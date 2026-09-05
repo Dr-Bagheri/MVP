@@ -153,8 +153,8 @@ describe("Settings · Sign-in methods", () => {
     render(<SignInMethods />);
 
     /* the rows are structure — two providers, named from the catalogue */
-    expect(await screen.findByText("Google")).toBeTruthy();
-    expect(screen.getByText("GitHub")).toBeTruthy();
+    expect(await screen.findByText("گوگل")).toBeTruthy();
+    expect(screen.getByText("گیت‌هاب")).toBeTruthy();
     /*
      * **The discriminating pair.** Each row read its state as
      * `row?.enabled ?? true`, so both providers were painted «فعال» before

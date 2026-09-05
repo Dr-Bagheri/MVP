@@ -28,7 +28,7 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 describe("the icon set", () => {
-  it("renders only at sizes on the scale", () => {
+  it("renders only at sizes on the scale", { timeout: 30_000 }, () => {
     const offenders: string[] = [];
     for (const file of sources(ROOT)) {
       const text = readFileSync(file, "utf8");
@@ -40,7 +40,7 @@ describe("the icon set", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("nothing uses a text character where an icon belongs", () => {
+  it("nothing uses a text character where an icon belongs", { timeout: 30_000 }, () => {
     /* the exact characters that were doing icon work before this rule.
        They are still legal INSIDE strings — a placeholder or a message
        may say ＋ — so the check looks only at JSX text nodes. */

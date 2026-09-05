@@ -81,7 +81,7 @@ describe("ConversationThread", () => {
         ]}
       />,
     );
-    expect(screen.getAllByText(/ذخیره به‌صورت PDF|Save as PDF/)).toHaveLength(1);
+    expect(screen.getAllByText(/ذخیره به‌صورت پی‌دی‌اف|Save as PDF/)).toHaveLength(1);
   });
 
   it("shows ONLY the human annotation on a failed run — never a raw provider error", () => {

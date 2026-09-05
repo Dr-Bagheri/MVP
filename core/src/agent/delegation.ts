@@ -43,11 +43,20 @@
  *    somebody can raise, and there is no version of "Ava asks Roya to ask Ava"
  *    that is worth the tokens it costs.
  *
- * 2. BLAST RADIUS. A delegate gets READS and nothing else — no client tools
- *    (which act on the person's own session) and no write tools (which emit
- *    proposals). M43's rule, applied: what an output can REACH decides what
- *    its author may hold. Echo keeps both, because Echo is the one the person
- *    is talking to and the one whose proposals they will see and confirm.
+ * 2. BLAST RADIUS — REVISED 2026-09-05. A delegate gets READS, plus the
+ *    SURFACE'S OWN CLIENT TOOLS when the session offers them, and never a
+ *    proposal (write) tool. The first cut gave them reads only, on M43's
+ *    rule that what an output can REACH decides what its author may hold.
+ *    The user then ruled that the colleagues must DO the work Echo hands
+ *    them ("if the number of tasks goes past three, or the person asks for
+ *    the agents, Echo must call them and ask them to do the job … give all
+ *    of them full control over the updates"). The reach argument still
+ *    holds, because a client tool's reach is bounded by the CONSENT CARD:
+ *    below Act every write it makes is shown to the person and waits for a
+ *    yes, on the person's own session, under the person's own grant — the
+ *    same wall Echo's hands meet. Proposals stay Echo's: a proposal is a
+ *    record edit inside the conversation the person is having WITH ECHO,
+ *    and a colleague's proposal would arrive with no sentence around it.
  *
  * 3. A CEILING PER TURN. `MAX_DELEGATIONS` bounds how many nested runs one
  *    question can spend. Without it a model that finds delegation useful will
@@ -91,6 +100,10 @@ export interface DelegationOptions {
   /** the interface language, so a delegate answers in the language being read */
   locale?: string | undefined;
   /** run one nested turn; injected so this module never imports the runtime */
+  /** the surface's client tools for THIS session (guard 2, revised) — the
+      colleagues act through them exactly as Echo does; absent when the
+      session offers none (a room, a worker), and then they only read */
+  clientTools?: DomainTool<ToolDeps, never>[] | undefined;
   runNested(input: {
     agentHandle: string;
     instructions: string;
@@ -98,6 +111,7 @@ export interface DelegationOptions {
     web: boolean;
     question: string;
     tools: DomainTool<ToolDeps, never>[];
+    clientTools: DomainTool<ToolDeps, never>[];
   }): Promise<AgentResult>;
   /** called when a delegate has spoken, so the surface can draw it */
   onTurn(turn: DelegateTurn): void | Promise<void>;
@@ -179,6 +193,10 @@ export async function createEchoTool(
         web: options.web,
         question,
         tools: [...createDomainTools(), ...toolsFor("both")] as DomainTool<ToolDeps, never>[],
+        /* Echo answering a colleague's QUESTION has no hands here: the
+           colleague is the one the person is talking to and the one whose
+           consent cards they will see */
+        clientTools: [],
       });
 
       /*
@@ -286,6 +304,7 @@ export async function createDelegationTools(
             ? `${question}\n\n[Context from the conversation, provided by Echo]\n${args.context}`
             : question,
           tools,
+          clientTools: options.clientTools ?? [],
         });
 
         await options.onTurn({
@@ -323,15 +342,20 @@ const DESCRIPTION: Readonly<Record<string, (own: string) => string>> = {
   roya: (own) =>
     `Ask رؤیا, the operations colleague. ${own} `
     + "She sees meetings, the task board, agendas and what is due — the work in "
-    + "flight. Ask her to plan, to draft the shape of something, or to tell you "
-    + "the state of what people are actually doing. She CANNOT read the audit "
-    + "trail or summary history; ask Ava for those.",
+    + "flight — and she DOES it: she creates and edits projects, folders, "
+    + "columns and tasks, assigns and moves work, sets up meetings and rooms. "
+    + "Every change she makes is shown to the person for a yes first. Hand her "
+    + "a whole batch of work in ONE brief — the list, who each piece is for, "
+    + "the deadlines you know. She CANNOT read the audit trail or summary "
+    + "history; ask Ava for those.",
   ava: (own) =>
     `Ask آوا, the analyst colleague. ${own} `
     + "She reads the record: transcripts, summaries and their versions, the "
-    + "audit trail, member history, who said what and what changed. Ask her to "
-    + "find evidence and to report on it. She CANNOT see the task board or "
-    + "meeting agendas; ask Roya for those.",
+    + "audit trail, member history, who said what and what changed — and she "
+    + "can turn what she finds into work: tasks, folders, a project, each shown "
+    + "to the person for a yes first. Ask her to find evidence, to report on "
+    + "it, and to file it. She CANNOT see the board's live state or meeting "
+    + "agendas; ask Roya for those.",
 };
 
 /**
@@ -356,6 +380,11 @@ function colleagueBriefing(name: string, locale: string | undefined): string {
     "اگر چیزی می‌بینی که پرسیده نشده اما به کار می‌آید، بگو — و اگر با",
     "برداشتِ پرسش موافق نیستی، همان را بگو؛ همکاری که فقط تأیید می‌کند به کار نمی‌آید.",
     "اگر شاهدی نیافتی، همین را بنویس؛ حدس نزن.",
+    /* the hands (2026-09-05): a colleague Echo has handed work to does the
+       work, and says plainly which changes still wait for the person */
+    "اگر اکو کاری به تو سپرده، همان را با ابزارهایت انجام بده — تسک بساز و واگذار",
+    "و جابه‌جا کن، پروژه و پوشه بساز. هر تغییری اول به کاربر نشان داده می‌شود و تا",
+    "تأیید نکند اعمال نمی‌شود؛ پس بگو چه کردی و چه چیزی هنوز منتظر تأیید است.",
     language,
   ].join(" ");
 }

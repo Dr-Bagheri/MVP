@@ -525,3 +525,22 @@ describe("the workflow detail page", () => {
     expect(screen.getByRole("switch").tagName).toBe("BUTTON");
   });
 });
+
+describe("the shipped template reads in the screen's language on its own page", () => {
+  /*
+   * The list localized its two flagship cards through the template copy and
+   * the detail page rendered the wire's English straight — so
+   * /fa/workflows/prepare-meetings opened as "Prepare me for meetings" under
+   * a Persian breadcrumb (user, 2026-09-05: "there are still some parts that
+   * are in English in the fa version"). Verified red against the page that
+   * read `card.name`.
+   */
+  it("renders the catalogue's Persian name, never the fixture's English", async () => {
+    const fa = (await import("@/messages/fa.json")).default;
+    const expected = (fa.workflows as { card: Record<string, { name: string }> }).card["draft-email-replies"]!.name;
+    await open("draft-email-replies");
+    const heading = await screen.findByRole("heading", { level: 1 });
+    expect(heading.textContent).toBe(expected);
+    expect(heading.textContent).not.toMatch(/Draft email replies/);
+  });
+});

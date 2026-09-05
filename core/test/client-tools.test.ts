@@ -113,6 +113,11 @@ describe("the registry", () => {
       "finish_recording", "set_member_status", "set_member_role",
       "rename_record", "set_record_scope", "archive_record", "unarchive_record",
       "delete_record", "restore_record", "delete_conversation", "add_speaker_person",
+      /* the hands of 2026-09-05 — every one changes data, every one asks */
+      "create_project", "update_project", "archive_project", "delete_project",
+      "set_project_member", "update_task_topic", "update_task_column",
+      "update_task_label", "delete_task_label", "delete_task",
+      "update_meeting_topic", "create_chat_room", "update_chat_room",
     ]) {
       const tool = CLIENT_TOOLS.find((t) => t.name === name);
       expect(tool, name).toBeDefined();

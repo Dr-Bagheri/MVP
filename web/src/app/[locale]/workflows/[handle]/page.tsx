@@ -21,7 +21,7 @@ import {
 } from "@/components/icons";
 import { digits, formatDate, formatTime } from "@/lib/format";
 import { notify } from "@/lib/notify";
-import { useWorkflowCopy } from "@/lib/workflowName";
+import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import { WorkflowBuilder } from "@/components/platform/WorkflowBuilder";
 import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
@@ -217,6 +217,11 @@ export default function WorkflowDetailPage({
   const tb = useTranslations("builder");
   const router = useRouter();
   const workflowCopy = useWorkflowCopy();
+  /* the shipped TEMPLATE's card copy — the list localizes its two flagship
+     cards through this and the detail page did not, so /fa/workflows/
+     prepare-meetings opened in English under a Persian breadcrumb (user,
+     2026-09-05: "there are still some parts that are in English") */
+  const templateCopy = useWorkflowTemplateCopy();
   const locale = useLocale();
 
   const [cards, setCards] = useState<WorkflowCard[] | null>(null);
@@ -315,11 +320,12 @@ export default function WorkflowDetailPage({
       };
     }
     if (card) {
+      const copy = templateCopy(card);
       return {
         kind: "template" as const,
         id: card.id,
-        name: card.name,
-        description: card.description,
+        name: copy.name,
+        description: copy.description,
         icon: card.icon,
         color: card.color,
         sourceKind: card.source_kind,
@@ -361,7 +367,7 @@ export default function WorkflowDetailPage({
       };
     }
     return null;
-  }, [card, engineRow, authoredRow, starterDef, handle, workflowCopy]);
+  }, [card, engineRow, authoredRow, starterDef, handle, workflowCopy, templateCopy]);
 
   useCrumbTitle(subject?.name);
 

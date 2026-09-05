@@ -18,9 +18,17 @@ const archiveSession = vi.fn();
 const setLocale = vi.fn();
 const taskBoard = vi.fn();
 const updateTask = vi.fn();
+const projects = vi.fn();
+const createProject = vi.fn();
+const deleteProject = vi.fn();
+const updateTaskTopic = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     members: (...args: unknown[]) => members(...args),
+    projects: (...args: unknown[]) => projects(...args),
+    createProject: (...args: unknown[]) => createProject(...args),
+    deleteProject: (...args: unknown[]) => deleteProject(...args),
+    updateTaskTopic: (...args: unknown[]) => updateTaskTopic(...args),
     setUserStatus: (...args: unknown[]) => setUserStatus(...args),
     setUserRole: (...args: unknown[]) => setUserRole(...args),
     listCalls: (...args: unknown[]) => listCalls(...args),
@@ -294,5 +302,57 @@ describe("update_task moves a card", () => {
     const { ctx } = surface();
     expect((await executeClientTool("update_task", { task_id: "t-1" }, ctx)).ok).toBe(false);
     expect(updateTask).not.toHaveBeenCalled();
+  });
+});
+
+describe("the hands of 2026-09-05 — projects and folders, named the way a person names them", () => {
+  beforeEach(() => {
+    members.mockReset(); projects.mockReset(); createProject.mockReset();
+    deleteProject.mockReset(); taskBoard.mockReset(); updateTaskTopic.mockReset();
+  });
+
+  it("create_project resolves the people by name and presses the SAME create the dialog does", async () => {
+    members.mockImplementation(async ({ search }: { search: string }) =>
+      search === "sina"
+        ? [{ id: "u-9", username: "sina", email: "s@example.test", display_name: "سینا" }]
+        : []);
+    createProject.mockResolvedValue({ id: "p-1", name: "آزمایش" });
+    const { ctx, push } = surface();
+    const result = await executeClientTool(
+      "create_project", { name: "آزمایش", members: ["sina", "nobody"] }, ctx,
+    );
+    expect(result.ok).toBe(true);
+    expect(createProject).toHaveBeenCalledWith(expect.objectContaining({ name: "آزمایش", member_ids: ["u-9"] }));
+    /* the unresolved person is SAID — a project quietly missing somebody
+       reads as "not yet given to anyone", which is the wrong nothing */
+    expect(result.detail).toMatch(/nobody/);
+    expect(push).toHaveBeenCalledWith("/projects?project=p-1");
+  });
+
+  it("delete_project resolves the name against the org's own list and refuses ambiguity", async () => {
+    projects.mockImplementation(async (opts?: { archived?: boolean }) =>
+      opts?.archived ? [] : [{ id: "p-1", name: "آزمایش" }, { id: "p-2", name: "آزمایش" }]);
+    const { ctx } = surface();
+    const twice = await executeClientTool("delete_project", { project: "آزمایش" }, ctx);
+    expect(twice.ok).toBe(false);
+    expect(deleteProject).not.toHaveBeenCalled();
+
+    projects.mockImplementation(async (opts?: { archived?: boolean }) =>
+      opts?.archived ? [] : [{ id: "p-1", name: "آزمایش" }]);
+    const once = await executeClientTool("delete_project", { project: "آزمایش" }, ctx);
+    expect(once.ok).toBe(true);
+    expect(deleteProject).toHaveBeenCalledWith("p-1");
+  });
+
+  it("update_task_topic renames a folder by its current name, and names the folders when none matches", async () => {
+    taskBoard.mockResolvedValue({ columns: [], topics: [{ id: "tp-1", name: "فروش" }], tasks: [] });
+    const { ctx } = surface();
+    const renamed = await executeClientTool("update_task_topic", { topic: "فروش", name: "فروش ۱۴۰۵" }, ctx);
+    expect(renamed.ok).toBe(true);
+    expect(updateTaskTopic).toHaveBeenCalledWith("tp-1", { name: "فروش ۱۴۰۵" });
+
+    const missing = await executeClientTool("update_task_topic", { topic: "بازاریابی", name: "x" }, ctx);
+    expect(missing.ok).toBe(false);
+    expect(missing.detail).toContain("فروش");
   });
 });

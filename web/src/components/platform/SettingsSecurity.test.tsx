@@ -99,8 +99,11 @@ describe("settings security surfaces", () => {
   it("lists only the two external sign-in providers", () => {
     render(<SignInMethods />);
 
-    expect(screen.getByText("Google")).toBeTruthy();
-    expect(screen.getByText("GitHub")).toBeTruthy();
+    /* the providers read in Persian on the Persian screen (2026-09-05:
+       "in fa only Persian") — the brand names are transliterated like every
+       other brand the catalogue names */
+    expect(screen.getByText("گوگل")).toBeTruthy();
+    expect(screen.getByText("گیت‌هاب")).toBeTruthy();
     expect(screen.queryByText("ایمیل و گذرواژه")).toBeNull();
   });
 });

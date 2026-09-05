@@ -58,7 +58,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "create_meeting", "update_meeting", "add_meeting_item", "approve_minutes",
       "archive_meeting", "invite_to_meeting", "open_meeting",
       "update_meeting_item", "extract_meeting_items", "create_meeting_topic",
-      "set_meeting_join_code",
+      "set_meeting_join_code", "update_meeting_topic",
     ],
   },
   {
@@ -70,6 +70,19 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "add_task_checklist_item", "archive_task",
       "list_task_columns", "create_task_column", "create_task_label",
       "set_task_label", "create_task_topic", "update_task_checklist_item",
+      "update_task_topic", "update_task_column", "update_task_label",
+      "delete_task_label", "delete_task",
+    ],
+  },
+  {
+    /* the order board (2026-09-05): a project is created, edited, archived,
+       deleted and given to people — the same five verbs the projects page
+       offers an admin, at the agent's suggestion and the person's yes */
+    key: "projects",
+    icon: "folder",
+    tools: [
+      "create_project", "update_project", "archive_project", "delete_project",
+      "set_project_member",
     ],
   },
   {
@@ -88,7 +101,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     icon: "ask",
     tools: [
       "list_conversations", "read_conversation", "archive_conversation",
-      "share_conversation",
+      "share_conversation", "create_chat_room", "update_chat_room",
     ],
   },
   {

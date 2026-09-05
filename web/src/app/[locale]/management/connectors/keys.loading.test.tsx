@@ -119,7 +119,7 @@ describe("a read that failed is not an organization with no keys", () => {
     // the empty array a failure leaves behind must never be read as an answer
     expect(screen.queryByText(/هنوز کلیدی ساخته نشده/)).toBeNull();
     // the card still carries its own name, so the reader knows what failed
-    expect(screen.getByText("کلیدهای API")).toBeTruthy();
+    expect(screen.getByText("کلیدهای ای‌پی‌آی")).toBeTruthy();
   });
 });
 

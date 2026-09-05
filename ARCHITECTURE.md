@@ -1464,6 +1464,34 @@ loud timeout forfeit; a foreign tool-result is indistinguishable from
 no-such-call. The result broker is in-process api state — the seam if the
 api ever scales horizontally.
 
+**[AMENDED 2026-09-05 — the hands, and the colleagues' hands; user
+directive: "if the number of tasks given to Echo goes more than 3, or if
+the user asks him to use agents for the work, it must call them and ask
+them to do the job; give all of them — Echo, Ava, Roya — full control over
+the updates we have in the platform: create projects or delete them or edit
+them, build folders in tasks, give projects and tasks to someone, move them
+— all a human can do."]** Two consequences, both inside this decision's
+mechanism rather than a new one. (1) The registry grew the order board's
+verbs as CLIENT tools — projects (create / edit / archive / delete /
+people), task folders, columns and labels (edit / archive / delete), task
+delete, meeting folders, chat rooms — each performed by the person's own
+browser through the api the screen's button runs, so `delete_project` is
+the person's delete at the agent's suggestion and `echo_agent` still holds
+no DELETE anywhere; the no-destructive-action clause keeps its meaning
+(purge / erase / tombstone stay out at every dial setting; everything
+here is what a person can press and, where it destroys, only after a
+consent card). (2) Delegation's guard 2 is revised: a colleague Echo
+calls (`ask_roya` / `ask_ava`) receives the SESSION's client tools beside
+its reads — a client tool's reach is bounded by the consent card on the
+person's own screen, which is the reach M43 asks about — and still no
+proposal tool, since a proposal belongs inside the conversation the person
+is having with Echo. The hand-off rule itself (more than three separate
+tasks, or the person asking for the agents → Echo splits the work and
+calls the colleagues) is a judgement about the request and lives in
+Echo's standing orders, pinned by `core/test/assistant-prompt.test.ts`;
+the colleagues' own instructions gained the matching paragraph in
+db/0192.
+
 ## M34 — Presence: the agent is always there [user-approved 2026-08-21; placement amended 2026-08-22]
 
 One persistent dock on every route (orb ↔ panel, Ctrl/⌘-E), including the

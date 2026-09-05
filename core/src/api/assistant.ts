@@ -379,6 +379,9 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           identity: request.identity,
           web: request.agentsWeb === true,
           locale: request.locale,
+          /* the colleagues act through THIS session's surface, consent card
+             and all — guard 2 as revised on 2026-09-05 */
+          clientTools: clientTools as never,
           onTurn: (turn) => {
             delegateTurns.push({ author: turn.author, text: turn.text, failed: turn.failed });
             stream.send({
@@ -399,10 +402,10 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
             callerModel: request.model,
             input: nested.question,
             tools: nested.tools as never,
-            /* NO client tools and NO write tools: guard 2. What an output can
-               REACH decides what its author may hold, and a delegate's output
-               is read by Echo before anybody acts on it. */
-            clientTools: [] as never,
+            /* the surface's client tools, when Echo was given any — a
+               colleague's write is a consent card on the person's own screen,
+               which is the reach M43 asks about (guard 2, revised) */
+            clientTools: nested.clientTools as never,
             deps: config.deps as never,
             callId: null,
             web: nested.web,

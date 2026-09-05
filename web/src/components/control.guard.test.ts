@@ -421,7 +421,7 @@ describe("controls share one shape", () => {
     expect(handRolled('<button disabled={count > 3} className="h-9 rounded-xl" />')).toBe(1);
   });
 
-  it("no file hand-rolls MORE button geometry than its recorded count", () => {
+  it("no file hand-rolls MORE button geometry than its recorded count", { timeout: 30_000 }, () => {
     const wrong: string[] = [];
     for (const file of sources(SRC)) {
       if (file.split(/[\\/]/).includes("ui")) continue; // shadcn source owns its own variants

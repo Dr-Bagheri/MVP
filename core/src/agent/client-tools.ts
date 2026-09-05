@@ -473,6 +473,10 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       /* the column by NAME, because that is what a person says. list_task_columns
          gives the board's own wording when you need to be sure. */
       column: str("The column to move it to, by name — e.g. «در حال انجام», «Done»."),
+      folder: str(
+        "The folder (topic) to file it under, by name — a project's folder"
+        + " included. «بدون پوشه» or \"none\" takes it out of its folder.",
+      ),
     }, ["task_id"]),
     effect: "write",
   },
@@ -1039,6 +1043,204 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       meeting: str("The meeting's title, as list_meetings returned it."),
     }, ["meeting"]),
     effect: "ui",
+  },
+
+  /*
+   * ── THE AGENTS GET THEIR HANDS (user directive, 2026-09-05) ──────────────
+   *
+   * "Give all of them — Echo, Ava, Roya — full control over the updates we
+   * have in the platform: create projects or delete them or edit them, build
+   * folders in tasks, give projects and tasks to someone, move them — all a
+   * human can do in the platform, these must do too."
+   *
+   * Every one below is a CLIENT tool on purpose. It runs in the person's own
+   * browser, on the person's own session, through the same api call the
+   * screen's button presses — so the wall it meets is the person's grant
+   * (an admin's project is an admin's; a member's request to create one is
+   * refused by the server exactly as their button would be), and the
+   * agent's database role is never involved. That is what keeps the
+   * invariant the repo will not trade: echo_agent holds no DELETE anywhere,
+   * and `delete_project` here is the PERSON deleting, after a consent card,
+   * at the agent's suggestion. Below Act every write asks first (M36).
+   *
+   * Things are named the way a person names them — a project by its name, a
+   * folder by its name, a colleague by handle or name — and resolved on the
+   * surface against the org's own lists. An ambiguous name refuses with the
+   * list rather than guessing, the same rule the record tools follow.
+   */
+  {
+    name: "create_project",
+    label: { fa: "ساختن پروژه", en: "Creating a project" },
+    description:
+      "Create a project — an order of work with its own people — on the board. "
+      + "This is what 'open a project for X', 'set up a project' and «پروژه بساز» "
+      + "mean. Creating it also creates its folder on the task board. Admins "
+      + "only; the server refuses anyone else.",
+    parameters: obj({
+      name: str("What the project is called."),
+      summary: str("One or two lines on what it is for. Optional."),
+      tone: strEnum(
+        ["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"],
+        "Its colour. Defaults to grey.",
+      ),
+      members: arr("Who is on it — colleagues by username, email or name. Optional; you can add people later with set_project_member."),
+    }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "update_project",
+    label: { fa: "ویرایش پروژه", en: "Editing a project" },
+    description:
+      "Change a project's name, summary or colour. Name it as list_projects or "
+      + "the person did; send only the fields being changed.",
+    parameters: obj({
+      project: str("The project, by its current name."),
+      name: str("A new name."),
+      summary: str("A new summary."),
+      tone: strEnum(
+        ["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"],
+        "A new colour.",
+      ),
+    }, ["project"]),
+    effect: "write",
+  },
+  {
+    name: "archive_project",
+    label: { fa: "بایگانی پروژه", en: "Archiving a project" },
+    description:
+      "Put a project in the archive, or bring it back. Its work and its people "
+      + "stay exactly as they are — prefer this to deleting.",
+    parameters: obj({
+      project: str("The project, by name."),
+      archived: bool("false to restore it. Defaults to true."),
+    }, ["project"]),
+    effect: "write",
+  },
+  {
+    name: "delete_project",
+    label: { fa: "حذف پروژه", en: "Deleting a project" },
+    description:
+      "Delete a project for good. Only the project goes: its folder and cards "
+      + "stay on the board and its chat room keeps every message. Use it only "
+      + "when the person clearly asked for a delete rather than an archive.",
+    parameters: obj({ project: str("The project, by name.") }, ["project"]),
+    effect: "write",
+  },
+  {
+    name: "set_project_member",
+    label: { fa: "افراد پروژه", en: "Changing a project's people" },
+    description:
+      "Put a colleague on a project, or take them off it — «این پروژه رو بده به "
+      + "سینا» is this. The colleague by username, email or name.",
+    parameters: obj({
+      project: str("The project, by name."),
+      member: str("The colleague — username, email or display name."),
+      member_of: bool("false removes them. Defaults to true."),
+    }, ["project", "member"]),
+    effect: "write",
+  },
+
+  // ── folders, columns and labels on the task board ─────────────────────
+  {
+    name: "update_task_topic",
+    label: { fa: "ویرایش پوشهٔ تسک‌ها", en: "Editing a task folder" },
+    description:
+      "Rename a task folder (topic), or archive it. Archiving takes the folder "
+      + "off the board and leaves its cards where they are, unfiled.",
+    parameters: obj({
+      topic: str("The folder, by its current name."),
+      name: str("A new name."),
+      archived: bool("true archives it, false brings it back."),
+    }, ["topic"]),
+    effect: "write",
+  },
+  {
+    name: "update_task_column",
+    label: { fa: "ویرایش ستون", en: "Editing a board column" },
+    description:
+      "Rename a board column, change its colour, or archive it. Name it as the "
+      + "board shows it — list_task_columns gives the exact names.",
+    parameters: obj({
+      column: str("The column, by its current name."),
+      name: str("A new name."),
+      tone: strEnum(
+        ["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"],
+        "A new colour.",
+      ),
+      archived: bool("true archives it, false brings it back."),
+    }, ["column"]),
+    effect: "write",
+  },
+  {
+    name: "update_task_label",
+    label: { fa: "ویرایش برچسب", en: "Editing a label" },
+    description: "Rename a task label or change its colour.",
+    parameters: obj({
+      label: str("The label, by its current name."),
+      name: str("A new name."),
+      color: strEnum(
+        ["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"],
+        "A new colour.",
+      ),
+    }, ["label"]),
+    effect: "write",
+  },
+  {
+    name: "delete_task_label",
+    label: { fa: "حذف برچسب", en: "Deleting a label" },
+    description:
+      "Retire a label from the whole board: it comes off every card that wore "
+      + "it. The person confirms this one; say so when you propose it.",
+    parameters: obj({ label: str("The label, by name.") }, ["label"]),
+    effect: "write",
+  },
+  {
+    name: "delete_task",
+    label: { fa: "حذف تسک", en: "Deleting a task" },
+    description:
+      "Delete a task for good. Prefer archive_task unless the person clearly "
+      + "asked for a delete — an archived task can be found again and a deleted "
+      + "one cannot.",
+    parameters: obj({ task_id: str("The task's id.") }, ["task_id"]),
+    effect: "write",
+  },
+
+  // ── meeting folders and chat rooms ────────────────────────────────────
+  {
+    name: "update_meeting_topic",
+    label: { fa: "ویرایش پوشهٔ جلسه‌ها", en: "Editing a meeting folder" },
+    description: "Rename a meeting folder, or archive it.",
+    parameters: obj({
+      topic: str("The folder, by its current name."),
+      name: str("A new name."),
+      archived: bool("true archives it, false brings it back."),
+    }, ["topic"]),
+    effect: "write",
+  },
+  {
+    name: "create_chat_room",
+    label: { fa: "ساختن اتاق گفت‌وگو", en: "Creating a chat room" },
+    description:
+      "Open a new chat room for the team. Rooms are readable by the whole "
+      + "organisation; people can be invited to it afterwards from the room.",
+    parameters: obj({
+      name: str("The room's name."),
+      topic: str("What the room is for. Optional."),
+    }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "update_chat_room",
+    label: { fa: "ویرایش اتاق گفت‌وگو", en: "Editing a chat room" },
+    description:
+      "Rename a chat room, or remove it. A removed room leaves the list and "
+      + "its messages stay as a record.",
+    parameters: obj({
+      room: str("The room, by its current name."),
+      name: str("A new name."),
+      archived: bool("true removes it, false brings it back."),
+    }, ["room"]),
+    effect: "write",
   },
 ] as const;
 

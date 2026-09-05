@@ -249,7 +249,7 @@ describe("Hub — session continuity", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "ساختن" }));
     const doc = await screen.findByRole("menuitem", { name: /^سند/ });
     expect(doc).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /^PDF/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /^پی‌دی‌اف/ })).toBeTruthy();
     expect(screen.queryByText("ضبط تماس")).toBeNull();
     expect(screen.queryByText("بارگذاری صدا")).toBeNull();
     expect(screen.queryByText("پرامپت تازه")).toBeNull();

@@ -98,6 +98,24 @@ export const SURFACE_TOOLS: readonly string[] = [
   "list_allowed_models",
   "set_model_allowed",
   "set_role_permission",
+  /* the hands of 2026-09-05 (user: "all a human can do in the platform,
+     these must do too") — projects, folders, columns, labels, rooms, and
+     the deletes a person can press. Each runs the api the screen's own
+     button runs, so an admin's power is an admin's and a member's refusal
+     is the server's. */
+  "create_project",
+  "update_project",
+  "archive_project",
+  "delete_project",
+  "set_project_member",
+  "update_task_topic",
+  "update_task_column",
+  "update_task_label",
+  "delete_task_label",
+  "delete_task",
+  "update_meeting_topic",
+  "create_chat_room",
+  "update_chat_room",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
@@ -245,6 +263,35 @@ async function recordAction(
     return { ok: false, detail: refusalDetail(cause, failDetail) };
   }
 }
+
+/**
+ * A thing named the way a person names it, resolved against the org's own
+ * list — exact match on the name, case-folded; two matches refuse with the
+ * count; none refuses with the list, so the model can say the real names
+ * back instead of guessing at the nearest one.
+ */
+function byName<T extends { id: string; name: string }>(
+  rows: readonly T[],
+  wanted: unknown,
+  what: string,
+): { ok: true; row: T } | { ok: false; detail: string } {
+  const name = typeof wanted === "string" ? wanted.trim() : "";
+  if (!name) return { ok: false, detail: `which ${what}?` };
+  const lowered = name.toLowerCase();
+  const hits = rows.filter((row) => row.name.trim().toLowerCase() === lowered);
+  if (hits.length === 1) return { ok: true, row: hits[0]! };
+  if (hits.length > 1) return { ok: false, detail: `${hits.length} ${what}s are called that — ask the user which one` };
+  return {
+    ok: false,
+    detail: rows.length === 0
+      ? `there is no ${what} yet`
+      : `no ${what} called that — there are: ${rows.map((row) => row.name).join("، ")}`,
+  };
+}
+
+const TONES = new Set(["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"]);
+const toneOf = (value: unknown): string | undefined =>
+  typeof value === "string" && TONES.has(value) ? value : undefined;
 
 export async function executeClientTool(
   tool: string,
@@ -493,6 +540,19 @@ export async function executeClientTool(
           }
           patch.column_id = hit.id;
         }
+        /* the FOLDER, by name — a project's folder included (2026-09-05).
+           «بدون پوشه» / "none" files it nowhere, which is a real state. */
+        const wantedFolder = typeof a.folder === "string" ? a.folder.trim() : "";
+        if (wantedFolder !== "") {
+          if (/^(none|no folder|بدون پوشه|بدون موضوع)$/i.test(wantedFolder)) {
+            patch.topic_id = null;
+          } else {
+            const board = await api.taskBoard();
+            const folder = byName(board.topics, wantedFolder, "folder");
+            if (!folder.ok) return { ok: false, detail: folder.detail };
+            patch.topic_id = folder.row.id;
+          }
+        }
         if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
         await api.updateTask(id, patch as never);
         /* no refresh topic for tasks or meetings — those pages fetch on
@@ -549,6 +609,228 @@ export async function executeClientTool(
     }
 
     /* ── M50 ─────────────────────────────────────────────────────────── */
+
+    // ── projects (2026-09-05) ─────────────────────────────────────────
+    case "create_project": {
+      const name = typeof a.name === "string" ? a.name.trim().slice(0, 120) : "";
+      if (!name) return { ok: false, detail: "a project needs a name" };
+      try {
+        const { api } = await import("@/api/client");
+        /* people by name, resolved one by one; an unresolved name is SAID,
+           never dropped in silence — a project quietly missing a person
+           reads as "not yet given to anyone", which is the wrong nothing */
+        const unresolved: string[] = [];
+        const memberIds: string[] = [];
+        for (const raw of Array.isArray(a.members) ? a.members : []) {
+          if (typeof raw !== "string" || raw.trim() === "") continue;
+          const who = await resolveMember(raw.trim());
+          if (who.ok) memberIds.push(who.id);
+          else unresolved.push(raw.trim());
+        }
+        const project = await api.createProject({
+          name,
+          ...(typeof a.summary === "string" && a.summary.trim() !== "" ? { summary: a.summary.trim().slice(0, 2000) } : {}),
+          ...(toneOf(a.tone) ? { tone: toneOf(a.tone) as never } : {}),
+          ...(memberIds.length ? { member_ids: memberIds } : {}),
+        });
+        announceChange("projects");
+        surface.push(`/projects?project=${encodeURIComponent(project.id)}`);
+        return {
+          ok: true,
+          detail: unresolved.length
+            ? `the project «${name}» was created; nobody matched ${unresolved.join(", ")} — ask the user who they meant`
+            : `the project «${name}» was created${memberIds.length ? ` with ${memberIds.length} people` : ""}`,
+        };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the project was not created") };
+      }
+    }
+    case "update_project": {
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.projects(), a.project, "project");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const patch: Record<string, unknown> = {};
+        if (typeof a.name === "string" && a.name.trim()) patch.name = a.name.trim().slice(0, 120);
+        if (typeof a.summary === "string") patch.summary = a.summary.slice(0, 2000);
+        if (toneOf(a.tone)) patch.tone = toneOf(a.tone);
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+        await api.updateProject(hit.row.id, patch as never);
+        announceChange("projects");
+        return { ok: true, detail: `«${hit.row.name}» updated` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the project could not be updated") };
+      }
+    }
+    case "archive_project": {
+      const restoring = a.archived === false;
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.projects({ archived: restoring }), a.project, "project");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        await api.updateProject(hit.row.id, { archived: !restoring });
+        announceChange("projects");
+        return { ok: true, detail: restoring ? `«${hit.row.name}» is back` : `«${hit.row.name}» archived` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the project could not be archived") };
+      }
+    }
+    case "delete_project": {
+      try {
+        const { api } = await import("@/api/client");
+        const live = await api.projects();
+        const archived = await api.projects({ archived: true });
+        const hit = byName([...live, ...archived], a.project, "project");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        await api.deleteProject(hit.row.id);
+        announceChange("projects");
+        return { ok: true, detail: `«${hit.row.name}» deleted — its folder, cards and room stay` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the project could not be deleted") };
+      }
+    }
+    case "set_project_member": {
+      const member = typeof a.member === "string" ? a.member.trim() : "";
+      if (!member) return { ok: false, detail: "who?" };
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.projects(), a.project, "project");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const who = await resolveMember(member);
+        if (!who.ok) return { ok: false, detail: who.detail };
+        const on = a.member_of !== false;
+        await api.setProjectMember(hit.row.id, who.id, on);
+        announceChange("projects");
+        return { ok: true, detail: on ? `added to «${hit.row.name}»` : `taken off «${hit.row.name}»` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the project's people could not be changed") };
+      }
+    }
+
+    // ── folders, columns, labels (2026-09-05) ─────────────────────────
+    case "update_task_topic": {
+      try {
+        const { api } = await import("@/api/client");
+        const board = await api.taskBoard();
+        const hit = byName(board.topics, a.topic, "folder");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const patch: { name?: string; archived?: boolean } = {};
+        if (typeof a.name === "string" && a.name.trim()) patch.name = a.name.trim().slice(0, 80);
+        if (typeof a.archived === "boolean") patch.archived = a.archived;
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+        await api.updateTaskTopic(hit.row.id, patch);
+        announceChange("tasks");
+        return { ok: true, detail: patch.archived === true ? `folder «${hit.row.name}» archived` : `folder «${hit.row.name}» updated` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the folder could not be changed") };
+      }
+    }
+    case "update_task_column": {
+      try {
+        const { api } = await import("@/api/client");
+        const board = await api.taskBoard();
+        const hit = byName(board.columns, a.column, "column");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const patch: { name?: string; archived?: boolean; tone?: never } = {};
+        if (typeof a.name === "string" && a.name.trim()) patch.name = a.name.trim().slice(0, 80);
+        if (typeof a.archived === "boolean") patch.archived = a.archived;
+        if (toneOf(a.tone)) patch.tone = toneOf(a.tone) as never;
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+        await api.updateTaskColumn(hit.row.id, patch);
+        announceChange("tasks");
+        return { ok: true, detail: `column «${hit.row.name}» updated` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the column could not be changed") };
+      }
+    }
+    case "update_task_label": {
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.taskLabels(), a.label, "label");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const patch: { name?: string; color?: never } = {};
+        if (typeof a.name === "string" && a.name.trim()) patch.name = a.name.trim().slice(0, 60);
+        if (toneOf(a.color)) patch.color = toneOf(a.color) as never;
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+        await api.updateTaskLabel(hit.row.id, patch);
+        announceChange("tasks");
+        return { ok: true, detail: `label «${hit.row.name}» updated` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the label could not be changed") };
+      }
+    }
+    case "delete_task_label": {
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.taskLabels(), a.label, "label");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        await api.deleteTaskLabel(hit.row.id);
+        announceChange("tasks");
+        return { ok: true, detail: `label «${hit.row.name}» retired from every card` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the label could not be deleted") };
+      }
+    }
+    case "delete_task": {
+      const id = typeof a.task_id === "string" ? a.task_id.trim() : "";
+      if (!id) return { ok: false, detail: "which task?" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.deleteTask(id);
+        announceChange("tasks");
+        return { ok: true, detail: "task deleted" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "that task could not be deleted") };
+      }
+    }
+
+    // ── meeting folders and rooms (2026-09-05) ────────────────────────
+    case "update_meeting_topic": {
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.meetingTopics(), a.topic, "meeting folder");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const patch: { name?: string; archived?: boolean } = {};
+        if (typeof a.name === "string" && a.name.trim()) patch.name = a.name.trim().slice(0, 80);
+        if (typeof a.archived === "boolean") patch.archived = a.archived;
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+        await api.updateMeetingTopic(hit.row.id, patch);
+        return { ok: true, detail: `meeting folder «${hit.row.name}» updated` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the meeting folder could not be changed") };
+      }
+    }
+    case "create_chat_room": {
+      const name = typeof a.name === "string" ? a.name.trim().slice(0, 80) : "";
+      if (!name) return { ok: false, detail: "a room needs a name" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.createChatChannel({
+          name,
+          ...(typeof a.topic === "string" && a.topic.trim() !== "" ? { topic: a.topic.trim().slice(0, 300) } : {}),
+        });
+        announceChange("chat");
+        return { ok: true, detail: `the room «${name}» is open` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the room was not created") };
+      }
+    }
+    case "update_chat_room": {
+      try {
+        const { api } = await import("@/api/client");
+        const hit = byName(await api.chatChannels(), a.room, "room");
+        if (!hit.ok) return { ok: false, detail: hit.detail };
+        const patch: { name?: string; archived?: boolean } = {};
+        if (typeof a.name === "string" && a.name.trim()) patch.name = a.name.trim().slice(0, 80);
+        if (typeof a.archived === "boolean") patch.archived = a.archived;
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+        await api.updateChatChannel(hit.row.id, patch);
+        announceChange("chat");
+        return { ok: true, detail: patch.archived === true ? `room «${hit.row.name}» removed` : `room «${hit.row.name}» updated` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the room could not be changed") };
+      }
+    }
 
     case "whoami_surface": {
       /* the SCREEN, not the person — `whoami` on the server answers who they

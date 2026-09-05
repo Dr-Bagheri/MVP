@@ -61,9 +61,10 @@ interface Nested {
   web: boolean;
   question: string;
   tools: { name: string }[];
+  clientTools: { name: string }[];
 }
 
-async function build(over: { web?: boolean } = {}) {
+async function build(over: { web?: boolean; clientTools?: { name: string }[] } = {}) {
   const nested: Nested[] = [];
   const turns: { author: string; text: string; failed: boolean }[] = [];
   const tools = await createDelegationTools({
@@ -71,6 +72,7 @@ async function build(over: { web?: boolean } = {}) {
     identity: IDENTITY,
     web: over.web ?? true,
     locale: "fa",
+    ...(over.clientTools ? { clientTools: over.clientTools as never } : {}),
     runNested: async (input) => {
       nested.push(input as unknown as Nested);
       return {
@@ -111,22 +113,33 @@ describe("Echo's colleagues, as tools", () => {
     expect(names.filter((n) => n.startsWith("ask_"))).toEqual([]);
   });
 
-  it("GUARD 2: a delegate is given READS and nothing that acts", async () => {
+  it("GUARD 2 (revised 2026-09-05): reads, the surface's own hands, and never a proposal", async () => {
     /*
      * The blast-radius rule (M43): what an output can REACH decides what its
-     * author may hold. A delegate's answer is read by Echo and shown to the
-     * person before anybody acts, so it needs no client tool and no write
-     * tool — and the check is on the SET that was handed over, because a
-     * promise in a comment is not a wall.
+     * author may hold. The user ruled the colleagues must DO the work Echo
+     * hands them, so they get the SURFACE's client tools — whose reach is a
+     * consent card on the person's own screen — and still no proposal tool,
+     * because a proposal belongs inside the conversation the person is
+     * having with Echo. The check is on the SET that was handed over,
+     * because a promise in a comment is not a wall.
      */
-    const { tools, nested } = await build();
+    const hand = { name: "create_project", label: "x", description: "x", parameters: {}, run: async () => ({}) };
+    const { tools, nested } = await build({ clientTools: [hand] });
     await run(tools.find((t) => t.name === "ask_roya")!, { question: "وضعیت تخته؟" });
     const names = nested[0]!.tools.map((t) => t.name);
-    expect(names.length).toBeGreaterThan(3);           // it got a real set
-    for (const acting of ["navigate", "start_recording", "set_member_role",
-      "send_member_message", "correct_transcript", "replace_summary"]) {
-      expect(names, acting).not.toContain(acting);
+    expect(names.length).toBeGreaterThan(3);           // it got a real read set
+    for (const proposal of ["correct_transcript", "replace_summary", "edit_speaker_roster"]) {
+      expect(names, proposal).not.toContain(proposal);
     }
+    expect(names.filter((n) => n.startsWith("ask_"))).toEqual([]);
+    /* the hands are the SESSION's, passed through untouched */
+    expect(nested[0]!.clientTools.map((t) => t.name)).toEqual(["create_project"]);
+
+    /* and a session that offers none hands over none — the bridge is the
+       surface's to offer, never something delegation invents */
+    const bare = await build();
+    await run(bare.tools.find((t) => t.name === "ask_roya")!, { question: "وضعیت تخته؟" });
+    expect(bare.nested[0]!.clientTools).toEqual([]);
   });
 
   it("GUARD 3: one question cannot call the colleagues without end", async () => {
