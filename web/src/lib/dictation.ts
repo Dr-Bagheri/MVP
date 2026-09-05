@@ -74,7 +74,7 @@ export function micTone(status: DictationStatus): string {
 export function useDictation(
   lang: string,
   onText: (text: string) => void,
-): { status: DictationStatus; toggle: () => void } {
+): { status: DictationStatus; toggle: () => void; start: () => void; stop: () => void } {
   const [status, setStatus] = useState<DictationStatus>("idle");
   const recRef = useRef<RecognitionLike | null>(null);
   // ref, not closure: onresult fires long after the render that created it,
@@ -202,5 +202,18 @@ export function useDictation(
     [],
   );
 
-  return { status, toggle };
+  /*
+   * PRESS AND RELEASE, decided by the truth rather than by the rendered status
+   * (user, 2026-09-05: "make it push to talk, not push to activate — you need
+   * to hold it while you are talking"). The hotkey used to call `toggle`
+   * guarded by `status`, and `status` is React state: it lags a keystroke by
+   * a frame, and Chrome's `no-speech` sets it to idle for a moment while the
+   * recogniser is being reopened — so a release that landed in that moment
+   * saw "idle", did nothing, and left the microphone open. The key had become
+   * a switch. `recRef` is what is actually running, and these two ask it.
+   */
+  const start = useCallback(() => { if (recRef.current === null) toggle(); }, [toggle]);
+  const stop = useCallback(() => { if (recRef.current !== null) toggle(); }, [toggle]);
+
+  return { status, toggle, start, stop };
 }

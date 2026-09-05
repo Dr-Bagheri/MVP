@@ -10,6 +10,7 @@ import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttac
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Overlay } from "@/components/platform/Overlay";
+import { DIALOG_BODY } from "@/components/platform/tasks/panelStyle";
 import { InvitePeople } from "@/components/platform/InvitePeople";
 import { DateField, TimeField } from "@/components/DateTimeFields";
 import { Select } from "@/components/Select";
@@ -1032,7 +1033,7 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
   return (
     <Overlay onClose={onClose} label={t("edit")} size="md">
       <h2 className="mb-3 text-base font-bold text-fg">{t("edit")}</h2>
-      <div className="space-y-3">
+      <div className={DIALOG_BODY}>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTitle")}</span>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -1079,7 +1080,7 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
             onChange={(e) => setDescription(e.target.value)} />
         </label>
       </div>
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
         <button type="button" onClick={onClose} className="btn border border-border font-medium text-fg">
           {t("cancel")}
         </button>

@@ -57,6 +57,25 @@ loosened rule — and the user's "except this part" is what puts one there.
 10. **Projects carry most of the problems**: the board must be the tasks
     board, the detail must be the task detail's pop-up.
 
+**2026-09-05, evening (fifteen items, twelve screenshots):**
+
+11. **Sections in every pop-up are DIVIDED** — "add divider between different
+    sections in all pop-up windows; they all seem connected; even if they
+    don't have information in them, put empty space for the parts that need
+    it, give the structure." → R8 (dialogs) and R18 (the detail's body and
+    rail), one rhythm in `panelStyle`.
+12. **The main menu opens COMPACT by default, in both locales**, and never
+    flashes open on a navigation; in Persian the expand chevron is `<`. → R1.
+13. **The assistant strip is part of the skeleton** — present on the first
+    frame of every reload, never after the identity read. → R1.
+14. **Row two's gap to its content is the board's 12** (`FILTER_ROW_GAP`); the
+    audit log's table drops its header row; member privileges get a row two
+    (اعضا | مدیران); projects' scope chips move UP to row one, before «مهلت
+    امروز» (a ruling for that page — row two stays the rule elsewhere). → R3.
+15. **A row inside a card is a row, not a box** (assistant settings). → R7.
+16. **The mic hotkey is PUSH-TO-TALK**: hold to listen, release to stop, one
+    microphone per key.
+
 ## The shapes, as they stand
 
 ### R1 · The shell — SOLID
@@ -70,7 +89,17 @@ loosened rule — and the user's "except this part" is what puts one there.
   `/join/[code]` (guest door) render outside it by design; the console's
   controls are off-family (see R4/R20).
 - **Enforced by:** `rhythm.guard` ("the shell scroll belongs to the shell"),
-  `trail` coverage, nav-icon coverage.
+  `trail` coverage, nav-icon coverage, `IconRail.test` (the width on the
+  first frame), `AssistantSidebar.test` (the strip before the network).
+- **2026-09-05 (rulings 12–13):** the rail opens COMPACT by default in both
+  locales and reads its width from a store (`lib/railCompact.ts`) on the
+  first render of every mount — it remounts per page, and the `useState` +
+  effect version flashed open and slid shut on every navigation. Expand
+  points at the content (inline-end: `>` en / `<` fa), collapse at the wall.
+  The assistant strip renders for an unanswered identity (`member ===
+  undefined`) and leaves only on "not a member"; its width is published in a
+  layout effect, so the page is centred between the two menus from the first
+  frame rather than stepping sideways when `/api/me` lands.
 
 ### R2 · The page column — SOLID
 
@@ -96,6 +125,13 @@ loosened rule — and the user's "except this part" is what puts one there.
   (all | online | offline with counts), the audit log (a glyph per source)
   and the workflow shelf's kinds; tasks, meetings and projects already wore
   it. A second row that wears the row-one tab is a defect.
+  **2026-09-05, evening:** the gap under row two is the board's own 12
+  (`FILTER_ROW_GAP` — audit, security, workflows, privileges); member
+  privileges got its row two (اعضا | مدیران, counts, one card under it);
+  the speakers directory's view/team row and the chat's room chips wear the
+  chip; the audit table lost its header row (`hideHeader`). Projects is the
+  one page whose scope chips sit in ROW ONE, before «مهلت امروز» — the user's
+  ruling for that page, not a loosening of the rule.
 
 - **Done on 2026-09-05:** the create button sits at the END of row 1 in one
   coat, `.btn btn-primary`, on every page that has one — workflows (it stood
@@ -271,6 +307,10 @@ loosened rule — and the user's "except this part" is what puts one there.
   tile stood on a page I could reach (`/fa/dashboard` is not a route), so the
   18 is a stylesheet reading, not a computed one.
 
+- **2026-09-05, evening (ruling 15):** a row inside a card is a row divided
+  by a hairline, never a `.well`/bordered box inside the card — the assistant
+  settings' switches and the agent dialog's web switch lost their boxes.
+
 ### R8 · Dialogs and panels — SOLID (2026-09-05)
 
 - **Fixed:** `ui/dialog.tsx` and `ui/alert-dialog.tsx` carried `sm:rounded-lg`
@@ -281,6 +321,14 @@ loosened rule — and the user's "except this part" is what puts one there.
   against the shipped base (`sm:rounded-lg` beside `rounded-2xl`), green after.
 - **Re-measured on production (2026-09-05):** the new-task and new-meeting
   dialogs at **18** (were 12); the project panel at 18 with its 283 rail.
+- **SECTIONS DIVIDED (ruling 11, 2026-09-05 evening):** every dialog body is
+  `DIALOG_BODY` (panelStyle) — each field a section, a hairline between them
+  drawn by the container, the same air on both sides — and a dialog that is
+  one block (a search over a list) is an entry WITH ITS REASON in
+  `dialogSections.guard.test.ts`, which fails a new `<Overlay` that reads
+  neither. Footers carry the hairline above them everywhere. An empty
+  section keeps its room (`SECTION_EMPTY`): «موردی ندارد» sits where the
+  items would.
 
 #### The record of the defect
 
@@ -333,6 +381,9 @@ loosened rule — and the user's "except this part" is what puts one there.
   DataTable's own). Each names its nothing — good — but none share a shape.
 - **Proposed rule:** one `Empty` shape (sentence at 13 muted, optional
   action as `btn-sm`, centred in the surface that would hold the rows).
+- **Fixed inside panels (2026-09-05 evening):** an empty section of a detail
+  keeps the height its items would take (`SECTION_EMPTY`), so the structure
+  the dividers draw does not collapse around a missing answer.
 
 ### R13 · Icons — SOLID
 
@@ -405,6 +456,11 @@ loosened rule — and the user's "except this part" is what puts one there.
   «واگذاری کار» at the end.
 - **Solid =** `detailPanel.guard.test.ts`: the frame's first line exists in
   exactly one file, and both details render `<DetailPanel>`.
+- **2026-09-05, evening (ruling 11):** the frame divides its body and its
+  rail (`PANEL_SECTIONS` / `RAIL_SECTIONS`) — each child a section with a
+  hairline between; the task detail's tab bar and its content became one
+  section so the line does not cut between them, and the project detail's
+  title and summary one block.
 - **Still pages, to rule on one by one:** agent (`/agents/[handle]`),
   workflow (`/workflows/[handle]`), meeting (`/meetings/[id]` — it runs the
   recorder and the stages, which may be the one that stays a page), member
@@ -459,6 +515,13 @@ loosened rule — and the user's "except this part" is what puts one there.
    404 or land on `/settings`, and the trail must never print a key.
 2. `.btn` min-height (R4) and the dialog radius (R8) — real, measured,
    invisible in the source.
+3. **Speed (measured on production, 2026-09-05 evening):** one dashboard load
+   asked `/api/meetings` nine times and `/api/tasks/board` twice; every page
+   fetched its data twice (the page remounts when the display preferences
+   hydrate with `/api/me`); and every BFF call ran in Vercel's `iad1` on its
+   way to a server in Germany (`x-vercel-id: cdg1::iad1`, ~500–700 ms a
+   call). Fixed with a 5-second burst tier in the client's read cache and
+   `web/vercel.json` → `fra1`; re-measured after deploy.
 
 ## Order proposed
 

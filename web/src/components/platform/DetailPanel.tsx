@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { IconClose } from "@/components/icons";
+import { PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
 
 /**
  * THE DETAIL PANEL — one frame for everything that opens over a list.
@@ -67,10 +68,14 @@ export function DetailPanel({ label, closeLabel, onClose, start, end, notice, ra
 
         {notice}
 
-        {/* ── body, then the rail ─────────────────────────────────────── */}
+        {/* ── body, then the rail — SECTIONS DIVIDED (2026-09-05) ─────────
+            Each child of the body and each child of the rail is a section,
+            and the hairline between them is the container's (panelStyle):
+            "they all seem connected" was a rail of six fields with air and
+            no lines between them. */}
         <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-[1fr_283px]">
-          <div className="min-h-0 space-y-4 p-5">{children}</div>
-          <aside className="space-y-4 border-t border-border p-5 md:border-s md:border-t-0">{rail}</aside>
+          <div className={`min-h-0 p-5 ${PANEL_SECTIONS}`}>{children}</div>
+          <aside className={`border-t border-border p-5 md:border-s md:border-t-0 ${RAIL_SECTIONS}`}>{rail}</aside>
         </div>
       </div>
     </div>

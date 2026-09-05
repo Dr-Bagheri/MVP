@@ -320,6 +320,8 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         ) : null}
         rail={rail}
       >
+        {/* the title and its summary are ONE section of the divided body */}
+        <div>
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
           <h2 className={`truncate text-[17px] font-bold ${project.archived_at === null ? "text-fg" : "text-fg-subtle"}`}>
@@ -331,7 +333,8 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
             </span>
           ) : null}
         </div>
-        <p className={BODY_TEXT}>{project.summary === "" ? t("noSummary") : project.summary}</p>
+        <p className={`${BODY_TEXT} mt-2`}>{project.summary === "" ? t("noSummary") : project.summary}</p>
+        </div>
 
         {/* ── the work: the cards filed under this project's folder ──── */}
         <section aria-label={t("work")}>

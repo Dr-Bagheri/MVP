@@ -9,7 +9,7 @@ import { notify } from "@/lib/notify";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import { IconClose, IconMoon, IconPeople3, IconPulse } from "@/components/icons";
 import { Chip, EmptyState } from "@/components/ui";
-import { FilterChips } from "./sectionTabs";
+import { FilterChips, FILTER_ROW_GAP } from "./sectionTabs";
 import { digits, formatDate, formatTime, personName } from "@/lib/format";
 import { useLocale } from "next-intl";
 import { signOutThisDevice } from "@/lib/signOut";
@@ -148,7 +148,7 @@ export function SecuritySettings() {
             label={t("colOnline")}
             active={presence}
             onSelect={setPresence}
-            className="mb-5"
+            className={FILTER_ROW_GAP}
             /* no count while the read is in flight: «۰» beside the chip
                before the answer is "loading" wearing "empty" (rule 12) */
             chips={[

@@ -92,3 +92,64 @@ describe("push to talk", () => {
     expect(onPress, "holding the key started dictation more than once").toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe("one key, one microphone (2026-09-05)", () => {
+  it("the HIGHEST-ranked surface answers; the others stay silent", () => {
+    /*
+     * Three surfaces offer the key and each used to listen on its own, so on
+     * the assistant page a press started the page's recogniser AND the
+     * strip's (its hooks run while it is invisible there), and in a room the
+     * composer's and the strip's fought for the one microphone Chrome allows.
+     */
+    setPushToTalkKey("F9");
+    const strip = { onPress: vi.fn(), onRelease: vi.fn() };
+    const page = { onPress: vi.fn(), onRelease: vi.fn() };
+    const a = renderHook(() => usePushToTalk({ ...strip, priority: 0 }));
+    const b = renderHook(() => usePushToTalk({ ...page, priority: 2 }));
+    act(() => press("F9", "F9"));
+    expect(page.onPress).toHaveBeenCalledTimes(1);
+    expect(strip.onPress, "two surfaces opened two microphones").not.toHaveBeenCalled();
+    act(() => release("F9", "F9"));
+    expect(page.onRelease).toHaveBeenCalledTimes(1);
+    expect(strip.onRelease).not.toHaveBeenCalled();
+    a.unmount();
+    b.unmount();
+  });
+
+  it("a surface that is not on screen offers nothing, whatever its rank", () => {
+    setPushToTalkKey("F9");
+    const hidden = { onPress: vi.fn(), onRelease: vi.fn() };
+    const shown = { onPress: vi.fn(), onRelease: vi.fn() };
+    const a = renderHook(() => usePushToTalk({ ...hidden, priority: 5, enabled: false }));
+    const b = renderHook(() => usePushToTalk({ ...shown, priority: 0 }));
+    act(() => press("F9", "F9"));
+    act(() => release("F9", "F9"));
+    expect(hidden.onPress).not.toHaveBeenCalled();
+    expect(shown.onPress).toHaveBeenCalledTimes(1);
+    expect(shown.onRelease).toHaveBeenCalledTimes(1);
+    a.unmount();
+    b.unmount();
+  });
+
+  it("losing the window releases a held key — an alt-tab does not leave the microphone open", () => {
+    setPushToTalkKey("F9");
+    const h = { onPress: vi.fn(), onRelease: vi.fn() };
+    const a = renderHook(() => usePushToTalk(h));
+    act(() => press("F9", "F9"));
+    act(() => { window.dispatchEvent(new Event("blur")); });
+    expect(h.onRelease).toHaveBeenCalledTimes(1);
+    act(() => release("F9", "F9"));
+    expect(h.onRelease, "the keyup after the blur released a second time").toHaveBeenCalledTimes(1);
+    a.unmount();
+  });
+
+  it("the answering surface unmounting under the finger releases", () => {
+    setPushToTalkKey("F9");
+    const h = { onPress: vi.fn(), onRelease: vi.fn() };
+    const a = renderHook(() => usePushToTalk(h));
+    act(() => press("F9", "F9"));
+    a.unmount();
+    expect(h.onRelease).toHaveBeenCalledTimes(1);
+  });
+});

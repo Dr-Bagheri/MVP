@@ -8,11 +8,13 @@ import { openChatLive, mergeBySeq, type ChatLiveState } from "@/lib/chatLive";
 import { shouldStick } from "@/lib/threadFollow";
 import type { ChatChannelRecord, ChatMessageRecord, OrgPersonRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
+import { DIALOG_BODY } from "./tasks/panelStyle";
 import { InvitePeople } from "./InvitePeople";
 import { AgentAvatar } from "./AgentAvatar";
 import { KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold";
 import { IconCheck, IconClose, IconPeople3, IconPlus, IconTrash } from "@/components/icons";
+import { filterChipClass } from "./sectionTabs";
 import { digits } from "@/lib/format";
 import { MessageRow } from "./chat/MessageRow";
 import { Composer } from "./chat/Composer";
@@ -257,11 +259,9 @@ export function Chat({ meId, isAdmin, people }: {
                 role="tab"
                 aria-selected={room.id === current}
                 onClick={() => { dismissed.current = false; setCurrent(room.id); }}
-                className={`btn btn-sm gap-1.5 border font-medium ${
-                  room.id === current
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border bg-surface text-fg-muted hover:text-fg"
-                }`}
+                /* the platform's filter chip (R3 row two) — the same class the
+                   folder strips read, not a copy of it spelled here */
+                className={filterChipClass(room.id === current)}
               >
                 <span aria-hidden className="text-fg-subtle">#</span>
                 {/* BOLD is the unread state — no dot beside it, because a bold
@@ -278,41 +278,13 @@ export function Chat({ meId, isAdmin, people }: {
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* ADDING PEOPLE IS AN ADMIN'S (0189, the directive's own words).
-              Absent rather than disabled: a greyed button is a promise the
-              product will not keep for this person. */}
-          {isAdmin && channel !== null ? (
-            <button type="button" onClick={() => setInviting(true)}
-              className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
-              <IconPeople3 width={12} height={12} />
-              {t("addPeople")}
-            </button>
-          ) : null}
-          <button type="button" onClick={() => setCreating(true)}
-            className="btn btn-primary gap-1.5">
-            <IconPlus width={12} height={12} />
-            {t("newChannel")}
-          </button>
-        </div>
-      </div>
-
-      {error !== null ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {error}
-        </p>
-      ) : null}
-
-      {/* ── the room: a FIXED box that scrolls inside itself ─────────── */}
-      <section className={`tile flex ${ROOM_HEIGHT} flex-col`} aria-label={t("room")}>
-        <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-fg">
-              <span aria-hidden className="text-fg-subtle">#</span> <bdi>{channel?.name ?? "—"}</bdi>
-            </h1>
-            {channel !== null && channel.topic !== "" ? (
-              <p className="truncate text-[11px] text-fg-muted"><bdi>{channel.topic}</bdi></p>
-            ) : null}
-          </div>
+          {/* THE ROOM'S OWN CONTROLS LIVE ON THE ROW THAT NAMES IT (user
+              directive, 2026-09-05: "in the chat box we have 3 عمومی — remove
+              the 2 in the chat box top part"). The box had a header restating
+              the chip's name and, under it, the room's topic — three spellings
+              of one word on one screen — so the header is gone, and what it
+              carried, the delivery lane and the room's menu, sits at the end
+              of the row the room was chosen on. */}
           {/* the delivery lane, named. "polling" is a real state a person can
               act on, and hiding it would make a working fallback look like a
               fault. */}
@@ -363,8 +335,32 @@ export function Chat({ meId, isAdmin, people }: {
               ]}
             />
           ) : null}
-        </header>
+          {/* ADDING PEOPLE IS AN ADMIN'S (0189, the directive's own words).
+              Absent rather than disabled: a greyed button is a promise the
+              product will not keep for this person. */}
+          {isAdmin && channel !== null ? (
+            <button type="button" onClick={() => setInviting(true)}
+              className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+              <IconPeople3 width={12} height={12} />
+              {t("addPeople")}
+            </button>
+          ) : null}
+          <button type="button" onClick={() => setCreating(true)}
+            className="btn btn-primary gap-1.5">
+            <IconPlus width={12} height={12} />
+            {t("newChannel")}
+          </button>
+        </div>
+      </div>
 
+      {error !== null ? (
+        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+
+      {/* ── the room: a FIXED box that scrolls inside itself ─────────── */}
+      <section className={`tile flex ${ROOM_HEIGHT} flex-col`} aria-label={t("room")}>
         <div
           ref={scroller}
           onScroll={(e) => { stick.current = shouldStick(e.currentTarget); }}
@@ -473,7 +469,7 @@ function NewChannelDialog({ onClose, onCreated, onFailed }: {
           <IconClose width={14} height={14} />
         </button>
       </div>
-      <div className="space-y-3">
+      <div className={DIALOG_BODY}>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("channelName")}</span>
           <input autoFocus value={name} maxLength={80}

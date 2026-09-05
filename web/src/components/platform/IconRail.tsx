@@ -5,12 +5,13 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { personName } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { signOutThisDevice } from "@/lib/signOut";
 import { useLocale } from "next-intl";
-import { IconChevronEnd, IconChevronRight, IconOpen, IconRobot } from "@/components/icons";
+import { IconChevronEnd, IconOpen, IconRobot } from "@/components/icons";
+import { railCompact, railCompactServer, setRailCompact, subscribeRailCompact } from "@/lib/railCompact";
 import { NAV_PRIMARY, NAV_UTILITY, activeNavHref, type NavItem } from "./nav";
 import { EchoMark, NAV_ICON } from "./icons";
 
@@ -37,9 +38,6 @@ import { EchoMark, NAV_ICON } from "./icons";
  * left, and `dir` resolves it with no mirroring logic. Inline-*end* is the
  * LEFT edge in RTL — learned by rendering it wrong once; do not "fix" it.
  */
-/** the person's own choice of menu width, remembered per browser */
-const RAIL_KEY = "neurai-rail-compact";
-
 export function IconRail() {
   const t = useTranslations("platform");
   const locale = useLocale();
@@ -50,27 +48,21 @@ export function IconRail() {
   }, []);
 
   /**
-   * TWO STATES (user directive, 2026-09-03: "make the side menu two stage of
-   * open and compact — in the compact only icons will be shown").
+   * TWO STATES, AND COMPACT IS THE DEFAULT (user directive, 2026-09-03: "make
+   * the side menu two stage of open and compact"; 2026-09-05: "make the closed
+   * version of the main menu the default in both versions").
    *
-   * Open is the default and the remembered choice is read in an EFFECT, not
-   * in `useState`: the server has no localStorage, and a value read during
-   * render would make the first paint disagree with the markup the server
-   * sent. Open is also the safe direction — a menu whose labels fail to
-   * appear is worse than one that starts wide.
+   * Read from a STORE, synchronously — not `useState` corrected by an effect.
+   * The shell is rendered by each PAGE, so this rail remounts on every
+   * navigation, and the effect version painted the menu OPEN and then closed
+   * it on every click from one section to the next (user report, 2026-09-05:
+   * "when I'm in the meetings and go to tasks it jumps and comes out and goes
+   * back, fast"). The store answers before the first paint of every remount;
+   * lib/railCompact.ts carries the reasoning.
    */
-  const [compact, setCompact] = useState(false);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(RAIL_KEY) === "1") setCompact(true);
-    } catch { /* storage unavailable — open, which is the safe default */ }
-  }, []);
+  const compact = useSyncExternalStore(subscribeRailCompact, railCompact, railCompactServer);
   function toggleCompact(): void {
-    setCompact((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(RAIL_KEY, next ? "1" : "0"); } catch { /* fine */ }
-      return next;
-    });
+    setRailCompact(!compact);
   }
 
   const activeHref = activeNavHref(pathname);
@@ -182,7 +174,9 @@ export function IconRail() {
             aria-expanded
             onClick={toggleCompact}
           >
-            <IconChevronEnd width={14} height={14} />
+            {/* the collapse points at the WALL the menu folds into — inline-start:
+                `<` in English, `>` in Persian, where the rail is on the right */}
+            <IconChevronEnd width={14} height={14} className="-scale-x-100 rtl:scale-x-100" />
           </button>
         )}
       </div>
@@ -198,7 +192,12 @@ export function IconRail() {
           aria-expanded={false}
           onClick={toggleCompact}
         >
-          <IconChevronRight width={14} height={14} />
+            {/* the expand points at the CONTENT the menu opens into — inline-end:
+                `>` in English, `<` in Persian (user, 2026-09-05: "in fa version
+                the opening menu icon should be < instead of >"). It was a
+                physical right chevron, which pointed into the wall on every
+                Persian screen. */}
+            <IconChevronEnd width={14} height={14} className="rtl:-scale-x-100" />
         </button>
       ) : null}
 

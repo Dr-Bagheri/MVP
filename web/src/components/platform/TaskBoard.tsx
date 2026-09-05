@@ -480,40 +480,6 @@ export function TaskBoard() {
             <section
               key={col.id}
               data-column={col.id}
-              draggable={renaming !== col.id}
-              onDragStart={(e) => {
-                /*
-                 * ONLY WHEN THE COLUMN ITSELF IS THE SOURCE (user report,
-                 * 2026-09-04: "for moving cards by hand they all move
-                 * together").
-                 *
-                 * `dragstart` BUBBLES. A card is inside its column and is
-                 * draggable too, so picking one up fired the card's handler
-                 * and then this one — the transfer left carrying BOTH a
-                 * task id and a column id, and the drop below reads the
-                 * column id first. Dragging one card moved the whole column,
-                 * which on screen is every card in it moving at once.
-                 *
-                 * `e.target !== e.currentTarget` is the whole fix: the
-                 * section starts a column drag only when the section is what
-                 * was picked up.
-                 *
-                 * AND IT CANCELS THE NATIVE DRAG when the press was on a child
-                 * (2026-09-05, "moving cards by hand is not working"). Cards
-                 * move by pointer events now, but a card sits inside this
-                 * draggable section, so the browser's first mousemove started a
-                 * native drag of the SECTION and fired `pointercancel` — the
-                 * hand's gesture died on the first pixel, every time, while
-                 * every synthetic-event probe passed because dispatched
-                 * events never start a native drag. A recorder on the window
-                 * showed the order: pointerdown, pointermove, dragstart on
-                 * the section, pointercancel. Returning was not enough; the
-                 * drag has to be refused so the pointer sequence survives.
-                 */
-                if (e.target !== e.currentTarget) { e.preventDefault(); return; }
-                draggedColumn.current = col.id;
-                e.dataTransfer.setData("text/column-id", col.id);
-              }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -555,7 +521,37 @@ export function TaskBoard() {
                   became the theme's 28px well and carries 9px of inset of its
                   own, so the OLD 8px gap would have read as 17. The pair is a
                   relationship, not two numbers. */}
-              <header className={BOARD_HEADER}>
+              <header
+                className={BOARD_HEADER}
+                /*
+                 * THE HEADER IS THE COLUMN'S HANDLE — the section is not
+                 * draggable at all (2026-09-05, "moving cards by hand still
+                 * not working", the third report). A card lives inside the
+                 * section, and a native drag starts from the nearest
+                 * DRAGGABLE ANCESTOR of whatever was pressed: with the section
+                 * draggable, the first pixel of a hand's move on a card
+                 * started a native drag of the section, dispatched `dragstart`
+                 * AT THE SECTION, and sent `pointercancel` to the card's
+                 * gesture. Proven in a real browser with a recorder on the
+                 * window; every synthetic test had passed because a test
+                 * dispatches the event at the card, where the browser never
+                 * does. The previous guard here compared target to
+                 * currentTarget and could not fire — both were the section.
+                 * A header contains no cards, so a drag that begins on it is a
+                 * column drag and nothing else; the ghost is still the whole
+                 * column (setDragImage).
+                 */
+                draggable={renaming !== col.id}
+                onDragStart={(e) => {
+                  draggedColumn.current = col.id;
+                  e.dataTransfer.setData("text/column-id", col.id);
+                  const column = e.currentTarget.parentElement;
+                  if (column !== null) {
+                    const box = column.getBoundingClientRect();
+                    e.dataTransfer.setDragImage(column, e.clientX - box.left, e.clientY - box.top);
+                  }
+                }}
+              >
                 <span className={BOARD_HEADER_START}>
                   <span className="relative">
                     {/* 2026-09-03: the theme's icon control — and the PICTURE is
@@ -845,6 +841,7 @@ function Card({ task, labels, people, lifted, onLift, onOver, onDrop, onCancel, 
     <div
       data-card={task.id}
       onPointerDown={drag.onPointerDown}
+      onDragStart={drag.onDragStart}
       /* a lifted card rides above its column and says so; the transform that
          carries it is written by the hook, not by a render per pointer move */
       className={`${BOARD_CARD} ${lifted ? "relative z-50 cursor-grabbing ring-2 ring-accent shadow-island" : ""}`}

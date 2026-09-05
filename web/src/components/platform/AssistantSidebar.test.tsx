@@ -35,9 +35,12 @@ vi.mock("@/lib/assistantSession", async (importOriginal) => {
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
+/* the identity read, per test: the default is a member, and two cases below
+   answer slowly or answer "stranger" */
+const identity = vi.hoisted(() => vi.fn(async (): Promise<{ state: string }> => ({ state: "member" })));
 vi.mock("@/api/client", () => ({
   api: {
-    identityState: async () => ({ state: "member" }),
+    identityState: () => identity(),
     models: async () => ({ models: [], preferred_model: null }),
     agentMessages: async () => [],
     deliverToolResult: async () => undefined,
@@ -131,9 +134,9 @@ afterEach(() => {
 
 async function mount() {
   const view = render(<><Page /><AssistantSidebar /></>);
-  /* the identity read gates everything, and a CLOSED sidebar renders nothing —
-     so the thing to wait for is the DOOR, which is portalled into the top bar
-     as soon as the component knows the person is a member */
+  /* the DOOR is portalled into the top bar; waiting for it keeps every effect
+     of the mount inside the test (the strip itself no longer waits for the
+     identity read — see the last describe) */
   await waitFor(() => expect(document.querySelector("[data-assistant-door]")).not.toBeNull());
   return view;
 }
@@ -374,5 +377,27 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     const { container } = await mount();
     await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
     expect(container.querySelector('[data-icon="mic"]')).not.toBeNull();
+  });
+});
+
+describe("the strip is structure, not a reward for the identity read (2026-09-05)", () => {
+  it("is on screen BEFORE the identity read answers", () => {
+    /*
+     * User report: "when I reload the page the AI assistant sidebar comes
+     * with delay — the skeleton structure of the whole platform must have the
+     * AI sidebar as always present". The read never answers here, and the
+     * strip must be there anyway, the way the rail and the top bar are.
+     */
+    identity.mockImplementationOnce(() => new Promise(() => { /* never */ }));
+    const { container } = render(<><Page /><AssistantSidebar /></>);
+    expect(container.querySelector("[data-assistant-sidebar]"), "the strip waited for the network").not.toBeNull();
+    expect(document.documentElement.style.getPropertyValue("--assistant-rail"), "the page was not asked to step aside").toBe("3rem");
+  });
+
+  it("leaves when the answer is 'not a member' — the control", async () => {
+    identity.mockResolvedValueOnce({ state: "anonymous" });
+    const { container } = render(<><Page /><AssistantSidebar /></>);
+    await waitFor(() => expect(container.querySelector("[data-assistant-sidebar]")).toBeNull());
+    expect(document.documentElement.style.getPropertyValue("--assistant-rail")).toBe("0px");
   });
 });

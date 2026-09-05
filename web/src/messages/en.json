@@ -46,7 +46,6 @@
     "detailModel": "Model",
     "detailModelDefault": "The platform's default",
     "detailPrompt": "Instructions",
-    "detailTools": "Tools",
     "detailWeb": "Web access",
     "detailWebOff": "Off",
     "detailWebOn": "On",
@@ -901,7 +900,7 @@
       "record": "New record",
       "stats": "Overview",
       "week": "This week",
-      "upcoming": "Upcoming",
+      "upcoming": "Upcoming meetings",
       "latest": "Latest meetings"
     },
     "noRecords": "No records yet. Start a meeting from Echo and this fills in.",
@@ -932,7 +931,6 @@
     "statMonth": "Meetings this month",
     "statTaskRate": "Task completion rate",
     "statTasksTotal": "Tasks recorded",
-    "upcomingAll": "Full calendar ←",
     "noUpcomingMeetings": "No meetings ahead.",
     "noMeetingsYet": "No meetings yet.",
     "latestReviewChip": "Review",
@@ -945,8 +943,7 @@
     "greetUpcoming": "you have {n} meetings ahead.",
     "greetNoUpcoming": "no meetings ahead.",
     "greetUpcomingUnknown": "an overview of meetings, tasks and minutes.",
-    "startRecordMeeting": "Start recording a meeting",
-    "integrationsAll": "All connections ←"
+    "startRecordMeeting": "Start recording a meeting"
   },
   "echo": {
     "group": {

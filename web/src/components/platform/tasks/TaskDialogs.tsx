@@ -13,7 +13,7 @@ import { Select } from "@/components/Select";
 import { ConfirmDialog } from "@/components/rowActions";
 import { JalaliPicker } from "./JalaliPicker";
 import {
-  FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, chipClass,
+  DIALOG_BODY, FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, chipClass,
   FOOTER_CANCEL, FOOTER_PRIMARY,
 } from "./panelStyle";
 import { IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
@@ -168,6 +168,7 @@ function LabelEditor({ label, onClose, onSaved }: {
         </button>
       </div>
       {failed ? <p role="alert" className="mb-2 text-xs text-danger">{t("writeFailed")}</p> : null}
+      <div className={DIALOG_BODY}>
       <label className="block">
         <span className={FIELD_LABEL}>{t("labelName")}</span>
         <input
@@ -177,8 +178,8 @@ function LabelEditor({ label, onClose, onSaved }: {
           className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent"
         />
       </label>
-      <div className="mt-3">
-        <span className="mb-1.5 block text-xs font-medium text-fg-muted">{t("labelColor")}</span>
+      <div>
+        <span className={FIELD_LABEL}>{t("labelColor")}</span>
         <div className="flex flex-wrap gap-1.5">
           {LABEL_COLORS.map((tone) => (
             <button
@@ -209,7 +210,8 @@ function LabelEditor({ label, onClose, onSaved }: {
           ))}
         </div>
       </div>
-      <div className="mt-4 flex items-center justify-between">
+      </div>
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
         {label !== null ? (
           <button
             type="button"
@@ -530,7 +532,8 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         </button>
       </div>
 
-      <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto pe-1 pt-2">
+      {/* every field a SECTION, divided by the body (panelStyle, 2026-09-05) */}
+      <div className={DIALOG_BODY}>
         {failed ? <p role="alert" className="text-xs text-danger">{t("writeFailed")}</p> : null}
 
         <label className="block">

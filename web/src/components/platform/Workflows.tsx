@@ -9,7 +9,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
-import { FilterChips, SectionTabs } from "./sectionTabs";
+import { FilterChips, FILTER_ROW_GAP, SectionTabs } from "./sectionTabs";
 import { IconCalendar, IconFileText, IconMail, IconMic, IconPlay, IconRows } from "@/components/icons";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
@@ -283,7 +283,7 @@ export function Workflows() {
                   label={t("libraryKindLabel")}
                   active={kind}
                   onSelect={setKind}
-                  className="mb-5"
+                  className={FILTER_ROW_GAP}
                   chips={[
                     { key: "all", label: t("libraryKindAll"), icon: <IconRows width={12} height={12} />, count: digits(library.length, locale) },
                     ...libraryKinds.map((k) => ({

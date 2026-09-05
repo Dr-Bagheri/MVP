@@ -160,3 +160,26 @@ describe("dictation across a pause", () => {
     expect(rec.starts).toBe(1);
   });
 });
+
+
+describe("press and release (2026-09-05)", () => {
+  it("stop follows the RECOGNISER, not the rendered status — a release inside the no-speech moment still stops", () => {
+    /*
+     * User: "make it push to talk, not push to activate — you need to hold it
+     * while you are talking." The hotkey used to call `toggle` guarded by
+     * `status`; Chrome's pause error sets `status` to idle for a moment while
+     * the session is being reopened, and a release landing there saw "idle",
+     * did nothing, and left the microphone open.
+     */
+    install();
+    const { result } = renderHook(() => useDictation("fa-IR", () => undefined));
+    act(() => result.current.start());
+    act(() => result.current.start());
+    expect(FakeRecognition.live.length, "a second press on a live recogniser made a second one").toBe(1);
+    const rec = only();
+    act(() => rec.onerror?.({ error: "no-speech" }));
+    expect(result.current.status).toBe("idle");
+    act(() => result.current.stop());
+    expect(rec.stopped, "the release read 'idle' and left the microphone open").toBe(true);
+  });
+});

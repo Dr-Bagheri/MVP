@@ -56,14 +56,9 @@ export interface WidgetSpec {
   group: WidgetGroup;
   sizes: readonly TileSize[];
   defaultSize: TileSize;
-  /**
-   * The panel's ONE action, rendered at the END of its header row rather than
-   * on a line under it (user directive, 2026-09-02). Declared here rather
-   * than drawn by the widget so every card's action lands in the same place —
-   * a link a widget renders itself is a link that sits wherever that widget's
-   * author put it.
-   */
-  action?: { href: string; labelKey: string };
+  /* NO per-panel action link since 2026-09-05 (user: "remove تقویم کامل ← from
+     both sections") — a panel's rows are its doors and the rail carries the
+     full list; the slot went rather than staying as a prop nothing sets. */
   /** in the default board, and in what order */
   defaultOrder?: number;
   /**
@@ -125,7 +120,6 @@ export const WIDGET_SPECS = [
     /* جلسات پیش‌رو — the product's own upcoming meetings */
     key: "upcoming",
     labelKey: "upcoming",
-    action: { href: "/meetings", labelKey: "upcomingAll" },
     icon: <IconClock />,
     group: "overview",
     sizes: ["column", "large"],
@@ -137,7 +131,6 @@ export const WIDGET_SPECS = [
     /* آخرین جلسات — newest first, with the review chip */
     key: "latest",
     labelKey: "latest",
-    action: { href: "/meetings", labelKey: "upcomingAll" },
     icon: <IconRows />,
     group: "overview",
     sizes: ["column", "large"],
@@ -178,7 +171,6 @@ export const WIDGET_SPECS = [
   {
     key: "integrations",
     labelKey: "integrations",
-    action: { href: "/integrations", labelKey: "integrationsAll" },
     icon: <IconPlug />,
     group: "overview",
     sizes: ["small", "column", "large", "hero"],

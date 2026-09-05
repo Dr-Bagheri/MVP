@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { CapabilityState, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
+import { FilterChips, FILTER_ROW_GAP } from "@/components/platform/sectionTabs";
+import { IconGavel, IconUser } from "@/components/icons";
 import { PageHeader, Skeleton } from "@/components/scaffold";
 import { Card } from "@/components/ui";
+import { digits } from "@/lib/format";
 import { notify } from "@/lib/notify";
 
 /**
@@ -20,6 +23,8 @@ import { notify } from "@/lib/notify";
  * the promise true.
  */
 const MEMBER_ROWS = 5;
+
+type Group = "member" | "admin";
 
 /**
  * MEMBER PRIVILEGES (user directive, 2026-08-26; db/0101).
@@ -39,10 +44,24 @@ const MEMBER_ROWS = 5;
  * owner binds ADMINS, nobody binds the owner. That last one is the exit
  * D27 asks for — if an admin could bind admins, two of them could lock
  * this screen away and only a hand-written UPDATE would recover the org.
+ *
+ * ONE GROUP AT A TIME, chosen on the second row (user directive, 2026-09-05:
+ * "second sub menu in Member privileges with two sections, members, admins,
+ * with the same style that we made the rule"). The two groups were two cards
+ * stacked on one scroll; they are the platform's row-two chips now — the
+ * tasks page's folder strip, the security page's presence filter — and the
+ * card under them shows the group that is lit. The ADMIN chip exists only
+ * when the server sent admin rows: the filtering happens on the SERVER (an
+ * admin's response simply has no admin rows in it — user directive,
+ * 2026-08-26: "it does not feel right that an admin sees their own
+ * privileges"), so this page offers whichever groups arrived rather than
+ * deciding the question here. A component that hid data it had been sent
+ * would be a curtain, not a wall.
  */
 export default function PrivilegesPage() {
   const t = useTranslations("management");
   const tAdmin = useTranslations("admin");
+  const locale = useLocale();
   const [me, setMe] = useState<User | null>(null);
   const [state, setState] = useState<CapabilityState | null>(null);
   /* audit finding, 2026-09-03: `state === null` used to mean two things —
@@ -52,6 +71,7 @@ export default function PrivilegesPage() {
      it gets its own flag so the screen can name which nothing it is showing. */
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [group, setGroup] = useState<Group>("member");
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -75,7 +95,7 @@ export default function PrivilegesPage() {
   const allowed = (role: string, key: string): boolean =>
     state?.decisions.find((d) => d.role === role && d.capability === key)?.allowed ?? true;
 
-  async function toggle(role: "member" | "admin", key: string, next: boolean) {
+  async function toggle(role: Group, key: string, next: boolean) {
     if (busy) return;
     setBusy(true);
     try {
@@ -102,6 +122,15 @@ export default function PrivilegesPage() {
     );
   }
 
+  /* the groups the server sent — the member group is structure and is offered
+     before the network answers; the admin group only once it has arrived */
+  const groups: readonly Group[] = state === null
+    ? ["member"]
+    : (["member", "admin"] as const).filter((role) => state.capabilities.some((cap) => cap.role === role));
+  const shown: Group = groups.includes(group) ? group : "member";
+  const editable = shown === "member" || (state?.may_set_admin ?? false);
+  const rows = state === null ? [] : state.capabilities.filter((cap) => cap.role === shown);
+
   return (
     <ManagementPane activeSlug="privileges">
       <PageHeader title={t("section.privileges")} subtitle={t("desc.privileges")} />
@@ -113,45 +142,40 @@ export default function PrivilegesPage() {
           as a card above the switches. A screen that opens with a paragraph
           about what it cannot do buries the switches it is for. */}
 
-      {/*
-        * The ADMIN half is the owner's alone to see (user directive,
-        * 2026-08-26: "it does not feel right that an admin sees their own
-        * privileges"). The filtering happens on the SERVER — an admin's
-        * response simply has no admin rows in it — so this map renders
-        * whichever halves arrived rather than deciding the question here.
-        * A component that hid data it had been sent would be a curtain,
-        * not a wall.
-        */}
+      <FilterChips
+        label={t("section.privileges")}
+        active={shown}
+        onSelect={setGroup}
+        className={FILTER_ROW_GAP}
+        chips={groups.map((role) => ({
+          key: role,
+          label: t(`privilegeGroup_${role}`),
+          icon: role === "member" ? <IconUser width={12} height={12} /> : <IconGavel width={12} height={12} />,
+          /* the count arrives with the rows — undefined until then, never a «۰»
+             that reads as "no privileges" while the read is in flight */
+          count: state === null
+            ? undefined
+            : digits(state.capabilities.filter((cap) => cap.role === role).length, locale),
+        }))}
+      />
+
       {/* audit finding, 2026-09-03: `state` is null until capabilities()
-          answers (and that fetch waits on identity first), so the filter
-          below yielded nothing and the page was the heading followed by
-          empty space until the cards dropped in and extended it — loading
+          answers (and that fetch waits on identity first), so the page was the
+          heading followed by empty space until the rows dropped in — loading
           and "nothing arrived" as one picture. The member card's frame is
-          known before the network, so it stands first with the rows'
-          geometry inside it (title line, hint line, the switch's label) and
-          only the words wait. The loading guard could not see this one:
-          its regex matches `=== null ? null :` and this page hid the same
-          vanish behind `?? []`. */}
+          known before the network, so it stands first with the rows' geometry
+          inside it and only the words wait. */}
       {state === null ? (
         loadFailed ? (
           <Card>
             <p className="text-sm text-fg-muted">{t("privilegeLoadFailed")}</p>
           </Card>
         ) : (
-          <Card className="mb-4">
-            <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 className="h-section">{t("privilegeGroup_member")}</h2>
-            </div>
-            {/* audit finding, 2026-09-03: `aria-busy` and `aria-hidden` sat on
-                this one element, and aria-hidden takes the subtree out of the
-                accessibility tree — so the busy state it announces was
-                unreachable, present and inert, on the page where it was
-                written to be heard. No test could see it either: the sibling
-                skeletons are asserted with querySelector("[aria-busy]"),
-                which does not care about aria-hidden. The platform's own
-                idiom (AssistantSettings, Hub, MeetingPage) is busy on the
-                container and hidden on the leaves — and every Skeleton sets
-                its own aria-hidden, so the placeholders stay decorative. */}
+          <Card>
+            {/* busy on the container, hidden on the leaves (every Skeleton sets
+                its own aria-hidden) — the platform's idiom; aria-hidden on the
+                busy element itself would take the announcement out of the
+                tree along with the placeholders */}
             <ul className="divide-y divide-border" aria-busy="true">
               {Array.from({ length: MEMBER_ROWS }, (_, i) => (
                 <li key={i} className="flex items-start justify-between gap-4 py-3">
@@ -165,51 +189,38 @@ export default function PrivilegesPage() {
             </ul>
           </Card>
         )
-      ) : (["member", "admin"] as const)
-        .filter((role) => state.capabilities.some((cap) => cap.role === role))
-        .map((role) => {
-        const editable = role === "member" || state.may_set_admin;
-        return (
-          <Card key={role} className="mb-4">
-            <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 className="h-section">{t(`privilegeGroup_${role}`)}</h2>
-              {editable ? null : (
-                <span className="text-xs text-fg-subtle">{t("privilegeOwnerOnly")}</span>
-              )}
-            </div>
-            <ul className="divide-y divide-border">
-              {/* audit finding, 2026-09-03: this branch only renders once
-                  `state` has answered, so the `?? []` that used to stand in
-                  for "not yet" would now be a second, silent spelling of the
-                  loading state one level down. */}
-              {state.capabilities
-                .filter((cap) => cap.role === role)
-                .map((cap) => (
-                  <li key={cap.key} className="flex items-start justify-between gap-4 py-3">
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-fg">
-                        {t(`privilege_${cap.key.replace(".", "_")}`)}
-                      </span>
-                      <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
-                        {t(`privilegeHint_${cap.key.replace(".", "_")}`)}
-                      </span>
-                    </span>
-                    <label className="flex shrink-0 items-center gap-2 text-xs text-fg-muted">
-                      <input
-                        type="checkbox"
-                        checked={allowed(role, cap.key)}
-                        disabled={busy || !editable}
-                        aria-label={t(`privilege_${cap.key.replace(".", "_")}`)}
-                        onChange={(e) => void toggle(role, cap.key, e.target.checked)}
-                      />
-                      {allowed(role, cap.key) ? t("privilegeOn") : t("privilegeOff")}
-                    </label>
-                  </li>
-                ))}
-            </ul>
-          </Card>
-        );
-      })}
+      ) : (
+        <Card>
+          {/* the one sentence the admin group may carry: whose hand it takes */}
+          {editable ? null : (
+            <p className="mb-1 text-xs text-fg-subtle">{t("privilegeOwnerOnly")}</p>
+          )}
+          <ul className="divide-y divide-border">
+            {rows.map((cap) => (
+              <li key={cap.key} className="flex items-start justify-between gap-4 py-3">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-fg">
+                    {t(`privilege_${cap.key.replace(".", "_")}`)}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
+                    {t(`privilegeHint_${cap.key.replace(".", "_")}`)}
+                  </span>
+                </span>
+                <label className="flex shrink-0 items-center gap-2 text-xs text-fg-muted">
+                  <input
+                    type="checkbox"
+                    checked={allowed(shown, cap.key)}
+                    disabled={busy || !editable}
+                    aria-label={t(`privilege_${cap.key.replace(".", "_")}`)}
+                    onChange={(e) => void toggle(shown, cap.key, e.target.checked)}
+                  />
+                  {allowed(shown, cap.key) ? t("privilegeOn") : t("privilegeOff")}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </ManagementPane>
   );
 }

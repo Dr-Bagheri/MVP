@@ -205,14 +205,15 @@ export function Hub() {
    *
    * The same control the button beside the box presses — not a second path
    * into dictation, which is how a key and a button come to disagree about
-   * whether the microphone is open. `toggle` is a toggle, so each side checks
-   * the status first: a press while already listening would STOP it, which is
-   * the opposite of what holding a key means.
+   * whether the microphone is open. PRESS starts and RELEASE stops, asked of
+   * the recogniser itself (`start`/`stop`, lib/dictation) and never of the
+   * rendered status, which lags the truth by a frame and lies for a moment
+   * around Chrome's no-speech error — the moment that turned the key into a
+   * switch (user, 2026-09-05: "make it push to talk, not push to activate").
+   * Priority 2: on this page the strip's own hotkey stands down, so one key
+   * opens one microphone.
    */
-  usePushToTalk({
-    onPress: () => { if (dictation.status !== "listening") dictation.toggle(); },
-    onRelease: () => { if (dictation.status === "listening") dictation.toggle(); },
-  });
+  usePushToTalk({ onPress: dictation.start, onRelease: dictation.stop, priority: 2 });
 
   /* system skills localize (shipped product content); authored names never do */
 

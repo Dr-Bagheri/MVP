@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { MeetingAgendaItem, MeetingMode, MeetingRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
+import { DIALOG_BODY } from "./tasks/panelStyle";
 import { Select } from "@/components/Select";
 import { DateField, TimeField } from "@/components/DateTimeFields";
 import {
@@ -795,7 +796,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           <IconClose width={14} height={14} />
         </button>
       </div>
-      <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto pe-1 pt-2">
+      <div className={DIALOG_BODY}>
         {/* audit finding, 2026-09-02: the title box and the description wore a
             file-local INPUT recipe — white ground, 16px corner — while the
             Select and the date/time pickers three rows down are `.input`
@@ -850,7 +851,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           the disabled state now (the local `disabled:opacity-50` restated what
           the class already does). This was the control guard's one worklist
           entry for this file; the entry is gone with it. */}
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
         <button type="button" onClick={onClose}
           className="btn border border-border text-fg">
           {t("cancel")}

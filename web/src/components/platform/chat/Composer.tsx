@@ -68,10 +68,10 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
        focus sends the next Enter to the document body */
     box.current?.focus();
   });
-  usePushToTalk({
-    onPress: () => { if (dictation.status !== "listening") dictation.toggle(); },
-    onRelease: () => { if (dictation.status === "listening") dictation.toggle(); },
-  });
+  /* press starts, release stops — asked of the recogniser, not of the
+     rendered status (lib/dictation, 2026-09-05); priority 1: a room's composer
+     outranks the assistant strip beside it, so one key opens one microphone */
+  usePushToTalk({ onPress: dictation.start, onRelease: dictation.stop, priority: 1 });
 
   /** who a `@` is currently reaching for — agents first, because naming one
       is the whole authorization for it to answer */

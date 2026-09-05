@@ -11,8 +11,9 @@ import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import { Avatar } from "@/components/Avatar";
 import {
-  IconMicOff, IconMicPlus, IconPencil, IconPlus, IconTeam, IconTrash, IconUser,
+  IconGauge, IconMicOff, IconMicPlus, IconPencil, IconPlus, IconRows, IconTeam, IconTrash, IconUser, IconUsers,
 } from "@/components/icons";
+import { filterChipClass } from "@/components/platform/sectionTabs";
 import { digits, personName } from "@/lib/format";
 
 /** 2026-08-24 cleanup: popup-confirmed deletes; the ledger's fixed line. */
@@ -584,8 +585,13 @@ export function SpeakersDirectory() {
         a directory rendering the same row must not disagree about what a
         filter looks like.
       */}
+      {/* THE SECOND ROW WEARS THE PLATFORM'S FILTER CHIP (R3 row two, user
+          2026-09-05: "second sub-menu did not apply to all pages with a second
+          sub menu on top — apply and fix"). This row sits under Management's
+          toolbar, so it is row two: an outlined chip with an icon, never the
+          row-one tab it was drawn with. */}
       {people !== null && (people.length > 0 || canManage) ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span
             className={`flex flex-wrap items-center gap-1 ${
               people.length === 0 ? "hidden" : ""
@@ -598,11 +604,7 @@ export function SpeakersDirectory() {
                 key={v}
                 type="button"
                 aria-pressed={view === v}
-                className={`btn btn-sm gap-1.5 font-medium ${
-                  view === v
-                    ? "bg-accent text-on-accent"
-                    : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                }`}
+                className={filterChipClass(view === v)}
                 onClick={() => {
                   setView(v);
                   /* a selection made in the table cannot be acted on from
@@ -611,6 +613,9 @@ export function SpeakersDirectory() {
                   if (v !== "table") setSelected(new Set());
                 }}
               >
+                {v === "table" ? <IconRows width={12} height={12} />
+                  : v === "cards" ? <IconUsers width={12} height={12} />
+                    : <IconGauge width={12} height={12} />}
                 {t(`view.${v}` as "view.table")}
               </button>
             ))}
@@ -627,13 +632,10 @@ export function SpeakersDirectory() {
                     key={team ?? "__all"}
                     type="button"
                     aria-pressed={teamFilter === team}
-                    className={`btn btn-sm gap-1.5 font-medium ${
-                      teamFilter === team
-                        ? "bg-accent text-on-accent"
-                        : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                    }`}
+                    className={filterChipClass(teamFilter === team)}
                     onClick={() => setTeamFilter(teamFilter === team ? null : team)}
                   >
+                    <IconTeam width={12} height={12} />
                     {team === null ? t("allTeams") : team === "" ? t("noTeam") : team}
                   </button>
                 ))}

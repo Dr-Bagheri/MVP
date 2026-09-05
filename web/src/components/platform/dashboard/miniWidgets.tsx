@@ -813,7 +813,10 @@ export function UpcomingWidget() {
             with dates and time and mode and the status same as the image").
             A date BLOCK leads — day number over month, the shape a calendar
             row has — then the title, then the time and how it is held, then
-            the stage. What stood here was a time chip and a title: the two
+            the stage — which left again on 2026-09-05 (user: "remove the
+            status in upcoming meetings from its table"): every row here is
+            «پیش از جلسه» by construction, so the chip said nothing a reader
+            did not already know. What stood here was a time chip and a title: the two
             facts a person scanning "what is coming" needs least, because the
             time alone does not say WHICH DAY and nothing said whether they
             had to be in a room.
@@ -839,9 +842,6 @@ export function UpcomingWidget() {
                     <span aria-hidden>·</span>
                     <span>{tMeetings(`mode_${m.mode}`)}</span>
                   </span>
-                </span>
-                <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
-                  {tMeetings("stage_pre")}
                 </span>
               </Link>
             </li>

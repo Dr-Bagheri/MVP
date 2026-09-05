@@ -50,6 +50,12 @@ export function filterChipClass(active: boolean): string {
 /** the count badge a filter chip carries, as the folder strips draw it */
 export const FILTER_COUNT = "badge-num rounded-md bg-surface-2 px-1 text-[10px]";
 
+/** THE GAP UNDER ROW TWO — the board's own `gap-3` (12px) between its second
+    row and its cards (user, 2026-09-05: "make the table sub menu on top gap
+    like in the theme rule"). A page whose second row is not inside a `gap-3`
+    column wears this instead of a number of its own. */
+export const FILTER_ROW_GAP = "mb-3";
+
 export interface FilterChip<K extends string> {
   key: K;
   label: ReactNode;

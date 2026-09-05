@@ -6,7 +6,6 @@ import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { ProjectDetail } from "./ProjectDetail";
 import { ProjectDialog } from "./ProjectDialog";
-import { filterChipClass } from "./sectionTabs";
 import { useHoldDrag, type HoldDragHandlers } from "./board/holdDrag";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
@@ -24,7 +23,7 @@ import { Avatar } from "@/components/Avatar";
 import { TONE_CHIP, TONE_DOT } from "./tasks/TaskDialogs";
 import {
   IconChevronRight, IconClock, IconFolder,
-  IconPeople3, IconPlus, IconUser,
+  IconPeople3, IconPlus,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
 import { dayKeyOf, digits, formatDate, monthGridAt, personName } from "@/lib/format";
@@ -222,7 +221,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
     });
   }, [rows, scope, sort, dueToday, meId, locale, cardsOf]);
 
-  const chip = (active: boolean, label: string, onClick: () => void) => (
+  const chip = (active: boolean, label: string, onClick: () => void, count?: string) => (
     <button
       key={label}
       type="button"
@@ -233,6 +232,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       }`}
     >
       {label}
+      {count !== undefined ? <span className="badge-num text-[10px] opacity-70">{count}</span> : null}
     </button>
   );
 
@@ -249,6 +249,13 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
           {chip(sort === "name", t("sortName"), () => setSort("name"))}
           {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
+          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+          {/* WHOSE PROJECTS, IN ROW ONE (user directive, 2026-09-05: "in
+              projects put my projects in the first sub menu top before Due
+              today"). It was the board's second row; here it wears row one's
+              tab like the chips beside it, and «همه» keeps the count. */}
+          {chip(scope === "mine", t("scopeMine"), () => setScope("mine"))}
+          {chip(scope === "all", t("scopeAll"), () => setScope("all"), digits(Array.isArray(rows) ? rows.length : 0, locale))}
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
           {/* the board's own «مهلت امروز», the same box with a border for the
               on state — a state, never a second geometry */}
@@ -285,36 +292,6 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
             {t("newProject")}
           </button>
         ) : null}
-      </div>
-
-      {/* ── row two: whose projects, in the board's second-row shape ───── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            aria-pressed={scope === "mine"}
-            onClick={() => setScope("mine")}
-            className={filterChipClass(scope === "mine")}
-          >
-            <IconUser width={12} height={12} />
-            {t("scopeMine")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={scope === "all"}
-            onClick={() => setScope("all")}
-            className={filterChipClass(scope === "all")}
-          >
-            <IconFolder width={12} height={12} />
-            {t("scopeAll")}
-            <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
-              {digits(Array.isArray(rows) ? rows.length : 0, locale)}
-            </span>
-          </button>
-        </div>
-        <span className="text-xs text-fg-subtle">
-          {t("count", { n: digits(shown.length, locale) })}
-        </span>
       </div>
 
       {error !== null ? (
@@ -683,6 +660,7 @@ function ProjectCard({ project, people, locale, compact = false, drag, lifted = 
       draggable={false}
       data-card={project.id}
       onPointerDown={drag?.onPointerDown}
+      onDragStart={drag?.onDragStart}
       onClick={(e) => { if (drag?.consumeClick()) e.preventDefault(); }}
       /*
        * `h-auto shrink-0` ON THE KANBAN CARD, and it is not a nicety: `.tile`

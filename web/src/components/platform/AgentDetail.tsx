@@ -215,9 +215,10 @@ export function AgentDetail({ handle }: { handle: string }) {
           restates the page under it and carries a number that has to be
           right forever. The groups below say what it can do, and each one
           carries its own count. */}
-      {/* undivided (same directive): the heading names the section, and a
-          rule above it is a second answer to the same question */}
-      <Section title={t("detailTools")}>
+      {/* NO HEADING EITHER (user, 2026-09-05: "remove the text ابزارها in
+          agents"): the groups below each carry their own name and count, and a
+          word over a grid of named groups restates the grid. */}
+      <Section>
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map((group) => (
             <section key={group.key} className="well p-4">

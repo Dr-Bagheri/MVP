@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
 
 /**
  * PRESS, MOVE OR HOLD, RELEASE (user, 2026-09-05: "the tasks in kanban should
@@ -37,6 +37,21 @@ import type { PointerEvent as ReactPointerEvent } from "react";
  * first, because a finger that moves at once is scrolling the lane.
  *
  * jsdom has no layout; the test mocks `elementFromPoint` to name the column.
+ *
+ * THE NATIVE DRAG, settled in a real browser (2026-09-05, the third report:
+ * "moving cards by hand still not working"). A card sits inside a column, and
+ * the column was an HTML5 drag source for reordering. Press on the card, move
+ * one pixel, and the browser starts a native drag of the nearest DRAGGABLE
+ * ANCESTOR of what was pressed — the column — dispatches `dragstart` AT THE
+ * COLUMN, then `pointercancel`, and this gesture is dead. A recorder on a
+ * scratch page showed the exact order under a real mouse: pointerdown@card,
+ * pointermove, dragstart@column, pointercancel. The previous fix compared the
+ * dragstart's target to the column and refused when they differed — and they
+ * never differed, because the browser does not dispatch dragstart at the card;
+ * the synthetic test did, which is why it was green. So: nothing above a card
+ * may be draggable (the column's HANDLE is its header now), and `onDragStart`
+ * below refuses the drags that can still begin INSIDE a card — an image, a
+ * link, a selection — so the pointer sequence survives.
  */
 export const HOLD_MS = 220;
 export const SLOP_PX = 6;
@@ -45,6 +60,9 @@ type Phase = "idle" | "pressed" | "lifted";
 
 export interface HoldDragHandlers {
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** refuses the browser's own drag of anything inside the card (an image, a
+      link, a selection), or it ends this gesture with a pointercancel */
+  onDragStart: (e: ReactDragEvent<HTMLElement>) => void;
   /** true exactly once after a drop — the card's onClick asks before opening */
   consumeClick: () => boolean;
 }
@@ -163,11 +181,15 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
     return () => { window.removeEventListener("keydown", onKey); putBack(); };
   }, [putBack]);
 
+  /* see the header: a native drag that begins inside the card would win the
+     pointer on its first pixel */
+  const onDragStart = useCallback((e: ReactDragEvent<HTMLElement>) => { e.preventDefault(); }, []);
+
   const consumeClick = useCallback(() => {
     const s = st.current;
     if (s.swallow) { s.swallow = false; return true; }
     return false;
   }, []);
 
-  return { onPointerDown, consumeClick };
+  return { onPointerDown, onDragStart, consumeClick };
 }

@@ -8,7 +8,7 @@ import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
 import { TONE_DOT } from "./tasks/TaskDialogs";
 import {
-  FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, FOOTER_CANCEL, FOOTER_PRIMARY,
+  DIALOG_BODY, FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, FOOTER_CANCEL, FOOTER_PRIMARY,
 } from "./tasks/panelStyle";
 import { IconCheck, IconClose, IconPlus } from "@/components/icons";
 import { personName } from "@/lib/format";
@@ -119,7 +119,7 @@ export function ProjectDialog(props: Props) {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pt-3">
+      <div className={DIALOG_BODY}>
         <label className="block">
           <span className={FIELD_LABEL}>{t("fieldName")}</span>
           <input

@@ -8,7 +8,6 @@ import {
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
-import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { personName } from "@/lib/format";
 import { useLocale } from "next-intl";
@@ -219,14 +218,6 @@ export function Dashboard() {
           <h2 className="min-w-0 flex-1 select-none truncate text-base font-semibold">
             {label}
           </h2>
-          {spec.action !== undefined && !editing ? (
-            <Link
-              href={spec.action.href}
-              className="shrink-0 whitespace-nowrap text-xs text-accent hover:underline"
-            >
-              {t(spec.action.labelKey as "upcomingAll")}
-            </Link>
-          ) : null}
           {/*
             The card's controls appear ONLY while the board is being edited:
             a pin and a remove. Outside edit mode there is nothing here at

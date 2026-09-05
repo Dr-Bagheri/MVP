@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { AgentCard } from "@/api/types";
 import { Field } from "@/components/ui";
 import { Overlay } from "@/components/platform/Overlay";
+import { DIALOG_BODY } from "@/components/platform/tasks/panelStyle";
 import { Select } from "@/components/Select";
 import { Switch } from "@/components/Switch";
 import { PageContainer, SkeletonCards } from "@/components/scaffold";
@@ -274,7 +275,7 @@ function AgentEditor({ agent, onClose, onSaved }: {
 
   return (
     <Overlay onClose={onClose} label={agent === null ? t("newAgent") : t("editAgent")}>
-      <div className="space-y-3">
+      <div className={DIALOG_BODY}>
         <Field label={t("fieldName")}>
           <input className="input w-full" value={name} maxLength={80}
             onChange={(e) => setName(e.target.value)} />
@@ -297,22 +298,23 @@ function AgentEditor({ agent, onClose, onSaved }: {
               options={AGENT_COLOR_CHOICES.map((choice) => ({ value: choice, label: choice }))} />
           </Field>
         </div>
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+        {/* a ROW of the divided body, not a box inside it (2026-09-05) */}
+        <div className="flex items-center justify-between gap-3">
           <span className="text-sm text-fg">{t("fieldWeb")}</span>
           <Switch checked={web} onChange={() => setWeb((v) => !v)} label={t("fieldWeb")} />
         </div>
+      </div>
 
-        {failed === null ? null : <p className="text-sm text-danger">{failed}</p>}
+      {failed === null ? null : <p className="mt-2 text-sm text-danger">{failed}</p>}
 
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" className="btn btn-sm border border-border bg-surface text-fg" onClick={onClose}>
-            {t("cancel")}
-          </button>
-          <button type="button" className="btn btn-sm bg-accent text-on-accent"
-            disabled={!canSave} onClick={save}>
-            {t("save")}
-          </button>
-        </div>
+      <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+        <button type="button" className="btn btn-sm border border-border bg-surface text-fg" onClick={onClose}>
+          {t("cancel")}
+        </button>
+        <button type="button" className="btn btn-sm bg-accent text-on-accent"
+          disabled={!canSave} onClick={save}>
+          {t("save")}
+        </button>
       </div>
     </Overlay>
   );

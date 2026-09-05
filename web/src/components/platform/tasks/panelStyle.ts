@@ -135,3 +135,29 @@ export const DETAIL_WIDTH = "w-[980px] max-w-[calc(100vw-2rem)]";
 export const DETAIL_RAIL = "w-[283px] shrink-0";
 /** the inset the reference gives a panel's body */
 export const PANEL_INSET = "px-6";
+
+/*
+ * ── SECTIONS ARE DIVIDED (user directive, 2026-09-05: "add divider between
+ * different sections in all pop-up windows — they all seem connected; even if
+ * they don't have information in them, put empty space for the parts that
+ * need it, give the structure") ─────────────────────────────────────────────
+ *
+ * One rhythm for every panel: a hairline between sections and the same air on
+ * both sides of it, drawn by the CONTAINER (`divide-y` plus a per-child
+ * padding) rather than by each section — so a section cannot forget the rule
+ * and reordering sections cannot break the lines. Three containers, three
+ * tunings, and `dialogSections.guard.test.ts` keeps every dialog on one of
+ * them.
+ */
+/** a dialog's scrolling body: each field a section */
+export const DIALOG_BODY =
+  "scroll-quiet min-h-0 flex-1 overflow-y-auto pe-1 divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-2 [&>*:last-child]:pb-1";
+/** the detail panel's body: the title, then each section */
+export const PANEL_SECTIONS =
+  "divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0";
+/** the detail panel's 283 rail: each field a section, tighter than the body */
+export const RAIL_SECTIONS =
+  "divide-y divide-border [&>*]:py-3.5 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0";
+/** an empty section keeps its room — «موردی ندارد» sits in the space the items
+    would take, so the structure does not collapse around a missing answer */
+export const SECTION_EMPTY = "min-h-[3rem]";

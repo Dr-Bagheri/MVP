@@ -259,28 +259,36 @@ describe("TaskBoard", () => {
     expect(within(columnRegion("برای انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument();
   });
 
-  it("a NATIVE drag that begins on a card is refused, so the hand's gesture survives; one that begins on the column is not", async () => {
+  it("the COLUMN is not draggable — its header is — and a card refuses the browser's drag", async () => {
     /*
-     * Found on production with a recorder on the window (2026-09-05): press
-     * on a card, first move → `dragstart` on the draggable COLUMN →
-     * `pointercancel`. The column's handler already ignored drags that began
-     * on a child; it has to CANCEL them, or the browser's drag wins the
-     * pointer. jsdom starts no native drag, so this asserts the one thing
-     * that decides it: `defaultPrevented` on the dragstart, for a card and —
-     * the control — not for the column itself, whose own reorder still needs
-     * the drag.
+     * Proven in a real browser with a recorder on the window (2026-09-05,
+     * scratch fixture, a real mouse): press on a card inside a draggable
+     * section, first move → `dragstart` whose TARGET IS THE SECTION, then
+     * `pointercancel`. The browser walks up from the pressed element to the
+     * nearest draggable ancestor and dispatches dragstart THERE, so the
+     * previous guard — "refuse when target !== currentTarget" — could never
+     * fire for a press on a card: target and currentTarget were both the
+     * section. The synthetic test that covered it dispatched the event AT
+     * THE CARD, which is not where the browser dispatches it, and was green
+     * against the shipped bug. Rule 9, in a pointer event.
+     *
+     * So the section is not draggable at all now: the HEADER is the handle
+     * (the control below proves a column still moves), and a card refuses
+     * any drag that starts inside it — an image, a link, a selection.
      */
     boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
     const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
     const column = columnRegion("برای انجام");
-    const dt = { setData: vi.fn(), getData: () => "", effectAllowed: "", dropEffect: "" };
 
+    expect(column.getAttribute("draggable"), "the section is a draggable ancestor of every card in it").not.toBe("true");
+    expect(column.querySelector("header")?.getAttribute("draggable"), "the header is the column's handle").toBe("true");
+
+    const dt = { setData: vi.fn(), getData: () => "", setDragImage: vi.fn(), effectAllowed: "", dropEffect: "" };
     /* fireEvent returns false when a handler called preventDefault */
     expect(fireEvent.dragStart(cardEl, { dataTransfer: dt })).toBe(false);
-    expect(fireEvent.dragStart(column, { dataTransfer: dt })).toBe(true);
-    expect(dt.setData).toHaveBeenCalledWith("text/column-id", "col-todo");
+    expect(dt.setData, "a drag from inside a card reached the column's transfer").not.toHaveBeenCalled();
   });
 
   it("a MOUSE that moves past the slop lifts at once — a drag needs no wait", async () => {
@@ -450,9 +458,11 @@ describe("TaskBoard", () => {
     const dt = {
       setData: (kind: string, value: string) => { store.set(kind, value); },
       getData: (kind: string) => store.get(kind) ?? "",
+      setDragImage: () => {},
       effectAllowed: "", dropEffect: "",
     };
-    fireEvent.dragStart(columnRegion("برای انجام"), { dataTransfer: dt });
+    /* the HEADER is the handle (see the test above) — a drag begins there */
+    fireEvent.dragStart(columnRegion("برای انجام").querySelector("header")!, { dataTransfer: dt });
     fireEvent.drop(columnRegion("در حال انجام"), { dataTransfer: dt });
 
     await waitFor(() => expect(updateTaskColumn).toHaveBeenCalledTimes(1));

@@ -212,7 +212,11 @@ export default function InvitationsPage() {
               role stretched to the whole row and pushed the other two onto
               rows of their own. A grid gives each control its column and no
               class fight to lose. Below sm the three stack. */}
-          <div className="mb-3 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
+          {/* and a HAIRLINE under it (user, 2026-09-05: "divider in the
+              invitation"): the form and the list are two sections of one card,
+              and without the rule the empty-list sentence read as the form's
+              own caption */}
+          <div className="mb-4 grid grid-cols-1 items-center gap-2 border-b border-border pb-4 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
             <input
               className="input"
               dir="ltr"

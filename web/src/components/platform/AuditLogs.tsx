@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FilterChips } from "./sectionTabs";
+import { FilterChips, FILTER_ROW_GAP } from "./sectionTabs";
 import { IconCheck, IconGavel, IconHistory, IconRobot, IconTrash } from "@/components/icons";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
@@ -340,7 +340,7 @@ export function AuditLogs() {
         label={t("filterSource")}
         active={source === "" ? "all" : source}
         onSelect={(key) => setSource(key === "all" ? "" : key)}
-        className="mb-5"
+        className={FILTER_ROW_GAP}
         chips={[
           { key: "all" as const, label: t("filterAll"), icon: <IconHistory width={12} height={12} /> },
           ...AUDIT_SOURCES.map((value) => ({
@@ -403,6 +403,11 @@ export function AuditLogs() {
             frame here was the one outer box left on the platform.
           */}
           <DataTable
+            /* NO HEADER ROW (user, 2026-09-05: "for Audit logs remove the
+               header of the table"): five column names over rows a person
+               reads across anyway. The <thead> stays sr-only inside DataTable,
+               so a screen reader still gets the columns. */
+            hideHeader
             rows={visible}
             loading={loading}
             /* six, matching the placeholder this replaced and roughly a

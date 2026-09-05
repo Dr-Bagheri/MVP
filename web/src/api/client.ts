@@ -202,10 +202,29 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
  */
 const readCache = new Map<string, { at: number; value: Promise<unknown> }>();
 const READ_CACHE_TTL_MS = 60_000;
+/**
+ * THE BURST TIER (measured on production, 2026-09-05, user: "the platform is
+ * getting a little slow — check for bugs and reruns"): one load of the
+ * dashboard asked `/api/meetings` NINE times and `/api/tasks/board` twice;
+ * the tasks page asked for its board, labels, people and both project lists
+ * TWICE each. Two causes, both structural — every widget fetches for itself,
+ * and the page REMOUNTS when the identity read lands (PlatformShell keys the
+ * page on the display preferences, which hydrate with `me`), so every fetch
+ * fired at mount fires again ~1s later. Each hop is a Vercel function in
+ * front of a server in another country, so the duplicates were most of the
+ * wait.
+ *
+ * Five seconds is long enough to cover one page's mount-and-remount and short
+ * enough that nothing a person does inside it can go stale: every write
+ * through `bff` clears the whole cache anyway, and the refresh bus refetches
+ * after the clear. Polling readers (the room, at 4s) do not read through this
+ * tier — see each site.
+ */
+const BURST_TTL_MS = 5_000;
 
-function cachedRead<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+function cachedRead<T>(key: string, fetcher: () => Promise<T>, ttl = READ_CACHE_TTL_MS): Promise<T> {
   const hit = readCache.get(key);
-  if (hit && Date.now() - hit.at < READ_CACHE_TTL_MS) return hit.value as Promise<T>;
+  if (hit && Date.now() - hit.at < ttl) return hit.value as Promise<T>;
   const value = fetcher().catch((error) => {
     readCache.delete(key);
     throw error;
@@ -1352,7 +1371,7 @@ export const api = {
    * than left as three methods nobody calls.
    */
   async agents(): Promise<AgentCard[]> {
-    const { agents } = await bff<{ agents: AgentCard[] }>("/api/agents");
+    const { agents } = await cachedRead("agents", () => bff<{ agents: AgentCard[] }>("/api/agents"), BURST_TTL_MS);
     return agents;
   },
 
@@ -1431,7 +1450,7 @@ export const api = {
 
   /* ── 0189 invitations ──────────────────────────────────────────────── */
   async invites(): Promise<JoinInviteRecord[]> {
-    return bff("/api/invites");
+    return cachedRead("invites", () => bff<JoinInviteRecord[]>("/api/invites"), BURST_TTL_MS);
   },
   async sendInvites(input: { kind: InviteKind; target_id: string; user_ids: string[] }): Promise<{ invited: number }> {
     return bff("/api/invites", {
@@ -1461,7 +1480,8 @@ export const api = {
 
   /* ── 0181 projects ─────────────────────────────────────────────────── */
   async projects(opts?: { archived?: boolean }): Promise<ProjectRecord[]> {
-    return bff(`/api/projects${opts?.archived ? "?archived=1" : ""}`);
+    const suffix = opts?.archived ? "?archived=1" : "";
+    return cachedRead(`projects${suffix}`, () => bff<ProjectRecord[]>(`/api/projects${suffix}`), BURST_TTL_MS);
   },
   async createProject(input: {
     name: string; summary?: string; tone?: ProjectTone; icon?: string | null;
@@ -1504,7 +1524,11 @@ export const api = {
     columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[];
   }> {
     const suffix = opts?.archived ? "?archived=1" : "";
-    return bff(`/api/tasks/board${suffix}`);
+    return cachedRead(
+      `task-board${suffix}`,
+      () => bff<{ columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[] }>(`/api/tasks/board${suffix}`),
+      BURST_TTL_MS,
+    );
   },
   /**
    * Everything the card IS, in one write (0186).
@@ -1588,7 +1612,7 @@ export const api = {
   },
   /* 0147 — labels, the roster, and a card's wearing of a label */
   async taskLabels(): Promise<TaskLabelRecord[]> {
-    return bff("/api/tasks/labels");
+    return cachedRead("task-labels", () => bff<TaskLabelRecord[]>("/api/tasks/labels"), BURST_TTL_MS);
   },
   async createTaskLabel(name: string, color: TaskLabelColor): Promise<TaskLabelRecord> {
     return bff("/api/tasks/labels", {
@@ -1633,7 +1657,7 @@ export const api = {
   },
 
   async orgPeople(): Promise<OrgPersonRecord[]> {
-    return bff("/api/org/people");
+    return cachedRead("org-people", () => bff<OrgPersonRecord[]>("/api/org/people"), BURST_TTL_MS);
   },
 
   async createTaskTopic(name: string): Promise<TaskTopicRecord> {
@@ -1655,7 +1679,9 @@ export const api = {
       patch. The recorder links its call by patching call_id. */
   async meetings(opts?: { archived?: boolean }): Promise<MeetingRecord[]> {
     const suffix = opts?.archived ? "?archived=1" : "";
-    return bff(`/api/meetings${suffix}`);
+    /* the burst tier: the dashboard's four meeting widgets and the page's
+       remount are one request, not nine (BURST_TTL_MS) */
+    return cachedRead(`meetings${suffix}`, () => bff<MeetingRecord[]>(`/api/meetings${suffix}`), BURST_TTL_MS);
   },
   async createMeeting(input: {
     title: string; scheduled_at: string; mode: MeetingMode;
@@ -1672,7 +1698,11 @@ export const api = {
   /* the meeting FOLDERS (0151) — real rows, so one can exist before its
      first meeting and be renamed without rewriting the meetings */
   async meetingTopics(): Promise<Array<{ id: string; name: string }>> {
-    const body = await bff<{ topics: Array<{ id: string; name: string }> }>("/api/meetings/topics");
+    const body = await cachedRead(
+      "meeting-topics",
+      () => bff<{ topics: Array<{ id: string; name: string }> }>("/api/meetings/topics"),
+      BURST_TTL_MS,
+    );
     return body.topics;
   },
   async createMeetingTopic(name: string): Promise<{ id: string; name: string }> {
@@ -2688,7 +2718,7 @@ export const api = {
 
   /** M35: agent-initiated cards. `unavailable` = db/0074 pending, not "no news". */
   async cards(): Promise<{ cards: AgentCardItem[]; unavailable?: string }> {
-    return bff<{ cards: AgentCardItem[]; unavailable?: string }>("/api/cards");
+    return cachedRead("cards", () => bff<{ cards: AgentCardItem[]; unavailable?: string }>("/api/cards"), BURST_TTL_MS);
   },
   async markCardRead(cardId: string): Promise<void> {
     await bff(`/api/cards/${cardId}/read`, { method: "POST" });

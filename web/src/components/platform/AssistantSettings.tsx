@@ -405,7 +405,12 @@ function VoiceSwitches() {
   return (
     <Card>
       <h2 className="h-section">{t("voiceSwitchesTitle")}</h2>
-      <div className="mt-4 space-y-3">
+      {/* ROWS DIVIDED BY A HAIRLINE, not boxes inside the card (user,
+          2026-09-05: "remove the extra box border in the assistant settings
+          for شنیدن دستیار, پاسخ با صدا, دسترسی عامل‌ها به وب"). A bordered row
+          inside a bordered card is a box in a box — the same shape the
+          notifications rows already refused. */}
+      <div className="mt-2 divide-y divide-border">
         <SwitchRow
           label={t("earsLabel")}
           hint={t("earsHint")}
@@ -441,7 +446,7 @@ function SwitchRow({ label, hint, checked, onChange }: {
   label: string; hint?: string; checked: boolean; onChange: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
+    <div className="flex items-start justify-between gap-4 py-3">
       <span className="min-w-0">
         <span className="block text-sm font-medium text-fg">{label}</span>
         {hint ? <span className="mt-0.5 block text-xs leading-6 text-fg-muted">{hint}</span> : null}
@@ -481,15 +486,15 @@ function AgentsWebCard({ state, value, onChange }: {
   return (
     <Card>
       <h2 className="h-section">{t("agentsWebTitle")}</h2>
-      <div className="mt-4">
+      <div className="mt-2">
         {state === "pending" ? (
-          <Skeleton className="h-14 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full" />
         ) : value === undefined ? (
           /* named, not hidden: a person who was told this setting exists and
              finds nothing would look for it forever */
           <p className="text-sm text-fg-muted">{t("agentsWebUnavailable")}</p>
         ) : (
-          <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
+          <div className="flex items-start justify-between gap-4 py-3">
             <span className="min-w-0">
               <span className="block text-sm font-medium text-fg">{t("agentsWebLabel")}</span>
             </span>

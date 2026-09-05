@@ -46,7 +46,6 @@
     "detailModel": "مدل",
     "detailModelDefault": "پیش‌فرض پلتفرم",
     "detailPrompt": "دستورالعمل",
-    "detailTools": "ابزارها",
     "detailWeb": "دسترسی وب",
     "detailWebOff": "خاموش",
     "detailWebOn": "روشن",
@@ -901,7 +900,7 @@
       "record": "رکورد تازه",
       "stats": "نمای کلی",
       "week": "این هفته",
-      "upcoming": "پیش رو",
+      "upcoming": "جلسات پیش رو",
       "latest": "آخرین جلسات"
     },
     "noRecords": "هنوز رکوردی نیست. از اکو جلسه‌ای آغاز کنید تا اینجا پر شود.",
@@ -932,7 +931,6 @@
     "statMonth": "جلسات این ماه",
     "statTaskRate": "نرخ انجام تسک‌ها",
     "statTasksTotal": "تسک‌های ثبت‌شده",
-    "upcomingAll": "تقویم کامل ←",
     "noUpcomingMeetings": "جلسه‌ای در پیش نداری.",
     "noMeetingsYet": "هنوز جلسه‌ای نیست.",
     "latestReviewChip": "بازبینی",
@@ -945,8 +943,7 @@
     "greetUpcoming": "{n} جلسه پیش‌رو داری.",
     "greetNoUpcoming": "جلسه پیش‌رویی نداری.",
     "greetUpcomingUnknown": "نمای کلی جلسات، تسک‌ها و مصوبات.",
-    "startRecordMeeting": "شروع ضبط جلسه",
-    "integrationsAll": "همهٔ اتصال‌ها ←"
+    "startRecordMeeting": "شروع ضبط جلسه"
   },
   "echo": {
     "group": {

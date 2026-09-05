@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  useCallback, useEffect, useRef, useState, useSyncExternalStore,
+  useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore,
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
@@ -248,10 +248,25 @@ export function AssistantSidebar() {
     getServerPresenceAnchorSnapshot,
   );
 
-  const [member, setMember] = useState(false);
+  /*
+   * THREE STATES, like the shell's identity (user report, 2026-09-05: "when I
+   * reload the page the AI assistant sidebar comes with delay — the skeleton
+   * structure of the whole platform must have the AI sidebar as always
+   * present"). `undefined` = the identity read has not answered; `true` = a
+   * member; `false` = not one. The strip renders for `undefined` — it is
+   * structure, known before the network, exactly as the rail and the top bar
+   * are — and leaves only when the answer is "not a member". A single `false`
+   * made the two the same value, so the strip could only appear AFTER the
+   * network, and the page stepped sideways when it did.
+   */
+  const [member, setMember] = useState<boolean | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   openRef.current = open;
+  /** whether the assistant belongs on this screen at all: not a stranger, on
+      a surface where the platform shell renders. Computed here, above the
+      hooks that read it (the hotkey below is one). */
+  const visible = member !== false && !sidebarIsSilentOn(pathname);
   /** messages that arrived while it was collapsed — the badge on the rail */
   const [input, setInput] = useState("");
   /**
@@ -480,11 +495,13 @@ export function AssistantSidebar() {
     inputRef.current?.focus();
   });
   usePushToTalk({
-    onPress: () => {
-      reveal();
-      if (dictation.status !== "listening") dictation.toggle();
-    },
-    onRelease: () => { if (dictation.status === "listening") dictation.toggle(); },
+    onPress: () => { reveal(); dictation.start(); },
+    onRelease: dictation.stop,
+    /* the LOWEST rank, and offered only while this strip is on screen: the
+       assistant page's own mic and a room's composer outrank it, so one key
+       opens one microphone (lib/usePushToTalk.ts) */
+    priority: 0,
+    enabled: visible,
   });
 
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
@@ -552,20 +569,26 @@ export function AssistantSidebar() {
    * nothing asked again. A full reload remounted it and the assistant
    * appeared, which is exactly the shape the report describes.
    *
-   * `member` is in the deps as a LATCH, not as a subscription: while it is
-   * false the question is re-asked on each navigation — which is what carries
-   * the sign-in transition — and the moment it is true the effect returns
-   * immediately and costs nothing for the rest of the session. Signing out is
-   * a full navigation, so the latch does not have to be reset by hand.
+   * The LATCH is a ref read at the top of the effect: until the answer is
+   * "member" the question is re-asked on each navigation — which is what
+   * carries the sign-in transition — and once it is, the effect returns at
+   * once and costs nothing for the rest of the session. Signing out is a full
+   * navigation, so the latch does not have to be reset by hand.
    */
+  /* asked once per NAVIGATION and latched on "member" — through a ref, not
+     the deps: with `member` in the deps the answer "not a member" re-ran the
+     effect and asked again at once, which a test's one-shot "stranger" answer
+     turned straight back into a member */
+  const memberRef = useRef(member);
+  memberRef.current = member;
   useEffect(() => {
-    if (member) return;
+    if (memberRef.current === true) return;
     let live = true;
     void api.identityState().then((who) => {
-      if (live && who.state === "member") setMember(true);
+      if (live) setMember(who.state === "member");
     }).catch(() => undefined);
     return () => { live = false; };
-  }, [member, pathname]);
+  }, [pathname]);
 
   /** every bus notice becomes a toast, gone after 4s */
   useEffect(() => {
@@ -610,12 +633,6 @@ export function AssistantSidebar() {
   }, [messages]);
 
   /**
-   * Whether the assistant belongs on this screen at all: a member, on a
-   * surface where the platform shell renders.
-   */
-  const visible = member && !sidebarIsSilentOn(pathname);
-
-  /**
    * COMING BACK FROM THE ASSISTANT PAGE (user directive, 2026-09-03: "all that
    * we were talked about should automatically come to the ai assistant side
    * bar and anywhere it navigates it will follow").
@@ -657,7 +674,10 @@ export function AssistantSidebar() {
    * are fixed; the page is the space between them; when this one is wider the
    * page is narrower.
    */
-  useEffect(() => {
+  /* a LAYOUT effect: the page reads this to step aside, and publishing it
+     after paint gave every load one frame of a page centred against a strip
+     that was about to appear */
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--assistant-rail", visible ? (open ? PANEL_W : RAIL_W) : "0px");
     /* and nothing when the assistant is not on this screen — an auth page has

@@ -16,7 +16,7 @@ import {
   TONE_CHIP, TONE_DOT, relativeTime,
 } from "./TaskDialogs";
 import { Overlay } from "../Overlay";
-import { BODY_HEADING, RAIL_LABEL, TAB_BAR, tabClass } from "./panelStyle";
+import { BODY_HEADING, DIALOG_BODY, RAIL_LABEL, SECTION_EMPTY, TAB_BAR, tabClass } from "./panelStyle";
 import { DetailPanel } from "../DetailPanel";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
@@ -290,7 +290,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
                 />
               ) : task.description.trim() === "" ? (
-                <p className="text-sm text-fg-subtle">{t("noDescription")}</p>
+                <p className={`${SECTION_EMPTY} text-sm text-fg-subtle`}>{t("noDescription")}</p>
               ) : (
                 <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{task.description}</p>
               )}
@@ -301,7 +301,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 {t("checklist")} ({digits(done, locale)}/{digits(task.checklist.length, locale)})
               </h3>
               {task.checklist.length === 0 ? (
-                <p className="text-sm text-fg-subtle">{t("checklistEmpty")}</p>
+                <p className={`${SECTION_EMPTY} text-sm text-fg-subtle`}>{t("checklistEmpty")}</p>
               ) : (
                 <ul className="space-y-1">
                   {task.checklist.map((line) => (
@@ -392,8 +392,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               </div>
             </section>
 
-            {/* ── the two tabs ─────────────────────────────────────── */}
-            <div role="tablist" className={TAB_BAR}>
+            {/* ── the two tabs AND the tab's content, one section ──────
+                DetailPanel divides its body's children (2026-09-05); the bar
+                and what it switches are one thing, or a hairline would cut
+                between them */}
+            <section aria-label={t("comments")}>
+            <div role="tablist" className={`${TAB_BAR} mb-4`}>
               {([["comments", `${t("comments")} ${digits(task.comments.length, locale)}`],
                  ["history", `${t("history")} ${digits(task.events.length, locale)}`]] as const).map(([key, label]) => (
                 <button
@@ -416,7 +420,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             {tab === "comments" ? (
               <div className="space-y-3">
                 {task.comments.length === 0 ? (
-                  <p className="text-sm text-fg-subtle">{t("noComments")}</p>
+                  <p className={`${SECTION_EMPTY} text-sm text-fg-subtle`}>{t("noComments")}</p>
                 ) : (
                   <ul className="space-y-2">
                     {task.comments.map((entry) => (
@@ -484,7 +488,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             ) : (
               <ul className="space-y-2">
                 {task.events.length === 0 ? (
-                  <li className="text-sm text-fg-subtle">{t("noHistory")}</li>
+                  <li className={`${SECTION_EMPTY} text-sm text-fg-subtle`}>{t("noHistory")}</li>
                 ) : task.events.map((entry) => (
                   <li key={entry.id} className="flex items-center gap-2.5">
                     {/* 2026-09-03: the platform's avatar. This tab drew its own
@@ -501,6 +505,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 ))}
               </ul>
             )}
+            </section>
       </DetailPanel>
 
       {confirmArchive ? (
@@ -640,6 +645,7 @@ function ScheduleRow({ task, onChanged, onFailed }: {
               <IconClose width={14} height={14} />
             </button>
           </div>
+          <div className={DIALOG_BODY}>
           {/* the SAME fields the create dialog offers, forced on — the switch
               would be a second way to say what «توقف تکرار» already says */}
           <ScheduleFields
@@ -650,7 +656,8 @@ function ScheduleRow({ task, onChanged, onFailed }: {
             onGapDays={setGapDays}
             onUntil={setUntil}
           />
-          <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-4">
             <button type="button" onClick={() => setOpen(false)}
               className="btn text-fg-muted hover:text-fg">{t("cancel")}</button>
             <button type="button" disabled={busy}
