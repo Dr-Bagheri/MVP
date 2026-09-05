@@ -123,10 +123,10 @@ export function SetMemberPassword({
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" className="btn-secondary h-9 px-4 text-sm" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={onClose}>
             {t("cancel")}
           </button>
-          <button className="btn-primary h-9 px-4 text-sm" disabled={!ready}>
+          <button className="btn-primary" disabled={!ready}>
             {busy ? t("passwordSetBusy") : t("passwordSetConfirmAction")}
           </button>
         </div>

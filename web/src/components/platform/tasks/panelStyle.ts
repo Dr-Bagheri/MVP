@@ -83,38 +83,54 @@ export const PANEL_INPUT = "input h-[45px] w-full text-[13.5px]";
 /** the same field grown for prose */
 export const PANEL_TEXTAREA = "input min-h-[73px] w-full resize-y py-[11px] text-[13.5px]";
 
-/**
- * A SEGMENT CHIP — column, priority, and any other closed choice.
+/*
+ * ── THE CONTROLS TAKE THE FAMILY (R4, user ruling 2026-09-05: "go with a") ──
  *
- * 9px, which is neither our control (11) nor our panel (12) radius: the
- * reference gives its small closed choices their own corner, and the two
- * states differ by ground and edge rather than by size, so the row does not
- * move when the selection does.
+ * The first version of this file wrote the reference's control heights by
+ * hand — `h-[34px]` on the chips, `h-[32px]` on the tabs, `h-[30px]` on the
+ * top-bar button, 42/40 on the footer — and NOT ONE OF THEM REACHED THE
+ * SCREEN. `.btn` carries `min-h-control` (38, 41.6 at 1920), and min-height
+ * beats a smaller height written beside it, so every one of these rendered at
+ * the regular size: chips measured 42 on production, tabs measured 42 inside a
+ * 42 bar, edge to edge. panelStyle.test asserted the STRINGS and was green the
+ * whole time — the artifact read as satisfied and only the computed value
+ * disagreed, one more instance of the class this repo keeps meeting.
+ *
+ * The ruling settles the shape rather than the numbers: the platform has
+ * THREE control sizes — `.btn` 38, `.btn-sm` 34, `.btn-icon` 28 — and a
+ * height written by hand on a control is a defect. The reference's 30 / 32 /
+ * 34 round into 34; its 40 / 42 round into 38; its 9px chip corner rounds into
+ * the family's 8, the same way. What these constants keep is the panel's
+ * GROUND and EDGE semantics: a chip's two states differ by colour and border
+ * and never by size, a tab's active state is the surface ground, the top-bar
+ * button is outlined. The control guard now fails any `btn` that re-sizes
+ * itself, so this cannot drift back by hand.
  */
+
+/** A SEGMENT CHIP — column, priority, and any other closed choice. The two
+    states differ by ground and edge, never by size, so the row does not move
+    when the selection does. */
 export const chipClass = (on: boolean): string =>
-  `btn h-[34px] rounded-[9px] px-3 text-[12px] font-semibold ${
+  `btn btn-sm ${
     on
       ? "border border-accent bg-accent-soft text-accent"
       : "border border-border bg-field text-fg-muted hover:text-fg"
   }`;
 
-/** the dialog's two footer controls */
-export const FOOTER_CANCEL =
-  "btn h-[42px] rounded-[11px] border border-border-strong px-4 text-[13px] font-semibold text-fg-muted hover:text-fg";
-export const FOOTER_PRIMARY =
-  "btn h-[40px] rounded-[11px] bg-accent px-[18px] text-[13px] font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50";
+/** the dialog's two footer controls — the regular size, like every footer */
+export const FOOTER_CANCEL = "btn border border-border-strong text-fg-muted hover:text-fg";
+export const FOOTER_PRIMARY = "btn-primary";
 
 /** a small control in the detail's top bar */
 export const TOP_BUTTON =
-  "btn h-[30px] gap-1.5 rounded-[8px] border border-border-strong px-3 text-[11.5px] font-semibold text-fg-muted hover:text-fg";
+  "btn btn-sm gap-1.5 border border-border-strong text-fg-muted hover:text-fg";
 
-/** the two-tab strip under the body */
-export const TAB_BAR =
-  "flex h-[42px] items-center gap-1 rounded-[11px] border border-border bg-field p-1";
+/** the two-tab strip under the body. The bar has NO height of its own: it is
+    the compact control plus 4px of padding on each side (34 + 8 = 42, the
+    reference's bar), so it grows with the root exactly as the tabs do. */
+export const TAB_BAR = "flex items-center gap-1 rounded-md border border-border bg-field p-1";
 export const tabClass = (on: boolean): string =>
-  `btn h-[32px] flex-1 rounded-[8px] text-[12px] font-semibold ${
-    on ? "bg-surface text-fg" : "text-fg-subtle hover:text-fg"
-  }`;
+  `btn btn-sm flex-1 ${on ? "bg-surface text-fg" : "text-fg-subtle hover:text-fg"}`;
 
 /** the panel itself — 580 for the dialog, 980 for the detail */
 export const DIALOG_WIDTH = "w-[580px] max-w-[calc(100vw-2rem)]";

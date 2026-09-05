@@ -60,7 +60,7 @@ export function DeletedCallsCard({
                 {t("purgeIn", { days: digits(purgeDaysLeft(call.deleted_at!), locale) })}
               </Chip>
               <button
-                className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                className="btn-secondary btn-sm"
                 onClick={async () => {
                   await api.restoreCall(call.id);
                   onChanged();

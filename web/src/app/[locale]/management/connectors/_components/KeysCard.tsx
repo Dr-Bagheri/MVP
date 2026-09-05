@@ -70,7 +70,7 @@ export function KeysCard({
         <h2 className="h-section">{t("keys")}</h2>
         <button
           type="button"
-          className="btn-primary h-9 min-h-0 px-3 text-xs"
+          className="btn-primary btn-sm"
           onClick={() => setMinting(true)}
         >
           {t("mint")}
@@ -168,7 +168,7 @@ export function KeysCard({
                       ) : (
                         <button
                           type="button"
-                          className="btn-secondary h-8 min-h-0 px-3 text-xs"
+                          className="btn-secondary btn-sm"
                           onClick={() => setRevoking(key)}
                         >
                           {t("revoke")}

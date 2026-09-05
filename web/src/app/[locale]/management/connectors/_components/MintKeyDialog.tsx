@@ -201,7 +201,7 @@ export function MintKeyDialog({
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="btn-secondary h-10 min-h-0 px-4 text-sm"
+              className="btn-secondary"
               onClick={() => {
                 reset();
                 onClose();
@@ -211,7 +211,7 @@ export function MintKeyDialog({
             </button>
             <button
               type="button"
-              className="btn-primary h-10 min-h-0 px-4 text-sm"
+              className="btn-primary"
               // Disabled until the actor is chosen: the choice cannot be
               // skipped past, which is the whole point of making it required.
               disabled={busy || actorId === "" || name.trim() === ""}

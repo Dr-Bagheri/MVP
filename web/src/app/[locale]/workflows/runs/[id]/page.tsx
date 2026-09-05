@@ -152,7 +152,7 @@ export default function WorkflowRunPage({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="btn-primary h-7 min-h-0 px-3 text-xs"
+                  className="btn-primary btn-sm"
                   disabled={deciding}
                   onClick={() => void decide(step.step_id, "approve")}
                 >
@@ -160,7 +160,7 @@ export default function WorkflowRunPage({
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary h-7 min-h-0 px-3 text-xs"
+                  className="btn-secondary btn-sm"
                   disabled={deciding}
                   onClick={() => void decide(step.step_id, "reject")}
                 >

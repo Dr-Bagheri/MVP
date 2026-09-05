@@ -272,6 +272,41 @@ function pressableCount(code: string): number {
   return n;
 }
 
+/**
+ * R4 — THE THEME'S OWN DOOR (user ruling 2026-09-05, "go with a": three
+ * control sizes, no fourth).
+ *
+ * The check above catches a control drawn WITHOUT the theme. This one catches
+ * the twelfth shape coming back THROUGH it: `btn-primary h-9 min-h-0 px-3
+ * text-xs`, `btn-secondary h-10`, `btn h-[34px]` — twenty static sites and
+ * the measured task panels had re-sized a themed control by hand, in five
+ * heights (28 / 32 / 36 / 40 / auto). `min-h-0` is the tell: it exists only
+ * to defeat `.btn`'s own minimum, and where it was missing the hand height
+ * silently lost to that minimum and rendered at 38 anyway (the panel chips:
+ * written 34, measured 42). Either way the family had a fourth size on the
+ * page, which is the complaint this file exists for.
+ *
+ * So: on a pressable element wearing `btn`, a fixed height, a min-height
+ * override or a text size is the finding. Width is not (a footer button may
+ * be `w-full`), and `h-full` is not (stretching to a row is not picking a
+ * size). Sizes are `btn` / `btn-sm` / `btn-icon`, and nothing else.
+ */
+const RESIZED_THEME_CONTROL =
+  /(?<![\w-])(?:min-h-(?:0|\d[\w.]*|\[[^\]]+\])|h-(?:\d+(?:\.\d+)?|\[[^\]]+\]|auto)|text-(?:xs|sm|base|lg|xl|\d?xl|\[[^\]]+\]))(?![\w-])/;
+
+function resizedThemeControls(code: string): string[] {
+  const out: string[] = [];
+  for (const [name, tag] of openingTags(code)) {
+    if (!isPressable(name, tag)) continue;
+    for (const cls of classAttributes(tag)) {
+      if (!/\bbtn\b|\bbtn-/.test(cls)) continue;
+      const hit = cls.match(RESIZED_THEME_CONTROL);
+      if (hit) out.push(`${name}: ${hit[0]} in "${cls.trim().replace(/\s+/g, " ")}"`);
+    }
+  }
+  return out;
+}
+
 function handRolled(code: string): number {
   let n = 0;
   for (const [name, tag] of openingTags(code)) {
@@ -399,6 +434,67 @@ describe("controls share one shape", () => {
     expect(
       wrong,
       "use .btn / .btn-sm / .btn-icon, or update the worklist:\n" + wrong.join("\n"),
+    ).toEqual([]);
+  });
+
+  it("R4: a themed control keeps the theme's size — and the check can answer NO", () => {
+    /*
+     * Both directions again, because "no hits" reads identically whether the
+     * tree is clean or the pattern is blind. The caught set is what shipped:
+     * the `min-h-0` override, the hand height that silently LOST to `.btn`'s
+     * minimum, a size pushed through a text utility, the template form, and a
+     * Link drawn as a button.
+     */
+    const caught = {
+      minHZero: '<button className="btn-primary h-9 min-h-0 px-3 text-xs" />',
+      heightLostToMinimum: '<button className="btn h-[34px] rounded-[9px]" />',
+      autoHeight: '<button className="btn-secondary h-auto min-h-0" />',
+      textSize: '<button className="btn text-sm" />',
+      template: '<button className={`btn h-[32px] flex-1 ${on ? "bg-surface" : ""}`} />',
+      link: '<Link href="/x" className="btn-primary h-10 px-4" />',
+    };
+    for (const [name, code] of Object.entries(caught)) {
+      expect(resizedThemeControls(code), `${name} must count`).toHaveLength(1);
+    }
+
+    const ignored = {
+      regular: '<button className="btn" />',
+      compact: '<button className={`btn btn-sm ${on ? "bg-accent text-on-accent" : ""}`} />',
+      icon: '<button className="btn btn-icon border border-border" />',
+      /* width is not a size: a footer button may fill its row */
+      fullWidth: '<button className="btn-danger w-full" />',
+      /* stretching to a row is not picking a size */
+      stretch: '<button className="btn h-full" />',
+      /* a badge INSIDE a control sizes its own digits; the control does not */
+      childBadge: '<button className="btn btn-sm"><span className="text-[10px]">3</span></button>',
+      /* drawn without the theme at all — the other check's business, not this one's */
+      notThemed: '<button className="h-9 rounded-xl px-3" />',
+    };
+    for (const [name, code] of Object.entries(ignored)) {
+      expect(resizedThemeControls(code), `${name} must NOT count`).toHaveLength(0);
+    }
+  });
+
+  it("R4: no themed control in the tree re-sizes itself", () => {
+    /*
+     * No worklist here, deliberately. The other check carries one because a
+     * day cell or a round transport genuinely has geometry the family lacks;
+     * a control that ALREADY wears `btn` has no such argument — it chose the
+     * family and then overrode it. Twenty sites did on 2026-09-05 and every one
+     * converted to `btn`, `btn-sm` or `btn-icon` without losing a thing.
+     */
+    const wrong: string[] = [];
+    for (const file of sources(SRC)) {
+      if (file.split(/[\\/]/).includes("ui")) continue; // shadcn source owns its own variants
+      const rel = relative(SRC, file).split("\\").join("/");
+      for (const hit of resizedThemeControls(codeOnly(readFileSync(file, "utf8")))) {
+        wrong.push(`${rel}: ${hit}`);
+      }
+    }
+    expect(
+      wrong,
+      "three sizes — .btn / .btn-sm / .btn-icon. A height, min-height or text size beside `btn` is a fourth:\n"
+        + wrong.join("\n"),
     ).toEqual([]);
   });
 });

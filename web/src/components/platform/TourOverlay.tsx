@@ -146,7 +146,7 @@ export function TourOverlay() {
           </button>
           <button
             type="button"
-            className="btn-primary h-8 min-h-0 px-4 text-xs"
+            className="btn-primary btn-sm"
             onClick={nextTourStep}
           >
             {last ? t("done") : t("next")}

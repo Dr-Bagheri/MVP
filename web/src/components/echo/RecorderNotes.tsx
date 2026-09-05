@@ -121,7 +121,7 @@ export function RecorderNotes({
       <div className="mt-2 flex items-center gap-2">
         <button
           type="button"
-          className="btn-secondary h-9 px-4 text-sm"
+          className="btn-secondary"
           disabled={busy || draft.trim() === ""}
           onClick={() => void add()}
         >

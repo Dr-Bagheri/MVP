@@ -265,8 +265,8 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
                 <div className="grid grid-cols-8 gap-0.5">
                   {EMOJI.map((e) => (
                     <button key={e} type="button" onClick={() => insert(e)}
-                      className="btn btn-icon text-base hover:bg-surface-2">
-                      {e}
+                      className="btn btn-icon hover:bg-surface-2">
+                      <span className="text-base">{e}</span>
                     </button>
                   ))}
                 </div>

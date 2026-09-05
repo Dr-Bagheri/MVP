@@ -27,6 +27,27 @@ A rule is worked **one at a time**, top to bottom in the order the user picks.
 Exceptions are entries with reasons in the guard's allow-list — never a
 loosened rule — and the user's "except this part" is what puts one there.
 
+## Rulings on record
+
+**2026-09-05 (the user, after reading the first draft):**
+
+1. **The template is the tasks page and the meetings page** — for pages,
+   buttons, dropdowns, tables, margins, spacing, dividers, everything. Where a
+   rule below needs a reference shape, it is the one those two pages use.
+2. **A create button sits in the same row as the first sub-menu** (row 1 of the
+   toolbar), the way tasks and meetings do. Every page.
+3. **The two kanban boards (tasks, projects) are the same board.** One
+   component; today they differ.
+4. **Same table or same button on two pages = same size.** Dividers placed the
+   same way, text the same style and size.
+5. **The Persian font must read well and render sharp** — a type decision to be
+   made under R6, with candidates shown, not slipped in.
+6. **Every rule applies to every page.** The only two surfaces allowed a
+   different STRUCTURE are the AI assistant and the dashboard — same theme,
+   different anatomy. (`/platform` and `/join` stay outside the shell as
+   before; their controls still follow the family.)
+7. **R4 = option (a): one control family, three sizes.**
+
 ## The shapes, as they stand
 
 ### R1 · The shell — SOLID
@@ -82,37 +103,40 @@ loosened rule — and the user's "except this part" is what puts one there.
 - **Solid =** `Toolbar` component + a guard: no `role="tablist"` and no
   `btn-primary` inside a page body outside the toolbar/footers.
 
-### R4 · The control family — PARTIAL · a measured defect
+### R4 · The control family — SOLID (ruled (a) 2026-09-05; swept, guarded, re-measured)
 
-- **Today:** `.btn` 38 (r11, 13/600) · `.btn-sm` 34 (r8, 12.5/600) ·
-  `.btn-icon` 28×28 (r8) · variants primary / secondary / ghost / danger ·
-  `.tap` gives 44 below md. Measured: btn-sm 37, btn-icon 31, btn 42 at 1920
-  — the tokens, scaled. `control.guard` holds a worklist of the remaining
-  hand-rolled controls.
-- **THE DEFECT:** `.btn` carries `min-h-control`, and **min-height beats any
-  smaller height written beside it**. Every control that tried to be smaller
-  than 38 by writing `h-[…]` on a `.btn` renders at 38 (42 at 1920):
-  - the panel chips (`chipClass`, `h-[34px]`) → measured **42**;
-  - the panel tabs (`tabClass`, `h-[32px]` in a 42 bar) → measured **42**,
-    filling the bar edge to edge;
-  - `TOP_BUTTON h-[30px]`, `FOOTER_PRIMARY h-[40px]` → 42 at this width.
-  The numbers measured off the reference on 2026-09-05 and asserted by
-  `panelStyle.test.ts` never reached the screen: the test read the STRING.
-  Plus: 26 raw `h-[Npx]` in components; the board's column names are 4
-  unstyled 23px buttons.
-- **Proposed rule:** **three control sizes, no fourth** — 38 / 34 / 28 — and
-  a height written by hand on a control is a defect. Panel chips and top
-  buttons = `btn-sm`; panel tabs = `btn-sm` inside a 42 bar with 4px padding
-  (34 + 8 = 42 exactly); footers = `.btn`. The reference's 30/32/40/42 are
-  rounded INTO the family, the same way its 9px chip corner rounds to the
-  family's 8.
-- **Solid =** `control.guard` gains: a className that contains `btn` may not
-  contain `h-[`/`min-h-[`; `panelStyle.test` asserts the family classes;
-  re-measured on production after deploy.
-- **The user's call:** one family (3 sizes) vs. reference-exact sizes (adds
-  chip 34/9, tab 32, top 30, footer 42/40 — seven sizes). Recommendation: one
-  family; the reference's own toolbar buttons are 38 and its dialog footer is
-  the outlier.
+- **The rule:** **three control sizes and no fourth** — `.btn` 38 (r11,
+  12.5/600) · `.btn-sm` 34 (r8, 12.5/600) · `.btn-icon` 28×28 (r8) — with the
+  coats primary / secondary / ghost / danger, and `.tap` for 44 below md.
+  **A height, a min-height override or a text size written beside `btn` is
+  a defect.** A glyph inside a control (an emoji, a count) sizes ITSELF on a
+  child span; the control does not.
+- **What was measured (before):** `.btn` carries `min-h-control`, and
+  min-height beats any smaller height written beside it, so every control
+  that tried to be smaller by writing `h-[…]` on a `.btn` rendered at 38 (42
+  at 1920): the panel chips (`h-[34px]`) measured **42**; the panel tabs
+  (`h-[32px]` in a 42 bar) measured **42**, edge to edge; `TOP_BUTTON
+  h-[30px]` and the 40/42 footer the same. The numbers measured off the
+  reference and asserted by `panelStyle.test` never reached the screen — the
+  test read the string. Twenty more sites had re-sized a themed control with
+  `h-7…h-10 min-h-0 text-xs/sm` (five heights), and twelve icon buttons carried
+  a text size for the emoji inside them.
+- **The sweep:** `panelStyle` chips, tabs and top button → `btn-sm`; the
+  footer → `.btn` / `.btn-primary`; the tab bar lost its `h-[42px]` and is now
+  the tabs plus 4px of padding (34 + 8 = 42, and it grows with the root as the
+  tabs do); the reference's 9px chip corner rounds to the family's 8. Twenty
+  static sites → `btn`, `btn-sm`, `btn-primary btn-sm`, `btn-secondary
+  btn-sm`. Emoji wells keep `btn btn-icon` and size the glyph on a span.
+- **Solid =** `control.guard` R4 check: on any pressable element wearing
+  `btn`, a fixed height, `min-h-*` or a text utility fails the suite — no
+  worklist, zero entries. Its first run found the twelve emoji wells the grep
+  had missed (a true positive before any green); the pattern is proven both
+  ways on synthetic tags (six caught, seven ignored). `panelStyle.test` asserts
+  the family classes and the ABSENCE of any hand size.
+- **Re-measured on production:** see the log entry for 2026-09-05 — chips and
+  tabs at the compact size, the tab bar at the tabs plus padding.
+- **Still open under this rule:** the board's column names are unstyled 23px
+  buttons (rename-in-place text, not chrome) — decided with R17.
 
 ### R5 · Fields — PROPOSED · two label styles
 

@@ -92,7 +92,7 @@ export function SecretOnce({
         <code className="ltr min-w-0 flex-1 select-all break-all rounded-md border border-border bg-surface-2 p-3 font-mono text-xs text-fg">
           {value}
         </code>
-        <button type="button" className="btn-secondary h-auto min-h-0 px-3 text-xs" onClick={() => void copy()}>
+        <button type="button" className="btn-secondary btn-sm" onClick={() => void copy()}>
           {copied === "ok" ? t("copied") : t("copy")}
         </button>
       </div>
@@ -113,7 +113,7 @@ export function SecretOnce({
       </label>
 
       <div className="mt-4 flex justify-end">
-        <button type="button" className="btn-primary h-10 min-h-0 px-4 text-sm" disabled={!acknowledged} onClick={onDone}>
+        <button type="button" className="btn-primary" disabled={!acknowledged} onClick={onDone}>
           {t("done")}
         </button>
       </div>

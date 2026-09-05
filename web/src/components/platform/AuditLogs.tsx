@@ -505,7 +505,7 @@ export function AuditLogs() {
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                 {cursor ? (
                   <button
-                    className="btn-secondary h-10 min-h-0 px-4 text-sm"
+                    className="btn-secondary"
                     disabled={paging}
                     onClick={() => void loadMore()}
                   >

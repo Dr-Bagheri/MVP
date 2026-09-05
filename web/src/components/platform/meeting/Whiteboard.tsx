@@ -272,7 +272,7 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
          pressed state is all this button owes on top of it. The glyph size
          is the one thing still stated: 12.5px is calibrated for WORDS, and
          these are marks. */
-      className={`btn btn-icon text-sm ${
+      className={`btn btn-icon ${
         tool === key ? "bg-accent-soft text-accent" : "text-fg-muted hover:text-fg"
       }`}
     >
@@ -340,19 +340,19 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
           control, and one shape has to mean one disabled treatment too. */}
       <div className="absolute bottom-3 start-3 flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1 shadow-card">
         <button type="button" aria-label={t("wbUndo")} title={t("wbUndo")} onClick={undo}
-          className="btn btn-icon text-sm text-fg-muted hover:text-fg">↶</button>
+          className="btn btn-icon text-fg-muted hover:text-fg">↶</button>
         <button type="button" aria-label={t("wbRedo")} title={t("wbRedo")} onClick={redo}
           disabled={redoStack.length === 0}
-          className="btn btn-icon text-sm text-fg-muted hover:text-fg">↷</button>
+          className="btn btn-icon text-fg-muted hover:text-fg">↷</button>
         <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         <button type="button" aria-label={t("wbZoomOut")} title={t("wbZoomOut")} onClick={() => zoomBy(1 / 1.2)}
-          className="btn btn-icon text-sm text-fg-muted hover:text-fg">−</button>
+          className="btn btn-icon text-fg-muted hover:text-fg">−</button>
         <span className="badge-num min-w-11 text-center text-[11px] text-fg-muted">{Math.round(view.zoom * 100)}%</span>
         <button type="button" aria-label={t("wbZoomIn")} title={t("wbZoomIn")} onClick={() => zoomBy(1.2)}
-          className="btn btn-icon text-sm text-fg-muted hover:text-fg">+</button>
+          className="btn btn-icon text-fg-muted hover:text-fg">+</button>
         <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         <button type="button" aria-label={t("wbClear")} title={t("wbClear")} onClick={clear}
-          className="btn btn-icon text-sm text-fg-muted hover:text-danger">🗑</button>
+          className="btn btn-icon text-fg-muted hover:text-danger">🗑</button>
       </div>
       {textAt !== null ? (
         <ConfirmDialog

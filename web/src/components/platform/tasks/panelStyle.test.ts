@@ -2,21 +2,24 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   BODY_HEADING, BODY_TEXT, FIELD_LABEL, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY,
-  PANEL_INPUT, PANEL_TEXTAREA, TAB_BAR, TOP_BUTTON, chipClass, tabClass,
+  FOOTER_CANCEL, FOOTER_PRIMARY, TAB_BAR, TOP_BUTTON, chipClass, tabClass,
 } from "./panelStyle";
 import { SCAFFOLD } from "@/components/scaffold/constants";
 
 /**
- * THE MEASURED PANEL, held to its measurements.
+ * THE MEASURED PANEL, held to its measurements — and, since R4, to the family.
  *
- * Every number here was read off `panel.arameet.ir` on 2026-09-05 at
- * 1920×911, signed in — the new-task dialog and `?task=836`. The point of
- * this file is not that the values are pretty; it is that they were MEASURED
- * and that the next person to "tidy" one has to change a test that says so.
+ * The type numbers were read off `panel.arameet.ir` on 2026-09-05 at 1920×911,
+ * signed in. The CONTROL numbers were read there too, and the first version of
+ * this file asserted them as strings — `h-[34px]` on the chips, `h-[32px]` on
+ * the tabs — while production rendered both at 42, because `.btn`'s own
+ * min-height beats a smaller height written beside it. A test that reads the
+ * class string cannot see that; it was green the whole time.
  *
- * The three surfaces share the constants, so what this guards is drift
- * between the constant and the reference — not between the three, which the
- * shared module already makes impossible.
+ * So the control half of this file asserts a SHAPE that cannot be defeated
+ * that way: every control wears one of the family's three sizes and writes no
+ * height of its own. That is checkable from the string because the failure
+ * mode is the presence of a height, not its value.
  */
 describe("the reference's measurements", () => {
   it("keeps the type scale the reference actually uses", () => {
@@ -46,33 +49,6 @@ describe("the reference's measurements", () => {
     expect(RAIL_EMPTY).not.toBe(RAIL_VALUE);
   });
 
-  it("keeps the measured control heights", () => {
-    expect(PANEL_INPUT).toContain("h-[45px]");
-    expect(PANEL_TEXTAREA).toContain("min-h-[73px]");
-    expect(chipClass(false)).toContain("h-[34px]");
-    expect(TAB_BAR).toContain("h-[42px]");
-    expect(tabClass(false)).toContain("h-[32px]");
-    expect(TOP_BUTTON).toContain("h-[30px]");
-  });
-
-  it("gives the closed choices their own 9px corner, and the tabs 8", () => {
-    /* three corners, measured, and none of them our control radius: the
-       reference rounds a segment at 9, a tab at 8 and a field at 11 */
-    expect(chipClass(true)).toContain("rounded-[9px]");
-    expect(tabClass(true)).toContain("rounded-[8px]");
-    expect(TAB_BAR).toContain("rounded-[11px]");
-  });
-
-  it("tells a chip's two states apart by ground and edge, never by size", () => {
-    /* the load-bearing one: if the selected chip changed size, the row would
-       reflow every time somebody picked a different column */
-    const on = chipClass(true), off = chipClass(false);
-    expect(on).toContain("h-[34px]");
-    expect(off).toContain("h-[34px]");
-    expect(on).toContain("bg-accent-soft");
-    expect(off).not.toContain("bg-accent-soft");
-  });
-
   it("rounds panels at the MEASURED 18, from the token and not by hand", () => {
     /*
      * The reference's dialog and its detail modal both round at 18; this
@@ -85,7 +61,7 @@ describe("the reference's measurements", () => {
 
   it("is read by all three surfaces", () => {
     /*
-     * The check that keeps the other six honest: the three panels must READ
+     * The check that keeps the others honest: the three panels must READ
      * these constants rather than each carrying its own copy, which is how
      * the dialog and the detail came to disagree in the first place.
      *
@@ -97,8 +73,6 @@ describe("the reference's measurements", () => {
      * cannot tell a rail label from a badge, and this repo has already
      * deleted one checker for manufacturing false positives, because
      * fails-when-it-shouldn't is the failure that gets an instrument muted.
-     * So the imprecise half is gone rather than tuned; what remains is a fact
-     * a grep can actually establish.
      */
     const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
     for (const file of [
@@ -106,5 +80,65 @@ describe("the reference's measurements", () => {
     ]) {
       expect(src(file)).toContain("panelStyle");
     }
+  });
+});
+
+describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
+  const CONTROLS = {
+    chipOn: chipClass(true),
+    chipOff: chipClass(false),
+    tabOn: tabClass(true),
+    tabOff: tabClass(false),
+    top: TOP_BUTTON,
+    footerCancel: FOOTER_CANCEL,
+    footerPrimary: FOOTER_PRIMARY,
+  };
+  /* a fixed height, a min-height override, an arbitrary corner or an arbitrary
+     text size — each is the reference's number written where the family's
+     belongs, and each is what rendered wrong */
+  const HAND_SIZE = /(?<![\w-])(?:min-h-|h-(?:\d|\[|auto)|rounded-\[|text-\[)/;
+
+  it("every control is a family member and writes no size of its own", () => {
+    for (const [name, cls] of Object.entries(CONTROLS)) {
+      expect(cls, `${name} must wear the family`).toMatch(/\bbtn(?:-\w+)?\b/);
+      expect(cls, `${name} must not size itself`).not.toMatch(HAND_SIZE);
+    }
+  });
+
+  it("the compact ones are compact and the footer is regular", () => {
+    /* chips, tabs and the top-bar button are the 34 size; the footer's two
+       buttons are the 38 — the same split the toolbar makes between its chips
+       and its primary action */
+    for (const name of ["chipOn", "chipOff", "tabOn", "tabOff", "top"] as const) {
+      expect(CONTROLS[name], `${name} is compact`).toMatch(/\bbtn-sm\b/);
+    }
+    expect(FOOTER_CANCEL).not.toMatch(/\bbtn-sm\b/);
+    expect(FOOTER_PRIMARY).not.toMatch(/\bbtn-sm\b/);
+    expect(FOOTER_PRIMARY).toMatch(/\bbtn-primary\b/);
+  });
+
+  it("tells a chip's two states apart by ground and edge, never by size", () => {
+    /* the load-bearing one: if the selected chip changed size, the row would
+       reflow every time somebody picked a different column */
+    const on = chipClass(true), off = chipClass(false);
+    expect(on).toContain("bg-accent-soft");
+    expect(off).not.toContain("bg-accent-soft");
+    const sizeWords = (c: string) => c.split(/\s+/).filter((w) => /^btn/.test(w)).sort().join(" ");
+    expect(sizeWords(on)).toBe(sizeWords(off));
+  });
+
+  it("the tab bar is the tabs plus their padding, not a number", () => {
+    /*
+     * The reference's bar is 42 because its tabs are 34 with 4px around them.
+     * Written as `h-[42px]` the bar stopped tracking the tabs the moment they
+     * grew with the root (37 at 1920), and the tabs — which had lost their own
+     * height to `.btn`'s minimum — filled it edge to edge. A bar with no
+     * height of its own cannot disagree with what it holds.
+     */
+    expect(TAB_BAR).toContain("p-1");
+    expect(TAB_BAR).not.toMatch(/(?<![\w-])h-/);
+    /* and its corner is the control token, not a hand-typed 11 */
+    expect(TAB_BAR).toContain("rounded-md");
+    expect(TAB_BAR).not.toMatch(/rounded-\[/);
   });
 });

@@ -146,7 +146,7 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
                 <button
                   type="button"
                   onClick={() => void navigator.clipboard?.writeText(turn.text).catch(() => undefined)}
-                  className="btn btn-sm mt-1 text-[11px] text-fg-subtle hover:text-fg"
+                  className="btn btn-sm mt-1 text-fg-subtle hover:text-fg"
                 >
                   <IconCopy width={12} height={12} />
                   {t("copy")}

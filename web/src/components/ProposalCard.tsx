@@ -81,14 +81,14 @@ export function ProposalCard({
           <p className="mt-3 text-xs leading-6 text-fg-muted">{t("proposalNothingYet")}</p>
           <div className="mt-2 flex gap-2">
             <button
-              className="btn-primary h-9 min-h-0 px-3 text-xs"
+              className="btn-primary btn-sm"
               disabled={busy || !runId}
               onClick={() => void decide("confirm")}
             >
               {t("approve")}
             </button>
             <button
-              className="btn-secondary h-9 min-h-0 px-3 text-xs"
+              className="btn-secondary btn-sm"
               disabled={busy || !runId}
               onClick={() => void decide("reject")}
             >

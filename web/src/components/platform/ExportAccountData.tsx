@@ -74,7 +74,7 @@ export function ExportAccountData() {
     <div>
       <button
         type="button"
-        className="btn-secondary h-10 px-4"
+        className="btn-secondary"
         disabled={state.kind === "working"}
         onClick={() => void exportAll()}
       >

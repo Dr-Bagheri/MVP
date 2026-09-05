@@ -799,11 +799,11 @@ export function NewProjectDialog({ people, meId, onClose, onCreated, onFailed }:
                 onClick={() => setIcon((cur) => (cur === choice ? null : choice))}
                 /* the same box as the colour swatch beside it — a picker
                    whose two rows are different sizes reads as two features */
-                className={`btn btn-icon text-base hover:bg-surface-2 ${
+                className={`btn btn-icon hover:bg-surface-2 ${
                   icon === choice ? "bg-accent-soft ring-2 ring-accent" : ""
                 }`}
               >
-                {choice}
+                <span className="text-base">{choice}</span>
               </button>
             ))}
           </div>

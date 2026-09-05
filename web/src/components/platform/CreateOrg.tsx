@@ -39,7 +39,7 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
     return (
       <button
         type="button"
-        className="btn-primary h-10 px-4 text-sm"
+        className="btn-primary"
         onClick={() => setOpen(true)}
       >
         {t("newOrg")}
@@ -72,14 +72,14 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
       ) : null}
       <div className="mt-3 flex gap-2">
         <button
-          className="btn-primary h-9 px-4 text-sm"
+          className="btn-primary"
           disabled={busy || !name.trim() || !reason.trim()}
           onClick={() => void create()}
         >
           {t("newOrgCreate")}
         </button>
         <button
-          className="btn-secondary h-9 px-4 text-sm"
+          className="btn-secondary"
           onClick={() => { setOpen(false); setFailed(false); }}
         >
           {t("cancel")}
