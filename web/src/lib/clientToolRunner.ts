@@ -36,7 +36,10 @@ import { executeClientTool } from "./agentSurface";
  */
 export interface ClientToolSurface {
   /** ask the person; `undefined` means this surface performs writes unasked */
-  askConsent?: ((label: string) => Promise<boolean>) | undefined;
+  /** ask the person before a write; `detail` names the OBJECT (a task's
+      title, a project's name) so the yes is informed — a card that says
+      only the verb was approved seven times in a row on 2026-09-06 */
+  askConsent?: ((label: string, detail: string | null) => Promise<boolean>) | undefined;
   push(path: string): void;
   switchLocale(next: string): void;
   /** starting or resuming a recording silences the spoken reply, where there is one */
@@ -44,6 +47,22 @@ export interface ClientToolSurface {
 }
 
 type ClientToolCall = Extract<AgentEvent, { type: "client_tool_call" }>;
+
+/**
+ * What the consent card names, from the call's own arguments: the first
+ * name-like field, plus the destination when the call moves something. Pure,
+ * so it is testable and so a card can never show less than the args carry.
+ */
+export function consentDetail(args: unknown): string | null {
+  const a = (args ?? {}) as Record<string, unknown>;
+  const str = (key: string): string | null =>
+    typeof a[key] === "string" && (a[key] as string).trim() !== "" ? (a[key] as string).trim() : null;
+  const subject = ["title", "name", "project", "topic", "room", "label", "column", "member", "meeting", "question"]
+    .map(str).find((v) => v !== null) ?? null;
+  const destination = str("folder") ?? (subject !== str("column") ? str("column") : null);
+  if (subject === null && destination === null) return null;
+  return [subject, destination === null ? null : `← ${destination}`].filter(Boolean).join(" ");
+}
 
 export async function handleClientToolCall(
   event: ClientToolCall,
@@ -68,9 +87,20 @@ export async function handleClientToolCall(
 
   try {
     /* consent BEFORE execution for write-effect calls; the loop blocks here
-       deliberately — the server is waiting on this very answer */
-    if (event.requires_consent && surface.askConsent) {
-      const allowed = await surface.askConsent(event.label);
+       deliberately — the server is waiting on this very answer.
+
+       A surface that CANNOT ask REFUSES. Until 2026-09-06 a missing
+       `askConsent` fell through to the execute below — the assistant page
+       had no card, so every write asked for there ran on a silent yes, and
+       the comment beside the page's surface said the opposite. The server's
+       `requires_consent` is the person's dial; a surface with no way to
+       honour it has no business performing the call. */
+    if (event.requires_consent) {
+      if (!surface.askConsent) {
+        await answer(false, "this surface cannot ask for consent — the assistant strip can, or set the assistant to act on its own");
+        return;
+      }
+      const allowed = await surface.askConsent(event.label, consentDetail(event.args));
       if (!allowed) {
         await answer(false, "the user declined");
         return;

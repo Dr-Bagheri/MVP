@@ -22,6 +22,7 @@ const projects = vi.fn();
 const createProject = vi.fn();
 const deleteProject = vi.fn();
 const updateTaskTopic = vi.fn();
+const taskDetail = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     members: (...args: unknown[]) => members(...args),
@@ -29,6 +30,7 @@ vi.mock("@/api/client", () => ({
     createProject: (...args: unknown[]) => createProject(...args),
     deleteProject: (...args: unknown[]) => deleteProject(...args),
     updateTaskTopic: (...args: unknown[]) => updateTaskTopic(...args),
+    taskDetail: (...args: unknown[]) => taskDetail(...args),
     setUserStatus: (...args: unknown[]) => setUserStatus(...args),
     setUserRole: (...args: unknown[]) => setUserRole(...args),
     listCalls: (...args: unknown[]) => listCalls(...args),
@@ -263,14 +265,18 @@ describe("update_task moves a card", () => {
   beforeEach(() => {
     taskBoard.mockReset();
     updateTask.mockReset();
+    taskDetail.mockReset();
     taskBoard.mockResolvedValue(BOARD);
     updateTask.mockResolvedValue({});
+    /* the task's identity: every id-addressed call carries the title and
+       the surface reads the card to compare (2026-09-06) */
+    taskDetail.mockResolvedValue({ id: "t-1", title: "کار" });
   });
 
   it("resolves the column by the name a person says", async () => {
     const { ctx } = surface();
     const result = await executeClientTool(
-      "update_task", { task_id: "t-1", column: "در حال انجام" }, ctx,
+      "update_task", { task_id: "t-1", title: "کار", column: "در حال انجام" }, ctx,
     );
     expect(result.ok).toBe(true);
     expect(updateTask).toHaveBeenCalledWith("t-1", { column_id: "col-doing" });
@@ -279,7 +285,7 @@ describe("update_task moves a card", () => {
   it("refuses a column the board does not have, and says what it does have", async () => {
     const { ctx } = surface();
     const result = await executeClientTool(
-      "update_task", { task_id: "t-1", column: "Done" }, ctx,
+      "update_task", { task_id: "t-1", title: "کار", column: "Done" }, ctx,
     );
     expect(result.ok).toBe(false);
     /* the real list, not a guess at the nearest column: moving a card to the
@@ -291,7 +297,7 @@ describe("update_task moves a card", () => {
 
   it("still patches the other fields, and sends ONLY what was given", async () => {
     const { ctx } = surface();
-    await executeClientTool("update_task", { task_id: "t-1", priority: "high" }, ctx);
+    await executeClientTool("update_task", { task_id: "t-1", title: "کار", priority: "high" }, ctx);
     /* the control for the column branch: no column means no board read and no
        column_id — a version that always set one would move every edited card */
     expect(taskBoard).not.toHaveBeenCalled();
@@ -300,8 +306,45 @@ describe("update_task moves a card", () => {
 
   it("a patch with nothing in it is a refusal, not an empty write", async () => {
     const { ctx } = surface();
-    expect((await executeClientTool("update_task", { task_id: "t-1" }, ctx)).ok).toBe(false);
+    expect((await executeClientTool("update_task", { task_id: "t-1", title: "کار" }, ctx)).ok).toBe(false);
     expect(updateTask).not.toHaveBeenCalled();
+  });
+});
+
+describe("a task tool must NAME the task it touches (2026-09-06)", () => {
+  beforeEach(() => {
+    taskDetail.mockReset();
+    deleteProject.mockReset();
+    updateTask.mockReset();
+    taskDetail.mockResolvedValue({ id: "t-1", title: "جمع‌آوری صدای خام" });
+  });
+
+  it("delete_task refuses an id whose title is not the one named, and says whose it is", async () => {
+    const deleteTask = vi.fn();
+    (await import("@/api/client")).api.deleteTask = deleteTask as never;
+    const { ctx } = surface();
+    const wrong = await executeClientTool("delete_task", { task_id: "t-1", title: "تهیهٔ گزارش فروش" }, ctx);
+    expect(wrong.ok).toBe(false);
+    expect(wrong.detail).toContain("جمع‌آوری صدای خام");
+    expect(deleteTask).not.toHaveBeenCalled();
+
+    const right = await executeClientTool("delete_task", { task_id: "t-1", title: "جمع‌آوری صدای خام" }, ctx);
+    expect(right.ok).toBe(true);
+    expect(deleteTask).toHaveBeenCalledWith("t-1");
+  });
+
+  it("an id with no title is refused before anything is read or written", async () => {
+    const { ctx } = surface();
+    const result = await executeClientTool("update_task", { task_id: "t-1", priority: "high" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/name the task/);
+    expect(updateTask).not.toHaveBeenCalled();
+  });
+
+  it("the comparison forgives the spelling a person cannot see — ZWNJ and spacing — and nothing else", async () => {
+    const { ctx } = surface();
+    const loose = await executeClientTool("archive_task", { task_id: "t-1", title: "جمع آوری  صدای خام" }, ctx);
+    expect(loose.ok).toBe(true);
   });
 });
 

@@ -290,6 +290,43 @@ function byName<T extends { id: string; name: string }>(
 }
 
 const TONES = new Set(["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"]);
+
+/**
+ * AN ID IS NOT A NAME A PERSON CAN CHECK (2026-09-06, the small hours). A run
+ * asked to file four new cards read the board, chose five task ids — the
+ * person's own tasks among them — and moved them into the wrong folder;
+ * the consent cards that let it through said «ویرایش تسک» and nothing else.
+ * Every tool that addresses a task by id now carries the task's TITLE
+ * beside it, and the surface refuses a mismatch before the switch below
+ * ever runs: a wrong id cannot reach the wrong card, and the card the person
+ * sees names what is about to change.
+ */
+const TASK_ID_TOOLS = new Set([
+  "complete_task", "assign_task", "update_task", "comment_on_task",
+  "add_task_checklist_item", "archive_task", "delete_task",
+]);
+/* a ZWNJ folds to a SPACE, not to nothing: a person reads «جمع‌آوری» and
+   types «جمع آوری», and both must name the same card — while «جمعآوری»,
+   which nobody reads, does not */
+const foldTitle = (value: string): string =>
+  value.normalize("NFC").replace(/[\u200c\u200d]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+
+async function namedTask(a: Record<string, unknown>): Promise<{ ok: true } | { ok: false; detail: string }> {
+  const id = typeof a.task_id === "string" ? a.task_id.trim() : "";
+  const title = typeof a.title === "string" ? a.title.trim() : "";
+  if (!id) return { ok: false, detail: "which task?" };
+  if (!title) return { ok: false, detail: "name the task — its title, exactly as list_tasks returned it" };
+  try {
+    const { api } = await import("@/api/client");
+    const task = await api.taskDetail(id);
+    if (foldTitle(task.title) !== foldTitle(title)) {
+      return { ok: false, detail: `that id is «${task.title}», not «${title}» — say which task you mean` };
+    }
+    return { ok: true };
+  } catch (cause) {
+    return { ok: false, detail: refusalDetail(cause, "no task with that id") };
+  }
+}
 const toneOf = (value: unknown): string | undefined =>
   typeof value === "string" && TONES.has(value) ? value : undefined;
 
@@ -299,6 +336,10 @@ export async function executeClientTool(
   surface: SurfaceContext,
 ): Promise<SurfaceResult> {
   const a = (args ?? {}) as Record<string, unknown>;
+  if (TASK_ID_TOOLS.has(tool)) {
+    const named = await namedTask(a);
+    if (!named.ok) return named;
+  }
   switch (tool) {
     case "navigate": {
       const path = typeof a.path === "string" ? a.path.trim() : "";
@@ -507,7 +548,9 @@ export async function executeClientTool(
        * this repo settled on the profile form.
        */
       const patch: Record<string, unknown> = {};
-      if (typeof a.title === "string" && a.title.trim()) patch.title = a.title.trim().slice(0, 300);
+      /* `title` is the task's IDENTITY now (checked above); a rename says
+         `new_title` */
+      if (typeof a.new_title === "string" && a.new_title.trim()) patch.title = a.new_title.trim().slice(0, 300);
       if (typeof a.description === "string") patch.description = a.description.slice(0, 8000);
       if (typeof a.priority === "string") patch.priority = a.priority;
       if (typeof a.due === "string" && a.due.trim()) patch.due_at = a.due.trim();

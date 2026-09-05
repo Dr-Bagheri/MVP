@@ -439,8 +439,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       "Mark a task done, or reopen one. Use the id from list_tasks or get_task.",
     parameters: obj({
       task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
       done: bool("true to complete it, false to reopen. Defaults to true."),
-    }, ["task_id"]),
+    }, ["task_id", "title"]),
     effect: "write",
   },
   {
@@ -451,9 +457,15 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "list_members or list_colleagues — never guess one from a name.",
     parameters: obj({
       task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
       user_id: str("The colleague's id."),
       assigned: bool("false to remove them. Defaults to true."),
-    }, ["task_id", "user_id"]),
+    }, ["task_id", "title", "user_id"]),
     effect: "write",
   },
   {
@@ -466,7 +478,13 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "being changed; anything omitted is left alone.",
     parameters: obj({
       task_id: str("The task's id."),
-      title: str("A new title."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
+      new_title: str("A new title, when renaming it."),
       description: str("A new description."),
       priority: strEnum(["low", "medium", "high", "critical"], "How urgent it is."),
       due: str("ISO 8601 deadline."),
@@ -477,7 +495,7 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
         "The folder (topic) to file it under, by name — a project's folder"
         + " included. «بدون پوشه» or \"none\" takes it out of its folder.",
       ),
-    }, ["task_id"]),
+    }, ["task_id", "title"]),
     effect: "write",
   },
   {
@@ -488,8 +506,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "delete one afterwards, including you, so write it as a record.",
     parameters: obj({
       task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
       body: str("What to say."),
-    }, ["task_id", "body"]),
+    }, ["task_id", "title", "body"]),
     effect: "write",
   },
   {
@@ -498,8 +522,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     description: "Add one line to a task's checklist.",
     parameters: obj({
       task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
       label: str("The item."),
-    }, ["task_id", "label"]),
+    }, ["task_id", "title", "label"]),
     effect: "write",
   },
   {
@@ -510,8 +540,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "an archived task can be found again and a deleted one cannot.",
     parameters: obj({
       task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
       archived: bool("false to bring it back. Defaults to true."),
-    }, ["task_id"]),
+    }, ["task_id", "title"]),
     effect: "write",
   },
 
@@ -844,9 +880,15 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     description: "Put a label on a task, or take it off.",
     parameters: obj({
       task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks or get_task returned it. The"
+        + " surface checks the id against it and refuses a mismatch, so a wrong"
+        + " id cannot touch the wrong card — and the person's consent card can"
+        + " name what is about to change.",
+      ),
       label: str("The label's name."),
       on: bool("true adds it, false removes it. Defaults to true."),
-    }, ["task_id", "label"]),
+    }, ["task_id", "title", "label"]),
     effect: "write",
   },
   {
@@ -1201,7 +1243,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       "Delete a task for good. Prefer archive_task unless the person clearly "
       + "asked for a delete — an archived task can be found again and a deleted "
       + "one cannot.",
-    parameters: obj({ task_id: str("The task's id.") }, ["task_id"]),
+    parameters: obj({
+      task_id: str("The task's id."),
+      title: str(
+        "The task's title, exactly as list_tasks returned it. The surface"
+        + " refuses an id whose title is different — a delete must name what"
+        + " it deletes.",
+      ),
+    }, ["task_id", "title"]),
     effect: "write",
   },
 

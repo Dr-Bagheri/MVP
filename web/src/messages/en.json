@@ -69,9 +69,9 @@
     "saveFailed": "That did not save.",
     "saved": "Saved",
     "shipped": "Platform agents",
-    "sys_ava_desc": "Reads and reports: what changed, what is slipping, what the week said.",
+    "sys_ava_desc": "Reads and reports: what changed, what is slipping, what the week said — and turns what she finds into work when you ask.",
     "sys_ava_name": "Ava",
-    "sys_roya_desc": "Does the work: drafts the reply, prepares the meeting, makes the task.",
+    "sys_roya_desc": "Gets the work done: creates and assigns tasks and projects, prepares meetings, drafts replies.",
     "sys_roya_name": "Roya",
     "tool": {
       "add_meeting_item": "Records a decision or an action on a meeting",

@@ -402,7 +402,7 @@ export function AssistantSidebar() {
   const streaming = live.streaming;
   const [consent, setConsent] = useState<
     | null
-    | { label: string; resolve: (allowed: boolean) => void }
+    | { label: string; detail: string | null; resolve: (allowed: boolean) => void }
   >(null);
   /** voice state: null = idle; "command" = the post-wake window */
   const [listening, setListening] = useState<"command" | null>(null);
@@ -873,9 +873,9 @@ export function AssistantSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member]);
 
-  const askConsent = useCallback((label: string): Promise<boolean> => {
+  const askConsent = useCallback((label: string, detail: string | null): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
-      setConsent({ label, resolve });
+      setConsent({ label, detail, resolve });
     });
   }, []);
 
@@ -1045,8 +1045,8 @@ export function AssistantSidebar() {
        * time. Toasts remain for everything ELSE on the platform.
        */
       handleClientToolCall(event, {
-        askConsent: async (label) => {
-          const allowed = await askConsent(label);
+        askConsent: async (label, detail) => {
+          const allowed = await askConsent(label, detail);
           setConsent(null);
           return allowed;
         },
@@ -1252,7 +1252,13 @@ export function AssistantSidebar() {
               ) : null}
               {consent ? (
                 <div className="rounded-xl border border-accent/30 bg-accent-soft p-3">
-                  <p className="text-detail text-fg">{t("consentAsk", { action: consent.label })}</p>
+                  {/* the VERB and the OBJECT (2026-09-06): «حذف تسک» alone was
+                      approved seven times in a row for cards nobody could
+                      name; the title beside it is what makes a yes a yes */}
+                  <p className="text-detail text-fg">
+                    {t("consentAsk", { action: consent.label })}
+                    {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
+                  </p>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"

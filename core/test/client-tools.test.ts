@@ -125,6 +125,32 @@ describe("the registry", () => {
     }
   });
 
+  it("every id-addressed task tool requires the task's TITLE beside the id", () => {
+    /*
+     * 2026-09-06, the small hours: a run asked to file four new cards moved
+     * FIVE task ids it had read off the board into the wrong folder — the
+     * person's own tasks among them — and the consent cards that let it
+     * through said «ویرایش تسک» and nothing else. An id is not a name a
+     * person can check. The title travels with the id; the surface refuses
+     * a mismatch; the card shows the title. Schema-level, because a
+     * required parameter is the only place the model cannot forget it.
+     */
+    for (const name of [
+      "complete_task", "assign_task", "update_task", "comment_on_task",
+      "add_task_checklist_item", "archive_task", "delete_task",
+    ]) {
+      const tool = CLIENT_TOOLS.find((t) => t.name === name);
+      expect(tool, name).toBeDefined();
+      const params = tool!.parameters as { required?: string[]; properties: Record<string, unknown> };
+      expect(params.required, name).toContain("task_id");
+      expect(params.required, name).toContain("title");
+    }
+    /* and renaming did not lose its parameter — `title` is the identity now */
+    const update = CLIENT_TOOLS.find((t) => t.name === "update_task")!;
+    expect(Object.keys((update.parameters as { properties: Record<string, unknown> }).properties))
+      .toContain("new_title");
+  });
+
   it("labels carry BOTH languages — the chip reads in the asker's UI language", () => {
     for (const tool of CLIENT_TOOLS) {
       expect(tool.label.fa.length, tool.name).toBeGreaterThan(0);

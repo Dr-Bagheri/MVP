@@ -59,6 +59,18 @@ describe("the client-tool seam, on every surface", () => {
     expect(broken, "advertising and performing must come in pairs").toEqual([]);
   });
 
+  it("every surface that PERFORMS also ASKS — the runner refuses a silent yes", () => {
+    /* 2026-09-06: the page performed without a card for two weeks while its
+       comment said it did not. The runner now refuses a consent-requiring
+       call on a surface without `askConsent`; this is the other half —
+       every surface offers the card, so the refusal never has to fire. */
+    const missing = SURFACES.filter((file) => {
+      const text = read(file);
+      return /handleClientToolCall\(/.test(text) && !/askConsent:/.test(text);
+    });
+    expect(missing, "a surface that performs writes must be able to ask first").toEqual([]);
+  });
+
   it("and they perform through the SHARED runner, not a copy", () => {
     /*
      * The sidebar had the only handler for months and the page had none; the

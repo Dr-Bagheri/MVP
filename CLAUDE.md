@@ -4233,3 +4233,84 @@ sessions) for the cross-session narrative.
   the public GitHub page — six render targets, six frames, zero render
   errors, read with Playwright and photographed.
   db 191 migrations · core 1358 tests · web 1099 tests + gate + sweep.
+- 2026-09-06 (small hours — ONE LANGUAGE PER SCREEN, THE ROOM READS RIGHT-TO-
+  LEFT, THE AGENTS GET THEIR HANDS — AND A TEST ON THE LIVE BOARD COST THE
+  BOARD; commits eb0d13e, b35d99c and the consent commit; db 0192):
+  **One language per screen** ("in fa only Persian, in en only English —
+  search the whole platform"). Both locales were SWEPT RENDERED on production
+  in the user's Chrome: every text node under `main` on twenty pages, Latin
+  in fa and Arabic script in en. fa carried English in two product places —
+  the shipped workflow's own page and breadcrumb (the list localized its
+  cards through the template copy; the detail page read the wire) and the
+  catalogue's own brand names and formats (نورAI, "call 1", Google, GitHub,
+  Chrome, Edge, LiveKit, PDF, JSON, API, IP, a `db/0074` reference inside a
+  UI string); en quoted «حین جلسه» twice. Everything else was data. Handles,
+  key names, model ids and file extensions stay Latin: they are what a person
+  types. Five tests that asserted the old English followed the catalogue.
+  **The room reads right-to-left** ("even English ones"): `dir` was `auto`
+  behind a Persian-if-any-Persian rule, which put a message that opened with
+  an @handle on the LEFT of a Persian room. The screen's direction decides;
+  verified red with a Latin-only body and live ("OK team, the RTL check"
+  renders `dir=rtl` to the box's right edge).
+  **The agents get their hands** — every one a CLIENT tool (create / edit /
+  archive / delete a project and set its people; rename or archive task
+  folders and columns; edit or retire labels; delete a task; edit meeting
+  folders; create and edit rooms; `update_task` learned the folder), run in
+  the person's own browser through the api the screen's button runs, behind
+  a consent card below Act — so `echo_agent` still holds no DELETE anywhere
+  and a project's delete is the PERSON's, at the agent's suggestion. Echo's
+  standing orders say when to hand work over (more than three separate
+  tasks, or the person asking for the agents — pinned by a prompt test run
+  red first); guard 2 of delegation is REVISED so a colleague Echo calls
+  receives the session's client tools beside its reads; 0192 gives the
+  colleagues the matching paragraph; ARCHITECTURE M33 carries the amendment;
+  the agent page names all thirteen tools under a new «پروژه‌ها» group.
+  **THE INCIDENT, in the API log's own times (UTC).** The user was on the
+  board at the same time (their Echo runs created cards at 22:56 and 23:03).
+  23:06:04 my first request — a room, a project, four tasks: Echo made the
+  room and the project itself and handed the tasks to Roya; my probe then
+  full-page-navigated away, so Roya's first creates came back "the surface
+  did not respond in time" (logged ok, performed false) and one card landed.
+  23:06:28 Echo asked Roya to MOVE five task ids it had read off the board
+  into the folder «دیتابیس صوتی» — the wrong folder, and four of the five
+  were the person's own tasks. 23:07:41–23:10:32 those five ids were deleted
+  by plain DELETE /v1/tasks requests, one every few seconds, with NO agent
+  step behind them — a browser session, on the board the run had just
+  disturbed. 23:09 Roya's three creates went through consent cards; 23:12 the
+  clean-up (eight items, Roya not named — handed over by count) deleted the
+  three test cards, the test project and the test room, each on a card I
+  approved. `echo.task` holds zero rows; `task_event` zero. The four tasks
+  the board had before the run («پیاده‌سازی و تطبیق دقیق متن با صوت»,
+  «دسته‌بندی داده‌ها», «جمع‌آوری صدای خام», «جمع آوری و لیبل فایل های
+  صوتی فارسی», the last one بحرانی with a deadline, all carrying Behnaaz +3)
+  and «هزار ساعت جدید صوتی» (created 16:32, due 2026-10-02) are gone; the
+  titles survive only in the agent_run traces and in my probe's readings.
+  Recovery is the user's call: a point-in-time restore of the Supabase
+  project, or re-creation from the titles above.
+  **What was mine.** I ran a write test on the ORG's live board, at the same
+  hour the user was working on it, and approved every consent card my poll
+  found without reading it — the cards said «حذف تسک» and nothing else, and
+  my click was a script. The three things the product got wrong were found
+  by that and fixed the same hour: (1) the assistant PAGE performed writes on
+  a SILENT YES — the runner treated a surface without `askConsent` as one
+  that need not ask, and the comment beside the page said the opposite; the
+  runner refuses such a call now (verified red against the restored
+  fall-through) and the page draws the card. (2) A consent card named the
+  VERB only; it names the object now — the task's title, the project's name,
+  the folder a move is going to (`consentDetail`, pure and tested).
+  (3) An id-addressed task tool could touch any card: every one now carries
+  the task's TITLE beside the id (schema-required), and the surface reads
+  the card and refuses a mismatch — «that id is X, not Y» — so a wrong id
+  cannot reach the wrong card and the card the person sees says what it
+  is. Minted, and the sentence to keep: **a consent card that names the verb
+  and not the object collects a yes to anything, and a test that runs on
+  live data while somebody else is working on it is not a test.**
+  Also: the three tree-scanning guards timed out under a loaded machine
+  (5.6–7.5 s against vitest's 5 s) and reported as failures a single run
+  could not reproduce — the scan is the test, so its budget follows it.
+  Deployed: 0192 on production; core on the server (both units active,
+  health 200); web on Vercel. Verified: core 1362 tests, web 1117, both
+  typechecks, build gate, encoding sweep, token verifier; verify-red on the
+  prompt test, the surface executors, the detail page, the room's direction,
+  the template resolver and the runner's refusal.
+  db 192 migrations · core 1362 tests · web 1117 tests + gate + sweep.

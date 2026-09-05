@@ -86,6 +86,14 @@ type CreateKind = "doc" | "pdf";
  */
 export function Hub() {
   const t = useTranslations("platform");
+  const tPresence = useTranslations("presence");
+  /* the consent card, the same one the strip draws (2026-09-06: this page
+     had none, and the runner performed every write asked for here on a
+     silent yes — the runner refuses that now, and this is how the page asks) */
+  const [consent, setConsent] = useState<
+    | null
+    | { label: string; detail: string | null; resolve: (allowed: boolean) => void }
+  >(null);
   
   const locale = useLocale();
   const router = useRouter();
@@ -732,10 +740,14 @@ export function Hub() {
    */
   useEffect(() => registerAssistantSurface({
     handleClientTool: (event) => handleClientToolCall(event, {
-      /* no consent card on this surface yet, so write-effect tools are NOT
-         offered a silent yes — `askConsent` is absent, which the runner reads
-         as "this surface cannot ask", and the server's own `requires_consent`
-         still governs what it sends */
+      /* the card below answers this; a surface that cannot ask is refused by
+         the runner (it used to fall through — the comment that stood here
+         claimed the opposite of what the code did) */
+      askConsent: async (label, detail) => {
+        const allowed = await new Promise<boolean>((resolve) => setConsent({ label, detail, resolve }));
+        setConsent(null);
+        return allowed;
+      },
       push: router.push,
       switchLocale: (next) => router.replace("/assistant", { locale: next }),
     }),
@@ -1145,6 +1157,22 @@ export function Hub() {
             <p role="alert" className="mt-2 text-xs leading-6 text-danger">
               {askError ?? live.error?.detail ?? t("askFailed")}
             </p>
+          ) : null}
+          {consent ? (
+            <div className="mt-3 rounded-xl border border-accent/30 bg-accent-soft p-3">
+              <p className="text-detail text-fg">
+                {tPresence("consentAsk", { action: consent.label })}
+                {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" className="btn-primary btn-sm" onClick={() => consent.resolve(true)}>
+                  {tPresence("allow")}
+                </button>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve(false)}>
+                  {tPresence("decline")}
+                </button>
+              </div>
+            </div>
           ) : null}
           {drafts.map((draft) => (
             <MailDraftCard
