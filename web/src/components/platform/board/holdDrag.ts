@@ -150,7 +150,14 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
       if (s.phase === "lifted") {
         const target = columnAt(ev.clientX, ev.clientY) ?? s.over;
         putBack();
+        /* armed for the click the browser fires right after this release —
+           and DISARMED a tick later, because that click reaches the card only
+           when the release happened over it. A release over the lane fires the
+           click elsewhere, and the armed flag then ate the NEXT genuine click
+           on the card, seconds later (found on production: a drop outside any
+           column left the card unopenable until a second press). */
         s.swallow = true;
+        setTimeout(() => { s.swallow = false; }, 0);
         fns.current.onDrop(target);
         return;
       }
