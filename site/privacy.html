@@ -1,14 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeurAI — Privacy Policy</title>
 <meta name="description" content="What NeurAI stores, what it reads on your behalf, and how you take access back.">
+<link rel="canonical" href="https://neurai.pt/privacy.html">
+<link rel="alternate" hreflang="en" href="https://neurai.pt/privacy.html">
+<link rel="alternate" hreflang="fa" href="https://neurai.pt/privacy-fa.html">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23130036'/%3E%3Cpath d='M18 46V18l28 28V18' stroke='%23A274FF' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* the company page's palette, in a plain readable document — a privacy
    policy is read, not watched */
@@ -36,10 +39,23 @@ a { color: var(--accent); }
 .updated { color: var(--fg-muted); font-size: 0.85rem; margin-top: 0.5rem; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
 .home { display: inline-block; margin-bottom: 2rem; font-size: 0.9rem; text-decoration: none; }
+.language-switch { display: flex; gap: 8px; direction: ltr; margin-bottom: 2rem; }
+.language-switch a { display: grid; place-items: center; min-width: 44px; min-height: 44px; text-decoration: none; font: 600 14px Inter, sans-serif; }
+.language-switch a[aria-current="page"] { color: var(--fg); border-bottom: 2px solid var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+html[lang="fa"] body { font-family: Vazirmatn, Tahoma, sans-serif; line-height: 2; }
+html[lang="fa"] h1 { letter-spacing: 0; }
+html[lang="fa"] p, html[lang="fa"] li { font-size: 1rem; }
+html[lang="fa"] .language-switch { justify-content: flex-end; }
+a[href^="mailto:"] { direction: ltr; unicode-bidi: isolate; display: inline-block; }
 </style>
 </head>
 <body>
 <main>
+  <nav class="language-switch" aria-label="Language">
+    <a href="/privacy-fa.html" lang="fa" hreflang="fa" aria-label="فارسی">FA</a>
+    <a href="/privacy.html" lang="en" hreflang="en" aria-label="English" aria-current="page">EN</a>
+  </nav>
   <a class="home" href="/">&larr; neurai.pt</a>
   <h1>Privacy Policy</h1>
   <p class="updated">Last updated: 5 September 2026 · Applies to the NeurAI platform at app.neurai.pt</p>
