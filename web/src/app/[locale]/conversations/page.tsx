@@ -79,11 +79,14 @@ export default function ConversationsPage() {
         sat in the one place on the page where the eye lands first — the top
         bar's own search already covers conversations.
       */}
-      {/* 16px under the toolbar — TwoPane's `!pt-4`, the meeting page's
-          `gap-4` (audit finding, 2026-09-02: this was the product's one
-          `!pt-3`, a table sitting 4px closer to its menu than every
-          sibling's, with no reason on record for the difference) */}
-      <PageContainer className="!pt-4">
+      {/* 12px under the toolbar — TwoPane's `!pt-3`, the board's `gap-3`.
+          History, kept because it reversed: the 2026-09-02 audit found this
+          page at `!pt-3` while TwoPane wore `!pt-4`, and moved it UP to match
+          its siblings; on 2026-09-05 the user ruled one gap for every page
+          ("an equal gap for all pages between the first sub menu and the
+          content") and TwoPane came down to the board's 12 — so this page
+          follows it back. Same reason both times: match the siblings. */}
+      <PageContainer className="!pt-3">
           <PageHeader title={t("title")} subtitle={t("hint")} />
           <DataTable
             rows={visible}

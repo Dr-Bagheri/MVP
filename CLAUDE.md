@@ -4218,7 +4218,18 @@ sessions) for the cross-session narrative.
   as illustrations. Fresh captures need a signed-in browser and the
   extension was down for the whole batch — the one item not delivered, said
   so rather than papered over.
+  Follow-up in the same hour: the conversations page, which the 2026-09-02
+  audit had moved from `!pt-3` UP to `!pt-4` to match TwoPane, follows
+  TwoPane back down to `!pt-3` — the same reason, the other direction; the
+  history stays in its comment because a reversal with no record reads as
+  a mistake. And a deploy-marker note: `!pt-3` appeared in that page's
+  COMMENT before this commit, and Tailwind's scanner reads comments, so the
+  class's presence in the production stylesheet proves nothing about which
+  build is live — Vercel's own commit status ("Deployment has completed")
+  is the evidence used.
   Verified: typecheck, 1099 web tests, the build gate, the encoding sweep
   (1191 files), the token verifier; the static sweep found no stray hex, no
-  `dark:` variant, no leftover logging.
+  `dark:` variant, no leftover logging. The README's six diagrams render on
+  the public GitHub page — six render targets, six frames, zero render
+  errors, read with Playwright and photographed.
   db 191 migrations · core 1358 tests · web 1099 tests + gate + sweep.
