@@ -3755,3 +3755,44 @@ sessions) for the cross-session narrative.
   module rather than the cache, which is the shape that sends somebody
   looking in the wrong place.
   db 191 migrations · core 1357 tests · web 1051 tests + gate + sweep.
+- 2026-09-05 (latest — THE FRONT-END RULEBOOK, and R4 made solid): user
+  directive, "make the front end solid and always follow it … give me the
+  frontend shapes we have right now as rules one by one, and make them solid."
+  So the shapes were MEASURED — twenty screens of production in the user's own
+  Chrome, computed styles on every control, input, heading, card and dialog,
+  plus a source census — and written down as **design-system/neurai-platform/
+  RULEBOOK.md**, twenty rules with a status each (PROPOSED → APPROVED → FIXED →
+  SOLID), now the third source of truth in this file. Eight were already solid
+  (guards run for them); twelve carry measured deviations. The user then
+  ruled: **tasks and meetings are the template pages**, a create button sits in
+  the first sub-menu row everywhere, the two kanbans are one board, same table
+  or button on two pages = same size, the Persian font gets chosen for
+  readability under R6, and only the assistant and the dashboard may differ in
+  STRUCTURE.
+  **Two defects the source could not show.** (1) `.btn` carries a min-height,
+  and min-height beats any smaller height written beside it — so the panel
+  chips measured off the reference the day before (`h-[34px]`) rendered at
+  **42**, the panel tabs (`h-[32px]`, in a 42 bar) rendered at 42 edge to edge,
+  and `panelStyle.test` had been green throughout because it asserted the
+  STRING. (2) `ui/dialog.tsx` carries `sm:rounded-lg`, which beats our
+  `rounded-2xl` from 640px up: **every Overlay dialog rounds at 12, not 18**;
+  the new-task dialog measured 12, the detail panel (its own markup) 18. The
+  "ten developers" symptom, counted: six toolbar dialects across nine pages,
+  70 hand-rolled card recipes against 15 uses of `.card`, two card radii (18
+  and 20), 212 raw px font sizes in 47 files that do not scale with the fluid
+  root, row titles at 16 where the scale says 14/700.
+  **R4 is the first rule made solid, on the user's "go with a"**: three control
+  sizes — 38 / 34 / 28 — and a height, min-height override or text size beside
+  `btn` is a defect. The panel constants took the family (chips, tabs and the
+  top button → `btn-sm`; footer → `.btn`; the tab bar lost its `h-[42px]` and
+  is the tabs plus 4px of padding, so it grows with the root as they do);
+  twenty static sites that had written `h-7…h-10 min-h-0 text-xs/sm` on
+  `btn-primary`/`btn-secondary` — five heights — took `btn`, `btn-sm` or the
+  two together; `min-h-0` was the tell, since it exists only to defeat the
+  family's own minimum. The guard's first tree run found **twelve more** the
+  grep had missed — emoji wells carrying `text-base`/`text-sm` on the
+  control — a true positive before any green; the size moved to the glyph on
+  a child span, which is where a badge already puts its digits. The R4 check
+  carries NO worklist: a control that already wears `btn` and then overrides
+  it has no geometry argument left. Deployed and re-measured on production at 1920 (root 17.5): the new-task chips 37 (= the 34 token; were 42), the detail tabs 37 inside a 48 bar (34 + padding + border; were 42 in 42), the footer 42 (= 38). The dialog still rounds at 12 - that is R8, next.
+  db 191 migrations · core 1357 tests · web 1054 tests + gate + sweep.

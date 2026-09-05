@@ -133,8 +133,10 @@ loosened rule — and the user's "except this part" is what puts one there.
   had missed (a true positive before any green); the pattern is proven both
   ways on synthetic tags (six caught, seven ignored). `panelStyle.test` asserts
   the family classes and the ABSENCE of any hand size.
-- **Re-measured on production:** see the log entry for 2026-09-05 — chips and
-  tabs at the compact size, the tab bar at the tabs plus padding.
+- **Re-measured on production (2026-09-05, 1920 wide, root 17.5):** new-task
+  chips **37** (= the 34 token; were 42), detail tabs **37** inside a **48**
+  bar (34 + padding + border; were 42 in 42), footer primary **42** (= 38),
+  `btn-sm` corners 8. The dialog itself still rounds at 12 — that is R8.
 - **Still open under this rule:** the board's column names are unstyled 23px
   buttons (rename-in-place text, not chrome) — decided with R17.
 
