@@ -3857,105 +3857,6 @@ sessions) for the cross-session narrative.
   against the shipped class list, then green.
   Deployed and re-measured on production at 1920: a project card opens the panel at /projects?project=<id> (dialog present, corner 18, rail 283, the acts 37/31 = the family); the new-task and new-meeting dialogs round at 18 (were 12) with no subtitle; the projects board's column reads boardStyle's class string and its title is 14.2 (= the board's 13); the create buttons on workflows, models, meetings and agents are btn-primary at 42 in the same row as the chips (tops 96 vs 98); the notifications page keeps one sentence and zero explanations; the agents intro is gone.
   db 191 migrations · core 1357 tests · web 1059 tests + gate + sweep.
-- 2026-09-05 (latest — THE HAND MOVES THE CARD AT LAST, EVERY POP-UP GETS ITS
-  STRUCTURE, THE MENU OPENS COMPACT, AND A PAGE ASKS ONCE; commit ba121c7):
-  fifteen items from twelve screenshots, and the third report of one bug.
-  **THE DRAG, settled in a real browser.** "Moving cards by hand still not
-  working" — after two fixes that every synthetic test had certified. A scratch
-  page served over http in a fresh Browser-pane tab, a recorder on the window
-  and a real mouse gave the order in one line: `pointerdown@card, pointermove,
-  dragstart@COLUMN, pointercancel`. **A native drag starts from the nearest
-  DRAGGABLE ANCESTOR of what was pressed and dispatches `dragstart` THERE** —
-  at the column, never at the card — so the guard that compared the
-  dragstart's target to the column ("refuse when they differ") could not fire:
-  they were the same element. The test that covered it dispatched dragstart AT
-  THE CARD, where the test's author believed the browser did, and was green
-  against the shipped bug — rule 9 in a pointer event. The section is not
-  draggable any more; its `<header>` is the column's handle (ghost = the whole
-  column), and the hook refuses drags that begin INSIDE a card. Same fixture,
-  same mouse, after: `pointerdown, LIFT, UP over=c2, DROPPED`. Minted: **a
-  synthetic event is dispatched where its author believes the browser
-  dispatches it; when the browser is the question, only the browser answers.**
-  **SECTIONS DIVIDED (R8/R18).** One rhythm in `panelStyle` — `DIALOG_BODY`,
-  `PANEL_SECTIONS`, `RAIL_SECTIONS`, `SECTION_EMPTY` — drawn by the CONTAINER
-  so a section cannot forget the rule; nine dialogs read it, three one-block
-  dialogs are entries with reasons. **The guard's first draft matched its own
-  import**: `text.includes("DIALOG_BODY")` stayed green when a body went back
-  to `space-y-3`, because the import line still carried the word — 13½'s
-  corpus trap, in a guard written the same hour, caught only because the
-  verify-red came back GREEN. It matches the use (`className={DIALOG_BODY}`)
-  now. **And the fix wrote a BACKSPACE into the regex**: `\b` in a non-raw
-  Python string — the exact control byte the encoding sweep exists for (0132's
-  lesson) — so the corrected guard went red when RESTORED too; a restored
-  control that stays red is the finding, not noise.
-  **THE SHELL.** The rail opens COMPACT by default in both locales and reads
-  its width from a store on the first render of every mount — the shell is
-  rendered per page, so the rail remounts on every navigation, and the
-  `useState` + effect version painted it open and slid it shut on every click
-  from one section to the next. Expand points at the content (`<` in Persian),
-  collapse at the wall. The assistant strip renders before the identity read
-  answers (three-state `member`) and publishes its width in a layout effect;
-  **the identity latch moved from the deps to a ref** — with `member` in the
-  deps, the answer "not a member" re-ran the effect and asked again at once,
-  which a test's one-shot "stranger" answer turned straight back into a member.
-  **ROW TWO** (R3): `FILTER_ROW_GAP` = the board's 12 under every second row;
-  member privileges wear اعضا | مدیران with counts over ONE card; the speakers
-  directory's row and the chat's room chips wear the chip; the audit table
-  lost its header row; projects' scope chips moved UP to row one before «مهلت
-  امروز» (the user's ruling for that page). The chat box lost its header
-  (three spellings of «عمومی» on one screen); the dashboard's meeting panels
-  lost «تقویم کامل ←» (the slot left the registry) and the always-true stage
-  pill; invitations got a hairline under the form; the agent page lost
-  «ابزارها»; the assistant settings' switches are rows, not boxes.
-  **PUSH-TO-TALK.** Press starts, release stops — asked of the RECOGNISER
-  (`start`/`stop`) and never of the rendered status, which Chrome's `no-speech`
-  sets to idle for a moment while the session reopens; a release landing in
-  that moment saw "idle", did nothing, and left the microphone open, which is
-  what turned the key into a switch. And three surfaces each listened on their
-  own: on the assistant page a press started TWO recognisers (the strip's hooks
-  run while it is invisible there). One pair of listeners now; the
-  highest-ranked surface on screen answers (page 2 > room composer 1 > strip
-  0, `enabled` while visible); a window blur or the surface unmounting
-  releases.
-  **SPEED, measured rather than guessed** (user: "check for bugs and reruns,
-  or a faster route we are circling around"): one dashboard load asked
-  `/api/meetings` NINE times and `/api/tasks/board` twice; every page fetched
-  its lists twice — `PlatformShell` keys the page on the display preferences,
-  which hydrate when `/api/me` lands, so the page REMOUNTS a second later; and
-  every BFF call ran in Vercel's `iad1` in front of a server in Germany
-  (`x-vercel-id: cdg1::iad1`, a cache-busted `/api/me` at ~690 ms). A 5-second
-  burst tier in the client's read cache collapses a page's mount-and-remount
-  into one request per list (writes still clear it); `web/vercel.json` pins
-  the functions to `fra1`. Production after the deploy (dpl_Hh27…, read in the user's Chrome):
-  `x-vercel-id: cdg1::fra1`, a cache-busted `/api/me` at 295 ms (was 686),
-  `/api/meetings` at 236 ms (was 479); one dashboard load = 7 API calls with
-  `/api/meetings` and `/api/tasks/board` ONCE each (was 15, ×9 and ×2). The
-  rail: stored "1" → `w-16` on the first frame of `/meetings` and the ONLY
-  width a MutationObserver saw across the navigation to `/tasks`; the expand
-  chevron carries `rtl:-scale-x-100` on the `rtl` document. The strip is in
-  the DOM with `--assistant-rail` published. A card dragged by the tool's own
-  mouse in a fresh tab: `pointerdown@card, pointermove@column, pointerup@column`
-  — no dragstart, no pointercancel — landed in «برای انجام» in the DOM and on
-  the server. Privileges: اعضا ۶ | مدیران ۴ over one card; audit `thead`
-  sr-only, 13 px from the chips to the table; invitations' form
-  `border-bottom 1px solid`; the agent page has no «ابزارها» heading; the
-  assistant settings' rows have 0 border and a 1 px divider between them; the
-  chat box has no header and one «عمومی»; projects' row one reads … «بر اساس
-  پیشرفت», «پروژه‌های من», «همه پروژه‌ها ۱», «مهلت امروز»; the speakers row is
-  outlined chips with icons; the new-task dialog's seven sections carry a 1 px
-  top hairline from the second on, the footer too; the task detail's rail
-  (7 hairlines) and body (3) likewise, two empty sections keeping their room;
-  and a synthetic hold of the stored `NumpadDecimal`: `aria-pressed` false →
-  true on keydown → false on keyup.
-  One more fix found there, shipped with the record: a drop released OUTSIDE
-  any column armed the click-swallow and the browser's click went elsewhere,
-  so the NEXT genuine click on the card was eaten — the flag disarms a tick
-  after the release now.
-  Verify-red on the four new guards, all true reds after the two corrections
-  above. Tooling recorded in memory rather than here: Bash has node but its
-  npx shims break; long heredocs fail; Python needs `C:/` paths and UTF-8
-  stdout; `fa.json`, `en.json` and `Agents.tsx` are CRLF.
-  db 191 migrations · core 1357 tests · web 1096 tests + gate + sweep.
 - 2026-09-05 (latest — R7: THREE SURFACES AND NOTHING ELSE; commit 88b8e11):
   the user's "next" after round 2. **What the census said:** 74 hand-rolled
   card recipes in 32 files by the guard's own count (the first grep had said
@@ -4120,3 +4021,102 @@ sessions) for the cross-session narrative.
   row — `preferred()` null, `forRun()` a model. Core deployed (health 200);
   the member's own retry is the proof this side cannot produce.
   db 191 migrations · core 1358 tests · web 1080 tests + gate + sweep.
+- 2026-09-05 (latest — THE HAND MOVES THE CARD AT LAST, EVERY POP-UP GETS ITS
+  STRUCTURE, THE MENU OPENS COMPACT, AND A PAGE ASKS ONCE; commit ba121c7):
+  fifteen items from twelve screenshots, and the third report of one bug.
+  **THE DRAG, settled in a real browser.** "Moving cards by hand still not
+  working" — after two fixes that every synthetic test had certified. A scratch
+  page served over http in a fresh Browser-pane tab, a recorder on the window
+  and a real mouse gave the order in one line: `pointerdown@card, pointermove,
+  dragstart@COLUMN, pointercancel`. **A native drag starts from the nearest
+  DRAGGABLE ANCESTOR of what was pressed and dispatches `dragstart` THERE** —
+  at the column, never at the card — so the guard that compared the
+  dragstart's target to the column ("refuse when they differ") could not fire:
+  they were the same element. The test that covered it dispatched dragstart AT
+  THE CARD, where the test's author believed the browser did, and was green
+  against the shipped bug — rule 9 in a pointer event. The section is not
+  draggable any more; its `<header>` is the column's handle (ghost = the whole
+  column), and the hook refuses drags that begin INSIDE a card. Same fixture,
+  same mouse, after: `pointerdown, LIFT, UP over=c2, DROPPED`. Minted: **a
+  synthetic event is dispatched where its author believes the browser
+  dispatches it; when the browser is the question, only the browser answers.**
+  **SECTIONS DIVIDED (R8/R18).** One rhythm in `panelStyle` — `DIALOG_BODY`,
+  `PANEL_SECTIONS`, `RAIL_SECTIONS`, `SECTION_EMPTY` — drawn by the CONTAINER
+  so a section cannot forget the rule; nine dialogs read it, three one-block
+  dialogs are entries with reasons. **The guard's first draft matched its own
+  import**: `text.includes("DIALOG_BODY")` stayed green when a body went back
+  to `space-y-3`, because the import line still carried the word — 13½'s
+  corpus trap, in a guard written the same hour, caught only because the
+  verify-red came back GREEN. It matches the use (`className={DIALOG_BODY}`)
+  now. **And the fix wrote a BACKSPACE into the regex**: `\b` in a non-raw
+  Python string — the exact control byte the encoding sweep exists for (0132's
+  lesson) — so the corrected guard went red when RESTORED too; a restored
+  control that stays red is the finding, not noise.
+  **THE SHELL.** The rail opens COMPACT by default in both locales and reads
+  its width from a store on the first render of every mount — the shell is
+  rendered per page, so the rail remounts on every navigation, and the
+  `useState` + effect version painted it open and slid it shut on every click
+  from one section to the next. Expand points at the content (`<` in Persian),
+  collapse at the wall. The assistant strip renders before the identity read
+  answers (three-state `member`) and publishes its width in a layout effect;
+  **the identity latch moved from the deps to a ref** — with `member` in the
+  deps, the answer "not a member" re-ran the effect and asked again at once,
+  which a test's one-shot "stranger" answer turned straight back into a member.
+  **ROW TWO** (R3): `FILTER_ROW_GAP` = the board's 12 under every second row;
+  member privileges wear اعضا | مدیران with counts over ONE card; the speakers
+  directory's row and the chat's room chips wear the chip; the audit table
+  lost its header row; projects' scope chips moved UP to row one before «مهلت
+  امروز» (the user's ruling for that page). The chat box lost its header
+  (three spellings of «عمومی» on one screen); the dashboard's meeting panels
+  lost «تقویم کامل ←» (the slot left the registry) and the always-true stage
+  pill; invitations got a hairline under the form; the agent page lost
+  «ابزارها»; the assistant settings' switches are rows, not boxes.
+  **PUSH-TO-TALK.** Press starts, release stops — asked of the RECOGNISER
+  (`start`/`stop`) and never of the rendered status, which Chrome's `no-speech`
+  sets to idle for a moment while the session reopens; a release landing in
+  that moment saw "idle", did nothing, and left the microphone open, which is
+  what turned the key into a switch. And three surfaces each listened on their
+  own: on the assistant page a press started TWO recognisers (the strip's hooks
+  run while it is invisible there). One pair of listeners now; the
+  highest-ranked surface on screen answers (page 2 > room composer 1 > strip
+  0, `enabled` while visible); a window blur or the surface unmounting
+  releases.
+  **SPEED, measured rather than guessed** (user: "check for bugs and reruns,
+  or a faster route we are circling around"): one dashboard load asked
+  `/api/meetings` NINE times and `/api/tasks/board` twice; every page fetched
+  its lists twice — `PlatformShell` keys the page on the display preferences,
+  which hydrate when `/api/me` lands, so the page REMOUNTS a second later; and
+  every BFF call ran in Vercel's `iad1` in front of a server in Germany
+  (`x-vercel-id: cdg1::iad1`, a cache-busted `/api/me` at ~690 ms). A 5-second
+  burst tier in the client's read cache collapses a page's mount-and-remount
+  into one request per list (writes still clear it); `web/vercel.json` pins
+  the functions to `fra1`. Production after the deploy (dpl_Hh27…, read in the user's Chrome):
+  `x-vercel-id: cdg1::fra1`, a cache-busted `/api/me` at 295 ms (was 686),
+  `/api/meetings` at 236 ms (was 479); one dashboard load = 7 API calls with
+  `/api/meetings` and `/api/tasks/board` ONCE each (was 15, ×9 and ×2). The
+  rail: stored "1" → `w-16` on the first frame of `/meetings` and the ONLY
+  width a MutationObserver saw across the navigation to `/tasks`; the expand
+  chevron carries `rtl:-scale-x-100` on the `rtl` document. The strip is in
+  the DOM with `--assistant-rail` published. A card dragged by the tool's own
+  mouse in a fresh tab: `pointerdown@card, pointermove@column, pointerup@column`
+  — no dragstart, no pointercancel — landed in «برای انجام» in the DOM and on
+  the server. Privileges: اعضا ۶ | مدیران ۴ over one card; audit `thead`
+  sr-only, 13 px from the chips to the table; invitations' form
+  `border-bottom 1px solid`; the agent page has no «ابزارها» heading; the
+  assistant settings' rows have 0 border and a 1 px divider between them; the
+  chat box has no header and one «عمومی»; projects' row one reads … «بر اساس
+  پیشرفت», «پروژه‌های من», «همه پروژه‌ها ۱», «مهلت امروز»; the speakers row is
+  outlined chips with icons; the new-task dialog's seven sections carry a 1 px
+  top hairline from the second on, the footer too; the task detail's rail
+  (7 hairlines) and body (3) likewise, two empty sections keeping their room;
+  and a synthetic hold of the stored `NumpadDecimal`: `aria-pressed` false →
+  true on keydown → false on keyup.
+  One more fix found there, shipped with the record: a drop released OUTSIDE
+  any column armed the click-swallow and the browser's click went elsewhere,
+  so the NEXT genuine click on the card was eaten — the flag disarms a tick
+  after the release now.
+  Verify-red on the four new guards, all true reds after the two corrections
+  above. Tooling recorded in memory rather than here: Bash has node but its
+  npx shims break; long heredocs fail; Python needs `C:/` paths and UTF-8
+  stdout; `fa.json`, `en.json` and `Agents.tsx` are CRLF.
+  db 191 migrations · core 1357 tests · web 1096 tests + gate + sweep.
