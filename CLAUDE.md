@@ -4676,3 +4676,55 @@ sessions) for the cross-session narrative.
   both typechecks, the build gate, the encoding sweep; every new test run
   red against the stashed old sources first.
   db 198 migrations · core 1385 tests · web 1206 tests + gate + sweep.
+- 2026-09-06 (evening — THE STANDING YES LEARNS ITS LIMITS, THE PROPOSALS
+  RETIRE INTO HANDS, AND THE INTEGRATIONS PAGE BECOMES A SHELF; commit
+  d0a0822; core deployed, web on Vercel): the user's answers to the
+  check-up's six items, and the next phase's first cut.
+  **The session-wide yes** ("yes, exclude them"): `NEVER_COVERED` in
+  consentGrant.ts — deletes, messages, invitations, revocations, role and
+  permission changes, a record's scope, approved minutes, a shared
+  conversation and the model list ask every time. The CARD reads
+  `sessionGrantEligible(tool)` — the runner now passes the tool to
+  `askConsent` — and offers «برای این نشست» only where the yes would stand:
+  a yes on a card the grant ignores is a question whose answer changes
+  nothing. Verified red: the class list (with a prefix-leak control), a
+  message and a status change still asking inside a granted session, the
+  sidebar card without the button.
+  **The proposals retired** ("retire proposal"): the assistant's server-side
+  write proposals are gone whole — write-tools.ts, proposals.ts, the
+  `proposal` SSE event, PROPOSAL_KINDS, the confirm/reject routes (404 on
+  production against a 401 control), the onProposal plumbing, ProposalCard
+  (which had no consumer) and its BFF route, ten `assistant.*` keys. The
+  capability is two HANDS now, `correct_transcript` and `edit_summary`, on
+  the person's own segment-edit and summary-version routes behind the
+  consent card — the same yes, beside the sentence that motivated it, one
+  wall instead of two. `echo.proposal_decision` stays for the workflow
+  engine (its assistant rows were zero). Delegation's guard 2 asserts the
+  POSITIVE property now — every server-side tool a delegate holds is a read
+  — and **that assertion found a real hole on its first run**:
+  `DOMAIN_TOOL_NAMES` was hand-written at four names while
+  `createDomainTools()` registered five, so `list_members` (0167) was a tool
+  the runtime offered that no agent could declare in `availableTools()` and
+  no coverage check had ever looked at — a guard's coverage list is itself a
+  seam, again. Fixed with an equality tripwire run red against the old list
+  first. Swept on the way: fourteen `platform.tool_*`/`toolCommand*` keys
+  with no consumer anywhere.
+  **The shelf (RULEBOOK R22)**: the Available tab is a grid of same-size
+  `.card-row` tiles, four to a row from md — the provider's own mark (inline
+  SVG, brandMarks.tsx; no remote brand asset under the CSP), the name on one
+  line, the status here as a chip, nothing else; the tile IS the control,
+  named for what it opens («اتصال جی‌میل», not «اتصال گوگل» four times).
+  Measured on production at 1745 (root 16.95): four columns of 251 px, gap
+  12.7, one top and one height (135.6) for all four, marks 42.4 (= h-10),
+  corner 16, chips «متصل است», no description in the shelf.
+  docs/CONNECTORS-PLAN.md holds the ten connectors and the adapter contract
+  the user asked for — nothing built until they pick the first three.
+  **Also done from the six**: the server has 2 GB of swap (fstab, swappiness
+  10), journald capped at 500M, apt clean, the pnpm store pruned
+  (1.3G→219M), rotated logs gone — disk 31 %; the `/root` junk dirs stay
+  (the tool's classifier refused the rmdir — the user's command). DB hygiene
+  as named operations: the no-audio `recording` call → failed with a written
+  reason, the incident's stuck `running` run → error.
+  Still the user's: bare names on the floor (M48), Soniox beyond
+  transcription, and the connectors' first three.
+  db 198 migrations · core 1362 tests · web 1230 tests + gate + sweep.
