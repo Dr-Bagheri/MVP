@@ -4314,3 +4314,100 @@ sessions) for the cross-session narrative.
   prompt test, the surface executors, the detail page, the room's direction,
   the template resolver and the runner's refusal.
   db 192 migrations · core 1362 tests · web 1117 tests + gate + sweep.
+- 2026-09-06 (morning — THE MIC KEEPS EVERY WORD, THE HOTKEY NEVER TYPES, A YES
+  CAN LAST THE SESSION, AND A FOLDER IS NOT A PROJECT; commits 59a4e32,
+  801d17a; db 0193): seven items from one message and six screenshots, plus
+  the architecture opinion the user asked for.
+  **The microphone** ("after a couple of seconds it does not hear me any more,
+  and it gave me less than half the sentences"). Four reports since 2026-09-04
+  had one cause: Chrome ends a recognition session by itself, and every
+  version of `dictation.ts` let some SESSION event stand in for the PERSON's
+  wish — `onend` went to idle (the cut command), a transient error reported
+  idle (the dead hotkey), and the restart of the OBJECT that had just died
+  threw inside `onend` and was read as the person stopping (the mic that goes
+  deaf after a couple of seconds); with `interimResults` off, every word
+  heard but not yet finalised when a session died went nowhere (the half
+  sentences). The hook keeps three things apart now — the wish, the live
+  session, the pending words — reopens a FRESH object after 150 ms while the
+  wish stands, and lands the pending words in the box before the dying session
+  goes. Press and release read the wish, never the status and never the
+  session. The fake in the test ends by itself, speaks in interims before
+  finals, and raises `aborted` before `end` on abort — the three things a
+  fake that agreed with the old belief could not have shown.
+  **The hotkey** ("after I release the key the prompt box gets selected and I
+  can't press the button any more because it will start typing"). The stored
+  key is NumpadDecimal, which prints «.»; dictation focuses the box it fills;
+  the typing guard refused a character key inside a field — so the key worked
+  exactly once per page. The bound key is the hotkey wherever the caret is and
+  its keydown is swallowed on the press AND on the repeats (verified red both
+  ways: the old guard refused the press; a repeat guard ahead of
+  preventDefault typed dots). The protection moved to where it belongs: the
+  WRITING keys — letters, digits, Space, the punctuation block — cannot be
+  bound (`isBindableKey`), a letter stored by an earlier version is dropped on
+  hydration, and the refusal toast names why; the numpad stays bindable.
+  **A yes for the session** ("add the option to give permission for the whole
+  session so they don't ask one after the other"). The consent card has a
+  third answer, «برای این نشست (به‌جز حذف)»: kept in `sessionStorage` (a
+  reload keeps it, a new tab does not), answered by the runner at once for
+  every later write, drawn as a standing line with «لغو» beside it on both
+  surfaces while it is on — and NEVER covering a `delete_*` tool, because that
+  is the verb the board was lost to two hours earlier; the button says so.
+  The server is not told; the dial and `requires_consent` are unchanged.
+  Verify-red on the runner: with the old boolean branch restored, «نه» (a
+  truthy string) PERFORMED the write — the discriminating red.
+  **A folder is not a project** ("they still don't understand the difference …
+  give them the access and the understanding"). The access was the finding:
+  no tool listed the projects — `update_project`'s own description named a
+  `list_projects` that did not exist — and `list_tasks` omitted the board's
+  folders, so the agents were asked to respect a difference between two lists
+  they could not see. `list_projects` (specialism both; in the room set — every
+  active member reads every project) and `folders` on `list_tasks`, each folder
+  saying whether it is a project's; `create_task` files by `project` or
+  `folder` (resolved against the RIGHT list — a project name that matches
+  nothing refuses with the real names rather than filing under a folder that
+  sounds alike), with the person by @handle, username or name in the same
+  create (`resolveColleague` learned the handle; an unresolved person refuses
+  the create rather than filing an orphan), and `column` and `priority` by
+  name. The understanding is one sentence in five places that cannot disagree:
+  Echo's standing orders (pinned, run red first), the colleagues' briefing and
+  descriptions, the tool descriptions, and db/0193 for the stored instructions
+  (sentinel-appended; 0192's paragraph asserted still present).
+  `create_task_topic` is «ساختن پوشهٔ تسک» now, and says it is not a project.
+  **The trail**: /projects opens under the board, «تسک‌ها / پروژه‌ها» — it left
+  the rail on 2026-09-05 and is reached from the board's first row, so the
+  roots pin lost it and a test names the two crumbs. **The gap**: every table
+  page measured 30 px from its toolbar to the first row against the board's
+  13 — `border-spacing` paints a band above the first row, and a headless
+  table (sr-only `<thead>`, which Chrome keeps IN the layout) carried a second
+  band around a row of no height. `.table-cards` takes one band back,
+  `.table-headless` two. **My first draft took back 17 and put the row 1 px
+  ABOVE the gap on every page** — measured 12.1 after the deploy, corrected
+  in 801d17a, re-measured 13.1 on users and security. A measurement that
+  came back exactly one pixel off is the reading that earns a second one.
+  **The opinion** is `docs/AGENTS-OPERATING-MODEL.md` — a proposal, the user's
+  to decide: chat decides and files cards; the board is the agents' queue
+  (server-side runs on the filer's borrowed authority, proposals + M41's
+  standing rules, progress as comments); rooms coordinate; authority written
+  once on the agent's page; agents as principals; never a server-side DELETE.
+  Phases P2 (one plan card per batch), P3 (agents as assignees), P4 (the
+  authority ledger); P1 shipped today.
+  **Proven on production in the user's Chrome**: the trail reads «تسک‌ها /
+  پروژه‌ها» with the ancestor linking to /fa/tasks; users, security, models
+  and the audit log at 13.1 under their toolbar (root 17.5, `margin-top`
+  −16 px, first row flush with its wrapper); the agents page names
+  `list_projects` and the new `create_task` sentence under «پروژه‌ها»; a
+  synthetic hold of the stored NumpadDecimal inside the composer — keydown and
+  repeat both `defaultPrevented`, nothing typed, the box still focused, the
+  mic `aria-pressed` true and pulsing while held, false on keyup; and a
+  request for a test task drew the card «دستیار می‌خواهد: ساختن تسک — «کارت
+  اجازه»» with the three buttons, declined with «نه»: the card left, the
+  board stayed at zero tasks, Echo said the creation was cancelled. NOT
+  proven live: speech itself — the reopen and the interim commit are pinned
+  by the fake, and the user's next dictation is the test this side cannot run.
+  Deployed: 0193 on production; core 59a4e32 on the server (both units
+  active, health 200, both markers on disk); web on Vercel twice. Verified:
+  core 1364 tests, web 1134, both typechecks, build gate, encoding sweep
+  (1194 files), token verifier; verify-red on every new test.
+  Still owed: the user's decision on the five lost tasks (restore or
+  recreate) and the README screenshots.
+  db 193 migrations · core 1364 tests · web 1134 tests + gate + sweep.
