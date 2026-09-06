@@ -24,7 +24,7 @@ import { useAssistantConversation } from "./AssistantConversationState";
 /* SendIcon left with the paper plane (2026-09-03): the send key wears the
    RETURN glyph now, which is the key it duplicates. */
 import { DocumentIcon, MicIcon, PlusIcon } from "./icons";
-import { mentionedAgent } from "@/lib/agentMention";
+import { FloorChip } from "./FloorChip";
 import { liveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { handleClientToolCall, type ConsentAnswer } from "@/lib/clientToolRunner";
@@ -142,10 +142,6 @@ export function Hub() {
      it, and the card must not offer a button that fails at the provider */
   const [canSend, setCanSend] = useState<Record<string, boolean>>({});
   const [input, setInput] = useState("");
-  /* the handles `@…` can name. Read once and rendered nowhere — the agents
-     have no picker on this surface by directive, so the only thing this list
-     does is tell a mention from an ordinary at-sign. */
-  const [agentHandles, setAgentHandles] = useState<string[]>([]);
   const streaming = live.streaming;
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [shared, setShared] = useState(false);
@@ -301,15 +297,6 @@ export function Hub() {
     prefillDone.current = true;
     setInput((prev) => (prev === "" ? prefill : prev));
   }, [prefill]);
-  useEffect(() => {
-    let alive = true;
-    void api.agents()
-      .then((rows) => { if (alive) setAgentHandles(rows.map((a) => a.handle)); })
-      .catch(() => { /* no roster: an @handle stays plain text and the
-                        ordinary assistant answers, which is the right
-                        forfeit — the mention is still in the question */ });
-    return () => { alive = false; };
-  }, []);
 
   /*
    * WHICH workflows this person wants recorded when they run them (db/0142).
@@ -555,7 +542,7 @@ export function Hub() {
   const adoptThread = useCallback(async (id: string) => {
     const versionAtStart = resetVersionRef.current;
     const [thread, verdicts] = await Promise.all([
-      api.agentMessages(id),
+      api.agentThread(id),
       api.sessionFeedback(id).catch(() => ({}) as Record<string, string>),
     ]);
     /* A just-cleared hub must not be repopulated by an older in-flight fetch. */
@@ -563,7 +550,7 @@ export function Hub() {
     /* one call: the thread, the id, and the sidebar handoff are one fact, and
        `adoptAssistantThread` publishes them together — a tick apart and the
        skeleton would flash once more over a thread that had already arrived */
-    adoptAssistantThread(id, thread);
+    adoptAssistantThread(id, thread.messages, thread.floor);
     setHeldThreadId(id);
     setFeedback(verdicts);
     setStarted(true);
@@ -840,10 +827,10 @@ export function Hub() {
       options: {
           model: model || undefined,
           skill: skill || undefined,
-          /* `?agent=` pins the conversation; an `@handle` in THIS message
-             routes just this turn — and the message wins, because it is the
-             more recent and more specific thing the person said */
-          agent: mentionedAgent(question, agentHandles)?.handle ?? agentHandle ?? undefined,
+          /* the agent a surface PINNED — a conversation opened from an agent's
+             own page. Names in the message are read by the SERVER, which keeps
+             the floor (2026-09-06): who was called, until somebody else is. */
+          agent: agentHandle ?? undefined,
           workflow: workflowSlug || undefined,
           connectorProvider,
           sourceId: sourceId || undefined,
@@ -1253,6 +1240,8 @@ export function Hub() {
           a person's dragged height is overwritten by the next keystroke, which
           is a control that works once.
         */}
+        {/* who is in the room, and the × that hands it back to Echo (2026-09-06) */}
+        <FloorChip className="mb-1" />
         <textarea
           ref={promptRef}
           rows={PROMPT_ROWS.min}

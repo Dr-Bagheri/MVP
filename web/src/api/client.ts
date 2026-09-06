@@ -2521,8 +2521,10 @@ export const api = {
    * progress, and inventing a state would be manufacturing an event the
    * server has no record of.
    */
-  async agentMessages(sessionId: string): Promise<AgentMessage[]> {
-    const { messages } = await bff<{
+  /** the thread AND who holds its floor (db/0194) — one read, so a reload
+      draws the chip before anybody types */
+  async agentThread(sessionId: string): Promise<{ messages: AgentMessage[]; floor: string[] }> {
+    const { messages, floor } = await bff<{
       messages: {
         id: string; role: "user" | "assistant" | "tool"; content: string;
         tool_calls: { id?: string; name?: string }[];
@@ -2530,13 +2532,15 @@ export const api = {
         /** db/0169 — a colleague's handle, or null for Echo */
         author?: string | null;
       }[];
+      /** absent from a core that predates the floor */
+      floor?: string[];
     }>(`/api/assistant/sessions/${sessionId}/messages`);
     /*
      * `tool` rows are filtered, not mapped: the thread renders what was SAID,
      * and nothing writes tool-role rows today — but the enum allows them, and
      * a future one must not crash a component whose union is user|assistant.
      */
-    return messages
+    const rows = messages
       .filter((m): m is typeof m & { role: "user" | "assistant" } => m.role !== "tool")
       .map((m) => ({
       id: m.id,
@@ -2553,6 +2557,17 @@ export const api = {
       truncated: m.truncated,
       author: m.author ?? null,
     }));
+    return { messages: rows, floor: floor ?? [] };
+  },
+  /**
+   * THE × ON THE CHIP: the person releases the floor (or sets it) by hand —
+   * the same column the router writes, so the screen and the next turn agree.
+   */
+  async setAssistantFloor(sessionId: string, agents: string[]): Promise<string[]> {
+    const { floor } = await bff<{ floor: string[] }>(`/api/assistant/sessions/${sessionId}/floor`, {
+      method: "PUT", body: JSON.stringify({ agents }), headers: { "content-type": "application/json" },
+    });
+    return floor;
   },
 
   // ---- the assistant experience (M27) ----------------------------------------

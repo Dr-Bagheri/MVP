@@ -23,7 +23,7 @@ export async function GET(
   const { sessionId } = await params;
   try {
     return Response.json(
-      await coreFetch<{ messages: AgentMessage[] }>(
+      await coreFetch<{ messages: AgentMessage[]; floor: string[] }>(
         `/v1/assistant/sessions/${sessionId}/messages`,
       ),
     );

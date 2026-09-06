@@ -84,7 +84,7 @@ vi.mock("@/api/client", () => ({
       record_on_agents: recordOnAgents,
     }),
     ask: (question: string) => scriptedAsk(question),
-    agentMessages: async () => [],
+    agentThread: async () => ({ messages: [], floor: [] }),
     models: async () => ({
       models: [{ id: "google/gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", reasoning: true }],
       preferred_model: null, curated: false, tool_capability_filtered: false,

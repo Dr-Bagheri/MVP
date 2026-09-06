@@ -1936,6 +1936,58 @@ agent's web default.
 Known trade, recorded: setAgentWorkflows is a whole-set write — the
 allowed_models lost-update hazard, same shape, same acceptance.
 
+## M48 — Who answers a turn: names, the floor, and one reach for every agent [user directives 2026-09-04 and 2026-09-06]
+
+The assistant thread has three voices — Echo, and the two colleagues رؤیا
+and آوا (db/0163) — and this decision says which of them answers a
+message. It was referenced as M48 by the `route` SSE event before it was
+written down; this is the record.
+
+**The rule.** (1) A message that NAMES agents — «رؤیا», `@roya`, "Roya",
+in any of the spellings `router.ts` keeps — is answered by exactly those
+named, in the order of address; the first named streams as the turn's
+answer, each other named colleague runs after it, hears what was said, and
+lands as its own message under its own name (2026-09-06: "when two names
+are said in one message, both answer"). (2) A message that names nobody is
+answered by whoever holds THE FLOOR — the agents the person last called and
+has not dismissed — because a called colleague stays until sent away
+(2026-09-06: "if I say 'Roya come here' and in the next message don't
+mention her name, she should not just leave — like humans do"). (3) Nobody
+named and nobody on the floor is Echo, the default. (4) The floor is
+released ONLY by a name — naming another colleague, or naming Echo («اکو»)
+— or by the × on the composer's chip; never by a topic, a pause, or a
+guess. Naming Echo alone stores the floor as `[]`, so "Echo holds it" and
+"nobody was called" are one state. (5) A conversation opened from an
+agent's own page starts with that agent on the floor (the surface's
+`agent`), and that hint counts on the first message only.
+
+**Where it lives.** `agent_session.floor text[]` (db/0194; an immutable
+`echo.floor_ok` enforces the handle shape and a ceiling of eight); the
+router (`agent/router.ts`: `namesIn`, `decide`) is pure and reads no topic
+— the classifier that could outvote a name (2026-09-04) is not coming back
+through this door; the ask route writes the floor BEFORE the stream opens
+and announces it as a `floor` SSE event right after `session`; the thread
+read returns `{messages, floor}` so a reload draws the chip before anybody
+types; `PUT /v1/assistant/sessions/:id/floor` is the ×. The 2026-09-04
+reading ("nobody named means Echo even after a specialist answered") is
+reversed for exactly one case — a follow-up after a CALLED colleague — and
+kept for the case that drove it (`current_agent`, who spoke last, decides
+nothing).
+
+**One reach for every agent** (2026-09-06: "full tool set for all three,
+yes"). The analyst/operator split of the platform reads is gone — one set,
+`createPlatformTools()`, for Echo, for a colleague answering under her own
+name, and for a colleague Echo calls; the personas differ in what they are
+FOR, never in what they can see. The wall is unchanged and is the only
+wall: every tool runs under the person's identity and role, client tools
+run in the person's own browser behind the consent card, `echo_agent` holds
+no DELETE. Every agent's prompt carries the same PLATFORM MAP and REACH
+RULE (`agent/platform-map.ts`, coverage derived from the tool registries):
+never «دسترسی ندارم» — a refusal is about the person's role and says who
+can; a record out of view is "not shared with you"; a missing feature is
+"not a feature". Rooms keep the org-readable set for the reason 0184 gave
+(the answer is addressed to everybody), and say so.
+
 ## M46 — The mail flow becomes a graph [user directive, 2026-08-28: "all
 these is not just a text that we show, it must be editable and part of the
 puzzled structure that we built ... workflow is a loop engineering of the

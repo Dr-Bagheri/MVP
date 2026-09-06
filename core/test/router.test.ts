@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decide, ECHO, nameIn, namesFor, rosterFor } from "../src/agent/router.ts";
+import { decide, ECHO, nameIn, namesFor, namesIn, rosterFor } from "../src/agent/router.ts";
 
 /**
  * WHO ANSWERS, under the rule the user drew:
@@ -22,8 +22,9 @@ const ROSTER = rosterFor([
 ]);
 const KNOWN = new Set([ECHO, "roya", "ava"]);
 
-const answers = (question: string, incumbent: string | null = null): string =>
-  decide(nameIn(question, ROSTER), incumbent, KNOWN).agent;
+/** who answers FIRST — with nobody on the floor unless the test says so */
+const answers = (question: string, incumbent: string | null = null, floor: string[] = []): string =>
+  decide(namesIn(question, ROSTER), floor, incumbent, KNOWN).agent;
 
 describe("a named agent takes the turn", () => {
   it("THE REPORTED BUG: naming Echo about a task subject gets Echo", () => {
@@ -51,10 +52,13 @@ describe("a named agent takes the turn", () => {
     expect(answers("@ava please look at this")).toBe("ava");
   });
 
-  it("the FIRST name wins when two are present", () => {
-    /* "ask Roya, or Ava if she is busy" addresses Roya; the last-match rule
-       would answer the aside */
-    expect(answers("از رؤیا بپرس، یا آوا اگر سرش شلوغ است")).toBe("roya");
+  it("two names: the FIRST streams and BOTH answer, in the order they were said (user, 2026-09-06)", () => {
+    /* "ask Roya, or Ava if she is busy" — Roya first, Ava after her; the
+       last-match rule would have answered the aside alone */
+    const decision = decide(namesIn("از رؤیا بپرس، یا آوا اگر سرش شلوغ است", ROSTER), [], null, KNOWN);
+    expect(decision.agent).toBe("roya");
+    expect(decision.responders).toEqual(["roya", "ava"]);
+    expect(decision.floor, "both hold the floor now").toEqual(["roya", "ava"]);
   });
 });
 
@@ -64,24 +68,23 @@ describe("nobody named means Echo", () => {
     expect(answers("summarise last week")).toBe(ECHO);
   });
 
-  it("even when a specialist answered the previous turn", () => {
+  it("even when a specialist answered the previous turn WITHOUT being called", () => {
     /*
-     * The directive read literally. An incumbent that keeps the turn would be
-     * a SECOND rule about who speaks, and two rules is how somebody ends up
-     * unable to predict which colleague replies — which is the complaint this
-     * whole file exists to answer.
+     * The incumbent still decides nothing (2026-09-04): who SPOKE last is a
+     * log fact. What decides is who was CALLED — the floor, below. A thread
+     * where Roya answered because Echo handed her a piece has an empty floor,
+     * and «و بعدش؟» goes back to Echo.
      */
     expect(answers("و بعدش؟", "roya")).toBe(ECHO);
-    const decision = decide(null, "roya", KNOWN);
+    const decision = decide([], [], "roya", KNOWN);
     expect(decision.rule).toBe("default");
-    /* the change of voice is still REPORTED, so the log can show it even
-       though it no longer decides anything */
+    /* the change of voice is still REPORTED, so the log can show it */
     expect(decision.switched).toBe(true);
   });
 
   it("a name nobody in the roster has is not a name", () => {
     expect(answers("سارا این را نگاه کن")).toBe(ECHO);
-    expect(decide("nobody", null, KNOWN).agent).toBe(ECHO);
+    expect(decide(["nobody"], [], null, KNOWN).agent).toBe(ECHO);
   });
 });
 
@@ -130,5 +133,69 @@ describe("the roster", () => {
   it("does not duplicate an agent whose handle is echo's", () => {
     const roster = rosterFor([{ handle: ECHO, name: "Echo" }]);
     expect(roster).toHaveLength(1);
+  });
+});
+
+
+/**
+ * THE FLOOR (user directive, 2026-09-06: "when I ask for Roya she should keep
+ * talking back until I say someone else's name — like humans: the person who
+ * was called joins and answers until you address somebody else"). Rulings the
+ * same day: two names → both answer; released only by a name or the ×.
+ *
+ * This REVERSES the 2026-09-04 reading for one case — a follow-up after a
+ * CALLED colleague — and keeps every other rule: a name beats everything, and
+ * nothing infers. Verified red against the old `decide`, which sent «و بعدش؟»
+ * to Echo whatever the floor said.
+ */
+describe("the floor", () => {
+  it("a called colleague keeps answering the messages that name nobody", () => {
+    expect(answers("رؤیا بیا اینجا")).toBe("roya");
+    const next = decide(namesIn("و بعدش؟", ROSTER), ["roya"], "roya", KNOWN);
+    expect(next.agent).toBe("roya");
+    expect(next.rule).toBe("floor");
+    expect(next.floor).toEqual(["roya"]);
+  });
+
+  it("naming Echo hands the floor back, and the floor is stored as nothing", () => {
+    const back = decide(namesIn("اکو، تو بگو", ROSTER), ["roya"], "roya", KNOWN);
+    expect(back.agent).toBe(ECHO);
+    expect(back.responders).toEqual([ECHO]);
+    expect(back.floor, "[echo] is the default and is stored as []").toEqual([]);
+    /* and the message after that is Echo's, with nobody on the floor */
+    expect(answers("و بعدش؟", ECHO, back.floor)).toBe(ECHO);
+  });
+
+  it("the × releases it: an empty floor and no name is Echo", () => {
+    expect(decide([], [], "roya", KNOWN).agent).toBe(ECHO);
+  });
+
+  it("a name always beats the floor — Ava called while Roya holds it takes it over", () => {
+    const handoff = decide(namesIn("آوا، نظر تو چیه؟", ROSTER), ["roya"], "roya", KNOWN);
+    expect(handoff.responders).toEqual(["ava"]);
+    expect(handoff.floor).toEqual(["ava"]);
+    expect(handoff.switched).toBe(true);
+  });
+
+  it("Echo named BESIDE a colleague: both answer, both hold the floor", () => {
+    const both = decide(namesIn("اکو و رؤیا، هر دو بگید", ROSTER), [], null, KNOWN);
+    expect(both.responders).toEqual([ECHO, "roya"]);
+    expect(both.floor).toEqual([ECHO, "roya"]);
+  });
+
+  it("a holder the roster no longer has is dropped, and an empty floor falls to Echo", () => {
+    const gone = decide([], ["someone_archived"], null, KNOWN);
+    expect(gone.agent).toBe(ECHO);
+    expect(gone.floor).toEqual([]);
+    const half = decide([], ["someone_archived", "ava"], null, KNOWN);
+    expect(half.responders).toEqual(["ava"]);
+  });
+
+  it("namesIn keeps the order of address and never repeats a name", () => {
+    expect(namesIn("رؤیا و آوا و باز رؤیا", ROSTER)).toEqual(["roya", "ava"]);
+    expect(namesIn("@ava then @roya", ROSTER)).toEqual(["ava", "roya"]);
+    expect(namesIn("جلسه‌های این هفته", ROSTER)).toEqual([]);
+    /* the one-name helper is the first of these, so the room keeps its rule */
+    expect(nameIn("@ava then @roya", ROSTER)).toBe("ava");
   });
 });

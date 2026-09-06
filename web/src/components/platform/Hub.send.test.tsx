@@ -26,7 +26,7 @@ vi.mock("@/api/client", () => ({
       yield { type: "text_delta", delta: "ok" };
       yield { type: "done", runId: "r", failed: false };
     })(); },
-    agentMessages: async () => [], models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
+    agentThread: async () => ({ messages: [], floor: [] }), models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [], agents: async () => [], workflows: async () => [], search: async () => [],
     assistantTools: async () => [], sessionFeedback: async () => ({}), shareState: async () => false,
     agentSessions: async () => [], connectors: async () => [], mailDrafts: async () => [],

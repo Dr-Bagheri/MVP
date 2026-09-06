@@ -154,29 +154,24 @@ describe("Echo's colleagues, as tools", () => {
     await expect(run(roya, { question: "و باز هم؟" })).rejects.toBeInstanceOf(ToolDenied);
   });
 
-  it("they are SPECIALISTS — the two sets genuinely differ", async () => {
+  it("ONE SET (user ruling, 2026-09-06): both colleagues carry every read, and differ in voice alone", async () => {
     /*
-     * The directive's "special in something more than the other". If both
-     * delegates got the same tools, asking the right one would be a
-     * personality choice, and the whole mechanism would be theatre.
+     * The 2026-09-04 split — Roya the board, Ava the record — was where
+     * «به سوابق دسترسی ندارم» came from: a colleague asked about a room it
+     * could not see. The wall was never the persona; every read runs under
+     * the PERSON's role. Verified red against the split: Ava had no
+     * list_tasks and Roya no list_audit.
      */
     const { tools, nested } = await build();
     await run(tools.find((t) => t.name === "ask_roya")!, { question: "؟" });
     await run(tools.find((t) => t.name === "ask_ava")!, { question: "؟" });
     const royaSet = new Set(nested[0]!.tools.map((t) => t.name));
     const avaSet = new Set(nested[1]!.tools.map((t) => t.name));
-
-    const onlyRoya = [...royaSet].filter((n) => !avaSet.has(n));
-    const onlyAva = [...avaSet].filter((n) => !royaSet.has(n));
-    expect(onlyRoya.length, "Roya carries tools Ava does not").toBeGreaterThan(0);
-    expect(onlyAva.length, "Ava carries tools Roya does not").toBeGreaterThan(0);
-
-    /* and named, so the split is the one the descriptions promise rather
-       than any difference at all */
-    expect(royaSet.has("list_tasks")).toBe(true);
-    expect(avaSet.has("list_tasks")).toBe(false);
-    expect(avaSet.has("list_audit")).toBe(true);
-    expect(royaSet.has("list_audit")).toBe(false);
+    expect([...royaSet].sort()).toEqual([...avaSet].sort());
+    for (const name of ["list_tasks", "list_audit", "list_projects", "list_meetings", "whoami"]) {
+      expect(royaSet.has(name), name).toBe(true);
+      expect(avaSet.has(name), name).toBe(true);
+    }
   });
 
   it("web access is BOTH switches — either off is off", async () => {
@@ -264,15 +259,11 @@ describe("the platform tool surface", () => {
     }
   });
 
-  it("the two specialisms overlap only where they must", () => {
-    const analyst = new Set(toolsFor("analyst").map((t) => t.name));
-    const operator = new Set(toolsFor("operator").map((t) => t.name));
-    const shared = [...analyst].filter((n) => operator.has(n));
-    /* a handful of reads neither can work without — and a SMALL handful: if
-       the shared set were most of them, the specialisms would be labels */
-    expect(shared.length).toBeGreaterThan(0);
-    expect(shared.length).toBeLessThan(Math.min(analyst.size, operator.size));
-    expect(toolsFor("all").length).toBeGreaterThan(analyst.size);
+  it("there is one platform read set, and it is the whole registry", () => {
+    const all = toolsFor().map((t) => t.name);
+    expect(all.length).toBeGreaterThan(10);
+    expect(new Set(all).size, "no duplicate names").toBe(all.length);
+    for (const name of ["list_tasks", "list_audit", "list_projects", "whoami"]) expect(all, name).toContain(name);
   });
 });
 

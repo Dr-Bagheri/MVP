@@ -121,6 +121,48 @@ describe("assistant stream", () => {
     expect(out.ended).toBe(true);
   });
 
+  it("the floor is announced after the session, and a second responder answers AFTER the streamed one (2026-09-06)", async () => {
+    /*
+     * "When two names are said in one message, both answer." The first
+     * named streams as the turn's own answer; each other named colleague
+     * runs after it, hears it, and lands as ONE message under its own name,
+     * after the answer it follows — and `done` is still last.
+     */
+    runPiMock.mockReset();
+    let calls = 0;
+    runPiMock.mockImplementation(async (options: { onText?: (d: string) => void }) => {
+      calls += 1;
+      if (calls === 1) {
+        options.onText?.("رؤیا: سلام");
+        return { text: "رؤیا: سلام", model: "m", tokensIn: 1, tokensOut: 1 };
+      }
+      return { text: "آوا: منم هستم", model: "m", tokensIn: 1, tokensOut: 1 };
+    });
+    const out = collectSink();
+    const turns: { text: string; author?: string | undefined }[] = [];
+    await createAssistant({ db: fakeDb(), tools: [], deps: {} }).ask({
+      ...ask,
+      sessionId: "55555555-5555-4555-8555-555555555555",
+      agentHandle: "roya",
+      route: { agent: "roya", rule: "mention", switched: true, confidence: null },
+      floor: ["roya", "ava"],
+      also: [{ handle: "ava", name: "آوا", systemInstructions: "تو آوا هستی", web: false }],
+      onTurn: async (turn: { text: string; author?: string | undefined }) => { turns.push({ text: turn.text, author: turn.author }); },
+    } as never, out.sink);
+    const events = out.events();
+    const types = events.map((e) => e.type);
+    expect(types.indexOf("floor"), "the floor comes right after the session").toBe(types.indexOf("session") + 1);
+    expect(events.find((e) => e.type === "floor")).toMatchObject({ agents: ["roya", "ava"] });
+    expect(events.filter((e) => e.type === "text_delta").map((e) => e.delta)).toEqual(["رؤیا: سلام"]);
+    const second = events.find((e) => e.type === "agent_message");
+    expect(second).toMatchObject({ author: "ava", name: "آوا", text: "آوا: منم هستم", failed: false, after: true });
+    expect(types.indexOf("agent_message"), "the second answer follows the first").toBeGreaterThan(types.lastIndexOf("text_delta"));
+    expect(types.at(-1)).toBe("done");
+    expect(runPiMock).toHaveBeenCalledTimes(2);
+    /* both persisted, under their own names, in speaking order */
+    expect(turns.map((t) => t.author)).toEqual(["roya", "ava"]);
+  });
+
   it("a denied tool is a NORMAL terminal state, not an error", async () => {
     runPiMock.mockReset();
     runPiMock.mockImplementation(async (options: {

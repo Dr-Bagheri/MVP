@@ -914,7 +914,7 @@ export async function executeClientTool(
       if (!who.ok) return { ok: false, detail: who.detail };
       try {
         const { api } = await import("@/api/client");
-        return { ok: true, detail: JSON.stringify(await api.agentMessages(who.id)) };
+        return { ok: true, detail: JSON.stringify((await api.agentThread(who.id)).messages) };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "that conversation could not be read") };
       }

@@ -1,6 +1,6 @@
 import { listAssistantAgents } from "../agent/agent-store.ts";
 import {
-  decide, ECHO, nameIn, rosterFor,
+  decide, ECHO, namesIn, rosterFor,
   type RouteDecision, type Responder,
 } from "../agent/router.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
@@ -25,6 +25,13 @@ export interface RouteInput {
   /** the message being routed */
   question: string;
   sessionId?: string | undefined;
+  /**
+   * An agent a SURFACE chose — a conversation opened from Roya's own page
+   * sends `agent: roya`. It counts as a name only on the FIRST message of a
+   * new conversation: after that the floor governs, or a page that keeps
+   * sending it would drag the person back to Roya after they said «اکو».
+   */
+  pinned?: string | undefined;
 }
 
 /**
@@ -48,6 +55,37 @@ export async function incumbentOf(
   });
 }
 
+/**
+ * Who holds the floor in this conversation — the colleagues the person called
+ * and has not yet dismissed (db/0194). Empty = Echo, the default.
+ */
+export async function floorOf(
+  db: Db, identity: Identity, sessionId: string | undefined,
+): Promise<Responder[]> {
+  if (sessionId === undefined || sessionId === "") return [];
+  return db.withIdentity(identity, async (tx: SqlTx) => {
+    const rows = await tx.unsafe<{ floor: string[] | null }>(
+      `select floor from echo.agent_session where id = $1`,
+      [sessionId],
+    );
+    return rows[0]?.floor ?? [];
+  });
+}
+
+/** Write the floor a turn decided — only when it changed, so an unchanged
+    floor costs no row and no `updated_at`. */
+export async function rememberFloor(
+  db: Db, identity: Identity, sessionId: string, floor: readonly Responder[],
+): Promise<void> {
+  await db.withIdentity(identity, async (tx: SqlTx) => {
+    await tx.unsafe(
+      `update echo.agent_session set floor = $2::text[], updated_at = now()
+        where id = $1 and floor is distinct from $2::text[]`,
+      [sessionId, [...floor]],
+    );
+  });
+}
+
 /** Remember who answered — the thread's record of its own voice. */
 export async function rememberIncumbent(
   db: Db, identity: Identity, sessionId: string, agent: Responder,
@@ -64,6 +102,10 @@ export async function rememberIncumbent(
 export async function routeTurn(input: RouteInput): Promise<RouteDecision> {
   const incumbent = await incumbentOf(input.db, input.identity, input.sessionId)
     .catch(() => null);
+  /* a floor read that fails must not stop the question either — it reads as
+     "nobody holds it", which is Echo, the same answer as a fresh thread */
+  const floor = await floorOf(input.db, input.identity, input.sessionId)
+    .catch(() => [] as Responder[]);
 
   /*
    * A roster read that fails must not stop somebody asking a question: with no
@@ -74,6 +116,10 @@ export async function routeTurn(input: RouteInput): Promise<RouteDecision> {
   const roster = rosterFor(agents.map((a) => ({ handle: a.handle, name: a.name })));
   const known = new Set<Responder>(roster.map((entry) => entry.handle));
   known.add(ECHO);
-
-  return decide(nameIn(input.question, roster), incumbent, known);
+  let named = namesIn(input.question, roster);
+  const fresh = input.sessionId === undefined || input.sessionId === "";
+  if (named.length === 0 && fresh && input.pinned !== undefined && known.has(input.pinned)) {
+    named = [input.pinned];
+  }
+  return decide(named, floor, incumbent, known);
 }

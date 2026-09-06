@@ -64,6 +64,8 @@ export interface AssistantSnapshot {
   streaming: boolean;
   /** the conversation these messages belong to, once the server names it */
   sessionId: string | null;
+  /** who holds the floor — the colleagues the person called (db/0194); [] = Echo */
+  floor: string[];
   /**
    * A refusal that happened BEFORE the run started. Not an error banner for a
    * stream that died mid-answer — that is annotated on the turn itself, and
@@ -108,6 +110,7 @@ let state: AssistantSnapshot = {
   messages: [],
   streaming: false,
   sessionId: null,
+  floor: [],
   error: null,
 };
 
@@ -135,7 +138,7 @@ export function assistantSnapshot(): AssistantSnapshot {
  * "getServerSnapshot should be cached" the moment a fresh literal is returned
  * per render. (This repo has paid for that one before, in `preferences`.)
  */
-const EMPTY: AssistantSnapshot = { messages: [], streaming: false, sessionId: null, error: null };
+const EMPTY: AssistantSnapshot = { messages: [], streaming: false, sessionId: null, floor: [], error: null };
 export function assistantServerSnapshot(): AssistantSnapshot {
   return EMPTY;
 }
@@ -152,8 +155,10 @@ export function registerAssistantSurface(next: SurfaceAdapter): () => void {
 }
 
 /** Replace the thread with rows read from the server (resume, adopt, reload). */
-export function adoptAssistantThread(sessionId: string | null, messages: AgentMessage[]): void {
-  publish({ sessionId, messages, error: null });
+export function adoptAssistantThread(
+  sessionId: string | null, messages: AgentMessage[], floor: string[] = [],
+): void {
+  publish({ sessionId, messages, floor, error: null });
   if (sessionId !== null) setLiveConversation(sessionId);
 }
 
@@ -161,8 +166,20 @@ export function adoptAssistantThread(sessionId: string | null, messages: AgentMe
 export function resetAssistantSession(): void {
   controller?.abort();
   controller = null;
-  publish({ messages: [], sessionId: null, error: null, streaming: false });
+  publish({ messages: [], sessionId: null, floor: [], error: null, streaming: false });
   setLiveConversation(null);
+}
+
+/**
+ * THE × ON THE CHIP (2026-09-06): the person hands the thread back to Echo.
+ * Cleared on screen at once and written to the session; a write that fails
+ * is corrected by the next turn's `floor` event, which reads the column.
+ */
+export async function releaseAssistantFloor(): Promise<void> {
+  const sessionId = state.sessionId;
+  publish({ floor: [] });
+  if (sessionId === null) return;
+  await api.setAssistantFloor(sessionId, []).catch(() => undefined);
 }
 
 export function clearAssistantError(): void {
@@ -399,6 +416,10 @@ async function consume(
           ? m
           : { ...m, author: event.agent }));
         break;
+      case "floor":
+        /* who is in the room after this message — the chip's one source (2026-09-06) */
+        publish({ floor: event.agents });
+        break;
       case "text_delta":
         patch(replyId, (m) => ({ ...m, content: m.content + event.delta }));
         adapter?.onDelta?.(event.delta);
@@ -433,8 +454,11 @@ async function consume(
           author: event.author,
           ...(event.failed ? { failed: true } : {}),
         };
+        /* a delegate's paragraph goes BEFORE the streamed answer (Echo read
+           it and went on); a second floor-holder's answer goes AFTER it —
+           that is the order they spoke (2026-09-06) */
         publish({
-          messages: idx === -1
+          messages: idx === -1 || event.after === true
             ? [...state.messages, turn]
             : [...state.messages.slice(0, idx), turn, ...state.messages.slice(idx)],
         });
@@ -495,6 +519,6 @@ export function resetAssistantForTest(): void {
   controller?.abort();
   controller = null;
   adapter = null;
-  state = { messages: [], streaming: false, sessionId: null, error: null };
+  state = { messages: [], streaming: false, sessionId: null, floor: [], error: null };
   for (const listener of listeners) listener();
 }

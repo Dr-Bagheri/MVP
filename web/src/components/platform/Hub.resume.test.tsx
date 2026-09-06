@@ -48,7 +48,7 @@ const askCalls: (string | undefined)[] = [];
  * A thread fetch the test can HOLD OPEN. The loading window is a moment, and
  * a mock that resolves on the next microtask makes that moment unobservable —
  * an assertion about it would pass or fail on scheduling luck. When `gate` is
- * set, `agentMessages` waits for the test to release it.
+ * set, `agentThread` waits for the test to release it.
  */
 let gate: Promise<AgentMessage[]> | null = null;
 async function* scriptedAsk(
@@ -81,7 +81,7 @@ vi.mock("@/api/client", () => ({
       avatar_url: null, role: "admin", status: "active", locale: "fa",
       model_id: null, created_at: new Date().toISOString(),
     }),
-    agentMessages: () => gate ?? Promise.resolve(failedThread),
+    agentThread: () => (gate ?? Promise.resolve(failedThread)).then((messages) => ({ messages, floor: [] })),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
     // the Part-1 surface the hub now touches on mount / after done
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),

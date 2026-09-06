@@ -42,7 +42,7 @@ vi.mock("@/api/client", () => ({
   api: {
     identityState: () => identity(),
     models: async () => ({ models: [], preferred_model: null }),
-    agentMessages: async () => [],
+    agentThread: async () => ({ messages: [], floor: [] }),
     deliverToolResult: async () => undefined,
     ask: () => (async function* () { /* nothing asked in this file */ })(),
     /* the roster `@handle` resolves against (0166). It is read on mount and

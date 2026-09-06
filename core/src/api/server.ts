@@ -47,7 +47,8 @@ import { toolsFor } from "../agent/platform-tools.ts";
 import {
   ECHO as ROUTER_ECHO, nameIn, roomResponder, rosterFor, type RouteDecision,
 } from "../agent/router.ts";
-import { rememberIncumbent, routeTurn } from "./routing.ts";
+import { rememberFloor, rememberIncumbent, routeTurn } from "./routing.ts";
+import { floorInstruction } from "../agent/platform-map.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { findProposal, recordDecision } from "../agent/proposals.ts";
@@ -259,14 +260,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * registered as a queue handler. `test/queue-handlers.test.ts` exists
    * because of that one. `test/tool-registry.test.ts` exists because of this.
    *
-   * `toolsFor("all")` rather than a specialism: the split between analyst and
-   * operator is about which colleague to ASK, and Echo is not asking anyone.
+   * `toolsFor()` is the whole platform read set — the analyst/operator split
+   * went on 2026-09-06 (one set for every agent; the person's role is the
+   * wall).
    */
   const domainTools = options.tools === undefined
     ? ([
       ...createDomainTools(),
       ...createWriteTools(),
-      ...toolsFor("all"),
+      ...toolsFor(),
     ] as unknown as DomainTool<TDeps, never>[])
     : options.tools;
   // agentToolsDb, not the raw db: every DB call a tool makes runs on
@@ -4303,7 +4305,23 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.get("/v1/assistant/sessions/:id/messages", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    return reply.send({ messages: await sessions.messages(identity, id) });
+    /* the rows AND the floor (db/0194) in one read: a thread resumed after a
+       reload has to know who is in the room before the next message is sent */
+    return reply.send(await sessions.thread(identity, id));
+  });
+  /**
+   * THE × ON THE CHIP (2026-09-06): the person releases the floor by hand.
+   * Same column the router writes, so the screen and the next turn cannot
+   * disagree; `[]` (or `["echo"]`) hands the thread back to Echo.
+   */
+  app.put("/v1/assistant/sessions/:id/floor", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { agents?: unknown };
+    if (!Array.isArray(body.agents) || body.agents.some((h) => typeof h !== "string")) {
+      throw new ValidationError("agents must be a list of handles");
+    }
+    return reply.send({ floor: await sessions.setFloor(identity, id, body.agents as string[]) });
   });
 
   app.post("/v1/assistant/sessions/:id/archive", async (request, reply) => {
@@ -4559,15 +4577,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }
 
     /**
-     * The card supplies only a HANDLE. The persona's instructions/model/tool
-     * list are re-read under this caller's RLS identity, so a forged browser
-     * request can neither select an invisible agent nor submit instructions
-     * of its own.
+     * A surface supplies only a HANDLE (a conversation opened from an agent's
+     * own page). The persona's instructions/model/tool list are re-read under
+     * this caller's RLS identity, so a forged browser request can neither
+     * select an invisible agent nor submit instructions of its own. `echo` is
+     * the platform assistant and has no row to resolve.
      */
-    const namedAgent = typeof body.agent === "string" && body.agent !== ""
-      ? await resolveAssistantAgent(options.db, identity, body.agent)
-      : undefined;
-    if (typeof body.agent === "string" && body.agent !== "" && !namedAgent) {
+    type Persona = Awaited<ReturnType<typeof resolveAssistantAgent>>;
+    const pinned = typeof body.agent === "string" && body.agent !== "" ? body.agent : undefined;
+    if (pinned !== undefined && pinned !== ROUTER_ECHO
+      && !(await resolveAssistantAgent(options.db, identity, pinned))) {
       throw new ValidationError("unknown agent", { code: "agent_not_found" });
     }
 
@@ -4599,37 +4618,48 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
      * decision a person already made is slower AND worse, and overriding one
      * would be the same mistake as ignoring an @mention.
      *
-     * Everything else gets one cheap constrained call, and whoever it names
-     * owns the whole turn. The hysteresis — cheap to stay with the current
-     * speaker, expensive to take the turn away — lives in agent/router.ts.
+     * Everything else is decided by NAMES and by THE FLOOR (agent/router.ts,
+     * 2026-09-06): the message names somebody → those named answer, in
+     * order, and hold the floor; it names nobody → whoever holds the floor
+     * answers; nobody holds it → Echo. No model call, no guess.
      */
     let route: RouteDecision | undefined;
-    let selectedAgent = namedAgent;
-    if (namedAgent) {
-      route = {
-        agent: namedAgent.handle, rule: "mention", confidence: null,
-        incumbent: null, switched: false,
-      };
-    } else if (selectedWorkflow === undefined && skill === undefined) {
+    let selectedAgent: Persona = undefined;
+    /* the OTHER responders of this turn — two names in one message, both
+       answer — each resolved under the caller's identity like the first;
+       `echo` needs no row and rides as `undefined` */
+    const others: { handle: string; agent: Persona }[] = [];
+    if (selectedWorkflow === undefined && skill === undefined) {
       route = await routeTurn({
         db: options.db,
         identity,
         question: typeof body.question === "string" ? body.question : "",
         sessionId: typeof body.session_id === "string" ? body.session_id : undefined,
+        pinned,
       });
-      if (route.agent !== ROUTER_ECHO) {
-        selectedAgent = await resolveAssistantAgent(options.db, identity, route.agent);
-        /* a handle the roster resolved and this line cannot — an agent
-           archived between the two reads. Echo answers rather than the turn
-           failing, and the log says `fallback` rather than pretending the
-           router chose Echo. */
+      const [first, ...rest] = route.responders;
+      if (first !== undefined && first !== ROUTER_ECHO) {
+        selectedAgent = await resolveAssistantAgent(options.db, identity, first);
         if (!selectedAgent) {
           /* a handle the roster resolved and this line cannot — an agent
              archived between the two reads. Echo answers, and `default` is
              the true rule: nobody the product can address was named. */
-          route = { ...route, agent: ROUTER_ECHO, rule: "default", switched: false };
+          route = {
+            ...route, agent: ROUTER_ECHO, responders: [ROUTER_ECHO, ...rest],
+            floor: rest, rule: "default", switched: false,
+          };
         }
       }
+      for (const handle of rest) {
+        const agent = handle === ROUTER_ECHO
+          ? undefined
+          : await resolveAssistantAgent(options.db, identity, handle);
+        if (handle === ROUTER_ECHO || agent) others.push({ handle, agent });
+      }
+    } else if (pinned !== undefined && pinned !== ROUTER_ECHO) {
+      /* a workflow or a skill addressed to an agent: that agent runs it and
+         no floor moves — a workflow turn is not a conversation */
+      selectedAgent = await resolveAssistantAgent(options.db, identity, pinned);
     }
 
     /**
@@ -4706,6 +4736,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     await sessions.append(identity, {
       sessionId: conversation.id, role: "user", content: body.question,
     });
+    /* THE FLOOR is written before the stream opens: a message that named a
+       colleague has moved it whether or not an answer arrives, and the chip
+       on the screen reads the same column the next turn will (db/0194) */
+    if (route) {
+      await rememberFloor(options.db, identity, conversation.id, route.floor)
+        .catch(() => undefined);
+    }
 
     // Headers must go out before the first event or proxies may buffer.
     reply.raw.writeHead(200, {
@@ -4816,6 +4853,41 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         + (sharedProfile.about ? ` ${sharedProfile.about}` : "")
       : undefined;
 
+    const timeLine = timeInstructions(new Date(), await callerZone(identity, body.timezone));
+    const nameOf = (handle: string): string =>
+      handle === ROUTER_ECHO ? "Echo" : (others.find((o) => o.handle === handle)?.agent?.name ?? selectedAgent?.name ?? handle);
+    /**
+     * The system prompt for ONE responder: its persona (none for Echo, whose
+     * orders are the runtime's default) over the situation every responder
+     * shares. One function, because a turn may have several responders and
+     * two hand-assembled prompts are how they come to hear different rooms.
+     */
+    const instructionsFor = (agent: Persona, company: readonly string[]): string => [
+      agent?.instructions,
+      /*
+       * The stored tool list, now that it no longer FILTERS anything: it is
+       * what this agent is built around, said as a preference. A column that
+       * stopped being a wall and became nothing would be the third kind of
+       * dead configuration this repo has found — present, editable, and read
+       * by no one. Phrased as "reach for these first", never as "only these":
+       * the whole point of the change above is that the ceiling is gone.
+       */
+      agent && agent.tools.length > 0
+        ? `You are built around these tools and should reach for them first: ${agent.tools.join(", ")}.`
+          + " You are not limited to them — use whatever the task needs."
+        : undefined,
+      /* a colleague answering under her own name: how she arrives and stays */
+      agent ? floorInstruction(agent.name, company.map(nameOf)) : undefined,
+      selectedWorkflow?.instructions,
+      profileInstruction,
+      contextLine,
+      blocksInstruction,
+      conciseInstruction,
+      // last, so the interface-language fact wins on language (see helper)
+      languageInstruction(body.locale),
+      timeLine,
+    ].filter(Boolean).join("\n\n");
+    const firstHandle = route?.agent ?? (selectedAgent?.handle ?? ROUTER_ECHO);
     await assistant.ask({
       identity,
       /* every extra channel is APPENDED and FENCED, never merged into the
@@ -4837,29 +4909,7 @@ ${liveText}`
           : "",
       ].join(""),
       skill,
-      systemInstructions: [
-        selectedAgent?.instructions,
-        /*
-         * The stored tool list, now that it no longer FILTERS anything: it is
-         * what this agent is built around, said as a preference. A column that
-         * stopped being a wall and became nothing would be the third kind of
-         * dead configuration this repo has found — present, editable, and read
-         * by no one. Phrased as "reach for these first", never as "only these":
-         * the whole point of the change above is that the ceiling is gone.
-         */
-        selectedAgent && selectedAgent.tools.length > 0
-          ? `You are built around these tools and should reach for them first: ${selectedAgent.tools.join(", ")}.`
-            + " You are not limited to them — use whatever the task needs."
-          : undefined,
-        selectedWorkflow?.instructions,
-        profileInstruction,
-        contextLine,
-        blocksInstruction,
-        conciseInstruction,
-        // last, so the interface-language fact wins on language (see helper)
-        languageInstruction(body.locale),
-        timeInstructions(new Date(), await callerZone(identity, body.timezone)),
-      ].filter(Boolean).join("\n\n"),
+      systemInstructions: instructionsFor(selectedAgent, others.map((o) => o.handle)),
       agentModel: selectedAgent?.model,
       /*
        * THE STORED TOOL LIST IS A PREFERENCE, NOT A CEILING (user directive,
@@ -4924,8 +4974,20 @@ ${liveText}`
        * ANDed with each agent's `web` flag: either off is off.
        */
       ...(selectedAgent ? { agentHandle: selectedAgent.handle } : {}),
-      /* M48: the surface names the responder before the first token */
-      ...(route ? { route } : {}),
+      /* M48: the surface names the responder before the first token — and
+         the floor after it, so the chip and the next turn agree */
+      ...(route ? { route, floor: route.floor } : {}),
+      /* the others on the floor answer after the streamed answer, in order */
+      also: others.map((other) => ({
+        handle: other.handle,
+        name: nameOf(other.handle),
+        systemInstructions: instructionsFor(
+          other.agent,
+          [firstHandle, ...others.filter((x) => x.handle !== other.handle).map((x) => x.handle)],
+        ),
+        agentModel: other.agent?.model ?? undefined,
+        web: body.web === true || other.agent?.web === true,
+      })),
       agentsWeb,
       signal: controller.signal,
       sessionId: conversation.id,
@@ -4953,7 +5015,7 @@ ${liveText}`
          */
         if (route) {
           await rememberIncumbent(
-            options.db, identity, conversation.id, route.agent,
+            options.db, identity, conversation.id, author ?? ROUTER_ECHO,
           ).catch(() => undefined);
         }
         try {

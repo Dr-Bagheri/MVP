@@ -1096,7 +1096,7 @@
       },
       "assistant": {
         "step1": "Type your question or task in the box and press Enter; Shift+Enter breaks the line. The answer arrives under it as plain text.",
-        "step2": "Name an agent — @roya or @ava — and that one answers; unnamed, Echo does. Agents see only what you are allowed to see.",
+        "step2": "Name an agent — Roya, Ava or @roya — and they join and keep answering until you name somebody else; two names, two answers. «Echo», or the × beside their name, hands the conversation back to Echo. Agents see only what you are allowed to see.",
         "step3": "The assistant acts, not only talks: it creates tasks, records meetings, searches the records and opens pages. Every change is shown to you first and is not written until you confirm; on that card you can allow the rest of this session so it stops asking — a delete always asks.",
         "step4": "The microphone beside the box is speaking instead of typing. With a hotkey chosen in the assistant settings, it listens while you hold the key and stops when you let go — wherever the caret is.",
         "step5": "The assistant strip on every page is the same conversation; what you said on the assistant page continues in the strip, and back.",
@@ -1149,7 +1149,7 @@
         "step5": "Nothing is read from an outside service without your asking, and what is read goes to the model only for that task."
       },
       "agents": {
-        "step1": "Agents are the organisation's AI colleagues. Echo is the general assistant; Roya knows the work in flight and Ava analyses the records. The agents page shows each with its name, handle and description.",
+        "step1": "Agents are the organisation's AI colleagues. Echo is the general assistant; Roya runs the work in flight and Ava analyses the records — all three reach every part of the platform, with your role's own access. The agents page shows each with its name, handle and description.",
         "step2": "An agent's page states its model, web access, kind and whether it can be edited, then, group by group, everything it can do — reading first, changing last.",
         "step3": "An agent works with your authority and never more: what you cannot see, it cannot see; and the agents' database role can never delete.",
         "step4": "An admin can create one with «New agent» or edit the organisation's own: name, description, instructions, icon and colour, and whether it may reach the web. System agents are not editable.",
@@ -2148,6 +2148,9 @@
   "presence": {
     "allow": "Allow",
     "allowSession": "For this session (not deletes)",
+    "floorWith": "Talking with",
+    "floorAnd": "and",
+    "floorRelease": "Back to Echo",
     "sessionGranted": "Changes run without asking for the rest of this session; deletes still ask.",
     "sessionRevoke": "Revoke",
     "bellCards": "Assistant messages",

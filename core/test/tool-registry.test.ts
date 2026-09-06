@@ -51,13 +51,13 @@ describe("every tool the platform implements is offered by the platform", () => 
     /* a renamed export or a factory returning [] would make every assertion
        below vacuous, which is the failure this whole family keeps finding in
        itself */
-    expect(toolsFor("all").length).toBeGreaterThan(10);
+    expect(toolsFor().length).toBeGreaterThan(10);
     expect(DOMAIN_TOOL_NAMES.length).toBeGreaterThan(3);
   });
 
   it("the ask route builds its toolset from the platform reads, not only the domain ones", () => {
     /*
-     * The defect, pinned where it lived. `toolsFor("all")` must appear in the
+     * The defect, pinned where it lived. `toolsFor()` must appear in the
      * server's default toolset — the branch taken when a caller passes no
      * tools, which is every real deployment (`api/main.ts` omits the option).
      *
@@ -118,7 +118,7 @@ describe("every tool the platform implements is offered by the platform", () => 
     const registered = [
       ...DOMAIN_TOOL_NAMES,
       ...createWriteTools().map((t) => t.name),
-      ...toolsFor("all").map((t) => t.name),
+      ...toolsFor().map((t) => t.name),
       ...CLIENT_TOOL_NAMES,
     ];
     expect(registered.length, "the registries were not read").toBeGreaterThan(60);

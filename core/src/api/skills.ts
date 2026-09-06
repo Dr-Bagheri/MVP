@@ -76,7 +76,7 @@ export function availableTools(): readonly string[] {
     cachedTools = [
       ...DOMAIN_TOOL_NAMES,
       ...createWriteTools().map((t) => t.name),
-      ...toolsFor("all").map((t) => t.name),
+      ...toolsFor().map((t) => t.name),
       ...CLIENT_TOOL_NAMES,
     ];
   }

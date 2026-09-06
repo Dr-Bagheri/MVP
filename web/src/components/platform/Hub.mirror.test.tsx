@@ -76,6 +76,10 @@ async function* handDriven(signal?: AbortSignal): AsyncGenerator<AgentEvent> {
 const persisted: {
   id: string; role: "user" | "assistant"; content: string; author?: string;
 }[] = [];
+const setFloor = vi.fn(async (_sessionId: string, _agents: string[]) => [] as string[]);
+/* what the SERVER says the floor is — the thread re-read after `done` adopts
+   it, so a mock that always said [] would wipe the floor the events set */
+let floorOnServer: string[] = [];
 
 vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {},
@@ -87,7 +91,8 @@ vi.mock("@/api/client", () => ({
     }),
     ask: (_q: string, _c: unknown, _s: unknown, opts?: { signal?: AbortSignal }) =>
       handDriven(opts?.signal),
-    agentMessages: async () => persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })),
+    agentThread: async () => ({ messages: persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })), floor: floorOnServer }),
+    setAssistantFloor: (sessionId: string, agents: string[]) => setFloor(sessionId, agents),
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [], agents: async () => [], workflows: async () => [],
     search: async () => [], assistantTools: async () => [], sessionFeedback: async () => ({}),
@@ -118,6 +123,7 @@ describe("one conversation, two windows onto it", () => {
     queue = []; wake = null; ended = false; aborted = false;
     persisted.length = 0;
     pushed.length = 0;
+    floorOnServer = [];
   });
 
   it("keeps answering after the surface that asked is gone, and the next surface has it", async () => {
@@ -240,6 +246,39 @@ describe("one conversation, two windows onto it", () => {
     end();
     await waitFor(() => expect(assistantSnapshot().streaming).toBe(false));
     await waitFor(() => expect(assistantSnapshot().messages.at(-1)?.author).toBe("roya"));
+  });
+
+  it("the FLOOR arrives after the session, a second responder lands AFTER the streamed answer, and the × releases it (2026-09-06)", async () => {
+    /*
+     * "When two names are said in one message, both answer" — the first
+     * streams, the second lands as its own message under its own name after
+     * it; the chip names both; the × hands the thread back to Echo through
+     * the api. Verified red against the store that inserted every
+     * agent_message BEFORE the streamed row and knew no floor.
+     */
+    render(<Hub />);
+    await ask("رؤیا و آوا، نظرتون؟");
+    push({ type: "session", id: "sess-3", created: true });
+    floorOnServer = ["roya", "ava"];
+    push({ type: "floor", agents: ["roya", "ava"] });
+    push({ type: "route", agent: "roya", rule: "mention", switched: true });
+    persisted.push({ id: "m-3", role: "assistant", content: "رؤیا: من", author: "roya" });
+    push({ type: "text_delta", delta: "رؤیا: من" });
+    push({ type: "agent_message", author: "ava", name: "آوا", text: "آوا: منم", failed: false, after: true });
+    /* asserted BEFORE `done`: after it the hub re-reads the thread from the
+       server, which is a different mechanism from the one under test */
+    await waitFor(() => expect(assistantSnapshot().messages.at(-1)?.author).toBe("ava"));
+    expect(assistantSnapshot().messages.at(-2)?.author, "the second answer follows the first").toBe("roya");
+    expect(assistantSnapshot().messages.at(-1)?.content).toBe("آوا: منم");
+    persisted.push({ id: "m-4", role: "assistant", content: "آوا: منم", author: "ava" });
+    push({ type: "done", runId: "r-3", failed: false });
+    end();
+    await waitFor(() => expect(assistantSnapshot().streaming).toBe(false));
+    expect(assistantSnapshot().floor).toEqual(["roya", "ava"]);
+    const release = await screen.findByRole("button", { name: /بازگشت به اکو/ });
+    release.click();
+    await waitFor(() => expect(assistantSnapshot().floor).toEqual([]));
+    expect(setFloor).toHaveBeenCalledWith("sess-3", []);
   });
 
   it("THE CONTROL: routing to Echo leaves the turn unauthored", async () => {

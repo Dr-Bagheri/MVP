@@ -54,6 +54,16 @@ export type SseEvent =
    * the answer exactly as it did before.
    */
   | { type: "route"; agent: string; rule: string; switched: boolean }
+  /**
+   * THE FLOOR (2026-09-06): who holds this conversation after the message
+   * just sent — the colleagues the person called and has not dismissed.
+   * Sent once per turn, right after `session`, and again by nothing else:
+   * the surface draws a chip from it («در گفت‌وگو با رؤیا») with the × that
+   * releases it. Handles only; the roster the surface already holds says
+   * what to draw, and a name on the wire would be a second copy of it.
+   * `[]` means Echo — the default, and the state the × returns to.
+   */
+  | { type: "floor"; agents: string[] }
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string;
       state: "started" | "ok" | "denied" | "blocked" | "error"; ms?: number }
@@ -83,7 +93,17 @@ export type SseEvent =
    * name is what a reader sees, and a client resolving one from the other
    * would be a second copy of the roster.
    */
-  | { type: "agent_message"; author: string; name: string; text: string; failed: boolean }
+  | {
+      type: "agent_message"; author: string; name: string; text: string; failed: boolean;
+      /**
+       * `after` (2026-09-06): this colleague answered AFTER the streamed
+       * answer rather than inside it. A delegate's paragraph belongs before
+       * Echo's conclusion (Echo read it and went on); a second floor-holder's
+       * answer belongs after the first's, because that is the order they
+       * spoke. Absent = before, which is what every older client renders.
+       */
+      after?: boolean;
+    }
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 /** Minimal sink so this is testable without a live socket. */

@@ -68,11 +68,16 @@ export interface PlatformToolDeps {
 }
 
 /** Who carries this tool when the run belongs to a delegate. */
-export type Specialism = "analyst" | "operator" | "both";
-
-export interface PlatformTool extends DomainTool<PlatformToolDeps, never> {
-  specialism: Specialism;
-}
+/**
+ * ONE SET FOR EVERY AGENT (user ruling, 2026-09-06: "full tool set for all
+ * three, yes"). Each tool used to carry a specialism — analyst, operator,
+ * both — and a colleague Echo called got only its own slice, which is where
+ * «به سوابق دسترسی ندارم» came from. The wall was never the persona: every
+ * read here runs under the PERSON's identity and role, so a member's Roya
+ * sees exactly what that member sees. The tag is gone rather than ignored —
+ * a field nothing reads is the drift shape this repo has already paid for.
+ */
+export type PlatformTool = DomainTool<PlatformToolDeps, never>;
 
 /**
  * Results are read by a model with a context window, not by a scrollbar.
@@ -104,18 +109,17 @@ function capped<T>(rows: T[], limit = CAP): { items: T[]; count: number; truncat
 }
 
 function tool<TArgs>(
-  spec: Specialism,
   def: Omit<DomainTool<PlatformToolDeps, TArgs>, "run"> & {
     run: DomainTool<PlatformToolDeps, TArgs>["run"];
   },
 ): PlatformTool {
-  return { ...def, specialism: spec } as unknown as PlatformTool;
+  return def as unknown as PlatformTool;
 }
 
 export function createPlatformTools(): PlatformTool[] {
   return [
     // ── the record: calls, transcripts, summaries ────────────────────────
-    tool<{ status?: string; limit?: number }>("analyst", {
+    tool<{ status?: string; limit?: number }>({
       name: "list_records",
       label: "فهرست رکوردها",
       description:
@@ -135,7 +139,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ call_id: string }>("analyst", {
+    tool<{ call_id: string }>({
       name: "get_summary",
       label: "خلاصهٔ جلسه",
       description:
@@ -151,7 +155,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ call_id: string }>("analyst", {
+    tool<{ call_id: string }>({
       name: "list_summary_versions",
       label: "نسخه‌های خلاصه",
       description:
@@ -168,7 +172,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ call_id: string }>("analyst", {
+    tool<{ call_id: string }>({
       name: "list_speakers",
       label: "گویندگان",
       description:
@@ -184,7 +188,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ call_id: string }>("analyst", {
+    tool<{ call_id: string }>({
       name: "list_record_notes",
       label: "یادداشت‌های رکورد",
       description: "The human notes attached to one record.",
@@ -199,7 +203,7 @@ export function createPlatformTools(): PlatformTool[] {
     }),
 
     // ── meetings ─────────────────────────────────────────────────────────
-    tool<{ archived?: boolean }>("operator", {
+    tool<{ archived?: boolean }>({
       name: "list_meetings",
       label: "فهرست جلسات",
       description:
@@ -216,7 +220,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ meeting_id: string }>("operator", {
+    tool<{ meeting_id: string }>({
       name: "get_meeting",
       label: "جزئیات جلسه",
       description:
@@ -231,7 +235,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ meeting_id: string }>("operator", {
+    tool<{ meeting_id: string }>({
       name: "list_meeting_items",
       label: "مصوبات و اقدام‌ها",
       description:
@@ -248,7 +252,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<Record<string, never>>("operator", {
+    tool<Record<string, never>>({
       name: "list_meeting_folders",
       label: "پوشه‌های جلسات",
       description: "The folders meetings are filed under, for scoping a search.",
@@ -259,7 +263,7 @@ export function createPlatformTools(): PlatformTool[] {
     }),
 
     // ── tasks ────────────────────────────────────────────────────────────
-    tool<{ archived?: boolean }>("operator", {
+    tool<{ archived?: boolean }>({
       name: "list_tasks",
       label: "تخته تسک‌ها",
       description:
@@ -296,7 +300,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ task_id: string }>("operator", {
+    tool<{ task_id: string }>({
       name: "get_task",
       label: "جزئیات تسک",
       description:
@@ -311,7 +315,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<Record<string, never>>("operator", {
+    tool<Record<string, never>>({
       name: "list_task_labels",
       label: "برچسب‌های تسک",
       description: "The organization's task labels and their tones.",
@@ -327,7 +331,7 @@ export function createPlatformTools(): PlatformTool[] {
      * pointed at a `list_projects` that did not exist. "both": Ava files what
      * she finds as work, and work for a project has to be filed IN it.
      */
-    tool<{ archived?: boolean }>("both", {
+    tool<{ archived?: boolean }>({
       name: "list_projects",
       label: "پروژه‌ها",
       description:
@@ -360,7 +364,7 @@ export function createPlatformTools(): PlatformTool[] {
     }),
 
     // ── people ───────────────────────────────────────────────────────────
-    tool<Record<string, never>>("both", {
+    tool<Record<string, never>>({
       name: "list_colleagues",
       label: "همکاران",
       description:
@@ -392,7 +396,7 @@ export function createPlatformTools(): PlatformTool[] {
      * has taken record deletion away from members, so I cannot do that for
      * you" instead of trying it and relaying a 403.
      */
-    tool("both", {
+    tool({
       name: "whoami",
       label: "من کی هستم",
       description:
@@ -414,7 +418,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool("both", {
+    tool({
       name: "list_role_permissions",
       label: "دسترسی نقش‌ها",
       description:
@@ -450,7 +454,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ window_days?: number }>("analyst", {
+    tool<{ window_days?: number }>({
       name: "member_stats",
       label: "آمار اعضا",
       description:
@@ -467,7 +471,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ search?: string }>("analyst", {
+    tool<{ search?: string }>({
       name: "list_voices",
       label: "دفترچهٔ گویندگان",
       description:
@@ -490,7 +494,7 @@ export function createPlatformTools(): PlatformTool[] {
     }),
 
     // ── the organization and its trail ───────────────────────────────────
-    tool<Record<string, never>>("both", {
+    tool<Record<string, never>>({
       name: "get_organization",
       label: "سازمان",
       description:
@@ -502,7 +506,7 @@ export function createPlatformTools(): PlatformTool[] {
       },
     }),
 
-    tool<{ limit?: number }>("analyst", {
+    tool<{ limit?: number }>({
       name: "list_audit",
       label: "رویدادها",
       description:
@@ -527,8 +531,7 @@ export const PLATFORM_TOOL_NAMES: readonly string[] =
   createPlatformTools().map((t) => t.name);
 
 /** The subset a given specialist carries. Echo is not a specialist: it gets all. */
-export function toolsFor(specialism: Specialism | "all"): PlatformTool[] {
-  const all = createPlatformTools();
-  if (specialism === "all") return all;
-  return all.filter((t) => t.specialism === specialism || t.specialism === "both");
+/** every platform read — there is one set now, and this is it */
+export function toolsFor(): PlatformTool[] {
+  return createPlatformTools();
 }

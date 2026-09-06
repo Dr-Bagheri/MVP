@@ -119,15 +119,13 @@ describe("list_role_permissions", () => {
     for (const def of CAPABILITIES) expect(byKey.get(def.key)).toBe(def.role);
   });
 
-  it("both tools are on EVERY agent, not one specialism", async () => {
-    /* "may I" is not an analyst question or an operator question — an agent
+  it("both tools are in the one platform set every agent carries", async () => {
+    /* "may I" is a question every agent must be able to answer — an agent
        that cannot tell somebody why it will not do something is the failure
-       this pair exists to prevent, whichever of the three is answering */
+       this pair exists to prevent (and since 2026-09-06 there is one set) */
     const { toolsFor } = await import("../src/agent/platform-tools.ts");
-    for (const who of ["analyst", "operator"] as const) {
-      const names = toolsFor(who).map((t) => t.name);
-      expect(names, who).toContain("whoami");
-      expect(names, who).toContain("list_role_permissions");
-    }
+    const names = toolsFor().map((t) => t.name);
+    expect(names).toContain("whoami");
+    expect(names).toContain("list_role_permissions");
   });
 });

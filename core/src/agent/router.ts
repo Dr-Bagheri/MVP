@@ -37,6 +37,37 @@ import type { Identity } from "./types.ts";
  * they take the turn; name nobody and Echo answers and may hand a piece to
  * Ava or Roya with its own tools. What is gone is the third path, where
  * something guessed on the person's behalf.
+ *
+ * ── THE FLOOR (user directive, 2026-09-06) ────────────────────────────────
+ *
+ * "When I ask for Roya or Ava they are supposed to keep talking back until I
+ * say someone else's name. If I say 'Roya come here' and in the next message
+ * don't mention her name, she should not just leave — like humans do: the
+ * person who was called joins, says hello, and answers until you address
+ * somebody else." And, ruled the same day: two names in one message → BOTH
+ * answer; the floor is released only by a name or the × on the screen.
+ *
+ * So the thread has a FLOOR — the set of colleagues who hold it — and the
+ * rule stays free of inference, which is what retired the classifier:
+ *
+ *   · a message that NAMES somebody sets the floor to exactly those named,
+ *     in the order they appear — one name, one holder; two names, two
+ *     holders, and each answers in turn;
+ *   · a message that names nobody goes to whoever holds the floor;
+ *   · naming Echo («اکو», @echo) hands the floor back — Echo is the
+ *     default, and a floor of exactly [echo] is stored as nothing, so "Echo
+ *     holds it" and "nobody was ever called" are one state rather than two
+ *     spellings of one;
+ *   · the × on the composer releases it the same way, through the same
+ *     column, so the screen and the server never disagree about who is in
+ *     the room.
+ *
+ * The 2026-09-04 reading ("nobody named means Echo, even after a specialist
+ * answered") is therefore REVERSED for the case it was about — a follow-up
+ * after a called colleague — and unchanged for the case that drove it: a
+ * name always beats an incumbent, and nothing but a name or the × moves the
+ * floor. The bug that retired the classifier (a topic outvoting a name)
+ * cannot come back through this door, because this door reads no topic.
  */
 
 /** `echo` is the platform assistant; the rest are agent handles. */
@@ -47,13 +78,20 @@ export const ECHO: Responder = "echo";
 export type RouteRule =
   /** the person named an agent, or a surface did */
   | "mention"
+  /** nobody was named and somebody was called earlier: the floor answers */
+  | "floor"
   /** this thread has a run waiting for an answer; it owns the turn */
   | "resume"
   /** nobody was named: the generalist answers, which is the product's default */
   | "default";
 
 export interface RouteDecision {
+  /** the FIRST responder — the one whose answer streams; the audit's column */
   agent: Responder;
+  /** everybody who answers this turn, in order; `agent` is `responders[0]` */
+  responders: Responder[];
+  /** who holds the floor AFTER this turn; [] = Echo, the default */
+  floor: Responder[];
   rule: RouteRule;
   /** kept on the shape so the audit's columns did not have to change; always
       null now that nothing scores a guess */
@@ -118,15 +156,28 @@ const BOUNDED = (name: string): RegExp =>
  * picking the last would answer the aside.
  */
 export function nameIn(question: string, roster: readonly RosterEntry[]): Responder | null {
-  let best: { handle: Responder; at: number } | null = null;
+  return namesIn(question, roster)[0] ?? null;
+}
+
+/**
+ * EVERY agent this message names, in the order they first appear.
+ *
+ * `nameIn` kept the first because one run had one persona; the floor answers
+ * with every named colleague in turn (user, 2026-09-06: "when two names are
+ * said in one message, both answer"), so the order is the order of address —
+ * "Roya and Ava, look at this" gets Roya first and Ava after her.
+ */
+export function namesIn(question: string, roster: readonly RosterEntry[]): Responder[] {
+  const hits: { handle: Responder; at: number }[] = [];
   for (const entry of roster) {
+    let at: number | null = null;
     for (const name of entry.names) {
       const found = BOUNDED(name).exec(question);
-      if (found === null) continue;
-      if (best === null || found.index < best.at) best = { handle: entry.handle, at: found.index };
+      if (found !== null && (at === null || found.index < at)) at = found.index;
     }
+    if (at !== null) hits.push({ handle: entry.handle, at });
   }
-  return best?.handle ?? null;
+  return hits.sort((a, b) => a.at - b.at).map((hit) => hit.handle);
 }
 
 /**
@@ -137,21 +188,37 @@ export function nameIn(question: string, roster: readonly RosterEntry[]): Respon
  * function.
  */
 export function decide(
-  named: Responder | null,
+  named: readonly Responder[],
+  floor: readonly Responder[],
   incumbent: Responder | null,
   known: ReadonlySet<Responder>,
 ): RouteDecision {
-  if (named !== null && known.has(named)) {
-    return { agent: named, rule: "mention", confidence: null, incumbent, switched: named !== incumbent };
+  const called = named.filter((handle) => known.has(handle));
+  const base = { confidence: null as number | null, incumbent };
+  if (called.length > 0) {
+    /* a floor of exactly [echo] is the default and is stored as nothing —
+       otherwise "Echo holds the floor" and "nobody was called" would be two
+       rows meaning one thing, and the chip would announce Echo as a guest in
+       its own thread */
+    const next = called.length === 1 && called[0] === ECHO ? [] : called;
+    return {
+      ...base, agent: called[0]!, responders: called, floor: next,
+      rule: "mention", switched: called[0] !== incumbent,
+    };
   }
-  /*
-   * NOBODY WAS NAMED, so Echo answers — including when a specialist answered
-   * the previous turn. That is the directive read literally, and literally is
-   * what it needs to be: an incumbent that keeps the turn is a second rule
-   * about who speaks, and two rules is how somebody ends up unable to predict
-   * which colleague replies. Echo has the thread in front of it either way.
-   */
-  return { agent: ECHO, rule: "default", confidence: null, incumbent, switched: incumbent !== null && incumbent !== ECHO };
+  const holders = floor.filter((handle) => known.has(handle));
+  if (holders.length > 0) {
+    return {
+      ...base, agent: holders[0]!, responders: holders, floor: holders,
+      rule: "floor", switched: holders[0] !== incumbent,
+    };
+  }
+  /* nobody named, nobody holding: the generalist, which is the product's
+     default and the thing the person did not have to ask for */
+  return {
+    ...base, agent: ECHO, responders: [ECHO], floor: [],
+    rule: "default", switched: incumbent !== null && incumbent !== ECHO,
+  };
 }
 
 /** The roster this identity may address — Echo plus every visible agent. */

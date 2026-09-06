@@ -146,3 +146,47 @@ describe("titles are made from the first question", () => {
     expect(title.length).toBeGreaterThan(60);
   });
 });
+
+
+/**
+ * THE FLOOR ON THE SESSION (db/0194, 2026-09-06): read with the thread so a
+ * resumed conversation knows who is in the room, and written by the × the
+ * way the router writes it — one spelling, `["echo"]` stored as `[]`.
+ */
+describe("the floor", () => {
+  it("the thread read carries the floor beside the rows", async () => {
+    const { db } = fakeDb((sql) => {
+      if (sql.includes("select floor from echo.agent_session")) return [{ floor: ["roya", "ava"] }];
+      if (sql.includes("select id from echo.agent_session")) return [{ id: SESSION }];
+      return [];
+    });
+    const repo = createSessionsRepo(db);
+    const thread = await repo.thread(IDENTITY, SESSION);
+    expect(thread.messages).toEqual([]);
+    expect(thread.floor).toEqual(["roya", "ava"]);
+  });
+
+  it("setFloor lowercases, dedupes, and stores a lone «echo» as nothing", async () => {
+    const { db, log } = fakeDb((sql) => (sql.includes("returning floor") ? [{ floor: [] }] : []));
+    const repo = createSessionsRepo(db);
+    await repo.setFloor(IDENTITY, SESSION, ["Echo", " echo "]);
+    const write = log.find((l) => l.sql.includes("returning floor"));
+    expect(write?.params?.[1]).toEqual([]);
+    await repo.setFloor(IDENTITY, SESSION, ["Roya", "roya", "ava"]);
+    const second = log.filter((l) => l.sql.includes("returning floor")).at(-1);
+    expect(second?.params?.[1]).toEqual(["roya", "ava"]);
+  });
+
+  it("setFloor refuses what is not a handle, and a ninth name", async () => {
+    const { db } = fakeDb(() => [{ floor: [] }]);
+    const repo = createSessionsRepo(db);
+    await expect(repo.setFloor(IDENTITY, SESSION, ["not a handle"])).rejects.toMatchObject({ code: "bad_handle" });
+    await expect(repo.setFloor(IDENTITY, SESSION, ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"]))
+      .rejects.toMatchObject({ code: "floor_too_wide" });
+  });
+
+  it("setFloor on a conversation the caller cannot see is not-found, not silence", async () => {
+    const { db } = fakeDb(() => []);
+    await expect(createSessionsRepo(db).setFloor(IDENTITY, SESSION, ["roya"])).rejects.toBeInstanceOf(NotFoundError);
+  });
+});

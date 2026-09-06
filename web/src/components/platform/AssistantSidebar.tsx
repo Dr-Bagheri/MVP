@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
 import type { ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { mentionedAgent } from "@/lib/agentMention";
+import { FloorChip } from "./FloorChip";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
 import { ThinkingLine, TypingCaret } from "./ThinkingLine";
 import { micTone, useDictation } from "@/lib/dictation";
@@ -272,28 +272,6 @@ export function AssistantSidebar() {
   const visible = member !== false && !sidebarIsSilentOn(pathname);
   /** messages that arrived while it was collapsed — the badge on the rail */
   const [input, setInput] = useState("");
-  /**
-   * THE ROSTER, for `@handle` — read once, rendered nowhere.
-   *
-   * The agents deliberately have no picker on this surface any more (user
-   * directive, 2026-09-03: "i dont want them to come to the AI assistant like
-   * a window or options anymore"). They are called by NAME, in the message,
-   * which means this component still needs to know which names are names.
-   *
-   * A failure is silent and leaves the list empty, which degrades to the
-   * ordinary assistant answering — the mention is still in the text, so the
-   * answer is on-topic; what is lost is which persona wrote it. That is the
-   * right forfeit here (M21: degrade what was inferred), and it is why
-   * `mentionedAgent` returns null for an empty roster rather than guessing.
-   */
-  const [handles, setHandles] = useState<string[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void api.agents()
-      .then((rows) => { if (alive) setHandles(rows.map((a) => a.handle)); })
-      .catch(() => { /* no roster: mentions stay plain text, see above */ });
-    return () => { alive = false; };
-  }, []);
   /* the thread is the store's — see lib/assistantSession. This panel is one
      of two windows onto it, and the other is the assistant page. */
   const live = useSyncExternalStore(subscribeAssistant, assistantSnapshot, assistantServerSnapshot);
@@ -746,7 +724,8 @@ export function AssistantSidebar() {
          re-shaping that used to happen here is gone with `SidebarMessage`;
          `author` in particular had to be copied by hand, and a colleague's
          turn quietly became Echo's on any reload that forgot to. */
-      adoptAssistantThread(id, await api.agentMessages(id));
+      const thread = await api.agentThread(id);
+      adoptAssistantThread(id, thread.messages, thread.floor);
     } catch {
       notify(t("failed"), "warn");
     } finally {
@@ -896,11 +875,6 @@ export function AssistantSidebar() {
     spokenIdxRef.current = 0;
     try {
       const model = await ensureModel();
-      /* `@roya` routes the turn to Roya. The mention stays IN the question —
-         "what do you think, @ava?" reads differently to its answerer than
-         "what do you think?", and the one being addressed is exactly who
-         should see that they were. */
-      const mention = mentionedAgent(trimmed, handles);
       /**
        * PRESENT IN THE MEETING (user directive, 2026-09-03: "in the meetings
        * they also are present in the background and even if they asked
@@ -939,7 +913,6 @@ export function AssistantSidebar() {
         options: {
           model,
           locale,
-          ...(mention === null ? {} : { agent: mention.handle }),
           ...(liveText === "" ? {} : { liveText }),
           clientTools: [...SURFACE_TOOLS],
           surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
@@ -1329,6 +1302,8 @@ export function AssistantSidebar() {
                 {/* three lines, growing, then the box's own thin scrollbar —
                     the page's composer and this one are the same box at two
                     widths, so they take the same rows and the same hook */}
+                {/* who is in the room, and the × that hands it back to Echo */}
+                <FloorChip className="mb-1" />
                 <textarea
                   ref={inputRef}
                   rows={PANEL_PROMPT_ROWS.min}

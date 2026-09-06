@@ -880,6 +880,8 @@ export type AgentEvent =
    * chose Echo, which are the same picture and opposite facts.
    */
   | { type: "route"; agent: string; rule: string; switched: boolean }
+  /** who holds the floor after this turn (db/0194); [] = Echo */
+  | { type: "floor"; agents: string[] }
   /**
    * db/0169 — a COLLEAGUE spoke in this thread.
    *
@@ -889,7 +891,11 @@ export type AgentEvent =
    * Echo's would make the thread claim Echo wrote it, which is precisely what
    * the avatar beside a message is there to settle.
    */
-  | { type: "agent_message"; author: string; name: string; text: string; failed: boolean }
+  | {
+      type: "agent_message"; author: string; name: string; text: string; failed: boolean;
+      /** a second floor-holder's answer: lands AFTER the streamed one */
+      after?: boolean;
+    }
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 /** A persisted conversation. */

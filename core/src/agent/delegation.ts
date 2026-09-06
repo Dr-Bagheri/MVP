@@ -66,7 +66,7 @@ import { Type } from "./pi.ts";
 import { ToolDenied, type DomainTool } from "./tools.ts";
 import { resolveAssistantAgent } from "./agent-store.ts";
 import { createDomainTools, type ToolDeps } from "./domain-tools.ts";
-import { toolsFor, type Specialism } from "./platform-tools.ts";
+import { toolsFor } from "./platform-tools.ts";
 import type { AgentResult, Identity } from "./types.ts";
 import type { Db } from "../db/identity.ts";
 
@@ -192,7 +192,7 @@ export async function createEchoTool(
         model: null,
         web: options.web,
         question,
-        tools: [...createDomainTools(), ...toolsFor("both")] as DomainTool<ToolDeps, never>[],
+        tools: [...createDomainTools(), ...toolsFor()] as DomainTool<ToolDeps, never>[],
         /* Echo answering a colleague's QUESTION has no hands here: the
            colleague is the one the person is talking to and the one whose
            consent cards they will see */
@@ -243,7 +243,6 @@ export async function createDelegationTools(
        model is never offered a colleague it cannot reach, which is a better
        answer than a tool that always refuses */
     if (!agent) return [];
-    const specialism: Specialism = SPECIALISM_BY_HANDLE[handle] ?? "both";
 
     const delegate: DomainTool<ToolDeps, { question: string; context?: string }> = {
       name: `ask_${handle}`,
@@ -286,7 +285,7 @@ export async function createDelegationTools(
          */
         const tools = [
           ...createDomainTools(),
-          ...toolsFor(specialism),
+          ...toolsFor(),
         ] as DomainTool<ToolDeps, never>[];
 
         const result = await options.runNested({
@@ -329,15 +328,6 @@ export async function createDelegationTools(
   });
 }
 
-const SPECIALISM_BY_HANDLE: Readonly<Record<string, Specialism>> = {
-  /* Roya ACTS — she is asked about work in flight: meetings, tasks, agendas,
-     what is due. Ava READS — the record, the history, what changed. The split
-     is by VERB, which is the ruling M-decision behind 0163's two agents, and
-     it is the whole reason asking the right one is worth doing. */
-  roya: "operator",
-  ava: "analyst",
-};
-
 const DESCRIPTION: Readonly<Record<string, (own: string) => string>> = {
   roya: (own) =>
     `Ask رؤیا, the operations colleague. ${own} `
@@ -349,16 +339,18 @@ const DESCRIPTION: Readonly<Record<string, (own: string) => string>> = {
     + "the deadlines you know. She knows a FOLDER from a PROJECT: a folder is "
     + "a person's own grouping of tasks; a project is an admin's order of work "
     + "with people, made with create_project and filled with "
-    + "create_task(project=…, assignee=…). She CANNOT read the audit trail or "
-    + "summary history; ask Ava for those.",
+    + "create_task(project=…, assignee=…). She reaches everything the person "
+    + "can — the records and the audit trail included — so ask her for the "
+    + "operations side of a job, not because Ava cannot see the board.",
   ava: (own) =>
     `Ask آوا, the analyst colleague. ${own} `
     + "She reads the record: transcripts, summaries and their versions, the "
     + "audit trail, member history, who said what and what changed — and she "
     + "can turn what she finds into work: tasks, folders, a project, each shown "
     + "to the person for a yes first. Ask her to find evidence, to report on "
-    + "it, and to file it. She CANNOT see the board's live state or meeting "
-    + "agendas; ask Roya for those.",
+    + "it, and to file it. She reaches everything the person can — the board "
+    + "and the meetings included — so ask her for the analysis, not because "
+    + "Roya cannot read a transcript.",
 };
 
 /**
@@ -395,6 +387,11 @@ function colleagueBriefing(name: string, locale: string | undefined): string {
     "کارِ مدیر است با آدم‌هایش و پوشه‌ای به همان نام روی برد. وقتی پروژه خواستند،",
     "اول با create_project بسازش و بعد تسک‌هایش را با create_task داخل همان پروژه",
     "و برای مسئولش بگذار — نه یک پوشهٔ خالی به‌جایش.",
+    /* the whole platform, the person's role as the wall (2026-09-06) — the
+       same sentence db/0194 gives their stored instructions */
+    "همهٔ ابزارهای اکو در اختیار توست و دسترسی‌ات همان دسترسی کاربر است؛ هرگز نگو",
+    "«دسترسی ندارم». اگر سکو کاری را برای نقش او رد کرد، بگو نقش او اجازه نمی‌دهد و",
+    "چه کسی می‌تواند.",
     language,
   ].join(" ");
 }

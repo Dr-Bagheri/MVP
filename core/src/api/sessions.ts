@@ -455,6 +455,56 @@ export function createSessionsRepo(db: Db) {
      * auto-titles overwriting the entry someone is scanning for, and a
      * person renaming their own thread is the opposite of that.
      */
+    /**
+     * THE THREAD AND ITS FLOOR (db/0194), one read. The floor is who the
+     * person called into this conversation and has not dismissed — `[]` is
+     * Echo. Read with the rows because a resumed thread has to draw the chip
+     * before anybody types, and a second round trip for one array is the
+     * kind of gap a reload turns into a wrong first answer.
+     */
+    async thread(
+      identity: Identity, sessionId: string,
+    ): Promise<{ messages: MessageRecord[]; floor: string[] }> {
+      const messages = await this.messages(identity, sessionId);
+      const id = assertUuid(sessionId, "session id");
+      const floor = await db.withIdentity(identity, async (tx: SqlTx) => {
+        const rows = await tx.unsafe<{ floor: string[] | null }>(
+          `select floor from echo.agent_session where id = $1`, [id],
+        );
+        return rows[0]?.floor ?? [];
+      });
+      return { messages, floor };
+    },
+
+    /**
+     * The person sets the floor by hand — the × on the chip, today; a picker,
+     * one day. Handles only, lowercase, at most eight, and `["echo"]` is the
+     * default spelled out, so it is stored as `[]` exactly as the router
+     * stores it: one state, one spelling.
+     */
+    async setFloor(identity: Identity, sessionId: string, agents: readonly string[]): Promise<string[]> {
+      const id = assertUuid(sessionId, "session id");
+      const clean = [...new Set(agents.map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
+      if (clean.length > 8) throw new ValidationError("too many agents on the floor", { code: "floor_too_wide" });
+      for (const handle of clean) {
+        if (!/^[a-z][a-z0-9_]{1,30}$/.test(handle)) {
+          throw new ValidationError("not an agent handle", { code: "bad_handle" });
+        }
+      }
+      const floor = clean.length === 1 && clean[0] === "echo" ? [] : clean;
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ floor: string[] }>(
+          `update echo.agent_session set floor = $2::text[], updated_at = now()
+            where id = $1 and archived_at is null
+            returning floor`,
+          [id, floor],
+        ),
+      );
+      const row = rows[0];
+      if (!row) throw new NotFoundError("conversation not found");
+      return row.floor;
+    },
+
     async rename(identity: Identity, sessionId: string, title: string): Promise<SessionRecord> {
       const id = assertUuid(sessionId, "session id");
       const clean = title.replace(/\s+/g, " ").trim();

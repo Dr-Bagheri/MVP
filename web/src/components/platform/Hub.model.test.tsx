@@ -77,7 +77,7 @@ vi.mock("@/api/client", () => ({
       model_id: null, created_at: new Date().toISOString(),
     }),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
-    agentMessages: async () => [],
+    agentThread: async () => ({ messages: [], floor: [] }),
     models: async () => ({
       models: OFFERED, preferred_model: preferred,
       curated: true, tool_capability_filtered: false,
