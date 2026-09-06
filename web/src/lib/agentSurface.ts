@@ -1358,7 +1358,16 @@ export async function executeClientTool(
       try {
         const { api } = await import("@/api/client");
         const res = await api.translateCall(who.id, what);
-        return { ok: true, detail: res.text };
+        /* the summary's translation is text, returned; the transcript's is a
+           JOB the transcriber runs on the audio (C4, 2026-09-06) — the model
+           is told which, so it can say "open the record" rather than wait */
+        if ("text" in res) return { ok: true, detail: res.text };
+        return {
+          ok: true,
+          detail: res.status === "ready"
+            ? "the transcript's translation is ready — it shows line by line on the record page"
+            : "the transcript's translation is being prepared by the transcriber from the audio; the record page shows it line by line when it lands (a long record takes minutes)",
+        };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the translation was refused") };
       }

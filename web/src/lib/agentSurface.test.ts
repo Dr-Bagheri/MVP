@@ -30,6 +30,7 @@ const sendMemberMessage = vi.fn();
 const editSegment = vi.fn();
 const editSummary = vi.fn();
 const connectorAction = vi.fn();
+const translateCall = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     createTask: (...args: unknown[]) => createTask(...args),
@@ -55,6 +56,7 @@ vi.mock("@/api/client", () => ({
     editSegment: (...args: unknown[]) => editSegment(...args),
     editSummary: (...args: unknown[]) => editSummary(...args),
     connectorAction: (...args: unknown[]) => connectorAction(...args),
+    translateCall: (...args: unknown[]) => translateCall(...args),
   },
 }));
 
@@ -648,5 +650,40 @@ describe("the connectors' hands — one action through the person's own grant", 
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("telegram");
     expect(result.detail).toContain("/integrations");
+  });
+});
+
+/**
+ * translate_record after C4 (2026-09-06): the SUMMARY's translation is text
+ * the model receives; the TRANSCRIPT's is a job — the seam asserts which
+ * door was opened and that the model is told to send the person to the
+ * record rather than being handed a sentence that is not there yet.
+ */
+describe("translate_record — text for the summary, a job for the transcript", () => {
+  beforeEach(() => {
+    listCalls.mockReset();
+    translateCall.mockReset();
+    listCalls.mockResolvedValue([{ id: "c-1", title: "call 3" }]);
+  });
+
+  it("returns the summary's translated text", async () => {
+    const { ctx } = surface();
+    translateCall.mockResolvedValue({ text: "Budget for next year", model: "m" });
+    const result = await executeClientTool("translate_record", { record: "call 3", what: "summary" }, ctx);
+    expect(translateCall).toHaveBeenCalledWith("c-1", "summary");
+    expect(result).toEqual({ ok: true, detail: "Budget for next year" });
+  });
+
+  it("asks for the transcript's translation as a job and says it is being prepared — or ready", async () => {
+    const { ctx } = surface();
+    translateCall.mockResolvedValue({ status: "queued", language: "en" });
+    const queued = await executeClientTool("translate_record", { record: "call 3", what: "transcript" }, ctx);
+    expect(translateCall).toHaveBeenCalledWith("c-1", "transcript");
+    expect(queued.ok).toBe(true);
+    expect(queued.detail).toContain("being prepared");
+
+    translateCall.mockResolvedValue({ status: "ready", language: "en" });
+    const ready = await executeClientTool("translate_record", { record: "call 3", what: "transcript" }, ctx);
+    expect(ready.detail).toContain("ready");
   });
 });

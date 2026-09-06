@@ -19,6 +19,8 @@ declare
     -- per-part: ONE message walks the whole ml/ ladder
     'echo_process_part',
     'echo_summarize',
+    -- 0201 (2026-09-06, C4): the transcript's translation, made from the audio
+    'echo_translate',
     -- M41/W11: one message advances exactly one workflow step (0104);
     -- consumer lands in P1 — the queue is the program counter it will walk
     'echo_workflow_step'

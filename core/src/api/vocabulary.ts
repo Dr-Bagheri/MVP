@@ -440,3 +440,12 @@ export const WORKFLOW_EVENTS = [
   "mail.received", "meeting.soon",
 ] as const;
 export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];
+
+/**
+ * db/0201 (2026-09-06, C4): a transcript translation request's status —
+ * queued when asked, ready when the transcriber's rows landed, failed with
+ * an error type otherwise. The read answers `none` for a language never
+ * asked for; that is the ABSENCE of a row, not a fourth status.
+ */
+export const TRANSLATION_STATUSES = ["queued", "ready", "failed"] as const;
+export type TranslationStatus = (typeof TRANSLATION_STATUSES)[number];

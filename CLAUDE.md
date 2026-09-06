@@ -4728,3 +4728,99 @@ sessions) for the cross-session narrative.
   Still the user's: bare names on the floor (M48), Soniox beyond
   transcription, and the connectors' first three.
   db 198 migrations · core 1362 tests · web 1230 tests + gate + sweep.
+- 2026-09-06 (evening — NINE CONNECTORS AND AN OPEN DOOR, THEN THE TRANSCRIBER
+  IS TOLD MORE AND ASKED FOR MORE; commits 76f8e90, 71cd220 and the
+  translation commit; db 0199–0201): the user's two directives of the
+  afternoon, taken whole — "built these: Zoom, Slack, Telegram, Jira,
+  Notion, GitHub, WhatsApp Business, Dropbox/OneDrive, and a generic MCP
+  connector … the same button and style … remove the lines of explanation
+  in all connectors and fix the gap as theme platform", and for Soniox:
+  translate_record through it, language detection for mixed recordings,
+  an asynchronous lane for long uploads, names and glossary as context.
+  **THE CONNECTORS ARE A REGISTRY (M49).** `connector-providers.ts` holds
+  one `ProviderDef` per provider — kind `oauth` or `token`, the OAuth spec
+  or the token fields, sources, actions, mappers, calls — and the
+  repository is generic over it: one OAuth dance parameterised by the spec
+  (PKCE, basic-vs-body client auth, form-vs-JSON token bodies, Slack's
+  user-token pick, Jira's cloud-id resolution), one token vouch before
+  anything is stored, one encrypted store, one revoke. Google's and
+  Microsoft's source methods are the legacy tail, byte for byte. The web
+  catalogue mirrors it ONE TILE PER CONNECTOR; a connector's sources are
+  R3's chips on its detail page, never several tiles. `ConnectDialog` is
+  the one door for both shapes (the OAuth briefing, and a pasted-token
+  form that vouches inside the page and turns the tile to «متصل است» in
+  front of the person). The detail page is the name and nothing under it
+  (R21), the body at the platform's gap (`mt-3`, was `mt-8`), the
+  connection's PUBLIC settings as rows (a site URL, a workspace, a bot,
+  a number — db/0199's `settings`, never the secret). Eight hands —
+  `send_slack_message`, `send_telegram_message`, `send_whatsapp_message`,
+  `create_jira_issue`, `create_github_issue`, `create_notion_page`,
+  `create_zoom_meeting`, `call_mcp_tool` — are CLIENT tools through
+  `POST /v1/connectors/:provider/actions/:action`, each named on the
+  consent card; server-side runs hold no route to them. One read,
+  `list_connector_items`, covers every provider and refuses BY NAME with
+  the integrations page as the offer. `call_mcp_tool` is NEVER covered by
+  the session-wide yes: a remote tool's effect is whatever the remote
+  server decides. An MCP URL must be public https (DNS-resolved; private
+  and loopback ranges refused). `docs/CONNECTORS.md` carries how each is
+  connected — console, redirect URI, scopes, `echo_platform_<provider>_
+  oauth_client_*`, token provenance — and the live proof still owed per
+  provider, because the OAuth apps are the operator's to create.
+  **THE TRANSCRIBER (M50).** (1) Recognition context is STRUCTURED — the
+  org's glossary first, then the directory's people, the members, the
+  projects as `terms`; the recording's title as `text`; the organisation
+  as `general` — built once (`db/recognition-context.ts`), read under the
+  caller's identity, sent by the worker with every part and by the live
+  relay with every session; ml/'s old flat list is refused rather than
+  transcribed without the context the caller believed it sent. (2) A line
+  knows its language: db/0200's nullable checked tag, set to the MAJORITY
+  of the line's words (a code-switched Persian line stays one line, in
+  Persian), carried on the wire; the calls page and the meeting review
+  set each line's direction from it and a mixed transcript shows its
+  languages as chips. (3) The long-file lane: each lane names its own
+  ceiling (Soniox five hours, the fallback thirty-five minutes) and the
+  pipeline refuses above the largest usable one — the old single cap, the
+  fallback's, had been refusing in production the forty-minute recorded
+  parts the primary lane carries. The WAV is read as a STREAM by both
+  VADs (state carried across chunk edges, proven equal to a whole-file
+  pass on chunk sizes that split every window), so a five-hour file is
+  never 1.15 GB of Float32 on a box with one to spare; the waits follow
+  the file; the runner renews its queue claim every third of the
+  visibility window while a step runs. (4) The transcript is translated
+  from the AUDIO through the transcriber, as a job and rows (db/0201:
+  `call_translation` per (call, language), `transcript_translation` per
+  (line, language)); ml/'s `POST /translate` answers units, core places
+  them on the lines by midpoint, the page reads them line beside line.
+  The summary's translation stays a model call whose text is returned.
+  FAILURE IS THE REQUEST'S, NEVER THE CALL'S — a refusal marks the request
+  failed and ends the step; a transient fault retries while it stays
+  queued; the third delivery writes even that down rather than handing
+  the message to the sink whose per-call branch would fail a ready record.
+  **Minted, from my own instruments.** A `beforeEach` with an expression
+  body RETURNS the mock from `mockReset()`, and vitest calls a returned
+  function as a cleanup — the mock ran once more with nobody awaiting it,
+  and the refusal test failed with its own fixture's rejection while the
+  executor had answered correctly. A "first language wins" mutation
+  stayed green because the fixture's first word already carried the
+  majority — the fixture now disagrees with itself where the rule must
+  decide. And a mutation that removes a poll's budget does not go red, it
+  HANGS: an instant fake sleep is a microtask loop no test timeout can
+  interrupt, and the verify-red run sat for ten minutes with the mutation
+  on disk; the fake sleep throws past a ceiling now, so a budget-less
+  poll fails by name. The queue-handlers guard enumerated four worker
+  files by name and could not see the fifth — it derives the list from
+  the directory now (13½, again). `ProviderRefusal` carried a parameter
+  property, which the production runtime refuses, and the three boot
+  tests were what said so.
+  Verified: ml 145 tests, core 1410, web 1256, all three typechecks, the
+  build gate, the encoding sweep (1234 files), the token verifier; db
+  0199–0201 applied on production with the suite (90, 102, 113, 114);
+  verify-red by mutation on fourteen invariants and by stash on the
+  connectors' twelve. Deployed: core and ml on the server (ml rebuilt;
+  both lanes configured, Silero streaming), web on Vercel; the new routes
+  401 where a control 404s. NOT proven live: a connector grant on any of
+  the nine (the operator's OAuth apps do not exist yet) and a Soniox
+  translation on a real record (costs a provider job; run once at
+  acceptance and recorded in docs/CONNECTORS.md's sibling note here when
+  it happens).
+  db 201 migrations · ml 145 tests · core 1410 tests · web 1256 tests + gate + sweep.

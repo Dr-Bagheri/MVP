@@ -89,6 +89,11 @@ const EXCLUDED: Record<string, string> = {
     "web/ renders proposals; it never decides whether one needs approving, " +
     "and a mirror of this list here would be a second place for that rule " +
     "to be true — which is exactly how a wall comes to have two meanings.",
+  TRANSLATION_STATUSES:
+    "not mirrored: web's CallTranslation.status is typed by hand from core's " +
+    "three words and the page branches on them (loading, ready, failed); " +
+    "a fourth status would render as the failed branch, and the read's " +
+    "`none` is the absence of a row, not a member (db/0201, 2026-09-06).",
   CONNECTOR_PROVIDERS:
     "not mirrored: `ConnectorProvider` is re-exported from core's wire " +
     "(api/types.ts), and every consumer reads the ARRAY — the two OAuth BFF " +

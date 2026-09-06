@@ -29,11 +29,13 @@ export const Q_AGENT_RULES = "echo_agent_rules";
 
 /** M41: one message advances exactly ONE workflow step (W11, db/0104). */
 export const Q_WORKFLOW_STEP = "echo_workflow_step";
+/** 0201 (2026-09-06, C4): a transcript translation, made from the audio by the transcriber */
+export const Q_TRANSLATE = "echo_translate";
 
 export const PART_QUEUES = [Q_PROCESS_PART] as const;
 export const CALL_QUEUES = [Q_LINK_SPEAKERS, Q_SUMMARIZE] as const;
 export const ALL_QUEUES = [
-  ...PART_QUEUES, ...CALL_QUEUES, Q_AGENT_RULES, Q_WORKFLOW_STEP,
+  ...PART_QUEUES, ...CALL_QUEUES, Q_AGENT_RULES, Q_WORKFLOW_STEP, Q_TRANSLATE,
 ] as const;
 
 export type QueueName = (typeof ALL_QUEUES)[number];
@@ -97,7 +99,25 @@ export interface WorkflowStepPayload {
   orgId: string;
 }
 
-export type QueuePayload = JobPayload | SignalPayload | WorkflowStepPayload;
+/**
+ * 0201: one transcript translation — a call, a target language, and the
+ * owner the job runs as (written at enqueue time while a real caller was
+ * present, M7). `kind` names it because nothing else in the union has one.
+ */
+export interface TranslatePayload {
+  kind: "translate";
+  callId: string;
+  ownerId: string;
+  orgId: string;
+  language: string;
+  requestedBy: string;
+}
+
+export type QueuePayload = JobPayload | SignalPayload | WorkflowStepPayload | TranslatePayload;
+
+export function isTranslatePayload(body: QueuePayload): body is TranslatePayload {
+  return (body as TranslatePayload).kind === "translate";
+}
 
 export function isSignalPayload(body: QueuePayload): body is SignalPayload {
   return typeof (body as SignalPayload).event === "string";

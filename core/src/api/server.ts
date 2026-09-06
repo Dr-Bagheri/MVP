@@ -58,6 +58,7 @@ import { createMemberPasswordRepo } from "./member-password.ts";
 import { createModelsRepo, firstServable, type ModelsRepo } from "./models.ts";
 import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
+import { createTranslationsRepo, translationLanguage } from "./translations.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { toolsFor } from "../agent/platform-tools.ts";
 import {
@@ -190,6 +191,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
   const calls: CallsRepo = createCallsRepo(options.db);
   const transcripts: TranscriptsRepo = createTranscriptsRepo(options.db);
+  const translations = createTranslationsRepo(options.db);
   const models: ModelsRepo = createModelsRepo(options.db);
   const members: MembersRepo = createMembersRepo(options.db);
   const keys: ApiKeysRepo = createApiKeysRepo(options.db);
@@ -609,35 +611,35 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * a missing translator skill is a BROKEN DEPLOYMENT, loudly (rule 7's
    * loud-floor corollary), never a silent fallback.
    *
-   * The translation is DISPLAY-ONLY — nothing is persisted beside the
-   * transcript, which stays the single source of truth. Re-clicking
+   * The SUMMARY's translation is DISPLAY-ONLY — nothing is persisted beside
+   * the transcript, which stays the single source of truth. Re-clicking
    * re-translates; the run rows are the record either way.
+   *
+   * THE TRANSCRIPT is different since 2026-09-06 (C4; user directive: "run
+   * translate_record through Soniox instead of a language model"): it is
+   * translated from the AUDIO by the transcriber, as a job, and kept as rows
+   * beside the lines (db/0201). This route ASKS and answers 202 with the
+   * request's status; GET …/translation reads the rows when they land.
    */
   app.post("/v1/calls/:id/translate", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { what?: unknown; model?: unknown };
+    const body = (request.body ?? {}) as { what?: unknown; model?: unknown; target?: unknown };
     const what = body.what;
     if (what !== "summary" && what !== "transcript") {
       throw new ValidationError("what must be summary or transcript");
     }
 
-    let source: string;
-    if (what === "summary") {
-      const versions = await transcripts.summaries(identity, id);
-      const current = versions[0];
-      if (!current) throw new NotFoundError("no summary to translate");
-      source = current.body;
-    } else {
-      await calls.get(identity, id); // 404 before "empty transcript" (the probe rule)
-      const segments = await transcripts.segments(identity, id, {});
-      if (segments.length === 0) throw new NotFoundError("no transcript to translate");
-      const mmss = (ms: number) => {
-        const s = Math.floor(ms / 1000);
-        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-      };
-      source = segments.map((s) => `[${mmss(s.start_ms)}] ${s.text}`).join("\n");
+    if (what === "transcript") {
+      const language = translationLanguage(body.target);
+      const asked = await translations.request(identity, id, language, createQueue(options.db));
+      return reply.code(202).send(asked);
     }
+
+    const versions = await transcripts.summaries(identity, id);
+    const current = versions[0];
+    if (!current) throw new NotFoundError("no summary to translate");
+    const source = current.body;
     if (source.length > 24_000) {
       // one honest refusal beats a truncated translation presented as whole
       throw new ValidationError("this content is too long to translate in one pass",
@@ -691,6 +693,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         { code: "translate_failed" });
     }
     return reply.send({ text: result.text, model: result.model });
+  });
+
+  /** the transcript's translation as rows (db/0201): its status, and one text per segment when ready */
+  app.get("/v1/calls/:id/translation", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const query = request.query as { language?: string };
+    return reply.send(await translations.read(identity, id, translationLanguage(query.language)));
   });
 
   /** Playback: signed, expiring URLs for the caller's own view of the call. */

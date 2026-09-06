@@ -201,3 +201,39 @@ export const HealthSchema = z
   .strict();
 
 export type Health = z.infer<typeof HealthSchema>;
+
+// ---------------------------------------------------------------- translate
+
+/** POST /translate (2026-09-06, C4): the transcript's translation from the
+ *  audio, through the transcriber's one-way translation. Same source rules
+ *  as /process: url or path, never both. */
+export const TranslateRequestSchema = z
+  .object({
+    audio_url: z.string().url().optional(),
+    audio_path: z.string().min(1).optional(),
+    job_ref: z.string().max(200).optional(),
+    target_language: z.string().regex(/^[a-z]{2,3}$/),
+    language_hints: z.array(z.string().min(2).max(8)).max(8).default(["fa", "en"]),
+  })
+  .strict()
+  .refine((b) => Boolean(b.audio_url) !== Boolean(b.audio_path), {
+    message: "provide exactly one of audio_url or audio_path",
+  });
+
+export const TranslationUnitSchema = z.object({
+  start_ms: z.number().int().min(0),
+  end_ms: z.number().int().min(0),
+  source_language: z.string().nullable(),
+  source_text: z.string(),
+  text: z.string(),
+});
+
+export const TranslateResponseSchema = z.object({
+  job_ref: z.string().nullable(),
+  model: z.string(),
+  media: z.object({ duration_ms: z.number().int().min(0) }),
+  /** on the FILE's own 0-based timeline; the caller holds the offsets */
+  units: z.array(TranslationUnitSchema),
+});
+
+export type TranslateResponse = z.infer<typeof TranslateResponseSchema>;

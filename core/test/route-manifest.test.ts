@@ -46,6 +46,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/calls/:id/restore", "M11 — db/0011 names restore as a non-owner-permitted act"],
 
   ["GET", "/v1/calls/:id/transcript", "SPEC §The transcript"],
+  ["GET", "/v1/calls/:id/translation", "db/0201 — the transcript's translation as rows, prepared by the transcriber (C4, 2026-09-06)"],
   ["GET", "/v1/calls/:id/speakers", "SPEC §The transcript — resolving a segment's speaker_id"],
   ["GET", "/v1/calls/:id/summary", "SPEC §The summary"],
   ["GET", "/v1/calls/:id/summaries", "invariant 4 — versions, never edits"],

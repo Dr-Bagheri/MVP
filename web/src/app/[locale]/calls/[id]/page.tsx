@@ -8,6 +8,7 @@ import { ToolbarShell } from "@/components/platform/ToolbarShell";
 import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { dirFor, languageMix } from "@/lib/textDirection";
+import { pollUntilSettled } from "@/lib/translationPoll";
 import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
@@ -193,7 +194,8 @@ export default function CallDetailPage({
   const [allCalls, setAllCalls] = useState<Call[]>([]);
   /** English translations, display-only; the Persian record is the truth. */
   const [summaryEn, setSummaryEn] = useState<string | "loading" | null>(null);
-  const [transcriptEn, setTranscriptEn] = useState<string | "loading" | null>(null);
+  /** the transcript's translation, one text per segment id (C4, 2026-09-06) */
+  const [transcriptEn, setTranscriptEn] = useState<Map<string, string> | "loading" | null>(null);
   const [showSummaryEn, setShowSummaryEn] = useState(false);
   const [showTranscriptEn, setShowTranscriptEn] = useState(false);
   const [translateError, setTranslateError] = useState<string | null>(null);
@@ -301,19 +303,40 @@ export default function CallDetailPage({
   }
 
   async function translate(what: "summary" | "transcript"): Promise<void> {
-    const set = what === "summary" ? setSummaryEn : setTranscriptEn;
-    const show = what === "summary" ? setShowSummaryEn : setShowTranscriptEn;
     setTranslateError(null);
-    set("loading");
-    show(true);
+    if (what === "summary") {
+      setSummaryEn("loading");
+      setShowSummaryEn(true);
+      try {
+        const catalogue = await api.models();
+        const model = catalogue.preferred_model ?? catalogue.models[0]?.id;
+        const result = await api.translateCall(id, "summary", model);
+        setSummaryEn("text" in result ? result.text : null);
+      } catch {
+        setSummaryEn(null);
+        setShowSummaryEn(false);
+        setTranslateError(t("translateFailed"));
+      }
+      return;
+    }
+    /*
+     * THE TRANSCRIPT (C4, 2026-09-06): translated from the AUDIO by the
+     * transcriber, as a job, and kept as rows beside the lines — so the ask
+     * answers a status and the rows are read when they land (a long record
+     * takes minutes). Asked again, a ready translation answers at once.
+     */
+    setTranscriptEn("loading");
+    setShowTranscriptEn(true);
     try {
-      const catalogue = await api.models();
-      const model = catalogue.preferred_model ?? catalogue.models[0]?.id;
-      const result = await api.translateCall(id, what, model);
-      set(result.text);
+      const asked = await api.translateCall(id, "transcript");
+      const settled = "status" in asked && asked.status === "ready"
+        ? await api.callTranslation(id, "en")
+        : await pollUntilSettled(() => api.callTranslation(id, "en"), { intervalMs: 4000, maxMs: 20 * 60 * 1000 });
+      if (settled.status !== "ready") throw new Error(settled.error_type ?? "translation failed");
+      setTranscriptEn(new Map(settled.segments.map((s) => [s.segment_id, s.text])));
     } catch {
-      set(null);
-      show(false);
+      setTranscriptEn(null);
+      setShowTranscriptEn(false);
       setTranslateError(t("translateFailed"));
     }
   }
@@ -1816,7 +1839,7 @@ export default function CallDetailPage({
                 </span>
               ) : null}
               <span className="flex-1" />
-              {showTranscriptEn && typeof transcriptEn === "string" ? (
+              {showTranscriptEn && transcriptEn instanceof Map ? (
                 <button
                   className="text-xs text-fg-muted underline-offset-2 hover:underline"
                   onClick={() => setShowTranscriptEn(false)}
@@ -1973,26 +1996,28 @@ export default function CallDetailPage({
           >
           {showTranscriptEn && transcriptEn === "loading" ? (
             <p className="p-4 text-sm text-fg-muted">{t("translating")}</p>
-          ) : showTranscriptEn && typeof transcriptEn === "string" ? (
-            /* SIDE-BY-SIDE (user directive): the Persian record stays on
-               screen beside its English rendering — a translation is a lens,
-               not a replacement. The two columns share the SECTION's
-               scroller now — they used to carry a 24rem box each, which was
-               two more heights nobody had decided on. */
-            <div className="grid divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0">
-              <div className="p-4">
-                {rows.slice(0, 200).map((r) => (
-                  <p key={r.id} dir="auto" className="mb-2 text-sm leading-8 text-fg">
+          ) : showTranscriptEn && transcriptEn instanceof Map ? (
+            /* SIDE-BY-SIDE, LINE BY LINE (user directive; C4, 2026-09-06):
+               the Persian record stays on screen beside its English — a
+               translation is a lens, not a replacement — and since the
+               translation is made from the audio and placed on each line,
+               the two columns stay aligned however long the record; a line
+               the transcriber gave nothing for shows a dash, never a
+               neighbour's sentence. */
+            <div className="divide-y divide-border">
+              {rows.slice(0, 400).map((r) => (
+                <div key={r.id} className="grid gap-x-6 gap-y-1 px-4 py-2 md:grid-cols-2">
+                  <p dir={dirFor(r.language) ?? "auto"} lang={r.language ?? undefined} className="text-sm leading-7 text-fg">
                     <span className="me-2 text-xs text-fg-muted ltr">
                       {formatClock(r.start_ms / 1000, locale)}
                     </span>
                     {r.text}
                   </p>
-                ))}
-              </div>
-              <p className="ltr whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
-                {transcriptEn}
-              </p>
+                  <p dir="ltr" lang="en" className="text-start text-sm leading-7 text-fg">
+                    {transcriptEn.get(r.id) ?? <span className="text-fg-subtle">—</span>}
+                  </p>
+                </div>
+              ))}
             </div>
           ) : rows.length === 0
             && !call.provisional_transcript

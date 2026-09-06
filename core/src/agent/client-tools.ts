@@ -1014,8 +1014,11 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     name: "translate_record",
     label: { fa: "ترجمهٔ ضبط", en: "Translating a record" },
     description:
-      "Translate a record's summary or its transcript. The translation is "
-      + "returned to you; it is not stored.",
+      "Translate a record's summary or its transcript to English. The SUMMARY's "
+      + "translation is returned to you and not stored. The TRANSCRIPT is "
+      + "translated from the audio by the transcriber, as a job: you are told it "
+      + "is being prepared (or already ready) and the record page shows it line "
+      + "by line when it lands — tell the person to open the record.",
     parameters: obj({
       record: str("The record's id or enough of its title to find it."),
       what: strEnum(["summary", "transcript"], "Which one to translate."),

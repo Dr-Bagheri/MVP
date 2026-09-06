@@ -34,7 +34,7 @@
  * discipline correction from the column tripwire, where a name-grep was
  * satisfied by the name's own presence in the code that failed to use it.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -75,7 +75,18 @@ function registeredFactories(): string[] {
 /** queue constant → the factory that claims it, read from each module. */
 function claimsByFactory(): Map<string, string> {
   const claims = new Map<string, string>();
-  for (const file of ["steps.ts", "call-steps.ts", "signal-step.ts", "workflow-step.ts"]) {
+  /*
+   * DERIVED from the directory, not a list (13½: the coverage list is itself
+   * a seam). This was four file names, and the translate step
+   * (translate-step.ts, 2026-09-06) was registered in main.ts, claimed its
+   * queue, and stayed invisible to this guard — which then reported the
+   * queue unconsumed. Every worker module that claims a queue is read.
+   */
+  const files = readdirSync(workerDir)
+    .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
+    .filter((name) => /^\s*queue: Q_[A-Z_]+,/m.test(read(name)));
+  expect(files.length, "no worker module claims a queue — the scan is stale").toBeGreaterThanOrEqual(4);
+  for (const file of files) {
     const src = read(file);
     /*
      * A module may hold more than one factory (call-steps.ts holds two), so

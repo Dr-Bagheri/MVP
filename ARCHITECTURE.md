@@ -2259,3 +2259,76 @@ Live proof per provider needs the operator's OAuth apps
 (docs/CONNECTORS.md carries the console steps and the env names) or a
 real token; the adapters ship tested against the providers' documented
 shapes, with the live run recorded in that document when it happens.
+
+## M50 — The transcriber is told more and asked for more: context, language, length, translation [user directive 2026-09-06: "run translate_record through Soniox instead of a language model; automatic language detection for mixed Persian and English recordings; an asynchronous file lane for long uploads; feed speaker names and your project glossary as recognition context"]
+
+Four things the product already had the raw material for and was not
+using. Each is recorded with the rule that keeps it honest.
+
+**1. Recognition context (C1).** `core/src/db/recognition-context.ts`
+builds the provider's STRUCTURED context — `terms` (the org's glossary
+first, then the people in the directory, the members, the projects;
+de-duplicated with ZWNJ and case folded; capped), `text` (the
+recording's title), `general` (the organisation) — and both lanes send
+it: the worker with every part, the live relay with every session. It is
+read under the CALLER's identity (the worker as the call's owner, the
+route as the person), so it can only name what they already see, and it
+is best-effort end to end: a failed read costs the bias, never the
+transcription. ml/'s `options.context` is that object; the retired flat
+list is REFUSED (bad_request) rather than transcribed without the context
+the caller believed it sent.
+
+**2. A line knows its language (C2).** db/0200 adds
+`transcript_segment.language` — a checked tag, nullable, where null means
+"not said" and is never defaulted. The mapping sets it to the MAJORITY
+language of the line's words; a code-switched Persian line stays one line,
+in Persian — splitting at every switch would shred spoken Persian into
+fragments. The screen sets each line's `dir`/`lang` from it and leaves an
+unidentified line to the document; a mixed transcript shows its languages
+as chips. Live captions carry the token's language too.
+
+**3. The long-file lane (C3).** Each STT lane names its own ceiling
+(Soniox five hours, the fallback ASR thirty-five minutes) and the
+pipeline refuses above the LARGEST usable one, before any lane is paid;
+a lane asked past its own refuses and the ladder tries the next. The old
+single cap — the fallback's — had been refusing, in production, the
+forty-minute recorded parts the primary lane carries. Three things had
+to move with the ceiling or it would have moved a failure rather than a
+limit: the WAV is read as a stream by both VADs (thirty seconds at a
+time, state carried across chunk edges, proven equal to a whole-file
+pass), so a five-hour file is never 1.15 GB of Float32 on a box with
+one to spare; the waits follow the file (the provider's, core's ml
+client's per part); and the worker renews its queue claim every third
+of the visibility window while a step runs — a step that outran the
+window used to be redelivered to a second slot and paid for twice. The
+upload rule says five hours; the byte cap (the storage tier's) still
+binds a single upload. `/process` stays synchronous (CONTRACT §7): the
+provider's async job sits behind a request that stays open.
+
+**4. Translation through the transcriber (C4).** The TRANSCRIPT is
+translated from the AUDIO, not from its text: one provider job does the
+transcription and a one-way translation together and answers units — an
+original run with its span, and the translation that followed it — which
+core places on the stored lines by midpoint (translation-mapping.ts). It
+is a JOB and an ARTIFACT (db/0201): `call_translation` holds the request
+per (call, language) with its status, `transcript_translation` one text
+per (line, language); the route answers 202 with the status, the page
+reads the rows when they land, line beside line. The SUMMARY's
+translation stays a language-model call whose text is returned and not
+stored — a summary is text, the transcriber translates audio.
+
+**The wall, restated.** A reader of the call may ASK for a translation;
+only the call's OWNER — the identity the job runs as — writes the rows
+and moves the status; the agent role reads and never writes; the purge
+learned both tables in the same migration, regenerated from the
+catalogue's own definition (0132, 0145). And the rule that shapes the
+step: FAILURE IS THE REQUEST'S, NEVER THE CALL'S — a provider refusal
+marks the request failed and ends the step normally; a transient fault
+retries while the status stays queued; the third delivery writes even a
+transient fault down rather than handing the message to a sink whose
+per-call branch would fail a ready record.
+
+**Not decided here.** A second target language on screen (the rows
+carry any tag; the page asks for English), translating the meeting's
+minutes or a summary through the transcriber (text has no audio), and a
+retry button on a failed translation (asking again already requeues).

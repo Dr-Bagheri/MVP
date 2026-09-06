@@ -17,6 +17,7 @@ import type { Db } from "../db/identity.ts";
 import { allPartsMissing, partsSettled, type Lifecycle } from "./lifecycle.ts";
 import {
   isSignalPayload,
+  isTranslatePayload,
   isWorkflowStepPayload,
   PART_QUEUES,
   Q_LINK_SPEAKERS,
@@ -81,6 +82,21 @@ export function createDeadLetterSink({ db, lifecycle, queue, log }: DeadLetterOp
         } catch {
           // the owner is gone or inactive: the log line above is the trace
         }
+        return;
+      }
+
+      /*
+       * 0201: a translate job writes its own failure (translate-step.ts marks
+       * the request failed and ends normally) and reaches this sink only on
+       * a lost receipt. The per-call branch below would fail the CALL for a
+       * translation that could not be made — a ready record must stay ready.
+       */
+      if (isTranslatePayload(body)) {
+        log.error(
+          { queue: queueName, call_id: body.callId, language: body.language,
+            error_type: info.errorType, exhausted: info.exhausted },
+          "translate job dead-lettered; the record is untouched",
+        );
         return;
       }
 

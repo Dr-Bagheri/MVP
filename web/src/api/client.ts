@@ -66,7 +66,7 @@ import type {
   TranscriptSegment,
   User,
   UserStatus,
-  WorkflowCard, MeetingAttachment, MeetingItem, MeetingItemKind } from "./types";
+  WorkflowCard, MeetingAttachment, MeetingItem, MeetingItemKind, CallTranslation, TranslationStatus } from "./types";
 /**
  * The producer's own shape for `GET /v1/me`, imported rather than described.
  * `import type` is erased, so nothing from core/ reaches the bundle — the same
@@ -1003,16 +1003,27 @@ export const api = {
    * transcript, through the /translator system skill (0063). Display-only:
    * nothing is persisted; the run is the record.
    */
+  /**
+   * Two answers, because they are two different things (2026-09-06, C4):
+   * the SUMMARY's translation is a language-model call whose text comes
+   * back and is not stored; the TRANSCRIPT's is prepared by the transcriber
+   * from the audio, as a job — the answer is the request's status, and
+   * `callTranslation` reads the rows when they land.
+   */
   async translateCall(
     callId: string,
     what: "summary" | "transcript",
     model?: string,
-  ): Promise<{ text: string; model: string }> {
+    target: string = "en",
+  ): Promise<{ text: string; model: string } | { status: TranslationStatus; language: string }> {
     return bff(`/api/calls/${callId}/translate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ what, model }),
+      body: JSON.stringify({ what, model, target }),
     });
+  },
+  async callTranslation(callId: string, language: string = "en"): Promise<CallTranslation> {
+    return bff<CallTranslation>(`/api/calls/${callId}/translation?language=${encodeURIComponent(language)}`);
   },
 
   /**

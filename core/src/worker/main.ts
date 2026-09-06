@@ -17,6 +17,8 @@ import { createLifecycle } from "./lifecycle.ts";
 import { createMlClient } from "./ml-client.ts";
 import { Q_AGENT_RULES, createQueue } from "./queue.ts";
 import { createRunner } from "./runner.ts";
+import { createTranslateStep } from "./translate-step.ts";
+import { createTranslationsRepo } from "../api/translations.ts";
 import { createPartStep, type StorageSigner } from "./steps.ts";
 import { storageSignerFromEnv } from "../storage/signer.ts";
 import { createLinkSpeakersStep, createSummarizeStep } from "./call-steps.ts";
@@ -142,6 +144,10 @@ export async function main(): Promise<void> {
       // the configured ml timeout is the FLOOR; the wait follows each part's
       // length from there (2026-09-06, the long-file lane)
       createPartStep({ db, ml, queue, lifecycle, storage, mlTimeoutMs: config.mlTimeoutMs }),
+      // 0201 (C4): the transcript's translation from the audio, as the owner
+      createTranslateStep({
+        db, ml, storage, lifecycle, translations: createTranslationsRepo(db), mlTimeoutMs: config.mlTimeoutMs,
+      }),
       // ml + storage arm M39 voice matching; without them the step is
       // exactly the pre-M39 step (matching is best-effort either way)
       createLinkSpeakersStep({ db, queue, lifecycle, ml, storage }),

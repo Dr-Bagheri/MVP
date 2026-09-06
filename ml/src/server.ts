@@ -15,10 +15,11 @@ import { assertLocalPathAllowed, fetchToFile, makeWorkspace } from "./audio/sour
 import { diarizerName } from "./diarize/index.js";
 import { embedSamples, embedderAvailable, sliceRanges } from "./embed/extractor.js";
 import { toMono16k } from "./audio/ffmpeg.js";
-import { readWav } from "./audio/wav.js";
+import { readWav, wavDuration } from "./audio/wav.js";
 import { ML_VERSION, runJob } from "./pipeline.js";
-import { EmbedRequestSchema, EmbedResponseSchema, HealthSchema, OptionsSchema, ProcessRequestSchema, ProcessResponseSchema } from "./schema.js";
+import { EmbedRequestSchema, EmbedResponseSchema, HealthSchema, OptionsSchema, ProcessRequestSchema, ProcessResponseSchema, TranslateRequestSchema, TranslateResponseSchema } from "./schema.js";
 import { laneStatus } from "./stt/registry.js";
+import { translationAvailable, translator } from "./stt/soniox-translate.js";
 import { vadEngine } from "./vad/index.js";
 
 export async function buildServer() {
@@ -112,6 +113,61 @@ export async function buildServer() {
     } catch (e) {
       const err = toMlError(e);
       jobLogger(jobRef).warn({ error_type: err.type, retryable: err.retryable }, "job failed");
+      return reply.code(err.http).send(err.body(jobRef));
+    } finally {
+      await ws.cleanup();
+    }
+  });
+
+  /**
+   * POST /translate — the transcript's TRANSLATION, from the audio, through
+   * the transcriber (2026-09-06, C4; user directive: "run translate_record
+   * through Soniox instead of a language model"). JSON only: audio_url or
+   * audio_path, a target language tag, the language hints. One provider
+   * job does the transcription and the one-way translation together and
+   * answers UNITS — an original run with its span and its translation — on
+   * the file's own timeline; placing them on the product's lines is core's
+   * (it holds the lines and the part offsets). Nothing persists here.
+   */
+  app.post("/translate", async (req, reply) => {
+    const ws = await makeWorkspace();
+    let jobRef: string | undefined;
+    try {
+      const body = TranslateRequestSchema.parse(req.body);
+      jobRef = body.job_ref;
+      if (!translationAvailable()) {
+        throw new MlError("stt_unavailable", "no translation lane is configured");
+      }
+      const input = path.join(ws.dir, "input.bin");
+      if (body.audio_url) {
+        const bytes = await fetchToFile(body.audio_url, input);
+        jobLogger(jobRef).info({ step: "fetch", host: hostOnly(body.audio_url), bytes }, "audio downloaded");
+      } else {
+        await assertLocalPathAllowed(body.audio_path!);
+        const { createReadStream } = await import("node:fs");
+        await streamPipeline(createReadStream(body.audio_path!), createWriteStream(input));
+      }
+      const log = jobLogger(jobRef);
+      const wav = path.join(ws.dir, "mono16k.wav");
+      await toMono16k(input, wav);
+      const durationMs = await wavDuration(wav);
+      if (durationMs > cfg.ML_SONIOX_MAX_DURATION_MS) {
+        throw new MlError("media_too_long", "audio exceeds the translation lane's ceiling");
+      }
+      const started = Date.now();
+      const outcome = await translator()({
+        file: wav, durationMs, targetLanguage: body.target_language, languageHints: body.language_hints,
+      });
+      log.info({ ms: Date.now() - started, units: outcome.units.length, target: body.target_language }, "translation done");
+      return TranslateResponseSchema.parse({
+        job_ref: jobRef ?? null,
+        model: outcome.model,
+        media: { duration_ms: durationMs },
+        units: outcome.units,
+      });
+    } catch (e) {
+      const err = toMlError(e);
+      jobLogger(jobRef).warn({ error_type: err.type, retryable: err.retryable }, "translation failed");
       return reply.code(err.http).send(err.body(jobRef));
     } finally {
       await ws.cleanup();

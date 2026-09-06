@@ -154,8 +154,26 @@ export interface MlClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface MlTranslateRequest {
+  audioUrl?: string;
+  audioPath?: string;
+  targetLanguage: string;
+  languageHints?: string[];
+  jobRef?: string;
+}
+
+export interface MlTranslateResult {
+  job_ref: string | null;
+  model: string;
+  media: { duration_ms: number };
+  /** units on the part's own 0-based timeline — see worker/translation-mapping.ts */
+  units: { start_ms: number; end_ms: number; source_language: string | null; source_text: string; text: string }[];
+}
+
 export interface MlClient {
   process(request: MlProcessRequest, options?: { timeoutMs?: number }): Promise<MlProcessResult>;
+  /** the transcript's translation from the AUDIO (2026-09-06, C4) — ml/'s POST /translate */
+  translate(request: MlTranslateRequest, options?: { timeoutMs?: number }): Promise<MlTranslateResult>;
   health(): Promise<{ ok: boolean; lanes: Record<string, string> }>;
   /** One voice vector (0081): whole file, or `ranges` (ms, file-relative)
    *  picking one voice's speech out of a longer take. Bytes mode carries an
@@ -254,6 +272,55 @@ export function createMlClient({
     }
   }
 
+  async function translate(request: MlTranslateRequest, perCall: { timeoutMs?: number } = {}): Promise<MlTranslateResult> {
+    const waitMs = perCall.timeoutMs ?? timeoutMs;
+    const body = {
+      ...(request.audioUrl ? { audio_url: request.audioUrl } : {}),
+      ...(request.audioPath ? { audio_path: request.audioPath } : {}),
+      ...(request.jobRef ? { job_ref: request.jobRef } : {}),
+      target_language: request.targetLanguage,
+      language_hints: request.languageHints ?? ["fa", "en"],
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), waitMs);
+    let response: Response;
+    try {
+      response = await fetchImpl(`${root}/translate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch {
+      const aborted = controller.signal.aborted;
+      throw new MlRequestError(
+        aborted ? "ml_timeout" : "ml_unreachable",
+        aborted ? `ml/ did not answer within ${waitMs}ms` : "ml/ is unreachable",
+        true,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      let errorType = "ml_http_error";
+      let retryable = response.status >= 500;
+      let message = `ml/ returned HTTP ${response.status}`;
+      try {
+        const parsed = JSON.parse(text) as { error_type?: string; retryable?: boolean; message?: string };
+        if (parsed.error_type) errorType = parsed.error_type;
+        if (typeof parsed.retryable === "boolean") retryable = parsed.retryable;
+        if (parsed.message) message = parsed.message;
+      } catch { /* a non-JSON body means a proxy or a crash, not ml/ speaking */ }
+      throw new MlRequestError(errorType, message, retryable, response.status);
+    }
+    try {
+      return JSON.parse(text) as MlTranslateResult;
+    } catch {
+      throw new MlRequestError("ml_bad_response", "ml/ returned a non-JSON success body", true, response.status);
+    }
+  }
+
   async function embed(request: MlEmbedRequest): Promise<MlEmbedResult> {
     const controller = new AbortController();
     // embedding a minute of audio is seconds of work — a tighter clock than
@@ -318,6 +385,7 @@ export function createMlClient({
 
   return {
     process: post,
+    translate,
     embed,
 
     async health() {

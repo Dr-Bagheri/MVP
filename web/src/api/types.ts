@@ -1274,3 +1274,18 @@ export interface MeetingAttachment {
   size_bytes: number;
   created_at: string;
 }
+
+/** db/0201 (2026-09-06, C4): a transcript translation request's status; `none` = never asked */
+export type TranslationStatus = "queued" | "ready" | "failed";
+
+/** GET /api/calls/[id]/translation — the transcript's translation as the transcriber prepared it */
+export interface CallTranslation {
+  call_id: string;
+  language: string;
+  status: TranslationStatus | "none";
+  requested_at: string | null;
+  finished_at: string | null;
+  error_type: string | null;
+  /** one translated text per segment id — empty until ready */
+  segments: { segment_id: string; text: string }[];
+}
