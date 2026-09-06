@@ -28,6 +28,7 @@
  */
 
 import { api } from "@/api/client";
+import { createRelayGate } from "./relayGate";
 
 // ---- the behavior (pure, tested) -------------------------------------------
 
@@ -176,6 +177,13 @@ export interface VoiceHandlers {
   /** rule 3 — stop talking (and end the exchange) */
   onStop: () => void;
   onState?: (state: "idle" | "session") => void;
+  /**
+   * The relay breaker tripped (lib/relayGate): the transcription service
+   * ended six sessions in a row before a word arrived, so the ears rest for
+   * a few minutes and try again on their own. Said ONCE per trip — this is
+   * the sentence the 2026-09-05/06 churn never had.
+   */
+  onFault?: (reason: "relay_unavailable") => void;
 }
 
 /**
@@ -368,6 +376,33 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
   let finalsBuf = "";
   let interimBuf = "";
   let pending: Int16Array[] = [];
+  /*
+   * THE GATE (2026-09-06). Sessions used to reopen on the next voiced frame
+   * after any end, with no memory of how the last one went — and when the
+   * provider behind the relay failed every handshake for ten hours, that
+   * was a new session every 400 ms, all night, from a room whose noise floor
+   * sat above the speech threshold. The gate backs off after a session the
+   * server ended before a word arrived, trips after six in a row, and clears
+   * on any session that heard something.
+   */
+  const gate = createRelayGate();
+  /*
+   * DEAF WHILE HIDDEN. A background tab keeps its microphone and its audio
+   * graph, and every one of them used to open relay sessions of its own; with
+   * several tabs on one account they reaped each other past the per-user cap
+   * — churn with nobody in the room. The wake word is for the tab the person
+   * is looking at; a hidden tab closes its session and opens none until it
+   * is shown again.
+   */
+  let dormant = typeof document !== "undefined" && document.visibilityState === "hidden";
+  const onVisibility = () => {
+    dormant = document.visibilityState === "hidden";
+    if (dormant) closeSession(false);
+  };
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
+  const settleEnd = (byServer: boolean) => {
+    if (gate.noteEnded(Date.now(), byServer) === "tripped") handlers.onFault?.("relay_unavailable");
+  };
 
   const downsample = (input: Float32Array): Int16Array => {
     const ratio = ctx.sampleRate / TARGET_RATE;
@@ -398,22 +433,26 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
     ).catch(() => undefined);
   };
 
-  const closeSession = () => {
+  /** `byServer`: the relay ended it (`closed`/`error`), not us — the gate's one question */
+  const closeSession = (byServer: boolean) => {
     const s = session;
     session = null;
     finalsBuf = "";
     interimBuf = "";
     if (!s) return;
+    settleEnd(byServer);
     void api.liveSttStop(s.id).catch(() => undefined);
     setTimeout(() => s.es.close(), 3_000);
   };
 
   const openSession = async () => {
-    if (session || opening || stopped) return;
+    if (session || opening || stopped || dormant) return;
+    if (!gate.canOpen(Date.now())) return;
     opening = true;
     try {
       const started = await api.liveSttStart("pcm16k");
       if (stopped || !started.ticket) return;
+      gate.noteOpened(Date.now());
       const base = started.direct_url || "";
       const es = new EventSource(
         base
@@ -428,10 +467,11 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
           };
           if (body.type === "closed" || body.type === "error") {
             es.close();
-            if (session?.es === es) closeSession();
+            if (session?.es === es) closeSession(true);
             return;
           }
           if (body.type === "tokens" && body.tokens) {
+            gate.noteTokens();
             if (muted) return;
             const finals = body.tokens.filter((t) => t.is_final).map((t) => t.text).join("");
             const interim = body.tokens.filter((t) => !t.is_final).map((t) => t.text).join("");
@@ -447,8 +487,11 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
       post(preroll);
       if (pending.length > 0) { post(pending); pending = []; }
     } catch {
-      // relay unavailable — the loop keeps gating locally and retries on
-      // the next speech onset; nothing to say every few seconds
+      /* relay unavailable — a start that fails is a short end for the gate:
+         the next onset may retry only after the backoff, and six in a row
+         rest the ears and say so once. Until 2026-09-06 this retried on the
+         very next voiced frame, ~85 ms later, without end. */
+      settleEnd(true);
     } finally {
       opening = false;
     }
@@ -489,12 +532,12 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
         void openSession();
       }
     } else if (session && now - lastVoiceAt > SESSION_LINGER_MS) {
-      closeSession();
+      closeSession(false);
     }
   };
 
   // the utterance gate: token silence, checked on a coarse clock
-  const gate = setInterval(() => {
+  const utteranceGate = setInterval(() => {
     if (stopped) return;
     const text = (finalsBuf + interimBuf).trim();
     if (!text) return;
@@ -508,9 +551,10 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
   return {
     stop: () => {
       stopped = true;
-      clearInterval(gate);
+      clearInterval(utteranceGate);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
       behavior.endSession();
-      closeSession();
+      closeSession(false);
       try { proc.disconnect(); source.disconnect(); } catch { /* fine */ }
       void ctx.close();
       stream.getTracks().forEach((track) => track.stop());

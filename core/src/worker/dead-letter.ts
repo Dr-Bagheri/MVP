@@ -105,7 +105,9 @@ export function createDeadLetterSink({ db, lifecycle, queue, log }: DeadLetterOp
             part_id: payload.partId ?? null,
             owner_id: payload.ownerId,
             error_type: info.errorType,
-            reason: info.reason,
+            /* `reason` is the provider's or Postgres's own sentence and rides
+               in the ARCHIVED message, where an operator reads it by hand; a
+               log line is the one place it may not go (invariant 7) */
             exhausted: info.exhausted,
             unresolved_owner: true,
           },

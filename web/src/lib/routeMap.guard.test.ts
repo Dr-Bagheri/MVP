@@ -86,6 +86,36 @@ describe("where the agents may be sent", () => {
     expect(refused, "in the enum, refused by the executor").toEqual([]);
   });
 
+  it("every page a person can reach from the shell is a place the model can be sent (the reverse)", () => {
+    /*
+     * The enum ⊆ routes direction was asserted from the start; this is the
+     * other one, added 2026-09-06 when `/projects` and `/chat` — both pages
+     * for a year of directives — were missing while the platform map told
+     * every agent "open any of them (navigate)". The model then sent people
+     * to the nearest word it had, which is the 2026-09-04 /echo shape again.
+     * Top-level pages only, minus the ones that are honestly not destinations,
+     * each with its reason.
+     */
+    const NOT_DESTINATIONS: Record<string, string> = {
+      "/calls": "a legacy list that redirects into meetings — a destination that bounces is a tool that half-works",
+      "/capture": "redirects to the recorder inside meetings",
+      "/skills": "redirects into Management",
+      "/connectors": "redirects into Management",
+      "/admin": "redirects into Management",
+      "/platform": "the vendor console — root only, never a place to send a member",
+      "/help": "the help is a document, opened from the rail; the model answers questions itself",
+      "/sign-in": "auth", "/sign-up": "auth", "/forgot": "auth", "/reset": "auth",
+      "/pending": "auth state", "/suspended": "auth state",
+    };
+    const topLevel = [...realRoutes()]
+      .filter((route) => route !== "/" && !route.includes("[") && route.split("/").length === 2);
+    const unreachable = topLevel.filter((route) => !destinations.includes(route) && !NOT_DESTINATIONS[route]);
+    expect(unreachable, "pages the app serves that the model cannot send anyone to").toEqual([]);
+    /* the allow-list must name real pages, or a deleted page reads as covered */
+    const stale = Object.keys(NOT_DESTINATIONS).filter((route) => !serves(realRoutes(), route));
+    expect(stale, "allow-list entries naming no page").toEqual([]);
+  });
+
   it("the product's own places are REACHABLE — the half a regex cannot ask", () => {
     /*
      * The other direction, and the one the report was about. Nothing was

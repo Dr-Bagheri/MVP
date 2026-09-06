@@ -123,13 +123,15 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
        *
        * `/echo/speakers` is gone from the list too: that address redirects to
        * /management/speakers now, and a destination that bounces is a tool
-       * that half-works. `route-map.test.ts` compares this enum against the
-       * actual app directory, which is what would have caught all of it.
+       * that half-works. `routeMap.guard.test.ts` (web) compares this enum
+       * against the actual app directory in BOTH directions, which is what
+       * would have caught all of it — and did catch `/projects` and `/chat`
+       * missing on 2026-09-06, while the map promised «open any of them».
        */
       path: strEnum([
-        "/", "/assistant", "/meetings", "/tasks",
+        "/", "/assistant", "/meetings", "/tasks", "/projects", "/chat",
         "/conversations", "/search", "/workflows", "/agents", "/integrations",
-        "/profile",
+        "/profile", "/management",
         "/management/users", "/management/speakers", "/management/skills",
         "/management/models", "/management/workflows", "/management/privileges",
         "/management/connectors", "/management/general", "/management/server",

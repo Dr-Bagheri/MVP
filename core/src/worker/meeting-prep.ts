@@ -192,7 +192,7 @@ export async function sweepMeetings(options: MeetingPrepOptions, log: StepLogger
       tx.unsafe<{ connection_id: string; owner_id: string; provider: string }>(
         "select connection_id, owner_id, provider from echo.due_meeting_polls(10)"));
   } catch (error) {
-    log.error({ event: "meeting_poll_door_failed", message: (error as Error).message },
+    log.error({ event: "meeting_poll_door_failed", error_type: (error as Error).name },
       "could not list due calendars");
     return;
   }
@@ -252,12 +252,14 @@ export async function sweepMeetings(options: MeetingPrepOptions, log: StepLogger
           }
           if (await prepareFor(options, identity, provider, event, log) === "prepared") prepared += 1;
         } catch (error) {
-          log.warn({ event: "meeting_prep_failed", message: (error as Error).message },
+          /* the TYPE, never the message — a calendar entry's title can ride
+             in a provider's error sentence (invariant 7) */
+          log.warn({ event: "meeting_prep_failed", error_type: (error as Error).name },
             "could not prepare one meeting");
         }
       }
     } catch (error) {
-      log.warn({ event: "meeting_poll_failed", connection: row.connection_id, message: (error as Error).message },
+      log.warn({ event: "meeting_poll_failed", connection: row.connection_id, error_type: (error as Error).name },
         "a calendar could not be polled this round");
     }
   }

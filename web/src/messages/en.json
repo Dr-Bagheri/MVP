@@ -2173,6 +2173,7 @@
     "listening": "Listening…",
     "manageConnectors": "Manage connections",
     "micDenied": "You didn't give mic access — grant it so I can help you.",
+    "voiceRelayPaused": "The listening service is not answering; the ears will rest for a few minutes and try again on their own.",
     "newConversation": "New conversation",
     "newConversationStarted": "Fresh conversation — the old one is under History.",
     "openLabel": "Open the assistant",

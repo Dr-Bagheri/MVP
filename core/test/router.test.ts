@@ -199,3 +199,21 @@ describe("the floor", () => {
     expect(nameIn("@ava then @roya", ROSTER)).toBe("ava");
   });
 });
+
+
+describe("the fold: an Arabic keyboard calls the same people (2026-09-06)", () => {
+  it("«اكو» with Arabic kaf hands the floor back like «اکو» does", () => {
+    const next = decide(namesIn("اكو تو بگو", ROSTER), ["roya"], "roya", KNOWN);
+    expect(next.agent).toBe(ECHO);
+    expect(next.floor).toEqual([]);
+  });
+  it("«رويا» with Arabic yeh calls Roya", () => {
+    expect(answers("رويا اینجایی؟")).toBe("roya");
+  });
+  it("a name with a ZWNJ inside it still matches", () => {
+    expect(answers("آ\u200Cوا بیا")).toBe("ava");
+  });
+  it("THE CONTROL: the fold does not invent names — «رویاهای من» is not Roya", () => {
+    expect(namesIn("رویاهای من قشنگ بود", ROSTER)).toEqual([]);
+  });
+});

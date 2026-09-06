@@ -43,6 +43,15 @@ export interface StorageSigner {
    */
   signUpload(bucket: string, path: string): Promise<{ url: string; token: string }>;
   signDownload(bucket: string, path: string, ttlSeconds: number): Promise<string>;
+  /**
+   * Delete one object (2026-09-06). Removing a meeting attachment deleted the
+   * ROW and kept the bytes, and the purge enumerates objects from rows, so a
+   * removed document lived on with nothing left that could ever find it —
+   * the purge job's own rule ("the row is the map to the object") inverted.
+   * Already-absent is success: the outcome is the same and the caller is
+   * about to delete the map.
+   */
+  remove(bucket: string, path: string): Promise<void>;
 }
 
 export interface StorageSignerConfig {
@@ -75,6 +84,28 @@ export function createStorageSigner(config: StorageSignerConfig): StorageSigner 
   const doFetch = config.fetchImpl ?? fetch;
 
   return {
+    async remove(bucket: string, path: string): Promise<void> {
+      if (!bucket || !path) throw new StorageSignError("storage: bucket and path are required");
+      const encodedPath = path.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+      if (encodedPath === "") throw new StorageSignError("storage: path is empty");
+      let response: Response;
+      try {
+        response = await doFetch(
+          `${base}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`,
+          { method: "DELETE", headers: { authorization: `Bearer ${key}`, apikey: key } },
+        );
+      } catch {
+        throw new StorageSignError("storage: delete request failed");
+      }
+      /* Supabase spells "already gone" as 400 with a nested 404 as well as a
+         plain 404 (the purge's finding, 2026-08-13): both are the outcome */
+      if (response.ok || response.status === 404) return;
+      if (response.status === 400) {
+        const text = await response.text().catch(() => "");
+        if (/not[ _]?found|404/i.test(text)) return;
+      }
+      throw new StorageSignError("storage: object could not be deleted");
+    },
     async signUpload(bucket: string, path: string): Promise<{ url: string; token: string }> {
       if (!bucket || !path) throw new StorageSignError("storage: bucket and path are required");
       const encodedPath = path.split("/").filter(Boolean).map(encodeURIComponent).join("/");

@@ -813,6 +813,8 @@ export function AssistantSidebar() {
       onCommand: (command) => routeCommand(command),
       onStop: () => farewellClose(),
       onState: (state) => setListening(state === "session" ? "command" : null),
+      /* the relay breaker tripped: the silence gets its sentence, once */
+      onFault: () => notify(t("voiceRelayPaused"), "warn"),
     }).then((handle) => {
       if (!handle) {
         notify(t("micDenied"), "warn");

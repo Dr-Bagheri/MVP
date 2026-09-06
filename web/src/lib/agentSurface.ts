@@ -123,7 +123,7 @@ export const SURFACE_TOOLS: readonly string[] = [
 /* the destinations the executor will perform. Kept in step with core's
    `navigate` enum by route-map.test.ts, which checks BOTH against the app
    directory — the pair used to agree with each other and with nothing else. */
-export const NAVIGABLE = /^\/(assistant|meetings|tasks|integrations|profile|echo(\/(record|upload|calls|records|summaries|archive))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
+export const NAVIGABLE = /^\/(assistant|meetings|tasks|projects|chat|integrations|profile|echo(\/(record|upload|calls|records|summaries|archive))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

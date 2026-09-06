@@ -346,10 +346,30 @@ export function createMeetingsRepo(db: Db) {
     ));
   }
 
-  async function removeAttachment(identity: Identity, id: string): Promise<void> {
-    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
-      "delete from echo.meeting_attachment where id = $1", [id],
+  /**
+   * OBJECTS FIRST (2026-09-06): the bytes, then the row that maps to them —
+   * the purge job's order, for its reason. Two transactions with the
+   * provider call between them, never one around it; a removal whose object
+   * delete fails keeps the row, so the next attempt can find the object
+   * again. `removeObject` is injected by the route because the storage
+   * client is the api's, not this repository's.
+   */
+  async function removeAttachment(
+    identity: Identity,
+    id: string,
+    removeObject?: (bucket: string, path: string) => Promise<void>,
+  ): Promise<void> {
+    const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
+      "select storage_bucket, storage_path from echo.meeting_attachment where id = $1", [id],
     ));
+    if (!rows[0]) throw new NotFoundError();
+    if (removeObject) {
+      await removeObject(String(rows[0].storage_bucket), String(rows[0].storage_path));
+    }
+    const gone = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
+      "delete from echo.meeting_attachment where id = $1 returning id", [id],
+    ));
+    if (!gone[0]) throw new NotFoundError();
   }
 
   /** 0160 — the meeting's decisions, action items, questions, risks and

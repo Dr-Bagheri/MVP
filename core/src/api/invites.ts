@@ -179,7 +179,12 @@ export function createInvitesRepo(db: Db) {
   /** the inviter taking one back — the invitee's "no" is `declined`, a state */
   async function withdraw(identity: Identity, id: string): Promise<void> {
     await db.withIdentity(identity, async (tx: SqlTx) => {
-      await tx.unsafe(`delete from echo.join_invite where id = $1`, [id]);
+      /* RETURNING, so a policy miss is a 404 rather than a 204 for anybody
+         (2026-09-06); db/0197 lets any admin withdraw, the inviter always */
+      const gone = await tx.unsafe<Record<string, unknown>>(
+        `delete from echo.join_invite where id = $1 returning id`, [id],
+      );
+      if (!gone[0]) throw new NotFoundError();
     });
   }
 

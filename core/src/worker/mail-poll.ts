@@ -414,7 +414,9 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
         } catch (error) {
           /* one unanswerable message must not stop the rest of the mailbox;
              the cursor has already moved past it, so it is not retried */
-          log.warn({ event: "mail_draft_failed", message: (error as Error).message },
+          /* the TYPE, never the message: a provider's or Postgres's sentence
+             can quote the mail it was about (invariant 7, 2026-09-06 sweep) */
+          log.warn({ event: "mail_draft_failed", error_type: (error as Error).name },
             "could not draft a reply for one message");
         }
       }
@@ -425,7 +427,7 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
           "messages were older than the age ceiling and were not answered");
       }
     } catch (error) {
-      log.warn({ event: "mail_poll_failed", connection: row.connection_id, message: (error as Error).message },
+      log.warn({ event: "mail_poll_failed", connection: row.connection_id, error_type: (error as Error).name },
         "a mailbox could not be polled this round");
     }
   }

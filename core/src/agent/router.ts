@@ -86,6 +86,14 @@ export type RouteRule =
   | "default";
 
 export interface RouteDecision {
+  /**
+   * A READ FAILED on the way here (the floor or the roster), so this decision
+   * was made on a blank where a fact should be. The answer still goes out —
+   * a hiccup must not stop a question — but nothing may be WRITTEN from it:
+   * a floor computed from "nobody holds it" would be persisted as "nobody
+   * holds it", and Roya would be dismissed by a database timeout.
+   */
+  unreliable?: boolean;
   /** the FIRST responder — the one whose answer streams; the audit's column */
   agent: Responder;
   /** everybody who answers this turn, in order; `agent` is `responders[0]` */
@@ -138,6 +146,26 @@ const BOUNDED = (name: string): RegExp =>
   new RegExp(`(?<![\\p{L}\\p{N}_])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_])`, "iu");
 
 /**
+ * ONE SPELLING BEFORE MATCHING (2026-09-06). Arabic keyboards write «اكو»
+ * with kaf U+0643 and «رويا» with yeh U+064A; Persian ones write ک and ی.
+ * The names above are spelled the Persian way, and a raw match let a person
+ * on an Arabic layout call nobody — Roya kept the floor, «اكو» could not hand
+ * it back. NFC first (a hamza can arrive composed or as a mark), then the
+ * four letters that have two code points for one shape, then the ZWNJ that
+ * some editors leave inside a name. Applied to the question AND the names,
+ * so the fold cannot disagree with itself.
+ */
+export function foldName(text: string): string {
+  return text
+    .normalize("NFC")
+    .replace(/[\u064A\u0649]/g, "\u06CC")   // ي / ى → ی
+    .replace(/\u0643/g, "\u06A9")            // ك → ک
+    .replace(/\u0629/g, "\u0647")            // ة → ه
+    .replace(/\u200C/g, "")                   // ZWNJ
+    .toLowerCase();
+}
+
+/**
  * The agent this message asks for, or null.
  *
  * Bounded matching, and the boundary is the whole difference between a name
@@ -168,11 +196,12 @@ export function nameIn(question: string, roster: readonly RosterEntry[]): Respon
  * "Roya and Ava, look at this" gets Roya first and Ava after her.
  */
 export function namesIn(question: string, roster: readonly RosterEntry[]): Responder[] {
+  const folded = foldName(question);
   const hits: { handle: Responder; at: number }[] = [];
   for (const entry of roster) {
     let at: number | null = null;
     for (const name of entry.names) {
-      const found = BOUNDED(name).exec(question);
+      const found = BOUNDED(foldName(name)).exec(folded);
       if (found !== null && (at === null || found.index < at)) at = found.index;
     }
     if (at !== null) hits.push({ handle: entry.handle, at });

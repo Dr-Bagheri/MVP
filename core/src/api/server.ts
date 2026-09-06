@@ -20,6 +20,22 @@ import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tool
 import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabilities.ts";
 import { iso, TIMEZONE_AUTO } from "./vocabulary.ts";
 import { assertUuid } from "../db/identity.ts";
+
+/**
+ * A REQUEST's id, validated as a request (2026-09-06). `assertUuid` guards
+ * the value interpolated into SET LOCAL and throws a bare Error — right for
+ * an actor id the process itself minted, wrong for a path parameter: a
+ * caller sending `/runs/abc/trace` got a 500 logged and reported as OURS,
+ * and any signed-in caller could fill the error log that way. A malformed
+ * id from a caller is the caller's 400.
+ */
+const REQUEST_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function requestUuid(value: string, what: string): string {
+  if (!REQUEST_UUID_RE.test(value)) {
+    throw new ValidationError(`${what} must be a uuid`, { code: "bad_id" });
+  }
+  return value;
+}
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import {
   egressConfig, livekitConfig, mintGuestToken, mintRoomToken, roomNameFor,
@@ -87,6 +103,14 @@ import { createQueue, Q_LINK_SPEAKERS } from "../worker/queue.ts";
  * cannot become a way to spend somebody's tokens.
  */
 const LIVE_TEXT_MAX = 12_000;
+/*
+ * The question's own ceiling (2026-09-06). `live_text` was capped "so the
+ * field cannot become a way to spend somebody's tokens" and the question —
+ * the bigger field — was open to Fastify's body limit (~1 MB), forwarded
+ * whole to the model on the org's key. Generous, because a pasted document is
+ * a legitimate question; bounded, because a megabyte is not.
+ */
+const QUESTION_MAX = 32_000;
 
 /**
  * What KIND of image is this, by its own first bytes?
@@ -179,7 +203,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const org: OrgRepo = createOrgRepo(options.db);
   const sessions: SessionsRepo = createSessionsRepo(options.db);
   const tts = createTts();
-  const liveStt = createLiveStt();
+  const liveStt = createLiveStt({ log: app.log });
   // (live-stt audio chunks ride the octet-stream parser the upload lane
   // already registers below — a second registration is a boot error)
   const skillAuthoring: SkillAuthoring = createSkillAuthoring(options.db);
@@ -1002,7 +1026,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       tx.unsafe<Record<string, unknown>>(
         `select model, status::text as status, tokens_in, tokens_out, steps
            from echo.agent_run where id = $1`,
-        [assertUuid(id, "run id")],
+        [requestUuid(id, "run id")],
       ));
     const run = rows[0];
     if (!run) throw new NotFoundError("no such run");
@@ -1300,24 +1324,42 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       const identity = await auth.requireActive(request);
       attach = (reader) => liveStt.subscribe(id, identity.userId, reader);
     }
-    reply.raw.writeHead(200, {
+    /*
+     * HIJACKED, and every write GUARDED (2026-09-06). This stream is ended by
+     * the relay's `closed` event, by the client dropping the EventSource, or
+     * by both within the same millisecond — and a write that lands after
+     * either is `ERR_STREAM_WRITE_AFTER_END`, which Fastify reports as
+     * "Promise errored, but reply.sent = true": 77,190 of them in one day
+     * while the provider socket was failing (the relay drops late pushes
+     * now — see live-stt.ts — and this end refuses to write into a closed
+     * response even if one gets through). `hijack()` tells Fastify the raw
+     * response is ours, so the framework neither sends nor logs on top of
+     * it.
+     */
+    reply.hijack();
+    const res = reply.raw;
+    const open = () => !res.writableEnded && !res.destroyed;
+    res.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
       "access-control-allow-origin": "*",
     });
+    const send = (event: import("./live-stt.ts").LiveEvent) => {
+      if (open()) res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    const finish = () => { if (open()) res.end(); };
     const detach = attach((event) => {
-      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
-      if (event.type === "closed") reply.raw.end();
+      send(event);
+      if (event.type === "closed") finish();
     });
     if (!detach) {
       // same wire shape, honest content — the stream opened before we knew
-      reply.raw.write(`data: ${JSON.stringify({ type: "error", code: "no_such_session" })}\n\n`);
-      reply.raw.end();
-      return reply;
+      send({ type: "error", code: "no_such_session" });
+      finish();
+      return;
     }
     request.raw.on("close", detach);
-    return reply;
   });
 
   app.post("/v1/live-stt/:id/stop", async (request, reply) => {
@@ -1628,7 +1670,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     refuseApiKey(identity);
     const { id, attachmentId } = request.params as { id: string; attachmentId: string };
     await meetings.detail(identity, id);
-    await meetings.removeAttachment(identity, attachmentId);
+    /* the same signer the sign route mints — objects first, then the row; a
+       platform with no storage configured has no objects to remove and only
+       a row to drop */
+    const storageUrl = options.storageUrl;
+    const storageKey = options.storageServiceKey;
+    const removeObject = storageUrl !== undefined && storageKey !== undefined
+      ? (bucket: string, path: string) =>
+          createStorageSigner({ url: storageUrl, serviceKey: storageKey }).remove(bucket, path)
+      : undefined;
+    await meetings.removeAttachment(identity, attachmentId, removeObject);
     return reply.code(204).send();
   });
 
@@ -3187,6 +3238,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       app.log.info({ channel_id: channelId, hops }, "chat_agent_hop_limit");
       return;
     }
+    /* the org's own dial (2026-09-06): a room mention started a billed run
+       for a member whose `assistant.ask` was switched off — silent in the
+       room, said in the log, like every other reason a room stays quiet */
+    if (!(await capabilities.allows(identity, "assistant.ask").catch(() => false))) {
+      app.log.info({ channel_id: channelId, reason: "capability" }, "chat_agent_skipped");
+      return;
+    }
 
     const cards = await listAssistantAgents(options.db, identity).catch(() => []);
     const roster = rosterFor(cards.map((a) => ({ handle: a.handle, name: a.name })));
@@ -4411,6 +4469,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (!assistantAllowed(identity)) {
       throw new NotActivatedError("this api key may not use the assistant");
     }
+    /* the same dial the ask route reads (2026-09-06): a member whose org
+       narrowed `assistant.ask` could still start a full run through here */
+    await capabilities.require(identity, "assistant.ask");
     // The session must exist, be the caller's, and not be archived — the
     // same resolve ask uses, which also refuses regenerating into an
     // archived thread ("done with this" stays said).
@@ -4519,6 +4580,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     };
     if (typeof body.question !== "string" || body.question.trim() === "") {
       throw new ValidationError("question is required");
+    }
+    if (body.question.length > QUESTION_MAX) {
+      throw new ValidationError("question is too long", {
+        code: "question_too_long", params: { max: QUESTION_MAX },
+      });
     }
     /**
      * Plural context (Sources). Validated hard: strings, non-empty, capped —
@@ -4739,7 +4805,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     /* THE FLOOR is written before the stream opens: a message that named a
        colleague has moved it whether or not an answer arrives, and the chip
        on the screen reads the same column the next turn will (db/0194) */
-    if (route) {
+    if (route && !route.unreliable) {
       await rememberFloor(options.db, identity, conversation.id, route.floor)
         .catch(() => undefined);
     }
@@ -4976,7 +5042,9 @@ ${liveText}`
       ...(selectedAgent ? { agentHandle: selectedAgent.handle } : {}),
       /* M48: the surface names the responder before the first token — and
          the floor after it, so the chip and the next turn agree */
-      ...(route ? { route, floor: route.floor } : {}),
+      /* an unreliable route answers and announces no floor: the chip keeps
+         what the thread had, and the next turn reads the real column */
+      ...(route ? (route.unreliable ? { route } : { route, floor: route.floor }) : {}),
       /* the others on the floor answer after the streamed answer, in order */
       also: others.map((other) => ({
         handle: other.handle,

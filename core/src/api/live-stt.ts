@@ -57,7 +57,16 @@ interface LiveSession {
   reader: ((event: LiveEvent) => void) | null;
   closed: boolean;
   idleTimer: ReturnType<typeof setTimeout>;
+  /** when it opened — the lifetime is the one number that tells a churn from a call */
+  startedAt: number;
+  /** the client asked for the end; the provider's close is then "stopped", not a fault */
+  stopping: boolean;
+  format: "pcm16k" | "auto";
 }
+
+/** why a session ended — codes only, never the provider's sentence */
+export type LiveEndReason =
+  | "stopped" | "idle" | "cap" | "provider_error" | "provider_socket" | "provider_closed";
 
 /** WebSocket-shaped, injectable for tests (Node 22's global otherwise). */
 export interface WsLike {
@@ -74,6 +83,19 @@ export interface LiveSttOptions {
   wsCtor?: (new (url: string) => WsLike) | undefined;
   idleMs?: number;
   maxPerUser?: number;
+  /**
+   * WHERE AN END IS WRITTEN DOWN (2026-09-06). For ten hours on 2026-09-05/06
+   * the provider socket failed on every session (a handshake that never
+   * completed) and the only trace in the api log was 77,000 "write after
+   * end" errors — the relay pushed the reason to the browser and told the
+   * server nothing, so the log could not name which nothing it was. A
+   * provider fault is a WARN with its reason and code; the ordinary ends are
+   * INFO. Codes only: the provider's message can quote audio.
+   */
+  log?: {
+    info: (fields: Record<string, unknown>, msg: string) => void;
+    warn: (fields: Record<string, unknown>, msg: string) => void;
+  } | undefined;
 }
 
 export function createLiveStt(options: LiveSttOptions = {}) {
@@ -84,7 +106,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
   const maxPerUser = options.maxPerUser ?? 3;
   const sessions = new Map<string, LiveSession>();
 
-  function push(session: LiveSession, event: LiveEvent): void {
+  function deliver(session: LiveSession, event: LiveEvent): void {
     if (session.reader) session.reader(event);
     else {
       session.queue.push(event);
@@ -92,18 +114,43 @@ export function createLiveStt(options: LiveSttOptions = {}) {
     }
   }
 
-  function reap(session: LiveSession): void {
+  /**
+   * A REAPED SESSION IS SILENT. `closed` is the last thing a subscriber
+   * hears and the reader ends its response on it; the provider socket keeps
+   * firing after we closed it (undici fires `error` and `close` in either
+   * order on a failed handshake), and every one of those late pushes used to
+   * reach an ended response — the "write after end" in the log. Only reap
+   * itself may deliver after the flag is set, and only the one event.
+   */
+  function push(session: LiveSession, event: LiveEvent): void {
+    if (session.closed) return;
+    deliver(session, event);
+  }
+
+  function reap(session: LiveSession, reason: LiveEndReason, code?: string): void {
     if (session.closed) return;
     session.closed = true;
     clearTimeout(session.idleTimer);
     try { session.ws.close(); } catch { /* already gone */ }
-    push(session, { type: "closed" });
+    deliver(session, { type: "closed" });
     sessions.delete(session.id);
+    const fields = {
+      reason,
+      ...(code === undefined ? {} : { code }),
+      lifetime_ms: Date.now() - session.startedAt,
+      format: session.format,
+      live_sessions: sessions.size,
+    };
+    if (reason === "provider_error" || reason === "provider_socket") {
+      options.log?.warn(fields, "live_stt_session_ended");
+    } else {
+      options.log?.info(fields, "live_stt_session_ended");
+    }
   }
 
   function touch(session: LiveSession): void {
     clearTimeout(session.idleTimer);
-    session.idleTimer = setTimeout(() => reap(session), idleMs);
+    session.idleTimer = setTimeout(() => reap(session, "idle"), idleMs);
   }
 
   /** owned lookup: foreign and unknown ids are ONE answer */
@@ -153,7 +200,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
       const mine = [...sessions.values()].filter((s) => s.userId === userId);
       if (mine.length >= maxPerUser) {
         // the oldest yields — a refresh mid-recording must not brick the lane
-        reap(mine[0]!);
+        reap(mine[0]!, "cap");
       }
       const Ctor = (options.wsCtor ?? (globalThis.WebSocket as unknown as new (u: string) => WsLike));
       const ws: WsLike = new Ctor(url);
@@ -166,6 +213,9 @@ export function createLiveStt(options: LiveSttOptions = {}) {
         reader: null,
         closed: false,
         idleTimer: setTimeout(() => undefined, 0),
+        startedAt: Date.now(),
+        stopping: false,
+        format: format === "pcm16k" ? "pcm16k" : "auto",
       };
       touch(session);
       ws.addEventListener("open", (() => {
@@ -226,7 +276,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
           if (body.error_code !== undefined) {
             // code only — the message could quote audio content
             push(session, { type: "error", code: String(body.error_code) });
-            reap(session);
+            reap(session, "provider_error", String(body.error_code));
             return;
           }
           if (Array.isArray(body.tokens) && body.tokens.length > 0) {
@@ -245,10 +295,12 @@ export function createLiveStt(options: LiveSttOptions = {}) {
           }
         } catch { /* a non-JSON frame — nothing to surface */ }
       }) as never);
-      ws.addEventListener("close", (() => reap(session)) as never);
+      ws.addEventListener("close", (() => {
+        reap(session, session.stopping ? "stopped" : "provider_closed");
+      }) as never);
       ws.addEventListener("error", (() => {
         push(session, { type: "error", code: "provider_socket" });
-        reap(session);
+        reap(session, "provider_socket");
       }) as never);
       sessions.set(session.id, session);
       return { session_id: session.id, ticket: session.ticket };
@@ -274,6 +326,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
     stop(id: string, userId: string): boolean {
       const session = owned(id, userId);
       if (!session) return false;
+      session.stopping = true;
       try { session.ws.send(""); } catch { /* already closing */ }
       // the provider flushes finals then closes; the close handler reaps.
       // A provider that never closes is caught by the idle reaper.

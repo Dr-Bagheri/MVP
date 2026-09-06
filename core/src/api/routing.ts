@@ -102,17 +102,19 @@ export async function rememberIncumbent(
 export async function routeTurn(input: RouteInput): Promise<RouteDecision> {
   const incumbent = await incumbentOf(input.db, input.identity, input.sessionId)
     .catch(() => null);
-  /* a floor read that fails must not stop the question either — it reads as
-     "nobody holds it", which is Echo, the same answer as a fresh thread */
-  const floor = await floorOf(input.db, input.identity, input.sessionId)
-    .catch(() => [] as Responder[]);
-
   /*
-   * A roster read that fails must not stop somebody asking a question: with no
-   * roster nobody can be named, and "nobody named" is Echo — which is the same
-   * answer this function gives on the ordinary path most of the time.
+   * A read that fails must not stop the question — but it must be SAID
+   * (2026-09-06): the old `.catch(() => [])` made a database hiccup
+   * indistinguishable from "nobody holds the floor", and the caller then
+   * WROTE that emptiness back as the floor. Roya, on the floor, dismissed by
+   * a timeout. `unreliable` travels with the decision; the ask route answers
+   * from it and persists nothing.
    */
-  const agents = await listAssistantAgents(input.db, input.identity).catch(() => []);
+  let unreliable = false;
+  const floor = await floorOf(input.db, input.identity, input.sessionId)
+    .catch(() => { unreliable = true; return [] as Responder[]; });
+  const agents = await listAssistantAgents(input.db, input.identity)
+    .catch(() => { unreliable = true; return []; });
   const roster = rosterFor(agents.map((a) => ({ handle: a.handle, name: a.name })));
   const known = new Set<Responder>(roster.map((entry) => entry.handle));
   known.add(ECHO);
@@ -121,5 +123,6 @@ export async function routeTurn(input: RouteInput): Promise<RouteDecision> {
   if (named.length === 0 && fresh && input.pinned !== undefined && known.has(input.pinned)) {
     named = [input.pinned];
   }
-  return decide(named, floor, incumbent, known);
+  const decision = decide(named, floor, incumbent, known);
+  return unreliable ? { ...decision, unreliable: true } : decision;
 }

@@ -615,18 +615,32 @@ export function createTasksRepo(db: Db) {
         [id],
       );
       if (!before[0]) throw new NotFoundError();
+      /*
+       * `done_now`: did THIS statement finish the card? `coalesce(done_at,
+       * now())` keeps an earlier stamp, and now() is the transaction's
+       * clock — so the flag is true for exactly one of two concurrent ticks.
+       * The pre-read cannot say that: two double-tapped PATCHes both read
+       * `done_at null`, both updated, both renewed, and a repeating order
+       * came back twice (2026-09-06). Decision-first, 0132's shape: the
+       * write decides, the code reads what it decided.
+       */
       const rows = await tx.unsafe<Record<string, unknown>>(
-        `update echo.task set ${sets.join(", ")} where id = $1 returning id`, args,
+        `update echo.task set ${sets.join(", ")} where id = $1
+         returning id, (done_at = now()) as done_now`, args,
       );
       if (!rows[0]) throw new NotFoundError();
 
       const was = before[0];
-      if ("done" in patch && (patch.done === true) !== (was.done_at !== null)) {
-        await note(tx, id, patch.done === true ? "done" : "undone");
-        /* FINISHING IS THE TRIGGER (0186). In the same transaction as the
-           tick, so the next order cannot be lost between two processes and
-           the person who just ticked the box sees it appear. */
-        if (patch.done === true) await renew(tx, id);
+      if ("done" in patch && patch.done === true) {
+        if (rows[0].done_now === true) {
+          await note(tx, id, "done");
+          /* FINISHING IS THE TRIGGER (0186). In the same transaction as the
+             tick, so the next order cannot be lost between two processes and
+             the person who just ticked the box sees it appear. */
+          await renew(tx, id);
+        }
+      } else if ("done" in patch && was.done_at !== null) {
+        await note(tx, id, "undone");
       }
       if ("archived" in patch && (patch.archived === true) !== (was.archived_at !== null)) {
         await note(tx, id, patch.archived === true ? "archived" : "restored");
@@ -878,6 +892,24 @@ export function createTasksRepo(db: Db) {
     identity: Identity, id: string, patch: { name?: string; archived?: boolean },
   ): Promise<void> {
     await db.withIdentity(identity, async (tx: SqlTx) => {
+      /*
+       * A PROJECT'S FOLDER IS THE PROJECT'S (2026-09-06). 0181 makes a
+       * project own the folder of its own name and 0186 makes the project
+       * admin-only — and this door renamed or archived that folder for any
+       * member, without a project check: the board's name drifted from the
+       * project's (the 0193 confusion reborn), or the folder vanished from
+       * under a project that then had nowhere to file work. The folder is
+       * changed through the project, by the people who may change it.
+       */
+      const owner = await tx.unsafe<Record<string, unknown>>(
+        `select project_id from echo.task_topic where id = $1`, [id],
+      );
+      if (!owner[0]) throw new NotFoundError();
+      if (owner[0].project_id !== null) {
+        throw new ValidationError("this folder belongs to a project — change the project instead", {
+          code: "task_topic_is_project",
+        });
+      }
       if (typeof patch.name === "string") {
         const clean = patch.name.trim().slice(0, 80);
         if (clean === "") {
@@ -1011,7 +1043,17 @@ export function createTasksRepo(db: Db) {
 
       if (parsed === null) {
         if (existing === null) return;
-        await tx.unsafe(`delete from echo.task_recurrence where id = $1`, [existing]);
+        /*
+         * DETACH, never delete (2026-09-06). `echo_app` holds no DELETE on
+         * task_recurrence — by design, the closed DELETE list — so the old
+         * `delete from` here was a 42501 for everybody: «توقف تکرار» answered
+         * 500 on every card that had ever repeated. Renewal happens only
+         * through the card's pointer, so a card that points at nothing
+         * repeats no more; the schedule row is switched off and stays as
+         * the fact it is (who set what, when).
+         */
+        await tx.unsafe(`update echo.task set recurrence_id = null where id = $1`, [taskId]);
+        await tx.unsafe(`update echo.task_recurrence set active = false where id = $1`, [existing]);
         return;
       }
       if (existing === null) {

@@ -352,6 +352,16 @@ export function mapError(error: unknown): MappedError {
     return { status: 404, body: { error: "not found", kind: "not_found" }, ours: false };
   }
 
+  /*
+   * 22P02 — `invalid_text_representation`: a path or body id that is not a
+   * uuid reached a uuid parameter (2026-09-06). It was a 500, logged as ours
+   * and shipped to the watchtower, minted by any signed-in caller with a
+   * typo — or on purpose. It is the caller's mistake and says so.
+   */
+  if (pg?.code === "22P02") {
+    return { status: 400, body: { error: "malformed identifier", kind: "invalid", code: "bad_id" }, ours: false };
+  }
+
   /**
    * Fastify's own client errors — malformed JSON, an empty body where one was
    * declared, an unsupported media type, a body over the limit. They carry a

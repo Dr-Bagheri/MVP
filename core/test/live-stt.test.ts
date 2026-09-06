@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createLiveStt, type WsLike } from "../src/api/live-stt.ts";
 
@@ -30,9 +30,9 @@ class FakeWs implements WsLike {
   open(): void { this.readyState = 1; this.fire("open", {}); }
 }
 
-function relay() {
+function relay(extra: Parameters<typeof createLiveStt>[0] = {}) {
   FakeWs.instances.length = 0;
-  return createLiveStt({ apiKey: "sk-test", wsCtor: FakeWs, idleMs: 60_000 });
+  return createLiveStt({ apiKey: "sk-test", wsCtor: FakeWs, idleMs: 60_000, ...extra });
 }
 
 const OWNER = "u-1";
@@ -183,5 +183,72 @@ describe("the live-stt relay (M38)", () => {
     stt.start(OWNER);
     expect(stt.liveSessions()).toBe(3);
     expect(stt.pushAudio(first.session_id, OWNER, new Uint8Array([1]))).toBe(false);
+  });
+});
+
+
+/**
+ * THE CHURN OF 2026-09-05/06 (production): the provider socket failed on
+ * every session for ten hours, the browser reopened one every 400ms, and the
+ * api log filled with 77,190 "write after end" errors and NOT ONE line that
+ * named the provider. Two facts pinned here: a reaped session delivers
+ * nothing after its `closed` (the late provider event was the write into the
+ * ended response), and every end tells the log WHY, code included, message
+ * never.
+ */
+describe("the relay after the end (2026-09-06)", () => {
+  it("a reaped session is silent — a late provider error never reaches the reader", () => {
+    const r = relay();
+    const { session_id } = r.start(OWNER);
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    const seen: string[] = [];
+    r.subscribe(session_id, OWNER, (event) => seen.push(event.type));
+    ws.fire("close", {});           // the socket died: reap → closed
+    ws.fire("error", {});           // undici's late error on a failed handshake
+    ws.fire("message", { data: JSON.stringify({ tokens: [{ text: "x", is_final: true }] }) });
+    expect(seen).toEqual(["closed"]);
+  });
+
+  it("the log hears the reason and the code of a provider error — never its message", () => {
+    const warn = vi.fn();
+    const info = vi.fn();
+    const r = relay({ log: { info, warn } });
+    const { session_id } = r.start(OWNER);
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    r.subscribe(session_id, OWNER, () => undefined);
+    ws.fire("message", { data: JSON.stringify({ error_code: 402, error_message: "the audio said: secret" }) });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [fields, msg] = warn.mock.calls[0]!;
+    expect(msg).toBe("live_stt_session_ended");
+    expect(fields).toMatchObject({ reason: "provider_error", code: "402", format: "auto" });
+    expect(JSON.stringify(fields)).not.toContain("secret");
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it("a failed provider socket is a WARN with its own reason; a client stop is an INFO", () => {
+    const warn = vi.fn();
+    const info = vi.fn();
+    const r = relay({ log: { info, warn } });
+    const a = r.start(OWNER);
+    FakeWs.instances[0]!.fire("error", {});
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ reason: "provider_socket" }), "live_stt_session_ended");
+    const b = r.start(OWNER);
+    FakeWs.instances[1]!.open();
+    r.stop(b.session_id, OWNER);
+    FakeWs.instances[1]!.fire("close", {});
+    expect(info).toHaveBeenCalledWith(expect.objectContaining({ reason: "stopped" }), "live_stt_session_ended");
+    expect(a.session_id).not.toBe(b.session_id);
+  });
+
+  it("the oldest yielding to the per-user cap is logged as 'cap', not as a fault", () => {
+    const warn = vi.fn();
+    const info = vi.fn();
+    const r = relay({ log: { info, warn }, maxPerUser: 1 });
+    r.start(OWNER);
+    r.start(OWNER);
+    expect(info).toHaveBeenCalledWith(expect.objectContaining({ reason: "cap" }), "live_stt_session_ended");
+    expect(warn).not.toHaveBeenCalled();
   });
 });

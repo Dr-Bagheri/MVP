@@ -454,6 +454,19 @@ export function createChatRepo(db: Db) {
       ? input.reply_to
       : null;
     return db.withIdentity(identity, async (tx: SqlTx) => {
+      if (replyTo !== null) {
+        /* the parent must be a message in THIS room (2026-09-06): 0189's key
+           is (id, org_id), so a reply could quote any message in the org and
+           readers of this room got a 140-character excerpt of another one's */
+        const parent = await tx.unsafe<Record<string, unknown>>(
+          `select channel_id from echo.chat_message where id = $1`, [replyTo],
+        );
+        if (!parent[0] || String(parent[0].channel_id) !== channelId) {
+          throw new ValidationError("a reply answers a message in the same room", {
+            code: "reply_across_rooms",
+          });
+        }
+      }
       const created = await tx.unsafe<Record<string, unknown>>(
         `insert into echo.chat_message (org_id, channel_id, author_kind, author_id, body, reply_to_id)
          values (echo.actor_org_id(), $1, 'user', echo.actor_id(), $2, $3)
@@ -558,9 +571,14 @@ export function createChatRepo(db: Db) {
         }
       } else {
         const body = cleanBody(patch.body);
+        /* the AUTHOR's words alone (db/0196): the policy admits an admin to
+           the row so they can tombstone it; the body is not theirs to change,
+           and the trigger behind this predicate refuses any writer that
+           forgets it */
         const done = await tx.unsafe<Record<string, unknown>>(
           `update echo.chat_message set body = $2, edited_at = now()
-            where id = $1 and deleted_at is null returning id`,
+            where id = $1 and deleted_at is null and author_id = echo.actor_id()
+            returning id`,
           [id, body],
         );
         if (!done[0]) throw new NotFoundError();

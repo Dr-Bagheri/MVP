@@ -794,20 +794,32 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       }
       const start = new Date().toISOString();
       const end = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+      /*
+       * Graph answers `start.dateTime` WITHOUT an offset, in the zone the
+       * `Prefer` header names — and with no header, in the mailbox's zone.
+       * `Date.parse` reads an offset-less stamp as LOCAL, which was right only
+       * while the worker's box ran on UTC (2026-09-06). So: ask for UTC, and
+       * stamp the `Z` the string lacks. All-day entries carry a `T00:00:00`
+       * too and are not moments anybody can be thirty minutes before — the
+       * Google branch already excludes them; this one now does.
+       */
       const data = await providerFetch(
         `https://graph.microsoft.com/v1.0/me/calendarView?${new URLSearchParams({
-          startDateTime: start, endDateTime: end, "$top": "20", "$select": "id,subject,start,location",
+          startDateTime: start, endDateTime: end, "$top": "20", "$select": "id,subject,start,location,isAllDay",
         })}`,
-        { headers: { authorization: `Bearer ${bearer}` } },
+        { headers: { authorization: `Bearer ${bearer}`, prefer: 'outlook.timezone="UTC"' } },
       );
       return (Array.isArray(data.value) ? data.value : []).flatMap((item): ConnectorItem[] => {
         if (!item || typeof item !== "object") return [];
         const record = item as Record<string, unknown>;
+        if (record.isAllDay === true) return [];
         const begin = record.start as Record<string, unknown> | undefined;
         const place = record.location as Record<string, unknown> | undefined;
+        const when = text(begin?.dateTime);
+        const instant = when === "" ? null : /[zZ]$|[+-]\d\d:\d\d$/.test(when) ? when : `${when}Z`;
         return typeof record.id === "string" ? [{
           id: record.id, title: text(record.subject) || "Untitled event",
-          subtitle: text(place?.displayName), occurred_at: text(begin?.dateTime) || null,
+          subtitle: text(place?.displayName), occurred_at: instant,
         }] : [];
       });
     },
