@@ -11,7 +11,7 @@ import { micTone, useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
 import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
-import { shouldStick } from "@/lib/threadFollow";
+import { useThreadFollow } from "@/lib/threadFollow";
 import { useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import {
@@ -247,23 +247,24 @@ export function Hub() {
   /* no AbortController here any more: the run is the store's, and a
      component that could abort it would re-create the defect this change
      exists to fix — a navigation that cancels the answer */
-  const threadEnd = useRef<HTMLDivElement>(null);
-  /** The thread's own scroll box (md+) — the page never scrolls for it. */
-  const scrollerRef = useRef<HTMLDivElement>(null);
   /**
-   * AUTO-FOLLOW state, a ref because it must never cause a render: whether
-   * the reader is at (or near) the bottom of the thread. While pinned, every
-   * new message and streaming delta keeps the latest answer in view. When
-   * the person has scrolled UP to re-read something older, we do NOT yank
-   * them back down — that is the difference between following and fighting.
-   * They re-pin by returning to the bottom (the scroll handler notices), or
-   * by sending a message themselves (their own act at the composer). The
-   * decision lives in lib/threadFollow, pure, where the scrolled-up case is
-   * unit-testable — jsdom cannot lay out, so the DECISION is what tests can
-   * actually hold. `overflow-anchor` alone is not reliable across our
-   * browsers; the behaviour is written, not hoped for.
+   * AUTO-FOLLOW — lib/threadFollow, ONE mechanism for every thread on the
+   * platform (2026-09-06). The box gets the ref and the scroll handler, its
+   * one content wrapper gets the other ref, and the person's own acts call
+   * `repin`. While the reader is at (or near) the bottom, every size change
+   * in the box keeps the newest line in view — a delta, a colleague's second
+   * answer, the consent card, the refusal line, the composer growing under
+   * it. When they have scrolled UP to re-read something older, nothing moves
+   * them: that is the difference between following and fighting. They
+   * re-pin by returning to the bottom (the handler notices) or by sending.
+   *
+   * Until this day the follow here ran on the MESSAGE LIST alone, so a card
+   * or a refusal — which are not messages — landed below the fold and stayed
+   * there until the person scrolled ("the messages from agents or echo go
+   * under the field of vision"). `followPage`: below md the page scrolls
+   * rather than this box, and the follow reaches it there.
    */
-  const pinnedRef = useRef(true);
+  const follow = useThreadFollow({ followPage: true });
 
   /**
    * Resume is driven by a URL param (`?c=<id>`), not component state: Back
@@ -605,7 +606,7 @@ export function Hub() {
     /* a freshly opened thread shows its LATEST turn — re-pin here, not in
        adoptThread: adoptThread also runs after every `done`, where re-pinning
        would yank a reader who scrolled up mid-answer */
-    pinnedRef.current = true;
+    follow.repin();
     let cancelled = false;
     void adoptThread(continueId).then(() => {
       if (cancelled) return;
@@ -637,7 +638,7 @@ export function Hub() {
        button just cleared: a "new conversation" that follows you back into
        the platform as the old one. */
     resetAssistantSession();
-    pinnedRef.current = true;
+    follow.repin();
     setHeldThreadId(null);
     setInput("");
     setFeedback({});
@@ -651,20 +652,6 @@ export function Hub() {
        to a briefing screen; same seam as the workflow launcher's. */
     if (resumeId) router.replace("/assistant");
   }, [resetVersion, resumeId, router]);
-
-  useEffect(() => {
-    /* Follow only while pinned — see pinnedRef for the reasoning. Instant,
-       not smooth: a smooth scroll issued on every streaming delta lags its
-       own target and judders; pinning is a position, not an animation. */
-    if (!pinnedRef.current) return;
-    const el = scrollerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    /* Below md the thread box does not scroll (the page scrolls as one, the
-       mobile layout deliberately untouched) — the sentinel carries the
-       follow there. On md+ the box is already at its bottom, so this
-       ancestor-scroll is a no-op. */
-    threadEnd.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
 
   /**
    * Create → Doc delivers ITSELF: a download needs no click gesture, so the
@@ -791,7 +778,7 @@ export function Hub() {
 
     /* sending re-pins: the person just acted at the composer, and a thread
        that does not show the question they sent reads as having eaten it */
-    pinnedRef.current = true;
+    follow.repin();
     setStarted(true);
     setInput("");
     setAskError(null);
@@ -1101,16 +1088,14 @@ export function Hub() {
         </div>
       ) : (
         <div
-          ref={scrollerRef}
+          ref={follow.scrollerRef}
           /* the ONE scrolling region of the active assistant page (md+):
              `min-h-0` lets a flex child actually shrink below its content,
              which is what makes `overflow-y-auto` mean something here. The
              handler keeps the follow decision current — recomputed on every
              scroll, the reader's own or ours, so returning to the bottom
              re-pins without a button. */
-          onScroll={(e) => {
-            pinnedRef.current = shouldStick(e.currentTarget);
-          }}
+          onScroll={follow.onScroll}
           /*
            * THE BAR SITS AT THE COLUMN'S EDGE, not inside it (user directive,
            * 2026-09-04: "position this scroll in the same place as the scroll
@@ -1133,62 +1118,76 @@ export function Hub() {
            * The page stays fixed by construction — the shell is `h-dvh` and
            * this is the one region with `overflow-y-auto`, so there is nothing
            * else that could move.
+           *
+           * `py-5` IS THE FADE'S WIDTH (2026-09-06): `.fade-scroll` masks the
+           * box's first and last 1.25rem to transparent, and with no vertical
+           * padding the newest line — the one the reader is looking at — sat
+           * inside that band half ghosted whenever the thread was pinned. The
+           * padding keeps the words out of the fade; only scrolled-past
+           * content passes through it. Tailwind's step 5 is 1.25rem; the
+           * follow test reads the edge from the stylesheet and holds the pair.
            */
-          className="scroll-quiet fade-scroll -mx-page-inline mb-4 min-h-0 flex-1 overflow-y-auto px-page-inline md:-mx-page-inline-md md:px-page-inline-md"
+          className="scroll-quiet fade-scroll -mx-page-inline mb-4 min-h-0 flex-1 overflow-y-auto px-page-inline py-5 md:-mx-page-inline-md md:px-page-inline-md"
         >
-          <ConversationThread
-            messages={messages}
-            streaming={streaming}
-            feedback={feedback}
-            onFeedback={(id, verdict) => void judge(id, verdict)}
-            onRegenerate={() => void regenerate()}
-          />
-          {/* the composer's own refusal, or the run's — the run's words are
-              the SERVER's when it gave any, and this page's translated line
-              when it did not (a store has no locale and must not write copy) */}
-          {askError !== null || live.error !== null ? (
-            <p role="alert" className="mt-2 text-xs leading-6 text-danger">
-              {askError ?? live.error?.detail ?? t("askFailed")}
-            </p>
-          ) : null}
-          {consent ? (
-            <div className="mt-3 rounded-xl border border-accent/30 bg-accent-soft p-3">
-              <p className="text-detail text-fg">
-                {tPresence("consentAsk", { action: consent.label })}
-                {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="btn-primary btn-sm" onClick={() => consent.resolve("once")}>
-                  {tPresence("allow")}
-                </button>
-                {/* the yes for the whole session (2026-09-06) — the button
-                    itself says what it never covers */}
-                <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("session")}>
-                  {tPresence("allowSession")}
-                </button>
-                <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("no")}>
-                  {tPresence("decline")}
-                </button>
-              </div>
-            </div>
-          ) : sessionGrant ? (
-            <p className="mt-3 flex flex-wrap items-center gap-2 text-detail text-fg-muted">
-              <span>{tPresence("sessionGranted")}</span>
-              <button type="button" className="btn btn-sm" onClick={revokeSessionConsent}>
-                {tPresence("sessionRevoke")}
-              </button>
-            </p>
-          ) : null}
-          {drafts.map((draft) => (
-            <MailDraftCard
-              key={draft.id}
-              draft={draft}
-              canSend={canSend[draft.provider] !== false}
-              onChanged={(next) => setDrafts((prev) =>
-                prev.map((entry) => (entry.id === next.id ? next : entry)))}
+          {/* THE ONE WRAPPER the follow observes: everything that can land in
+              this box — the thread, the refusal, the consent card, the
+              standing yes, a mail draft — renders inside it, so its growth is
+              the follow's signal. A child rendered as this wrapper's sibling
+              would be invisible to the follow; Hub.follow.test holds that. */}
+          <div ref={follow.contentRef}>
+            <ConversationThread
+              messages={messages}
+              streaming={streaming}
+              feedback={feedback}
+              onFeedback={(id, verdict) => void judge(id, verdict)}
+              onRegenerate={() => void regenerate()}
             />
-          ))}
-          <div ref={threadEnd} />
+            {/* the composer's own refusal, or the run's — the run's words are
+                the SERVER's when it gave any, and this page's translated line
+                when it did not (a store has no locale and must not write copy) */}
+            {askError !== null || live.error !== null ? (
+              <p role="alert" className="mt-2 text-xs leading-6 text-danger">
+                {askError ?? live.error?.detail ?? t("askFailed")}
+              </p>
+            ) : null}
+            {consent ? (
+              <div className="mt-3 rounded-xl border border-accent/30 bg-accent-soft p-3">
+                <p className="text-detail text-fg">
+                  {tPresence("consentAsk", { action: consent.label })}
+                  {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" className="btn-primary btn-sm" onClick={() => consent.resolve("once")}>
+                    {tPresence("allow")}
+                  </button>
+                  {/* the yes for the whole session (2026-09-06) — the button
+                      itself says what it never covers */}
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("session")}>
+                    {tPresence("allowSession")}
+                  </button>
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("no")}>
+                    {tPresence("decline")}
+                  </button>
+                </div>
+              </div>
+            ) : sessionGrant ? (
+              <p className="mt-3 flex flex-wrap items-center gap-2 text-detail text-fg-muted">
+                <span>{tPresence("sessionGranted")}</span>
+                <button type="button" className="btn btn-sm" onClick={revokeSessionConsent}>
+                  {tPresence("sessionRevoke")}
+                </button>
+              </p>
+            ) : null}
+            {drafts.map((draft) => (
+              <MailDraftCard
+                key={draft.id}
+                draft={draft}
+                canSend={canSend[draft.provider] !== false}
+                onChanged={(next) => setDrafts((prev) =>
+                  prev.map((entry) => (entry.id === next.id ? next : entry)))}
+              />
+            ))}
+          </div>
         </div>
       )}
 

@@ -1,8 +1,9 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resetPushToTalkForTest } from "@/lib/pushToTalk";
+import { installFakeResizeObserver } from "@/test/resizeObserver";
 import { resolve } from "node:path";
 
 /* mutable, so one case can put the panel on a surface it must stay off. The
@@ -399,5 +400,80 @@ describe("the strip is structure, not a reward for the identity read (2026-09-05
     const { container } = render(<><Page /><AssistantSidebar /></>);
     await waitFor(() => expect(container.querySelector("[data-assistant-sidebar]")).toBeNull());
     expect(document.documentElement.style.getPropertyValue("--assistant-rail")).toBe("0px");
+  });
+});
+
+/**
+ * THE PANEL'S THREAD FOLLOWS WHAT LANDS IN IT (user report, 2026-09-06: "when
+ * agents or echo reply to you in the side bar … it goes down that you need to
+ * scroll down to see it").
+ *
+ * This panel's follow used to be an unconditional `scrollIntoView` on the
+ * message list: it snatched a reader who had scrolled up, and it never ran
+ * for the consent card, which is not a message. Keyed on geometry (lib/
+ * threadFollow) it follows every size change while the reader is pinned and
+ * none after they scroll up — and the card, being inside the observed
+ * wrapper, is followed like anything else. jsdom has no ResizeObserver, so a
+ * fake is installed and the test says when something changed size.
+ */
+describe("the panel's thread follows what lands in it", () => {
+  it("the consent card is inside what the follow observes; pinned it follows, scrolled up it does not", async () => {
+    const ro = installFakeResizeObserver();
+    try {
+      pathname.mockReturnValue("/fa/meetings");
+      claims.length = 0;
+      const { container } = await mount();
+      await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
+      const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
+      const box = aside.querySelector<HTMLElement>('[class*="overflow-y-auto"]')!;
+      expect(box, "the panel's thread box").not.toBeNull();
+      expect(ro.observed()).toContain(box);
+
+      const writes: number[] = [];
+      let top = 0;
+      Object.defineProperty(box, "scrollHeight", { value: 1000, configurable: true });
+      Object.defineProperty(box, "clientHeight", { value: 300, configurable: true });
+      Object.defineProperty(box, "scrollTop", {
+        configurable: true, get: () => top, set: (value: number) => { top = value; writes.push(value); },
+      });
+
+      /* the run hands THIS surface a write to perform — the store's own call,
+         which the runner turns into the card before anything executes */
+      await waitFor(() => expect(claims.length).toBeGreaterThan(0));
+      const surface = claims[claims.length - 1] as {
+        handleClientTool: (event: unknown) => Promise<void>;
+      };
+      expect(typeof surface.handleClientTool).toBe("function");
+      let answered: Promise<void> | null = null;
+      act(() => {
+        answered = surface.handleClientTool({
+          type: "client_tool_call", id: "ct-s-1", tool: "archive_task", label: "بایگانی تسک",
+          args: { task_id: "t-1", title: "دکتر" }, effect: "write", requires_consent: true,
+        });
+      });
+      const decline = await screen.findByRole("button", { name: "نه" });
+      expect(screen.getByText(/بایگانی تسک/).textContent).toContain("دکتر");
+
+      const inside = ro.observed().filter((node) => node !== box && box.contains(node));
+      expect(inside.length, "one content wrapper is observed").toBe(1);
+      expect(inside[0]!.contains(decline), "the card is inside the observed content").toBe(true);
+
+      // the card's arrival is a size change; pinned, the box goes to its bottom
+      ro.fire();
+      expect(writes).toEqual([1000]);
+
+      // THE CONTROL: the reader scrolled up to re-read; a later size change leaves them there
+      top = 100;
+      fireEvent.scroll(box);
+      ro.fire();
+      expect(writes).toEqual([1000]);
+
+      // «نه» answers the run; the card leaves and nothing was performed
+      await userEvent.click(decline);
+      await expect(answered!).resolves.toBeUndefined();
+      await waitFor(() => expect(screen.queryByRole("button", { name: "نه" })).toBeNull());
+    } finally {
+      ro.uninstall();
+    }
   });
 });

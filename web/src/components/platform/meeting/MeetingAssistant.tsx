@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { recorderSnapshot } from "@/lib/recordingEngine";
+import { useThreadFollow } from "@/lib/threadFollow";
 import { IconAgent, IconCopy, IconRetry, IconSend } from "@/components/icons";
 
 /**
@@ -25,6 +26,9 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const sessionId = useRef<string | undefined>(undefined);
+  /* the same follow as every other thread (2026-09-06) — this panel had
+     none: an answer streamed under the fold and the reader scrolled for it */
+  const follow = useThreadFollow();
 
   const suggestions = [
     t("askWhatWas"), t("askDecisions"), t("askTasks"), t("askRisks"),
@@ -33,6 +37,7 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
   const send = (question: string) => {
     if (question.trim() === "" || busy) return;
     setBusy(true);
+    follow.repin();
     setFailed(false);
     setDraft("");
     setTurns((prev) => [...prev, { role: "user", text: question }, { role: "assistant", text: "" }]);
@@ -97,68 +102,70 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
         ) : null}
       </div>
 
-      <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto">
-        {/* the greeting is always first, exactly as theirs opens */}
-        <div className="flex items-start gap-2.5">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden>
-            <IconAgent width={12} height={12} />
-          </span>
-          <p className="rounded-2xl bg-surface-2/70 px-3.5 py-2.5 text-sm leading-7 text-fg">
-            {t("assistantGreeting", { title })}
-          </p>
-        </div>
+      <div ref={follow.scrollerRef} onScroll={follow.onScroll} className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
+        <div ref={follow.contentRef} className="space-y-3">
+          {/* the greeting is always first, exactly as theirs opens */}
+          <div className="flex items-start gap-2.5">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden>
+              <IconAgent width={12} height={12} />
+            </span>
+            <p className="rounded-2xl bg-surface-2/70 px-3.5 py-2.5 text-sm leading-7 text-fg">
+              {t("assistantGreeting", { title })}
+            </p>
+          </div>
 
-        {turns.map((turn, i) => (
-          <div key={i} className={turn.role === "user" ? "flex justify-end" : "flex items-start gap-2.5"}>
-            {turn.role === "assistant" ? (
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden>
-                <IconAgent width={12} height={12} />
-              </span>
-            ) : null}
-            <div className={turn.role === "user"
-              ? "max-w-[80%] rounded-2xl bg-accent px-3.5 py-2 text-sm leading-7 text-on-accent"
-              : "min-w-0 flex-1"}>
-              {turn.text === "" && turn.role === "assistant" ? (
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-border border-t-accent" aria-hidden />
-              ) : (
-                <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{turn.text}</p>
-              )}
-              {turn.role === "assistant" && turn.text !== "" ? (
-                <button
-                  type="button"
-                  onClick={() => void navigator.clipboard?.writeText(turn.text).catch(() => undefined)}
-                  className="btn btn-sm mt-1 text-fg-subtle hover:text-fg"
-                >
-                  <IconCopy width={12} height={12} />
-                  {t("copy")}
-                </button>
+          {turns.map((turn, i) => (
+            <div key={i} className={turn.role === "user" ? "flex justify-end" : "flex items-start gap-2.5"}>
+              {turn.role === "assistant" ? (
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden>
+                  <IconAgent width={12} height={12} />
+                </span>
               ) : null}
+              <div className={turn.role === "user"
+                ? "max-w-[80%] rounded-2xl bg-accent px-3.5 py-2 text-sm leading-7 text-on-accent"
+                : "min-w-0 flex-1"}>
+                {turn.text === "" && turn.role === "assistant" ? (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-border border-t-accent" aria-hidden />
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{turn.text}</p>
+                )}
+                {turn.role === "assistant" && turn.text !== "" ? (
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard?.writeText(turn.text).catch(() => undefined)}
+                    className="btn btn-sm mt-1 text-fg-subtle hover:text-fg"
+                  >
+                    <IconCopy width={12} height={12} />
+                    {t("copy")}
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {failed ? <p role="alert" className="text-xs text-danger">{t("assistantFailed")}</p> : null}
+          {failed ? <p role="alert" className="text-xs text-danger">{t("assistantFailed")}</p> : null}
 
-        {turns.length === 0 ? (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {suggestions.map((question) => (
-              <button
-                key={question}
-                type="button"
-                onClick={() => send(question)}
-                /* 2026-09-03: the theme's control, not a twelfth invented size.
-                   These were a 36px/16px-corner shape of their own, sitting
-                   under a `btn btn-sm` new-chat button in this same component —
-                   two idioms for the same press, eight lines apart. `.btn`
-                   composes `.tap`, so nothing is lost below md, and `.btn-sm`
-                   owns the text size the `text-xs` was re-stating. */
-                className="btn btn-sm border border-border bg-surface font-medium text-fg hover:border-border-strong"
-              >
-                {question}
-              </button>
-            ))}
-          </div>
-        ) : null}
+          {turns.length === 0 ? (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {suggestions.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  onClick={() => send(question)}
+                  /* 2026-09-03: the theme's control, not a twelfth invented size.
+                     These were a 36px/16px-corner shape of their own, sitting
+                     under a `btn btn-sm` new-chat button in this same component —
+                     two idioms for the same press, eight lines apart. `.btn`
+                     composes `.tap`, so nothing is lost below md, and `.btn-sm`
+                     owns the text size the `text-xs` was re-stating. */
+                  className="btn btn-sm border border-border bg-surface font-medium text-fg hover:border-border-strong"
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* ── the composer ─────────────────────────────────────────────── */}

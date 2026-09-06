@@ -30,6 +30,7 @@ import {
 } from "@/lib/voicePrefs";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { handleClientToolCall, type ConsentAnswer } from "@/lib/clientToolRunner";
+import { useThreadFollow } from "@/lib/threadFollow";
 import {
   consentGrantServer, consentGrantedForSession, revokeSessionConsent, subscribeConsentGrant,
 } from "@/lib/consentGrant";
@@ -377,6 +378,7 @@ export function AssistantSidebar() {
        otherwise opening the assistant page after "new conversation" would
        resume the one just left behind, the exact opposite of what it says */
     resetAssistantSession();
+    follow.repin();
     notify(t("newConversationStarted"));
   }
 
@@ -491,7 +493,17 @@ export function AssistantSidebar() {
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(inputRef, input, PANEL_PROMPT_ROWS);
-  const endRef = useRef<HTMLDivElement>(null);
+  /**
+   * AUTO-FOLLOW — lib/threadFollow, the same mechanism as the page's
+   * (2026-09-06). This panel used to `scrollIntoView` a sentinel on every
+   * change of the message list: it dragged a reader who had scrolled up back
+   * down on every delta, and it never ran for the consent card, which is not
+   * a message — so the card landed below the fold, in a 30% column, and the
+   * run waited on an answer nobody could see. Every size change in the box
+   * is followed while the reader is at the bottom; none after they scroll
+   * up; their own send and an opened conversation re-pin.
+   */
+  const follow = useThreadFollow();
   /** the ONE voice listener (lib/voiceLoop — the 2026-08-22 rebuild) */
   const loopRef = useRef<VoiceLoopHandle | null>(null);
   /** the reply to a VOICE ask is spoken; typed asks stay silent */
@@ -612,10 +624,6 @@ export function AssistantSidebar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
-
   /**
    * COMING BACK FROM THE ASSISTANT PAGE (user directive, 2026-09-03: "all that
    * we were talked about should automatically come to the ai assistant side
@@ -717,6 +725,8 @@ export function AssistantSidebar() {
    * new questions continuing it.
    */
   async function loadSession(id: string) {
+    /* an opened conversation shows its LATEST turn */
+    follow.repin();
     setLoadingThread(true);
     try {
       /* one call: the rows, the id, and the handoff — and the assistant page
@@ -868,6 +878,9 @@ export function AssistantSidebar() {
     const trimmed = question.trim();
     if (!trimmed || streamingRef.current) return;
     reveal();
+    /* sending re-pins: the person just acted at the composer, and a thread
+       that does not show the question they sent reads as having eaten it */
+    follow.repin();
     streamingRef.current = true;
     speakReplyRef.current = viaVoice;
     muteReplyRef.current = false;
@@ -1136,143 +1149,147 @@ export function AssistantSidebar() {
               </button>
             </div>
 
-            <div className="scroll-quiet min-h-24 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-              {loadingThread ? (
-                /* the frame is structure and structure is known: a stored
-                   conversation being fetched draws lines where its lines will
-                   be, so "still loading" never wears the empty state's copy */
-                <SkeletonLines lines={4} />
-              ) : messages.length === 0 ? (
-                <p className="text-detail leading-6 text-fg-muted">{t("empty")}</p>
-              ) : (
-                messages.map((m) => (
-                  /* the question on the PHYSICAL right in both locales — see
-                     ConversationThread for the reasoning; the panel must not
-                     disagree with the page about which side is the person's */
-                  <div
-                    key={m.id}
-                    className={m.role === "user"
-                      ? `flex ${locale === "fa" ? "justify-start" : "justify-end"}`
-                      : "flex items-start gap-2"}
-                  >
-                    {/* AVATAR, NAME, ANSWER ON ONE LINE — the page's shape,
-                        one size down: this column is 30% of the screen, so a
-                        face here competes with the words it introduces.
-                        `items-start` so a long answer keeps its portrait beside
-                        the sentence it belongs to rather than centred against
-                        the whole block. */}
-                    {m.role === "assistant"
-                      ? <AgentAvatar handle={m.author ?? ECHO} size="md" />
-                      : null}
+            <div ref={follow.scrollerRef} onScroll={follow.onScroll} className="scroll-quiet min-h-24 flex-1 overflow-y-auto px-3 py-3">
+              {/* THE ONE WRAPPER the follow observes — the thread, the run's
+                  refusal and the consent card all render inside it; a sibling
+                  would be invisible to the follow (AssistantSidebar.test) */}
+              <div ref={follow.contentRef} className="space-y-3">
+                {loadingThread ? (
+                  /* the frame is structure and structure is known: a stored
+                     conversation being fetched draws lines where its lines will
+                     be, so "still loading" never wears the empty state's copy */
+                  <SkeletonLines lines={4} />
+                ) : messages.length === 0 ? (
+                  <p className="text-detail leading-6 text-fg-muted">{t("empty")}</p>
+                ) : (
+                  messages.map((m) => (
+                    /* the question on the PHYSICAL right in both locales — see
+                       ConversationThread for the reasoning; the panel must not
+                       disagree with the page about which side is the person's */
                     <div
-                      className={
-                        m.role === "user"
-                          ? `max-w-[85%] rounded-2xl bg-accent-soft px-3 py-2 text-detail leading-6 text-fg ${
-                              locale === "fa" ? "rounded-bl-sm" : "rounded-br-sm"
-                            }`
-                          /* a step dimmer than the speaker's name — see
-                             ConversationThread for why */
-                          : "min-w-0 flex-1 text-detail leading-6 text-fg-muted"
-                      }
+                      key={m.id}
+                      className={m.role === "user"
+                        ? `flex ${locale === "fa" ? "justify-start" : "justify-end"}`
+                        : "flex items-start gap-2"}
                     >
-                      {/* the name leads the answer's own line, not a heading
-                          above it */}
-                      {m.role === "assistant" ? (
-                        <span className="me-1.5 font-semibold text-fg">
-                          {/* the colon marks a speaker — see ConversationThread */}
-                          <AgentName handle={m.author ?? ECHO} />:
-                        </span>
-                      ) : null}
-                      {m.content}
-                      {/*
-                        NO TOOL CHIPS (user directive, 2026-09-04) — and THIS
-                        panel is where removing them was felt, for a reason
-                        worth keeping: it never had a thinking indicator of its
-                        own. While a turn ran the chips appeared one at a time,
-                        and that is what read as "it is working" — so they were
-                        doing a second job nobody had assigned them. Taking
-                        away the job they WERE assigned took the other one with
-                        it, and the panel went from a stream of activity to an
-                        avatar, a name, a colon and nothing at all.
+                      {/* AVATAR, NAME, ANSWER ON ONE LINE — the page's shape,
+                          one size down: this column is 30% of the screen, so a
+                          face here competes with the words it introduces.
+                          `items-start` so a long answer keeps its portrait beside
+                          the sentence it belongs to rather than centred against
+                          the whole block. */}
+                      {m.role === "assistant"
+                        ? <AgentAvatar handle={m.author ?? ECHO} size="md" />
+                        : null}
+                      <div
+                        className={
+                          m.role === "user"
+                            ? `max-w-[85%] rounded-2xl bg-accent-soft px-3 py-2 text-detail leading-6 text-fg ${
+                                locale === "fa" ? "rounded-bl-sm" : "rounded-br-sm"
+                              }`
+                            /* a step dimmer than the speaker's name — see
+                               ConversationThread for why */
+                            : "min-w-0 flex-1 text-detail leading-6 text-fg-muted"
+                        }
+                      >
+                        {/* the name leads the answer's own line, not a heading
+                            above it */}
+                        {m.role === "assistant" ? (
+                          <span className="me-1.5 font-semibold text-fg">
+                            {/* the colon marks a speaker — see ConversationThread */}
+                            <AgentName handle={m.author ?? ECHO} />:
+                          </span>
+                        ) : null}
+                        {m.content}
+                        {/*
+                          NO TOOL CHIPS (user directive, 2026-09-04) — and THIS
+                          panel is where removing them was felt, for a reason
+                          worth keeping: it never had a thinking indicator of its
+                          own. While a turn ran the chips appeared one at a time,
+                          and that is what read as "it is working" — so they were
+                          doing a second job nobody had assigned them. Taking
+                          away the job they WERE assigned took the other one with
+                          it, and the panel went from a stream of activity to an
+                          avatar, a name, a colon and nothing at all.
 
-                        The trace is not lost: `tool_calls` still travel on the
-                        wire and still render on the agent-run surface, where
-                        it is the subject rather than the margin.
-                      */}
-                      {m.role === "assistant" && m.streaming && m.content !== ""
-                        ? <TypingCaret />
-                        : null}
-                      {m.role === "assistant" && m.streaming && m.content === ""
-                        ? <ThinkingLine />
-                        : null}
-                      {m.failed ? (
-                        <span className="mt-1 block text-group-label text-warning">
-                          {t("failed")}
-                        </span>
-                      ) : null}
+                          The trace is not lost: `tool_calls` still travel on the
+                          wire and still render on the agent-run surface, where
+                          it is the subject rather than the margin.
+                        */}
+                        {m.role === "assistant" && m.streaming && m.content !== ""
+                          ? <TypingCaret />
+                          : null}
+                        {m.role === "assistant" && m.streaming && m.content === ""
+                          ? <ThinkingLine />
+                          : null}
+                        {m.failed ? (
+                          <span className="mt-1 block text-group-label text-warning">
+                            {t("failed")}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {/*
+                  THE REFUSAL'S OWN SENTENCE, once. It used to be stored on the
+                  message as `failedDetail`; it belongs to the RUN, not to a
+                  turn, and the store keeps it there — a 400's message is
+                  actionable ("no model selected…") where a bare "did not
+                  finish" is not, so it is worth saying, and worth saying in
+                  exactly one place.
+                */}
+                {live.error ? (
+                  <p className="text-group-label text-warning">
+                    {live.error.detail
+                      ? <span dir="ltr">{live.error.detail}</span>
+                      : t("failed")}
+                  </p>
+                ) : null}
+                {consent ? (
+                  <div className="rounded-xl border border-accent/30 bg-accent-soft p-3">
+                    {/* the VERB and the OBJECT (2026-09-06): «حذف تسک» alone was
+                        approved seven times in a row for cards nobody could
+                        name; the title beside it is what makes a yes a yes */}
+                    <p className="text-detail text-fg">
+                      {t("consentAsk", { action: consent.label })}
+                      {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        onClick={() => consent.resolve("once")}
+                      >
+                        {t("allow")}
+                      </button>
+                      {/* the yes for the whole session (2026-09-06) — the
+                          button itself says what it never covers */}
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => consent.resolve("session")}
+                      >
+                        {t("allowSession")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => consent.resolve("no")}
+                      >
+                        {t("decline")}
+                      </button>
                     </div>
                   </div>
-                ))
-              )}
-              {/*
-                THE REFUSAL'S OWN SENTENCE, once. It used to be stored on the
-                message as `failedDetail`; it belongs to the RUN, not to a
-                turn, and the store keeps it there — a 400's message is
-                actionable ("no model selected…") where a bare "did not
-                finish" is not, so it is worth saying, and worth saying in
-                exactly one place.
-              */}
-              {live.error ? (
-                <p className="text-group-label text-warning">
-                  {live.error.detail
-                    ? <span dir="ltr">{live.error.detail}</span>
-                    : t("failed")}
-                </p>
-              ) : null}
-              {consent ? (
-                <div className="rounded-xl border border-accent/30 bg-accent-soft p-3">
-                  {/* the VERB and the OBJECT (2026-09-06): «حذف تسک» alone was
-                      approved seven times in a row for cards nobody could
-                      name; the title beside it is what makes a yes a yes */}
-                  <p className="text-detail text-fg">
-                    {t("consentAsk", { action: consent.label })}
-                    {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
+                ) : sessionGrant ? (
+                  <p className="flex flex-wrap items-center gap-2 text-detail text-fg-muted">
+                    <span>{t("sessionGranted")}</span>
+                    <button type="button" className="btn btn-sm" onClick={revokeSessionConsent}>
+                      {t("sessionRevoke")}
+                    </button>
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="btn-primary btn-sm"
-                      onClick={() => consent.resolve("once")}
-                    >
-                      {t("allow")}
-                    </button>
-                    {/* the yes for the whole session (2026-09-06) — the
-                        button itself says what it never covers */}
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      onClick={() => consent.resolve("session")}
-                    >
-                      {t("allowSession")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      onClick={() => consent.resolve("no")}
-                    >
-                      {t("decline")}
-                    </button>
-                  </div>
-                </div>
-              ) : sessionGrant ? (
-                <p className="flex flex-wrap items-center gap-2 text-detail text-fg-muted">
-                  <span>{t("sessionGranted")}</span>
-                  <button type="button" className="btn btn-sm" onClick={revokeSessionConsent}>
-                    {t("sessionRevoke")}
-                  </button>
-                </p>
-              ) : null}
-              <div ref={endRef} />
+                ) : null}
+              </div>
             </div>
 
             {/*

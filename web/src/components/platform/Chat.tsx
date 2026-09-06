@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { openChatLive, mergeBySeq, type ChatLiveState } from "@/lib/chatLive";
-import { shouldStick } from "@/lib/threadFollow";
+import { useThreadFollow } from "@/lib/threadFollow";
 import type { ChatChannelRecord, ChatMessageRecord, OrgPersonRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
 import { DIALOG_BODY } from "./tasks/panelStyle";
@@ -177,15 +177,12 @@ export function Chat({ meId, isAdmin, people }: {
   }, [current, messages, loadChannels]);
 
   /* ── stick to the bottom ─────────────────────────────────────────────
-     `threadFollow`'s rule, not a second one: follow while the reader is at
-     the foot, and stop the moment they scroll up to read something. */
-  const scroller = useRef<HTMLDivElement | null>(null);
-  const stick = useRef(true);
-  useEffect(() => {
-    const box = scroller.current;
-    if (box === null || !stick.current) return;
-    box.scrollTop = box.scrollHeight;
-  }, [messages, typing]);
+     `threadFollow`'s mechanism, not a second one (2026-09-06): every size
+     change in the box is followed while the reader is at the foot — a
+     message, the typing line, a refused-send note, a late image — and
+     nothing moves them once they scroll up to read something. The room's
+     own send re-pins. */
+  const follow = useThreadFollow();
 
   const channel = useMemo(
     () => (Array.isArray(channels) ? channels.find((c) => c.id === current) ?? null : null),
@@ -200,7 +197,7 @@ export function Chat({ meId, isAdmin, people }: {
       const message = await api.postChatMessage(current, body, answering?.id ?? null);
       setMessages((cur) => mergeBySeq(cur ?? [], [message]));
       tip.current = Math.max(tip.current, message.seq);
-      stick.current = true;
+      follow.repin();
     } catch {
       /* PUT THE QUOTE BACK. A refused send that silently forgot what it was
          answering leaves the person to retype into a room where their next
@@ -362,56 +359,59 @@ export function Chat({ meId, isAdmin, people }: {
       {/* ── the room: a FIXED box that scrolls inside itself ─────────── */}
       <section className={`tile flex ${ROOM_HEIGHT} flex-col`} aria-label={t("room")}>
         <div
-          ref={scroller}
-          onScroll={(e) => { stick.current = shouldStick(e.currentTarget); }}
+          ref={follow.scrollerRef}
+          onScroll={follow.onScroll}
           role="log"
           aria-label={t("messages")}
           aria-live="polite"
-          className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-4 py-3"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
         >
-          {current === null ? (
-            /* NOT «no messages yet» — that is a claim about a room, and there
-               is no room. The two nothings are different and the copy says
-               which one this is. */
-            <p className="py-10 text-center text-xs text-fg-subtle">{t("noRoomChosen")}</p>
-          ) : messages === null ? (
-            <SkeletonLines lines={5} />
-          ) : messages.length === 0 ? (
-            <p className="py-10 text-center text-xs text-fg-subtle">{t("emptyRoom")}</p>
-          ) : (
-            messages.map((message, i) => (
-              <MessageRow
-                key={message.id}
-                message={message}
-                previous={messages[i - 1] ?? null}
-                people={people}
-                meId={meId}
-                locale={locale}
-                onReply={setReplyTo}
-                onReact={react}
-              />
-            ))
-          )}
-          {typing !== null ? (
-            <p className="flex items-center gap-2 py-1.5 text-[11px] text-fg-muted">
-              <AgentAvatar handle={typing} size="sm" />
-              {t("agentThinking", { name: typing })}
-              <span className="inline-flex gap-0.5" aria-hidden>
-                <span className="h-1 w-1 animate-pulse rounded-full bg-fg-subtle" />
-                <span className="h-1 w-1 animate-pulse rounded-full bg-fg-subtle" />
-                <span className="h-1 w-1 animate-pulse rounded-full bg-fg-subtle" />
-              </span>
-            </p>
-          ) : null}
-          {failedAgent !== null ? (
-            /* AN ANNOTATION, NEVER A MESSAGE. A tidy apology written into the
-               room would be indistinguishable a week later from something the
-               agent said — the honest record is the question standing there
-               unanswered. */
-            <p role="status" className="py-1.5 text-[11px] text-warning">
-              {t("agentFailed", { name: failedAgent })}
-            </p>
-          ) : null}
+          {/* the one wrapper the follow observes */}
+          <div ref={follow.contentRef} className="space-y-0.5">
+            {current === null ? (
+              /* NOT «no messages yet» — that is a claim about a room, and there
+                 is no room. The two nothings are different and the copy says
+                 which one this is. */
+              <p className="py-10 text-center text-xs text-fg-subtle">{t("noRoomChosen")}</p>
+            ) : messages === null ? (
+              <SkeletonLines lines={5} />
+            ) : messages.length === 0 ? (
+              <p className="py-10 text-center text-xs text-fg-subtle">{t("emptyRoom")}</p>
+            ) : (
+              messages.map((message, i) => (
+                <MessageRow
+                  key={message.id}
+                  message={message}
+                  previous={messages[i - 1] ?? null}
+                  people={people}
+                  meId={meId}
+                  locale={locale}
+                  onReply={setReplyTo}
+                  onReact={react}
+                />
+              ))
+            )}
+            {typing !== null ? (
+              <p className="flex items-center gap-2 py-1.5 text-[11px] text-fg-muted">
+                <AgentAvatar handle={typing} size="sm" />
+                {t("agentThinking", { name: typing })}
+                <span className="inline-flex gap-0.5" aria-hidden>
+                  <span className="h-1 w-1 animate-pulse rounded-full bg-fg-subtle" />
+                  <span className="h-1 w-1 animate-pulse rounded-full bg-fg-subtle" />
+                  <span className="h-1 w-1 animate-pulse rounded-full bg-fg-subtle" />
+                </span>
+              </p>
+            ) : null}
+            {failedAgent !== null ? (
+              /* AN ANNOTATION, NEVER A MESSAGE. A tidy apology written into the
+                 room would be indistinguishable a week later from something the
+                 agent said — the honest record is the question standing there
+                 unanswered. */
+              <p role="status" className="py-1.5 text-[11px] text-warning">
+                {t("agentFailed", { name: failedAgent })}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         <Composer
