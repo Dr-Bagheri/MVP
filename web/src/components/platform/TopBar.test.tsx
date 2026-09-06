@@ -23,7 +23,13 @@ vi.mock("@/lib/usePreferences", () => ({ useTimezonePreference: () => "auto" }))
 vi.mock("@/lib/format", () => ({ formatDate: () => "22 Aug 2026" }));
 vi.mock("./AvatarMenu", () => ({ AvatarMenu: () => <button type="button">Avatar</button> }));
 vi.mock("./Breadcrumbs", () => ({ Breadcrumbs: () => <nav>Calls</nav> }));
-vi.mock("./NotificationBell", () => ({ NotificationBell: () => <button type="button">Bell</button> }));
+vi.mock("./NotificationBell", () => ({
+  NotificationBell: () => <button type="button" aria-label="bell">Bell</button>,
+}));
+
+/** a resolved identity — the bell renders only for one, and it is a member of
+    the cluster whose order this file now asserts */
+const ME = { id: "u-1", display_name: "امیر" } as never;
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -131,9 +137,79 @@ describe("the bar's own doors (2026-09-05)", () => {
     expect(door).toHaveAttribute("href", expect.stringContaining("/chat"));
 
     const toggle = screen.getByRole("button", { name: "themeToggle" });
-    for (const shape of ["btn", "btn-icon"]) {
+    for (const shape of ["btn", "btn-icon-sm"]) {
       expect(door.className.split(/\s+/)).toContain(shape);
       expect(toggle.className.split(/\s+/)).toContain(shape);
     }
   });
 });
+
+/**
+ * ONE HEIGHT, ONE ORDER (user directive, 2026-09-06: "give the buttons on the
+ * top menu the same size — the en/fa size is the good one — and add a divider
+ * between the theme and the others; the order is from the end: en - fa |
+ * theme mode - chat - notification").
+ *
+ * The order is asserted as DOCUMENT POSITION rather than as left and right:
+ * the cluster mirrors with the page, so "en at the end" is one fact in both
+ * locales and "en on the right" is only true in one of them.
+ */
+describe("the top bar's end cluster", () => {
+  it("runs bell → chat → theme → divider → fa → en, so the locale pair sits at the very edge", () => {
+    const { container } = render(<TopBar me={ME} />);
+    const theme = screen.getByRole("button", { name: "themeToggle" });
+    const cluster = theme.parentElement!;
+    const order = [...cluster.children].map((el) => {
+      if (el.getAttribute("aria-label") === "bell") return "bell";
+      if (el.getAttribute("aria-label") === "chat") return "chat";
+      if (el.getAttribute("aria-label") === "themeToggle") return "theme";
+      if (el.tagName === "SPAN" && el.className.includes("w-px")) return "divider";
+      /* the pair is a GROUP of two buttons — the cluster's child is the div,
+         and the buttons inside it are named by their own text */
+      if ([...el.querySelectorAll("button")].some((b) => b.textContent === "fa")) return "locales";
+      return null;
+    }).filter(Boolean);
+    expect(order).toEqual(["bell", "chat", "theme", "divider", "locales"]);
+
+    /* the pair inside its own group, fa before en — the edge is en's */
+    const [fa, en] = ["fa", "en"].map((l) => screen.getByRole("button", { name: l }));
+    // eslint-disable-next-line no-bitwise
+    expect(fa!.compareDocumentPosition(en!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* the divider is between the theme and the pair, not decoration at the end */
+    // eslint-disable-next-line no-bitwise
+    expect(theme.compareDocumentPosition(fa!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector("[data-platform-topbar]")).not.toBeNull();
+  });
+
+  it("puts every control in the row at the locale pair's height, and none at the dense 28", () => {
+    /*
+     * The discriminating half: asserting that the buttons carry a compact
+     * class is satisfied by a bar that also carries the 28px square somewhere
+     * in the same row, which is exactly the state this directive corrected —
+     * three heights among five controls.
+     */
+    render(<TopBar me={ME} />);
+    const theme = screen.getByRole("button", { name: "themeToggle" });
+    const cluster = theme.parentElement!;
+    const compact = /(^|\s)btn-(sm|icon-sm)(\s|$)/;
+    /* the bell is mocked in this file (it fetches on mount); its own box is
+       asserted where it is written — NotificationBell.invites.test.tsx */
+    for (const el of [...cluster.querySelectorAll("button, a")].filter((e) => e.getAttribute("aria-label") !== "bell")) {
+      expect(compact.test(el.className), `${el.getAttribute("aria-label") ?? el.textContent} is not at the row's height`).toBe(true);
+      expect(/(^|\s)btn-icon(\s|$)/.test(el.className), "the dense 28px square has no place in this row").toBe(false);
+    }
+  });
+
+  it("stands the search box at that height too, and wide enough for its own hint", () => {
+    render(<TopBar me={ME} />);
+    const search = screen.getByRole("search");
+    const classes = search.className.split(/\s+/);
+    /* `.input` is the 40px field and every neighbour is 34 — the compact
+       field is the theme's own answer for a field standing in a toolbar */
+    expect(classes).toContain("input-sm");
+    expect(classes).not.toContain("input");
+    /* wider than the 14rem that cut the placeholder mid-word */
+    expect(classes).toContain("w-80");
+  });
+});
+

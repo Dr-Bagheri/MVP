@@ -97,6 +97,51 @@ describe("units say what a rule is about", () => {
     }
   });
 
+  /**
+   * EVERY SIZE TOKEN A CONTROL NAMES MUST EXIST (2026-09-06).
+   *
+   * `.btn-icon-sm` was written as `h-control-sm min-h-control-sm
+   * w-control-sm` — and the width scale had only `menu`, `rail` and
+   * `control-icon`, so Tailwind emitted NO width at all. The class was
+   * present, the intent was readable, a reviewer would have seen a square,
+   * and the button would have rendered 34 tall and as wide as its glyph. It
+   * is the `text-on-accent` bug and the shadcn `*-foreground` bug in a third
+   * costume: the artifact reads as satisfied and only the computed value
+   * disagrees.
+   *
+   * A stylesheet has no computed value here, but the CONFIG does have the
+   * list — so the check is a cross-read against the producer rather than a
+   * hand-kept list of legal names (13½: derive the coverage from the
+   * producer).
+   */
+  it("names only size tokens the config actually declares", () => {
+    const config = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
+    /** the keys inside one `extend` group, e.g. width: { … } */
+    const scale = (group: string): Set<string> => {
+      const at = config.indexOf(`      ${group}: {`);
+      expect(at, `tailwind.config.ts has no ${group} scale — the parser is stale`).toBeGreaterThan(-1);
+      const body = config.slice(at, config.indexOf("\n      },", at));
+      return new Set([...body.matchAll(/^\s*"?([a-z][\w-]*)"?:/gm)].map((m) => m[1]!));
+    };
+    const scales = { w: scale("width"), h: scale("height"), "min-h": scale("minHeight") };
+    /* the sizes Tailwind ships with are legal too: `h-5`, `w-px`, `h-full` */
+    const BUILT_IN = /^(\d+(\.\d+)?|px|full|auto|screen|dvh|fit|min|max|\[.*\])$/;
+
+    const unknown: string[] = [];
+    for (const sel of [".btn", ".btn-sm", ".btn-icon", ".btn-icon-sm", ".input", ".input-sm"]) {
+      const rule = body(sel);
+      for (const m of rule.matchAll(/(?:^|\s)(w|h|min-h)-([\w[\]().%-]+)/g)) {
+        const [prefix, name] = [m[1]! as "w" | "h" | "min-h", m[2]!];
+        if (BUILT_IN.test(name)) continue;
+        if (!scales[prefix].has(name)) unknown.push(`${sel}: ${prefix}-${name}`);
+      }
+    }
+    expect(
+      unknown,
+      "these utilities name a token the config does not declare, so Tailwind emits NOTHING for them",
+    ).toEqual([]);
+  });
+
   it("can answer NO — the patterns tell the two units apart", () => {
     /*
      * The negative control, run against the exact strings that shipped. "No

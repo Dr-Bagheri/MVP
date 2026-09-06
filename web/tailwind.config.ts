@@ -230,6 +230,13 @@ const config: Config = {
         /* the icon button is SQUARE, so its width is the same token as its
            height — two literals is how a square stops being one */
         "control-icon": rem(SCAFFOLD.controlHeightIcon),
+        /* and the COMPACT square (`.btn-icon-sm`, 2026-09-06), for the same
+           reason. Its absence is the whole shape of the bug it was added
+           with: `w-control-sm` was written in the stylesheet against a width
+           scale that had never heard of it, so Tailwind emitted nothing, the
+           class list read as satisfied and the button would have been 34 tall
+           and as wide as its glyph. */
+        "control-sm": rem(SCAFFOLD.controlHeightSm),
       },
       maxWidth: {
         "content-small": rem(SCAFFOLD.contentMaxWidthSmall),

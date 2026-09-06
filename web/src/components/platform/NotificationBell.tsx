@@ -171,7 +171,7 @@ export function NotificationBell() {
            `relative` stays explicit: the unread badge is positioned against
            this box, and letting it inherit that from `.tap` would make the
            badge depend on the internals of a hit-area utility. */
-        className="btn btn-icon relative border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
+        className="btn btn-icon-sm relative border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
         onClick={() => {
           /* the OPENING edge only — see the fetch effect above. Computed
              here rather than inside the updater: an updater runs twice under

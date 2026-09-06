@@ -588,6 +588,23 @@
   .btn-icon {
     @apply h-control-icon min-h-control-icon w-control-icon rounded-[8px] px-0;
   }
+  /*
+   * THE COMPACT SQUARE (user directive, 2026-09-06: "give the buttons on the
+   * top menu the same size — the en/fa size is the good one").
+   *
+   * The family had a compact BUTTON (34, `.btn-sm`) and a square ICON button
+   * (28, `.btn-icon`), and nothing that was both — so the top bar stood a
+   * 28px theme toggle and a 28px chat door beside a 34px locale pair, three
+   * heights in one row of five controls. Every screen that wants an icon in a
+   * row of compact buttons needs this shape; its absence is what `.btn-sm`'s
+   * own note says produces the mess.
+   *
+   * 28 stays for a DENSE row (a table's actions, the whiteboard's toolbar).
+   * This is for a toolbar standing beside words.
+   */
+  .btn-icon-sm {
+    @apply h-control-sm min-h-control-sm w-control-sm rounded-[8px] px-0;
+  }
 
   /*
    * Inputs are replaced-adjacent: `.tap` renders no ::after on them, so their

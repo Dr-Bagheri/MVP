@@ -175,9 +175,25 @@ export function TopBar({
               `bg-field` ground, the border, the inline padding and the type;
               only the width and the focus-within (the ring belongs to the
               form, the focus to the field inside it) are written here. */}
+          {/* ONE HEIGHT ACROSS THE ROW (user directive, 2026-09-06: "for the
+              search box and the date and time, make them the same size in
+              height as well, and make the search box a bit longer so you can
+              see all the hint in it and a little more").
+
+              `.input` is the 40px field; the clock beside it is `.btn-sm` at
+              34 and so is every control at the other end — so the bar's one
+              field was the only element in it standing 6px taller than
+              everything else. `.input-sm` is the theme's own compact field,
+              the same token as `.btn-sm`, and it exists for exactly this: a
+              field and a button standing in one toolbar row must be level.
+
+              And it is 20rem wide rather than 14: the placeholder is the
+              hint («جستجو در رکوردها، گفتگوها، تسک‌ها…» / "Search records,
+              conversations, tasks…") and at 224px it was cut mid-word, which
+              turns a promise about what can be searched into an ellipsis. */}
           <form
             role="search"
-            className="input hidden w-56 min-w-0 items-center gap-2 focus-within:border-accent lg:flex"
+            className="input-sm hidden w-80 min-w-0 items-center gap-2 focus-within:border-accent lg:flex"
             onSubmit={(e) => {
               e.preventDefault();
               const q = new FormData(e.currentTarget).get("q");
@@ -266,11 +282,29 @@ export function TopBar({
             `md:inline-flex` matches the toggle beside it: below md the bottom
             bar carries navigation, and this is chrome for the desktop shell.
           */}
+          {/*
+            THE END CLUSTER'S ORDER IS THE USER'S (2026-09-06): "the order is
+            from the end: en - fa | theme mode - chat - notification".
+
+            Read from the bar's EDGE inward, so DOM order — which is
+            start→end in both directions — is the reverse: the bell nearest
+            the centre, then chat, then the theme, the divider, and the
+            locale pair at the very edge. In Persian the whole cluster
+            mirrors with the document and the reading still starts at the
+            edge, which is why the order is written logically rather than as
+            left and right.
+
+            One SIZE too, and it is the locale pair's: `.btn-icon-sm` is the
+            compact square this bar needed and the theme did not have — the
+            three icon buttons stood at 28 beside two 34px words.
+          */}
+          {me === null ? null : <NotificationBell />}
+
           <Link
             href="/chat"
             title={tPlatform("chat")}
             aria-label={tPlatform("chat")}
-            className="btn btn-icon hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
+            className="btn btn-icon-sm hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
           >
             {/* the RAIL'S own glyph, imported rather than redrawn: the entry
                 left the rail and the picture follows it */}
@@ -282,10 +316,16 @@ export function TopBar({
             onClick={() => storeTheme(theme === "dark" ? "light" : "dark")}
             title={tPlatform("themeToggle")}
             aria-label={tPlatform("themeToggle")}
-            className="btn btn-icon hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
+            className="btn btn-icon-sm hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
           >
             {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
           </button>
+
+          {/* the divider the user asked for — between the theme and the
+              things that are not it. It hides with the controls it separates:
+              below md the locale pair folds away and a rule with nothing on
+              one side of it is a mark that means nothing. */}
+          <span className="mx-0.5 hidden h-5 w-px bg-border md:block" aria-hidden />
 
           {/* audit finding, 2026-09-02: the two segments were a 36px,
               12px-cornered group written by hand — invisible to the control
@@ -313,15 +353,6 @@ export function TopBar({
             ))}
           </div>
 
-          {/* the notification menu — icon only, at the bar's end, beside the
-              calendar/clock (user directive, 2026-08-21).
-              PRESENT WHILE LOADING: the bar is chrome, and chrome that
-              assembles itself piece by piece in front of the reader is worse
-              than chrome that arrives complete and fills in. The bell renders
-              as soon as the page does; what waits for the network is what is
-              INSIDE it. It disappears only for a resolved `null` — an answer,
-              not a delay. */}
-          {me === null ? null : <NotificationBell />}
         </div>
       </div>
 

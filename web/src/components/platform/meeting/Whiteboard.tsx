@@ -3,6 +3,7 @@
 import { ConfirmDialog } from "@/components/rowActions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTheme } from "@/lib/useTheme";
 
 /**
  * THE WHITEBOARD (the big-milestone round, 2026-09-01) — the reference's
@@ -21,16 +22,52 @@ import { useTranslations } from "next-intl";
 
 type Tool = "pen" | "highlight" | "eraser" | "line" | "arrow" | "rect" | "ellipse" | "text" | "hand";
 
+/**
+ * THE INK IS A ROLE, NOT A HEX (user directive, 2026-09-06: "for the
+ * whiteboard in the meetings room add bright colours for dark theme and
+ * darker colours for light theme — in dark remove the black and the brown
+ * and add white; in light remove the white and add black and darker
+ * colours").
+ *
+ * The board was five fixed hex values chosen against a white canvas, and the
+ * canvas is `.card` — the surface, which is near-black in dark. So the first
+ * swatch, the one every board starts on, drew near-black on near-black: a pen
+ * that appears to do nothing, and the brown beside it nearly as bad.
+ *
+ * A per-theme palette alone would have fixed the pen and broken the boards:
+ * strokes are stored (localStorage, per meeting), so a board drawn in dark
+ * with a literal white would come back invisible on the light canvas the
+ * moment somebody switched. What is stored is the ROLE — «the neutral», «the
+ * green» — and the hex is resolved at DRAW time from the theme on screen. The
+ * same board reads in both themes, which is the property a stored colour
+ * cannot have.
+ *
+ * `color` stays on the shape and is still drawn: boards made before today
+ * hold hex values and nothing may erase somebody's board to take a fix.
+ */
+const INKS = ["ink", "green", "blue", "red", "amber"] as const;
+type Ink = (typeof INKS)[number];
+
+const PALETTE: Record<"dark" | "light", Record<Ink, string>> = {
+  /* BRIGHT on the dark canvas — the neutral is the page's own near-white, so
+     the default pen reads exactly like writing on a dark board */
+  dark: { ink: "#f2efe9", green: "#3ddc84", blue: "#63c9ff", red: "#ff7a93", amber: "#ffc75c" },
+  /* DARK on the light one — the neutral is the near-black the board used to
+     open with, and every other ink is its own colour taken down to ink weight */
+  light: { ink: "#14110c", green: "#0a6b3c", blue: "#0b4a86", red: "#a11836", amber: "#7a4a06" },
+};
+
 interface Shape {
   tool: Exclude<Tool, "eraser" | "hand">;
+  /** the literal, kept for boards drawn before the ink became a role */
   color: string;
+  /** the ROLE, resolved against the theme at draw time */
+  ink?: Ink;
   width: number;
   /** pen/highlight: the polyline; others: [start, end] */
   points: Array<{ x: number; y: number }>;
   text?: string;
 }
-
-const COLORS = ["#1c1a16", "#0fa85d", "#0369a1", "#c9264a", "#8f5d08"];
 
 function storageKey(meetingId: string): string {
   return `neurai-whiteboard-${meetingId}`;
@@ -45,7 +82,15 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
   /* the text composer: the world point pressed, and the words */
   const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
   const [textValue, setTextValue] = useState("");
-  const [color, setColor] = useState(COLORS[0]!);
+  const theme = useTheme();
+  const palette = PALETTE[theme === "light" ? "light" : "dark"];
+  const [ink, setInk] = useState<Ink>("ink");
+  /** what a shape is actually drawn in: its role under the theme on screen,
+      or the literal a board older than the roles was stored with */
+  const inkOf = useCallback(
+    (shape: Shape) => (shape.ink === undefined ? shape.color : palette[shape.ink]),
+    [palette],
+  );
   const [shapes, setShapes] = useState<Shape[]>(() => {
     try {
       const raw = localStorage.getItem(storageKey(meetingId));
@@ -89,8 +134,9 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
     ctx.scale(view.zoom, view.zoom);
     const all = drawing.current === null ? shapes : [...shapes, drawing.current];
     for (const shape of all) {
-      ctx.strokeStyle = shape.color;
-      ctx.fillStyle = shape.color;
+      const drawn = inkOf(shape);
+      ctx.strokeStyle = drawn;
+      ctx.fillStyle = drawn;
       ctx.lineWidth = shape.width;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -129,7 +175,7 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
       }
     }
     ctx.globalAlpha = 1;
-  }, [shapes, view]);
+  }, [shapes, view, inkOf]);
 
   /* size the canvas to its box at device resolution; observe resizes */
   useEffect(() => {
@@ -197,7 +243,11 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
     }
     drawing.current = {
       tool,
-      color,
+      ink,
+      /* the literal too, so a board this browser stored can still be read by
+         a build that predates the roles — the store is the person's, not a
+         version of ours */
+      color: palette[ink],
       width: tool === "highlight" ? 12 : 2.5,
       points: [world],
     };
@@ -315,22 +365,22 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
         {toolBtn("text", "T", t("wbText"))}
         {toolBtn("eraser", "⌫", t("wbEraser"))}
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-        {COLORS.map((c) => (
+        {INKS.map((name) => (
           <button
-            key={c}
+            key={name}
             type="button"
-            aria-pressed={color === c}
+            aria-pressed={ink === name}
             aria-label={t("wbColor")}
-            onClick={() => setColor(c)}
+            onClick={() => setInk(name)}
             /* 2026-09-03: the same control as the tools beside it. This one
                the guard could never see — it hand-rolled a height and a
                centred box but no corner of its own, because its corner is
                the DOT's. It is converted anyway: a 36px swatch standing in
                one row with 28px tools is exactly the drift this pass is
                here to remove, and the guard's silence is not a verdict. */
-            className={`btn btn-icon ${color === c ? "opacity-100" : "opacity-60 hover:opacity-100"}`}
+            className={`btn btn-icon ${ink === name ? "opacity-100" : "opacity-60 hover:opacity-100"}`}
           >
-            <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: c }} />
+            <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: palette[name] }} />
           </button>
         ))}
       </div>
@@ -377,7 +427,7 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
             const at = textAt;
             const text = textValue.trim();
             setTextAt(null);
-            commit({ tool: "text", color, width: 2, points: [at], text });
+            commit({ tool: "text", ink, color: palette[ink], width: 2, points: [at], text });
           }}
         />
       ) : null}
