@@ -18,6 +18,7 @@
  *     say what it produced without a second fetch.
  */
 import { NotFoundError, ValidationError, ConflictError } from "./errors.ts";
+import { hasMeetingAttendees } from "../db/capabilities.ts";
 import { iso } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -67,6 +68,22 @@ export interface MeetingSignature {
   at: string;
 }
 
+/**
+ * A MEMBER on a meeting (db/0202). The names travel resolved, from user
+ * management, because that is the directive: «the username and member name
+ * in user management should be used». A meeting that stored the name would
+ * be the two-spellings defect — one person appearing twice under whatever
+ * string the surface that added them happened to hold.
+ */
+export interface MeetingAttendee {
+  user_id: string;
+  display_name: string;
+  display_name_en: string | null;
+  username: string | null;
+  /** they opened the meeting while it was being held — in the room, not merely asked */
+  attended: boolean;
+}
+
 export interface MeetingRecord {
   id: string;
   title: string;
@@ -78,7 +95,11 @@ export interface MeetingRecord {
   topic: string | null;
   location: string | null;
   description: string;
+  /** the people with NO account — 0145's reason for the text[], and now its
+      only contents */
   invitees: string[];
+  /** the MEMBERS (db/0202), names resolved from user management */
+  attendees: MeetingAttendee[];
   agenda: MeetingAgendaItem[];
   /** the record this meeting produced — null until the recorder links it,
       and null again if the call was purged (SET NULL) */
@@ -100,7 +121,13 @@ export interface MeetingRecord {
   minutes_signatures: MeetingSignature[];
 }
 
-const MEETING_ROWS = `
+/**
+ * The meeting rows. `withAttendees` is the db/0202 capability: on a schema
+ * without the table the subquery is a 42703 that would take out every
+ * meetings list, so the read answers an empty roster instead — the shape of
+ * the wire does not depend on when the migration landed.
+ */
+const meetingRows = (withAttendees: boolean) => `
   select m.id, m.title, m.scheduled_at, m.duration_minutes, m.mode,
          m.topic_id, mt.name as topic,
          m.location, m.description, m.invitees, m.agenda, m.call_id,
@@ -115,7 +142,18 @@ const MEETING_ROWS = `
             backtick in a comment ends the SQL string. */
          hu.display_name as host_name, hu.display_name_en as host_name_en,
          m.minutes_approved_at, m.minutes_closed_at, m.minutes_signatures,
-         m.video_url, m.video_provider
+         m.video_url, m.video_provider,
+         ${withAttendees ? `coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'user_id', a.user_id,
+                    'display_name', au.display_name,
+                    'display_name_en', au.display_name_en,
+                    'username', au.username,
+                    'attended', a.attended_at is not null)
+                  order by au.display_name)
+             from echo.meeting_attendee a
+             join echo.app_user au on au.id = a.user_id
+            where a.meeting_id = m.id), '[]'::jsonb)` : `'[]'::jsonb`} as attendees
     from echo.meeting m
     left join echo.call c on c.id = m.call_id
     /* LEFT: a meeting with no folder is the ordinary state, and an inner
@@ -142,6 +180,16 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     location: (row.location as string | null) ?? null,
     description: String(row.description ?? ""),
     invitees: (row.invitees as string[]) ?? [],
+    attendees: (Array.isArray(row.attendees) ? row.attendees : []).map((a) => {
+      const r = a as Record<string, unknown>;
+      return {
+        user_id: String(r.user_id),
+        display_name: String(r.display_name ?? ""),
+        display_name_en: (r.display_name_en as string | null) ?? null,
+        username: (r.username as string | null) ?? null,
+        attended: r.attended === true,
+      };
+    }),
     agenda: rawAgenda.map((item) => ({
       title: String((item as Record<string, unknown>).title ?? ""),
       minutes: (item as Record<string, unknown>).minutes === null ||
@@ -271,10 +319,14 @@ export function sliceSummary(text: string): Array<{ kind: MeetingItemKind; body:
 }
 
 export function createMeetingsRepo(db: Db) {
+  /** the select, with or without db/0202's roster (the capability is cached) */
+  const rowsSql = async () => meetingRows(await hasMeetingAttendees(db));
+
   async function list(identity: Identity, opts: { archived?: boolean } = {}): Promise<MeetingRecord[]> {
+    const select = await rowsSql();
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
-        `${MEETING_ROWS}
+        `${select}
           where m.archived_at is ${opts.archived ? "not null" : "null"}
           order by m.scheduled_at`,
       );
@@ -532,9 +584,10 @@ export function createMeetingsRepo(db: Db) {
   }
 
   async function detail(identity: Identity, id: string): Promise<MeetingRecord> {
+    const select = await rowsSql();
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
-        `${MEETING_ROWS} where m.id = $1`, [id],
+        `${select} where m.id = $1`, [id],
       );
       if (!rows[0]) throw new NotFoundError();
       return toMeeting(rows[0]);
@@ -542,6 +595,7 @@ export function createMeetingsRepo(db: Db) {
   }
 
   async function create(identity: Identity, input: Record<string, unknown>): Promise<MeetingRecord> {
+    const select = await rowsSql();
     const title = typeof input.title === "string" ? input.title.trim() : "";
     if (title === "" || title.length > 300) {
       throw new ValidationError("meeting needs a title", { code: "meeting_title_invalid" });
@@ -575,7 +629,7 @@ export function createMeetingsRepo(db: Db) {
         ],
       );
       const back = await tx.unsafe<Record<string, unknown>>(
-        `${MEETING_ROWS} where m.id = $1`, [String(rows[0]!.id)],
+        `${select} where m.id = $1`, [String(rows[0]!.id)],
       );
       return toMeeting(back[0]!);
     });
@@ -707,6 +761,7 @@ export function createMeetingsRepo(db: Db) {
        paper. The check runs in-transaction, where the write happens. */
     const CLOSED_ALLOWED = new Set(["archived"]);
     const touchesContent = Object.keys(patch).some((key) => !CLOSED_ALLOWED.has(key));
+    const select = await rowsSql();
     return db.withIdentity(identity, async (tx: SqlTx) => {
       if (touchesContent) {
         const closedState = await tx.unsafe<Record<string, unknown>>(
@@ -733,9 +788,81 @@ export function createMeetingsRepo(db: Db) {
       );
       if (!rows[0]) throw new NotFoundError();
       const back = await tx.unsafe<Record<string, unknown>>(
-        `${MEETING_ROWS} where m.id = $1`, [id],
+        `${select} where m.id = $1`, [id],
       );
       return toMeeting(back[0]!);
+    });
+  }
+
+  /**
+   * WHO IS COMING, as members (db/0202).
+   *
+   * `on conflict do nothing` makes adding somebody twice the same fact
+   * rather than a refusal of the whole batch — the same reasoning 0189's
+   * invite carries, and the two acts happen together: the route adds the
+   * rows and mints the invitations, so being put on a meeting and being told
+   * about it cannot come apart.
+   *
+   * The rows land under the CALLER's identity, which is what 0202's insert
+   * policy checks (`added_by = echo.actor_id()`), and a person outside the
+   * org is dropped by the `where` rather than refused — the same posture as
+   * the invite: one bad id must not lose the other nine.
+   */
+  async function addAttendees(identity: Identity, id: string, userIds: readonly string[]): Promise<MeetingRecord> {
+    const ids = [...new Set(userIds.filter((v) => typeof v === "string" && v !== ""))].slice(0, 200);
+    const select = await rowsSql();
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const meeting = await tx.unsafe<Record<string, unknown>>(
+        `select id, org_id from echo.meeting where id = $1`, [id],
+      );
+      if (!meeting[0]) throw new NotFoundError();
+      if (ids.length > 0) {
+        await tx.unsafe(
+          `insert into echo.meeting_attendee (meeting_id, user_id, org_id, added_by)
+           select $1::uuid, u.id, echo.actor_org_id(), echo.actor_id()
+             from echo.app_user u
+            where u.id = any($2::uuid[])
+              and u.org_id = echo.actor_org_id()
+              and u.status = 'active'
+           on conflict (meeting_id, user_id) do nothing`,
+          [id, ids],
+        );
+      }
+      const back = await tx.unsafe<Record<string, unknown>>(`${select} where m.id = $1`, [id]);
+      return toMeeting(back[0]!);
+    });
+  }
+
+  async function removeAttendee(identity: Identity, id: string, userId: string): Promise<MeetingRecord> {
+    const select = await rowsSql();
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      await tx.unsafe(
+        `delete from echo.meeting_attendee where meeting_id = $1 and user_id = $2`, [id, userId],
+      );
+      const back = await tx.unsafe<Record<string, unknown>>(`${select} where m.id = $1`, [id]);
+      if (!back[0]) throw new NotFoundError();
+      return toMeeting(back[0]);
+    });
+  }
+
+  /**
+   * I AM HERE (db/0202). Stamped by the person themselves — 0202's update
+   * policy names the actor on both sides, so this cannot record anybody
+   * else's presence — and only once: `coalesce` keeps the first moment,
+   * because when they arrived is the fact and when they last reloaded is not.
+   *
+   * Silent when they are not on the meeting's roster. Somebody who opens a
+   * colleague's meeting is a reader, not an attendee, and inserting a row
+   * here would put every curious member in the room.
+   */
+  async function markAttended(identity: Identity, id: string): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      await tx.unsafe(
+        `update echo.meeting_attendee
+            set attended_at = coalesce(attended_at, now())
+          where meeting_id = $1 and user_id = echo.actor_id()`,
+        [id],
+      );
     });
   }
 
@@ -806,5 +933,6 @@ export function createMeetingsRepo(db: Db) {
     list, detail, create, update, remove, topics, createTopic, updateTopic,
     byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
     items, addItem, updateItem, removeItem, extractItems,
+    addAttendees, removeAttendee, markAttended,
   };
 }

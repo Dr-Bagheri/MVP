@@ -25,6 +25,9 @@ const updateTaskTopic = vi.fn();
 const taskDetail = vi.fn();
 const createTask = vi.fn();
 const orgPeople = vi.fn();
+const addMeetingAttendees = vi.fn();
+const meetingDetail = vi.fn();
+const updateMeeting = vi.fn();
 const meetings = vi.fn();
 const sendMemberMessage = vi.fn();
 const editSegment = vi.fn();
@@ -35,6 +38,9 @@ vi.mock("@/api/client", () => ({
   api: {
     createTask: (...args: unknown[]) => createTask(...args),
     orgPeople: (...args: unknown[]) => orgPeople(...args),
+    addMeetingAttendees: (...args: unknown[]) => addMeetingAttendees(...args),
+    meetingDetail: (...args: unknown[]) => meetingDetail(...args),
+    updateMeeting: (...args: unknown[]) => updateMeeting(...args),
     meetings: (...args: unknown[]) => meetings(...args),
     sendMemberMessage: (...args: unknown[]) => sendMemberMessage(...args),
     members: (...args: unknown[]) => members(...args),
@@ -369,6 +375,7 @@ describe("the hands of 2026-09-05 — projects and folders, named the way a pers
     members.mockReset(); projects.mockReset(); createProject.mockReset();
     deleteProject.mockReset(); taskBoard.mockReset(); updateTaskTopic.mockReset();
     createTask.mockReset(); orgPeople.mockReset();
+    addMeetingAttendees.mockReset(); meetingDetail.mockReset(); updateMeeting.mockReset();
   });
 
   it("create_project resolves the people by name and presses the SAME create the dialog does", async () => {
@@ -455,6 +462,76 @@ describe("the hands of 2026-09-05 — projects and folders, named the way a pers
     const orphan = await executeClientTool("create_task", { title: "y", assignee: "کسی" }, ctx);
     expect(orphan.ok).toBe(false);
     expect(createTask, "an unresolved person filed an unowned card").toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A COLLEAGUE IS AN ACCOUNT (db/0202, user directive 2026-09-06: "the
+   * agents add members based on the knowledge that they have and their
+   * names ... in case of adding members to a task or invitation for chat or
+   * meetings those names are useless and the user name and member name in
+   * user management should be used").
+   *
+   * `invite_to_meeting` used to write whatever string the model produced
+   * into `meeting.invitees` — a name on a list, no account, nobody told —
+   * so an agent could add «دکتر باقری» to a meeting that already had
+   * «drbagheri» on it and report success.
+   */
+  it("invite_to_meeting adds a colleague BY ACCOUNT and never writes their name down", async () => {
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi", username: "sina" },
+    ]);
+    addMeetingAttendees.mockResolvedValue({ id: "m-1" });
+    const { ctx } = surface();
+    const result = await executeClientTool(
+      "invite_to_meeting", { meeting_id: "m-1", invitees: ["@sina"] }, ctx,
+    );
+    expect(result.ok, result.detail).toBe(true);
+    expect(addMeetingAttendees).toHaveBeenCalledWith("m-1", ["u-2"]);
+    /* the text array is for people with NO account — a colleague must never
+       reach it, which is the defect this replaced */
+    expect(updateMeeting).not.toHaveBeenCalled();
+    /* and the person is named BACK: "invited 1" is a success report you
+       cannot check */
+    expect(result.detail).toContain("سینا سپاسی");
+  });
+
+  it("a name that matches no member REFUSES and names the near misses — it is never written down as an invitee", async () => {
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا سپاسی", display_name_en: null, username: "sina" },
+    ]);
+    /*
+     * THE WRITE PATH IS OPEN ON PURPOSE. Without these, a version that DID
+     * write the unmatched name down still failed — on an unmocked read
+     * throwing — and the test reported the refusal it was written for while
+     * measuring a broken fixture. Verify-red caught it: the mutation stayed
+     * green. The fixture has to let the wrong answer succeed, or it cannot
+     * tell the two apart.
+     */
+    meetingDetail.mockResolvedValue({ id: "m-1", invitees: [] });
+    updateMeeting.mockResolvedValue({ id: "m-1" });
+    const { ctx } = surface();
+    const result = await executeClientTool(
+      "invite_to_meeting", { meeting_id: "m-1", invitees: ["سینا سپاسی نژاد"] }, ctx,
+    );
+    expect(result.ok).toBe(false);
+    expect(addMeetingAttendees).not.toHaveBeenCalled();
+    expect(updateMeeting).not.toHaveBeenCalled();
+  });
+
+  it("an EMAIL still reaches the text list, appended to what is already there", async () => {
+    /* somebody with no account here has no row to add, which is the whole
+       reason 0145's text array survives — and the read is what makes this
+       an ADD rather than a whole-array write that uninvites everybody */
+    orgPeople.mockResolvedValue([]);
+    meetingDetail.mockResolvedValue({ id: "m-1", invitees: ["old@example.com"] });
+    updateMeeting.mockResolvedValue({ id: "m-1" });
+    const { ctx } = surface();
+    const result = await executeClientTool(
+      "invite_to_meeting", { meeting_id: "m-1", invitees: ["new@example.com"] }, ctx,
+    );
+    expect(result.ok, result.detail).toBe(true);
+    expect(updateMeeting).toHaveBeenCalledWith("m-1", { invitees: ["old@example.com", "new@example.com"] });
+    expect(addMeetingAttendees).not.toHaveBeenCalled();
   });
 
   it("update_task_topic renames a folder by its current name, and names the folders when none matches", async () => {

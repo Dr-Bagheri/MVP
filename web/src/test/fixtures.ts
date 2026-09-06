@@ -18,7 +18,7 @@ export function meetingFixture(over: Partial<MeetingRecord> = {}): MeetingRecord
   return {
     id: "m-1", title: "جلسهٔ محصول", scheduled_at: "2020-01-01T09:00:00.000Z",
     duration_minutes: 60, mode: "online", topic_id: null, topic: null, location: null,
-    description: "", invitees: [], agenda: [], call_id: null, call_title: null,
+    description: "", invitees: [], attendees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
     /* the host's resolved name: the meeting knows who ran it, so the minutes
        can count them among the attendees and the plan card can stop drawing

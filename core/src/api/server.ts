@@ -3471,6 +3471,72 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await meetings.detail(identity, id));
   });
 
+  /**
+   * WHO IS COMING (db/0202) — and being told about it is the SAME ACT.
+   *
+   * The two halves used to be two buttons: a picker that wrote a name into
+   * `meeting.invitees`, and a separate «notify colleagues» that minted the
+   * invitations. So a person could be on the meeting and never hear about
+   * it, or hear about it and not be on it, and the roster read whatever
+   * string the picker happened to hold — «drbagheri» beside «دکتر باقری»,
+   * one member twice (user report, 2026-09-06).
+   *
+   * One door now: the members land as rows keyed by their account and the
+   * invitation is minted in the same request, so the bell carries the accept
+   * and reject the user asked for (0189's cards, which already knew the
+   * meeting kind). An invitation that fails to mint does NOT lose the
+   * roster — being on the meeting is the fact, the notification is how
+   * somebody learns it — and the failure is logged rather than swallowed.
+   */
+  app.post("/v1/meetings/:id/attendees", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { user_ids?: unknown };
+    const userIds = Array.isArray(body.user_ids)
+      ? body.user_ids.filter((v): v is string => typeof v === "string" && v !== "")
+      : [];
+    const meeting = await meetings.addAttendees(identity, id, userIds);
+    /* everyone but the person doing the adding: an invitation to a meeting
+       you are arranging is a notification about a decision you just made
+       (0189's own rule, at its second caller) */
+    const toNotify = userIds.filter((uid) => uid !== identity.userId);
+    if (toNotify.length > 0) {
+      try {
+        await invites.invite(identity, { kind: "meeting", target_id: id, user_ids: toNotify });
+      } catch (cause) {
+        request.log.warn(
+          { meeting_id: id, error_type: (cause as { code?: string }).code ?? "invite_failed" },
+          "attendees added; the invitation could not be minted",
+        );
+      }
+    }
+    return reply.send(meeting);
+  });
+
+  app.delete("/v1/meetings/:id/attendees/:userId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, userId } = request.params as { id: string; userId: string };
+    return reply.send(await meetings.removeAttendee(identity, id, userId));
+  });
+
+  /**
+   * I AM HERE (db/0202). The page posts this when a member on the roster
+   * opens a meeting that is being held; the row stamps once, under their own
+   * identity, and a reader who is not on the roster stamps nothing.
+   *
+   * It is what the transcript's roster reads afterwards: who was in the room
+   * is a fact the platform has and was throwing away.
+   */
+  app.post("/v1/meetings/:id/attended", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await meetings.markAttended(identity, id);
+    return reply.code(204).send();
+  });
+
   /* the meeting FOLDERS (0151) — the strip's own rows, so a folder can be
      made before the first meeting uses it and renamed without rewriting
      every meeting that shares a spelling */

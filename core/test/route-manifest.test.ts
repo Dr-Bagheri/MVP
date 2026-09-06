@@ -46,6 +46,9 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/calls/:id/restore", "M11 — db/0011 names restore as a non-owner-permitted act"],
 
   ["GET", "/v1/calls/:id/transcript", "SPEC §The transcript"],
+  ["POST", "/v1/meetings/:id/attendees", "db/0202 — the meeting's MEMBERS, added and invited in one act (2026-09-06)"],
+  ["DELETE", "/v1/meetings/:id/attendees/:userId", "db/0202 — taking somebody off the meeting"],
+  ["POST", "/v1/meetings/:id/attended", "db/0202 — who was actually in the room, stamped by themselves"],
   ["GET", "/v1/calls/:id/translation", "db/0201 — the transcript's translation as rows, prepared by the transcriber (C4, 2026-09-06)"],
   ["GET", "/v1/calls/:id/speakers", "SPEC §The transcript — resolving a segment's speaker_id"],
   ["GET", "/v1/calls/:id/summary", "SPEC §The summary"],

@@ -709,12 +709,15 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     name: "invite_to_meeting",
     label: { fa: "دعوت به جلسه", en: "Inviting to a meeting" },
     description:
-      "Add people to a meeting's invitee list. Names for colleagues, email "
-      + "addresses for anybody outside the organisation. This ADDS — whoever "
-      + "is already invited stays invited.",
+      "Put people on a meeting and invite them — one act: each colleague gets "
+      + "an invitation in their notifications with accept and reject. Name a "
+      + "colleague by their username or their name in user management; an "
+      + "email address is for somebody with no account here. A name that "
+      + "matches no member is REFUSED rather than written down. This ADDS — "
+      + "whoever is already on the meeting stays on it.",
     parameters: obj({
       meeting_id: str("The meeting's id."),
-      invitees: arr("The people to add, by name or email address."),
+      invitees: arr("The people to add: a colleague's username or their name in user management, or an email address for somebody outside the organisation."),
     }, ["meeting_id", "invitees"]),
     effect: "write",
   },

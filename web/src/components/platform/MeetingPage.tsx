@@ -11,7 +11,6 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Overlay } from "@/components/platform/Overlay";
 import { DIALOG_BODY } from "@/components/platform/tasks/panelStyle";
-import { InvitePeople } from "@/components/platform/InvitePeople";
 import { DateField, TimeField } from "@/components/DateTimeFields";
 import { Select } from "@/components/Select";
 import { AgendaEditor, MODE_ICON } from "./Meetings";
@@ -24,7 +23,7 @@ import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
 import {
   IconCheck, IconCopy, IconFileText, IconMic, IconPlus, IconRows, IconTrash,
-  IconUsers, IconUpload, IconMailPlus } from "@/components/icons";
+  IconUsers, IconUpload } from "@/components/icons";
 import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
 } from "@/lib/recordingEngine";
@@ -129,6 +128,19 @@ export function MeetingPage({ id }: { id: string }) {
   useEffect(loadMeeting, [loadMeeting]);
   useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
 
+  /**
+   * THE HOST IS THE MEETING'S AUTHOR — and the database says so too.
+   *
+   * 0202 puts a trigger on `meeting.call_id`: only `created_by` may link or
+   * unlink the record. This constant is that same rule one layer up, so the
+   * screen and the wall agree instead of the screen offering a button the
+   * server refuses. It is deliberately FALSE while `me` is still null — not
+   * knowing who you are is not a reason to be handed the host's controls,
+   * and the effects below re-run when the identity lands.
+   */
+  const isHost = typeof meeting === "object" && meeting !== null
+    && me !== null && meeting.created_by === me.id;
+
   /* the linked record, POLLED while the pipeline walks its ladder */
   const callId = typeof meeting === "object" && meeting !== null ? meeting.call_id : null;
   useEffect(() => {
@@ -189,6 +201,20 @@ export function MeetingPage({ id }: { id: string }) {
    */
   const beginTake = useCallback(() => {
     if (typeof meeting !== "object" || meeting === null) return;
+    /* THE RECORDING IS THE HOST'S (user directive, 2026-09-06: "only the
+       host should have the ability to start the recording and share the
+       screen for audio ... no, all that come to the meeting have a ability
+       to get it for themselves as well and its a bug").
+
+       THE ONLY WALL on this page, deliberately: every door above — the
+       auto-start, the share button, the upload picker — comes through here,
+       so one of them forgetting the rule cannot open a microphone.
+
+       Silent, because a colleague is not being refused anything they asked
+       for: the top bar states the rule for as long as they are in the
+       stage, and a banner repeating it would be the same sentence twice on
+       one screen. */
+    if (me === null || meeting.created_by !== me.id) return;
     if (meeting.mode === "upload" || meeting.call_id !== null) return;
     /* the engine is module-level: an unrelated take may be live right now.
        Starting over it would silently hijack that take (the engine's
@@ -260,7 +286,7 @@ export function MeetingPage({ id }: { id: string }) {
       startedHere.current = false;
       setError(t("startFailed"));
     });
-  }, [meeting, locale, t]);
+  }, [meeting, me, locale, t]);
 
   /*
    * THE LIVE STAGE STARTS ITSELF, ONCE.
@@ -276,6 +302,17 @@ export function MeetingPage({ id }: { id: string }) {
   useEffect(() => {
     if (stage !== "hold" || autoStarted.current) return;
     if (typeof meeting !== "object" || meeting === null) return;
+    /* WAIT for the identity rather than deciding without it: starting on a
+       null `me` would be the page refusing its own host for as long as one
+       request takes, and the ref is not set here, so the effect re-enters
+       when the answer arrives.
+
+       WHO may start is NOT asked here. `beginTake` asks it, at the altitude
+       where a microphone would actually be opened — the same verdict this
+       effect already carries for the upload and held cases, and for the same
+       reason: a second copy read as extra rigour and made the test for the
+       real one vacuous (found by verify-red, 2026-09-06). */
+    if (me === null) return;
     /*
      * … EXCEPT WHERE STARTING NEEDS A HAND ON THE MOUSE.
      *
@@ -299,7 +336,48 @@ export function MeetingPage({ id }: { id: string }) {
     if (meeting.call_id !== null) return;
     autoStarted.current = true;
     beginTake();
-  }, [stage, meeting, beginTake]);
+  }, [stage, meeting, me, isHost, beginTake]);
+
+  /**
+   * THE ROOM CLOSES FOR EVERYONE (user directive: "only the host must have
+   * the ability to finish it and after it finishes the session should be
+   * close for all").
+   *
+   * The engine is in the HOST's browser; every other page has nothing local
+   * to watch, so it asks. What it waits for is the RECORD — the same fact
+   * the host's own `end()` waits for — which is why this cannot report a
+   * meeting as finished that the pipeline never received.
+   */
+  useEffect(() => {
+    if (stage !== "hold" || isHost || callId !== null) return;
+    let alive = true;
+    const timer = setInterval(() => {
+      void api.meetingDetail(id).then((m) => {
+        if (!alive) return;
+        setMeeting(m);
+        if (m.call_id !== null) setStage("post");
+      }).catch(() => { /* a failed poll is not an ended meeting */ });
+    }, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [stage, isHost, callId, id]);
+
+  /**
+   * I AM HERE (db/0202).
+   *
+   * Stamped once, on opening a meeting that is being HELD — which is the
+   * only moment the word means anything. The server walls it to the
+   * caller's own row and is SILENT for somebody who is not on the roster,
+   * so a colleague who opens a meeting out of interest is a reader and does
+   * not become an attendee. It is what lets the transcript name who was in
+   * the room instead of numbering voices.
+   */
+  const stamped = useRef(false);
+  useEffect(() => {
+    if (stage !== "hold" || stamped.current) return;
+    if (typeof meeting !== "object" || meeting === null) return;
+    stamped.current = true;
+    void api.markMeetingAttended(meeting.id).catch(() => { /* best effort */ });
+  }, [stage, meeting]);
 
   /*
    * THE FRAME BEFORE THE RECORD (audit finding, 2026-09-02). This was a lone
@@ -495,17 +573,35 @@ export function MeetingPage({ id }: { id: string }) {
               {engine.quality === "shareEnded" ? t("mixShareEnded") : t("mixShared")}
             </span>
           ) : null}
-          {recordingLive ? (
+          {/*
+            EVERY START AND EVERY END IS THE HOST'S (user directive,
+            2026-09-06). What a colleague gets instead is the SENTENCE, not a
+            disabled button: a greyed «پایان و پردازش» is a promise the
+            product will not keep, and pressing it explains nothing. The
+            page moves them to the record on its own when the host finishes
+            — see the poll above — so there is nothing here for them to do.
+
+            This is the screen's half of a rule the DATABASE holds (0202's
+            trigger on `call_id`). Neither is the wall on its own: without
+            the trigger the button was merely hidden, and without this the
+            product offered an act the server refuses.
+          */}
+          {!isHost && active === "hold" && !held ? (
+            <span className="rounded-xl bg-surface-2 px-2.5 py-1.5 text-[11px] font-medium text-fg-muted">
+              {t("hostOnlyRecord")}
+            </span>
+          ) : null}
+          {isHost && recordingLive ? (
             <button type="button" onClick={end}
               className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {t("endAndProcess")}
             </button>
-          ) : engineFailed ? (
+          ) : isHost && engineFailed ? (
             <button type="button" onClick={end}
               className="btn bg-danger font-semibold text-on-accent hover:opacity-90">
               {t("retryFinish")}
             </button>
-          ) : !held && meeting.mode === "upload" ? (
+          ) : isHost && !held && meeting.mode === "upload" ? (
             /* the UPLOAD lane keeps its button, and it is a FILE PICKER —
                there is nothing to start by walking into a stage, and a
                button labelled «آپلود فایل» must never open a microphone.
@@ -518,7 +614,7 @@ export function MeetingPage({ id }: { id: string }) {
               {MODE_ICON.upload}
               {t("startUpload")}
             </button>
-          ) : !held && active === "hold" && meeting.mode === "online" ? (
+          ) : isHost && !held && active === "hold" && meeting.mode === "online" ? (
             /* THE GESTURE (see the auto-start effect). Named for what it
                opens, not just for what it starts: a button that says
                «shuru» and then raises a share dialog is a surprise, and a
@@ -572,7 +668,13 @@ export function MeetingPage({ id }: { id: string }) {
       ) : null}
 
       {active === "pre" ? (
-        <PreStage meeting={meeting} onPatch={patch} locale={locale} />
+        <PreStage
+          meeting={meeting}
+          onPatch={patch}
+          onMeeting={setMeeting}
+          onInviteFailed={() => setError(t("writeFailed"))}
+          locale={locale}
+        />
       ) : null}
       {active === "hold" ? (
         /* `me` is gone from here (2026-09-03): the live stage's only use of
@@ -589,7 +691,6 @@ export function MeetingPage({ id }: { id: string }) {
           meeting={meeting}
           locale={locale}
           recordingLive={recordingLive}
-          meId={me?.id ?? null}
         />
       ) : null}
       {active === "post" ? (
@@ -608,9 +709,13 @@ export function MeetingPage({ id }: { id: string }) {
 }
 
 /* ═══ پیش از جلسه — the reference's plan cards ═══════════════════════════ */
-function PreStage({ meeting, onPatch, locale }: {
+function PreStage({ meeting, onPatch, onMeeting, onInviteFailed, locale }: {
   meeting: MeetingRecord;
   onPatch: (body: Record<string, unknown>) => void;
+  /** the roster dialog writes through the api and hands back the SERVER's
+      record — adopted, never merged with a local guess */
+  onMeeting: (next: MeetingRecord) => void;
+  onInviteFailed: () => void;
   locale: string;
 }) {
   const t = useTranslations("meetings");
@@ -623,6 +728,9 @@ function PreStage({ meeting, onPatch, locale }: {
     { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
     locale,
   );
+  /* the HOST is the meeting's author and has their own row above: a person
+     who is both would be counted twice and listed twice */
+  const roster = meeting.attendees.filter((a) => a.user_id !== meeting.created_by);
   /** minting the guest capability is a network act — the button says so */
   const [guestBusy, setGuestBusy] = useState(false);
   /** the meeting's documents — null while the read is in flight */
@@ -875,7 +983,7 @@ function PreStage({ meeting, onPatch, locale }: {
               {t("fieldInvitees")}
             </h2>
             <span className="badge-num rounded-full bg-accent-soft px-2 text-[11px] text-accent">
-              {digits(meeting.invitees.length + 1, locale)}
+              {digits(roster.length + meeting.invitees.length + 1, locale)}
             </span>
           </header>
           {/* EACH PERSON IN THEIR OWN BOX (user directive, 2026-09-02: "for
@@ -902,11 +1010,31 @@ function PreStage({ meeting, onPatch, locale }: {
                 {t("memberHost")}
               </span>
             </li>
+            {/* THE COLLEAGUES, by their USER MANAGEMENT name (db/0202, user
+                directive: "the user name and member name in user management
+                should be used"). These are rows keyed by an account, so one
+                person can appear only once however they were added — the
+                screenshot that started this showed «drbagheri» and «دکتر
+                باقری» as two people because a name was all the record had. */}
+            {roster.map((a) => (
+              <li key={a.user_id} className="well flex items-center gap-2 px-2.5 text-sm text-fg">
+                <Avatar name={personName(a, locale)} size="sm" />
+                <span className="min-w-0 flex-1 truncate">{personName(a, locale)}</span>
+                {a.username !== null ? (
+                  <span className="shrink-0 text-[10px] text-fg-subtle" dir="ltr">@{a.username}</span>
+                ) : null}
+              </li>
+            ))}
+            {/* and the people with NO account — all that is left of 0145's
+                text array, and the reason it exists */}
             {meeting.invitees.map((name) => (
               <li key={name} className="well flex items-center gap-2 px-2.5 text-sm text-fg">
                 {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one */}
                 <Avatar name={name} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{name}</span>
+                <span className="shrink-0 rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] text-fg-subtle">
+                  {t("guestMember")}
+                </span>
               </li>
             ))}
           </ul>
@@ -934,8 +1062,9 @@ function PreStage({ meeting, onPatch, locale }: {
       ) : null}
       {inviting ? (
         <InviteDialog
-          invitees={meeting.invitees}
-          onChange={(invitees) => onPatch({ invitees })}
+          meeting={meeting}
+          onMeeting={onMeeting}
+          onFailed={onInviteFailed}
           onClose={() => setInviting(false)}
           guestLinkCopied={guestCopied}
           onCopyGuestLink={copyGuestLink}
@@ -1101,18 +1230,19 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, locale, recordingLive, meId }: {
+function HoldStage({ meeting, locale, recordingLive }: {
   meeting: MeetingRecord;
   locale: string;
   recordingLive: boolean;
-  /* the READER, threaded down for the invite dialog alone. It was `null`
-     there, and the server skips the actor when it writes invitations, so
-     picking yourself off the list was a control that reads as working and
-     does nothing — the count comes back one lower than the picks and
-     nothing on screen says why. */
-  meId: string | null;
+  /* `meId` is gone with the invite dialog it was threaded down for (0202,
+     2026-09-06): people are added on the PLAN now, in the one act that also
+     tells them. A prop that nothing reads is the next person's invitation
+     to reach for it again. */
 }) {
   const t = useTranslations("meetings");
+  /* the HOST has their own row below — a person who is both would be listed
+     twice and counted twice */
+  const roster = meeting.attendees.filter((a) => a.user_id !== meeting.created_by);
   /* the host is a fact about the MEETING, read from the wire — never the
      signed-in viewer (see the members card below) */
   const hostName = meeting.host_name === null
@@ -1123,7 +1253,6 @@ function HoldStage({ meeting, locale, recordingLive, meId }: {
       );
   const [noteDraft, setNoteDraft] = useState("");
   const [taskDraft, setTaskDraft] = useState("");
-  const [invitingPeople, setInvitingPeople] = useState(false);
   /* every outcome goes to the NOTIFICATION bus (platform rule): a banner
      that lives in this card is a second place to look, and it disappears
      before someone who glanced away can read it */
@@ -1153,15 +1282,6 @@ function HoldStage({ meeting, locale, recordingLive, meId }: {
 
   return (
     <div className={`grid min-h-0 flex-1 gap-4 ${STAGE_COLUMNS}`}>
-      {invitingPeople ? (
-        <InvitePeople
-          kind="meeting"
-          targetId={meeting.id}
-          meId={meId}
-          onClose={() => setInvitingPeople(false)}
-          onFailed={() => setInvitingPeople(false)}
-        />
-      ) : null}
       {/* the stage — the reference puts the media on the START side */}
       <MeetingStage
         meeting={meeting}
@@ -1201,22 +1321,25 @@ function HoldStage({ meeting, locale, recordingLive, meId }: {
         <section className="tile p-3.5" aria-label={t("membersTitle")}>
           <header className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-fg">{t("membersTitle")}</h3>
-            <div className="flex items-center gap-1.5">
-              {/* NOTIFY COLLEAGUES (0189, user directive: "do the same
-                  notification if they are invited for an online meeting as
-                  well"). Not admin-walled, unlike a room: arranging a meeting
-                  is not an administrative act, and the person booking it is
-                  the one who knows who should be in it — 0189's insert policy
-                  says exactly that, so this button and the wall agree. */}
-              <button type="button" onClick={() => setInvitingPeople(true)}
-                className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
-                <IconMailPlus width={12} height={12} />
-                {t("notifyMembers")}
-              </button>
-              <span className="badge-num rounded-full bg-surface-2 px-2 text-[11px] text-fg-subtle">
-                {digits(meeting.invitees.length + (hostName === null ? 0 : 1), locale)}
-              </span>
-            </div>
+            {/*
+              NO ADD DOOR HERE, and the button that stood in this slot is
+              gone with the model under it (db/0202, 2026-09-06).
+
+              «دعوت اعضا» minted invitations while the دعوت‌شدگان card on the
+              PLAN wrote names — two buttons for one act, which is how
+              somebody came to be on a meeting nobody told them about, and
+              how one person came to be listed twice under two spellings.
+              Adding a colleague now IS inviting them, in one request, on
+              the plan where the meeting is arranged.
+
+              What this card does instead is the thing only it can: it says
+              who was actually IN THE ROOM. That is a fact about a meeting
+              that has happened, and it is what the transcript's roster
+              reads.
+            */}
+            <span className="badge-num rounded-full bg-surface-2 px-2 text-[11px] text-fg-subtle">
+              {digits(roster.length + meeting.invitees.length + (hostName === null ? 0 : 1), locale)}
+            </span>
           </header>
           <ul className="space-y-1.5">
             {hostName !== null ? (
@@ -1245,11 +1368,30 @@ function HoldStage({ meeting, locale, recordingLive, meId }: {
                 <span className="ms-auto rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">{t("memberHost")}</span>
               </li>
             ) : null}
+            {roster.map((a) => (
+              <li key={a.user_id} className="flex items-center gap-2 text-sm text-fg">
+                {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one */}
+                <Avatar name={personName(a, locale)} size="sm" />
+                <span className="min-w-0 flex-1 truncate">{personName(a, locale)}</span>
+                {/* WHO WAS ACTUALLY HERE (db/0202's `attended_at`). Said only
+                    in the affirmative: a mark reading «نیامد» on somebody who
+                    joined from a phone the platform never saw would be a
+                    confident lie, where a missing mark is only silence. */}
+                {a.attended ? (
+                  <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] text-accent">
+                    {t("attendedMark")}
+                  </span>
+                ) : null}
+              </li>
+            ))}
             {meeting.invitees.map((name) => (
               <li key={name} className="flex items-center gap-2 text-sm text-fg">
                 {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one */}
                 <Avatar name={name} size="sm" />
-                {name}
+                <span className="min-w-0 flex-1 truncate">{name}</span>
+                <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">
+                  {t("guestMember")}
+                </span>
               </li>
             ))}
           </ul>

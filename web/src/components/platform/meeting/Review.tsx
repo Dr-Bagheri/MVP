@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { speakerNaming } from "@/lib/speakerNaming";
 import { api } from "@/api/client";
 import type { Call, Speaker, TranscriptSegment } from "@/api/types";
 import { dirFor } from "@/lib/textDirection";
@@ -370,12 +371,6 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
 }
 
 /* ── the transcript panel ──────────────────────────────────────────────── */
-function speakerName(seg: TranscriptSegment, speakers: Speaker[]): string | null {
-  if (seg.speaker_id === null) return null;
-  const sp = speakers.find((s) => s.id === seg.speaker_id);
-  if (sp === undefined) return null;
-  return sp.person_name ?? sp.label;
-}
 
 const SPEAKER_TONES = [
   "bg-accent-soft text-accent",
@@ -437,7 +432,14 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
       </header>
       <ol className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto pe-1">
         {segments.map((seg) => {
-          const name = speakerName(seg, speakers);
+          /* NEVER THE INTERNAL LABEL (2026-09-06). This read
+             `person_name ?? label`, so an unlinked voice was shown to a
+             reader as «S1·1» — the diarizer's own string, in the place a
+             name goes. See lib/speakerNaming.ts. */
+          const naming = speakerNaming(seg.speaker_id, speakers);
+          const name = naming.kind === "person" ? naming.name
+            : naming.kind === "ordinal" ? t("speakerNamed", { n: digits(naming.n, locale) })
+              : null;
           const tone = seg.speaker_id !== null ? toneOf.get(seg.speaker_id) ?? SPEAKER_TONES[0]! : "bg-surface-2 text-fg-muted";
           return (
             <li key={seg.id} className="flex items-start gap-2.5">

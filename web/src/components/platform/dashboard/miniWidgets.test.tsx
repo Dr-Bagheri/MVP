@@ -4,6 +4,7 @@ import { BffError } from "@/api/client";
 import { __setPreferencesForTest } from "@/lib/preferences";
 import type { Call, ConnectorItem, ConnectorStatus } from "@/api/types";
 import { INTEGRATIONS } from "@/components/platform/integrationsCatalogue";
+import { meetingFixture } from "@/test/fixtures";
 
 /**
  * THE KINDS OF NOTHING, on a glance surface.
@@ -249,20 +250,13 @@ describe("the connections tile", () => {
 });
 
 
+/* THROUGH THE SHARED FIXTURE (2026-09-06) — see Meetings.test.tsx for the
+   reasoning: this was the third hand-written copy of one wire shape. */
 function meetingRow(over: Partial<import("@/api/types").MeetingRecord>): import("@/api/types").MeetingRecord {
-  return {
-    id: "m-1", title: "جلسه", scheduled_at: "2099-01-01T09:00:00.000Z",
-    duration_minutes: null, mode: "online", topic_id: null, topic: null, location: null,
-    description: "", invitees: [], agenda: [], call_id: null, call_title: null,
-    archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
-    /* the host's resolved name: the meeting knows who ran it, so the
-       minutes can count them among the attendees and the plan card can
-       stop drawing whoever happens to be looking */
-    host_name: "سینا", host_name_en: null,
-    video_url: null, video_provider: null,
-    minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
+  return meetingFixture({
+    title: "جلسه", scheduled_at: "2099-01-01T09:00:00.000Z", duration_minutes: null,
     ...over,
-  };
+  });
 }
 
 describe("the stat strip (the reference's four figures)", () => {

@@ -75,7 +75,10 @@ const ALSO_DESTRUCTIVE: Readonly<Record<string, string>> = {
  * the next `clearSomething` that turns out to be a cache refresh belongs here
  * with its sentence, not quietly outside the vocabulary.
  */
-const NOT_DESTRUCTIVE: Readonly<Record<string, string>> = {};
+const NOT_DESTRUCTIVE: Readonly<Record<string, string>> = {
+  removeMeetingAttendee:
+    "taking a colleague off a meeting's PLAN, which is the same act as the press that put them there and is undone by pressing it again — nothing is destroyed and no message is unsent. It is only true because InviteDialog refuses to remove anybody whose `attended_at` is set (db/0202): a person who was in the room is part of the record, and removing them WOULD destroy the platform's evidence of it. If that refusal is ever lifted, this entry stops being true and the method belongs back under the dialog",
+};
 
 /**
  * Destructive helpers that are not client methods — a local store still holds

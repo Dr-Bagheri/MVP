@@ -48,8 +48,14 @@ values ('c0000000-0000-4000-8000-0000000000c1',
         '0a000000-0000-4000-8000-00000000000a',
         '02000000-0000-4000-8000-000000000002',
         'رکورد جلسه', 'ready', 'web', 'private', 'fa');
+/* the LINK is the host's alone (0202), and this block is not about the link
+   — it is about what a delete cannot reach — so the setup is done as alice,
+   who created this meeting, and bob takes the actor back for the delete
+   itself, which is still an ordinary member's to make */
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 update echo.meeting set call_id = 'c0000000-0000-4000-8000-0000000000c1'
  where id = 'b0000000-0000-4000-8000-000000000101';
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 
 delete from echo.meeting where id = 'b0000000-0000-4000-8000-000000000101';
 select t.ok(

@@ -94,6 +94,11 @@ export async function hasCallTags(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "tags");
 }
 
+/** db/0202 (2026-09-06): a meeting's MEMBERS are rows, not names in a text[] */
+export async function hasMeetingAttendees(db: Db): Promise<boolean> {
+  return hasColumn(db, "meeting_attendee", "user_id");
+}
+
 /** db/0200 (2026-09-06): a transcript line carries the language it was spoken in */
 export async function hasSegmentLanguage(db: Db): Promise<boolean> {
   return hasColumn(db, "transcript_segment", "language");

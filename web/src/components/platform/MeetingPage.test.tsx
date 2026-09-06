@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Call, MeetingRecord } from "@/api/types";
@@ -50,8 +50,15 @@ const startSpy = vi.fn(async (_opts: unknown) => undefined);
 const tokenSpy = vi.fn((_id: string) => undefined);
 /* useSyncExternalStore REQUIRES a stable snapshot reference — a getter that
    builds a fresh object every call re-renders forever (the real engine's
-   snapshot is a module-level constant between changes for the same reason) */
-const ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0 };
+   snapshot is a module-level constant between changes for the same reason).
+   SETTABLE since 2026-09-06, and only ever between tests: a suite whose
+   engine is frozen at "idle" cannot represent a take in progress, so the
+   end button — half of the host rule — was unreachable by any assertion. */
+let ENGINE_SNAPSHOT: { phase: string; callId: string | null; recordedMs: number } =
+  { phase: "idle", callId: null, recordedMs: 0 };
+const engineIsRecording = (callId: string) => {
+  ENGINE_SNAPSHOT = { phase: "recording", callId, recordedMs: 12_000 };
+};
 vi.mock("@/lib/recordingEngine", () => ({
   startRecording: (opts: unknown) => startSpy(opts),
   finish: vi.fn(async () => undefined),
@@ -59,9 +66,30 @@ vi.mock("@/lib/recordingEngine", () => ({
   subscribeRecorder: () => () => undefined,
 }));
 
-/* the shared fixture — see src/test/fixtures.ts for why it is not
-   written out twice */
-const meeting = meetingFixture;
+/*
+ * The shared fixture (see src/test/fixtures.ts for why it is not written out
+ * twice), with ONE default of this suite's own: the reader is the HOST.
+ *
+ * db/0202 made starting and ending a recording the host's alone, and almost
+ * every test here is about running a meeting — so a stranger as the default
+ * viewer would exercise the refusal in every case and the product in none.
+ * It lives on the wrapper rather than in `beforeEach` because each test
+ * builds its own record, and an override there is silently discarded.
+ * A test about somebody ELSE's meeting passes `created_by` and reads as
+ * what it is.
+ */
+const meeting = (over: Partial<MeetingRecord> = {}): MeetingRecord =>
+  meetingFixture({ created_by: "u-me", ...over });
+
+/* db/0202's roster: who was ADDED, who was STAMPED, and the directory the
+   dialog picks from */
+const added: string[][] = [];
+const removed: string[] = [];
+const attended: string[] = [];
+let PEOPLE: Array<{ id: string; display_name: string; display_name_en: string | null; username: string | null; role: string }> = [];
+const personRow = (id: string) => ({
+  user_id: id, display_name: id, display_name_en: null, username: null, attended: false,
+});
 
 function call(over: Partial<Call>): Call {
   return {
@@ -122,6 +150,19 @@ vi.mock("@/api/client", async () => ({
       token: "t", url: "wss://example.livekit.cloud",
       expires_at: new Date(Date.now() + 3600_000).toISOString(),
     }),
+    /* db/0202 — the roster and the attendance stamp. `markMeetingAttended`
+       fires on EVERY visit to a held meeting, so a mock without it makes
+       every stage test fail on a render error rather than on its subject. */
+    markMeetingAttended: async (id: string) => { attended.push(id); },
+    addMeetingAttendees: async (_id: string, ids: string[]) => {
+      added.push(ids);
+      return { ...MEETING, attendees: [...MEETING.attendees, ...ids.map(personRow)] };
+    },
+    removeMeetingAttendee: async (_id: string, userId: string) => {
+      removed.push(userId);
+      return { ...MEETING, attendees: MEETING.attendees.filter((a) => a.user_id !== userId) };
+    },
+    orgPeople: async () => PEOPLE,
     createTask: vi.fn(), addCallNote: vi.fn(), deleteCallNote: vi.fn(),
   },
 }));
@@ -129,11 +170,25 @@ vi.mock("@/api/client", async () => ({
 import { MeetingPage } from "./MeetingPage";
 
 beforeEach(() => {
+  /*
+   * THE READER IS THE HOST, by default (db/0202, 2026-09-06).
+   *
+   * Starting and ending a recording is the host's alone now, so a suite
+   * whose default viewer is a stranger would be testing the refusal in
+   * every case and the product in none. The two tests that are ABOUT
+   * somebody else's meeting say so on their own line, which is also what
+   * makes them readable.
+   */
   MEETING = meeting({});
+  added.length = 0;
+  removed.length = 0;
+  attended.length = 0;
+  PEOPLE = [];
   CALL = null;
   DETAIL_GATE = null;
   patched.length = 0;
   startSpy.mockClear();
+  ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0 };
   tokenSpy.mockClear();
 });
 
@@ -218,7 +273,12 @@ describe("MeetingPage", () => {
      * and both halves are asserted: the host's name present, the viewer's
      * absent. Verified red against the old row on both.
      */
-    MEETING = meeting({ call_id: null, mode: "online", host_name: "مریم", invitees: ["رضا"] });
+    MEETING = meeting({
+      call_id: null, mode: "online", host_name: "مریم", invitees: ["رضا"],
+      /* SOMEBODY ELSE'S meeting — which is the whole point of this test and,
+         since 0202, also the reason the start controls are absent below */
+      created_by: "u-host",
+    });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
@@ -393,5 +453,239 @@ describe("the edit dialog reads the platform's clock (2026-09-06)", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "ذخیره" }));
     await waitFor(() => expect(patched).toHaveLength(1));
     expect(patched[0]!.scheduled_at).toBe("2026-05-07T22:09:00.000Z");
+  });
+});
+
+/**
+ * THE RECORDING IS THE HOST'S, AND THE ROSTER IS AN ACCOUNT (db/0202).
+ *
+ * User directive, 2026-09-06: "only the host should have the ability to start
+ * the recording and share the screen for audio and only the host must have
+ * the ability to finish it and after it finishes the session should be close
+ * for all. no, all that come to the meeting have a ability to get it for
+ * themselves as well and its a bug fix it."
+ *
+ * The whole matrix is walked, because asserting the refusal alone leaves the
+ * ORDINARY path unproven — and the ordinary path is the product: a wall that
+ * refuses everybody satisfies every "a colleague cannot" line in this block.
+ */
+describe("the recording belongs to the host (db/0202)", () => {
+  it("a colleague walking into the stage neither starts a take nor is offered one", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person", created_by: "u-host" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+
+    /* the in-person lane is the one that starts by ARRIVING, so this is the
+       case where a missing wall costs a recording nobody asked for */
+    await screen.findByText("شروع و پایان ضبط با میزبان است.");
+    expect(startSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
+  });
+
+  it("the online share button is the HOST'S: they are offered it and a colleague is not", async () => {
+    /*
+     * THE PAIR IS THE TEST, and the first half is what makes the second
+     * mean anything. Written the other way round — a colleague, and one
+     * queryByRole coming back null — it passed against a mutation that
+     * handed the button to everybody, because the name in the query
+     * («هم‌رسانی») is not the name on the button («شروع ضبط و اشتراک صدا»)
+     * and could never have matched. Found by verify-red, 2026-09-06: a
+     * check that only asks "is the thing I expect absent?" cannot tell an
+     * absent button from a misspelt query.
+     */
+    MEETING = meeting({ call_id: null, mode: "online" });
+    const host = render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    await screen.findByRole("button", { name: "شروع ضبط و اشتراک صدا" });
+    host.unmount();
+
+    MEETING = meeting({ call_id: null, mode: "online", created_by: "u-host" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    await screen.findByText("شروع و پایان ضبط با میزبان است.");
+    expect(screen.queryByRole("button", { name: "شروع ضبط و اشتراک صدا" })).toBeNull();
+  });
+
+  it("THE HOST still starts — the ordinary path, without which the two above pass against a wall that refuses everybody", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("شروع و پایان ضبط با میزبان است.")).toBeNull();
+  });
+
+  it("ENDING is the host's too: on one live take the host is offered «پایان و پردازش» and a colleague is not", async () => {
+    /*
+     * A reload mid-recording — the engine's take IS this meeting's linked
+     * call — which is the state where the end button appears without this
+     * page having started anything. The pair is the test: one fixture, one
+     * engine, two readers, and only the answer differs.
+     */
+    engineIsRecording("c-1");
+    MEETING = meeting({ call_id: "c-1" });
+    CALL = call({ status: "linking" });
+    const own = render(<MeetingPage id="m-1" />);
+    await screen.findByRole("button", { name: "پایان و پردازش" });
+    own.unmount();
+
+    MEETING = meeting({ call_id: "c-1", created_by: "u-host" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
+  });
+
+  it("the session closes for everyone: a colleague's page moves to the record when the host finishes", async () => {
+    /*
+     * "after it finishes the session should be close for all". The engine is
+     * in the HOST's browser, so this page has nothing local to watch — it
+     * asks, and what it waits for is the RECORD itself, which is the same
+     * fact the host's own end() waits for.
+     *
+     * The poll is on a real interval, so the clock is faked here; the read
+     * answers `call_id` only after the host has finished.
+     */
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      MEETING = meeting({ call_id: null, mode: "in_person", created_by: "u-host" });
+      render(<MeetingPage id="m-1" />);
+      await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+      await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+      await screen.findByText("شروع و پایان ضبط با میزبان است.");
+
+      /* the host finishes, somewhere else */
+      MEETING = meeting({ call_id: "c-1", mode: "in_person", created_by: "u-host" });
+      CALL = call({ status: "linking" });
+      await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+
+      await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("who was in the room (db/0202)", () => {
+  it("stamps attendance on walking into a HELD meeting, and never on the plan", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    /* the PLAN is not the room: a meeting somebody is reading about has not
+       been attended, and a stamp here would put every browser in it */
+    expect(attended).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    await waitFor(() => expect(attended).toEqual(["m-1"]));
+
+    /* ONCE — walking back and in again is one arrival, and the stamp's own
+       `coalesce` keeps the first moment anyway */
+    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    expect(attended).toEqual(["m-1"]);
+  });
+
+  it("lists colleagues by their USER MANAGEMENT name and marks who actually came", async () => {
+    /*
+     * The screenshot that started this showed «drbagheri» beside «دکتر
+     * باقری» — one person, twice, because the roster was a list of NAMES and
+     * two surfaces had written two spellings. A row keyed by an account
+     * cannot do that, and the name is resolved at read time.
+     */
+    MEETING = meeting({
+      call_id: null, mode: "in_person", invitees: ["مهمان بیرونی"],
+      attendees: [
+        { user_id: "u-2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi", username: "sina", attended: true },
+        { user_id: "u-3", display_name: "شهلا حسینی", display_name_en: null, username: "shahla", attended: false },
+      ],
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+
+    const members = (await screen.findByRole("heading", { name: "اعضای جلسه" })).closest("section")!;
+    expect(within(members).getByText("سینا سپاسی")).toBeInTheDocument();
+    expect(within(members).getByText("شهلا حسینی")).toBeInTheDocument();
+    /* the person with no account is still listed, and is MARKED as such —
+       so this cannot pass by rendering the roster and dropping the guests */
+    expect(within(members).getByText("مهمان بیرونی")).toBeInTheDocument();
+    expect(within(members).getByText("مهمان")).toBeInTheDocument();
+
+    /* ATTENDANCE, in the affirmative only: exactly one «در جلسه», on the
+       person who was there. A version that marked everybody would pass an
+       assertion that merely found the word. */
+    expect(within(members).getAllByText("در جلسه")).toHaveLength(1);
+    expect(within(members).getByText("سینا سپاسی").closest("li")!).toHaveTextContent("در جلسه");
+
+    /* host + two colleagues + one guest */
+    expect(within(members).getByText("۴")).toBeInTheDocument();
+  });
+
+  it("somebody who was IN THE ROOM cannot be taken off the meeting, and somebody who was not still can", async () => {
+    /*
+     * The pair, and the second half is what stops this passing against a
+     * dialog that removes nobody at all.
+     *
+     * Removing an attendee drops db/0202's row and its `attended_at` with
+     * it — the platform's own evidence that a person was there, which is
+     * the fact the transcript's roster reads. Un-planning is not a delete;
+     * un-remembering is.
+     */
+    PEOPLE = [
+      { id: "u-2", display_name: "سینا", display_name_en: null, username: "sina", role: "member" },
+      { id: "u-3", display_name: "شهلا", display_name_en: null, username: "shahla", role: "member" },
+    ];
+    MEETING = meeting({
+      call_id: null,
+      attendees: [
+        { user_id: "u-2", display_name: "سینا", display_name_en: null, username: "sina", attended: true },
+        { user_id: "u-3", display_name: "شهلا", display_name_en: null, username: "shahla", attended: false },
+      ],
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "دعوت افراد" }));
+    const dialog = await screen.findByRole("dialog");
+
+    /* BOTH doors to removal, because either one left open is the whole
+       hole: the chip's × and the directory row's toggle */
+    expect(within(dialog).queryByRole("button", { name: "حذف سینا" })).toBeNull();
+    /* anchored at the START of the name: the chip's own remove button is
+       labelled «حذف شهلا», so an unanchored match finds two buttons and
+       the query cannot say which door it is asking about */
+    expect(await within(dialog).findByRole("button", { name: /^سینا/ })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: /^شهلا/ })).toBeEnabled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "حذف شهلا" }));
+    await waitFor(() => expect(removed).toEqual(["u-3"]));
+  });
+
+  it("a colleague picked in the invite dialog is added BY ACCOUNT, in the one request that also invites them", async () => {
+    /*
+     * Adding somebody and telling them about it used to be two buttons —
+     * «دعوت‌شدگان» wrote a name into the text array and «دعوت اعضا» minted
+     * the invitations — so being on a meeting and hearing about it could
+     * come apart in either direction. One act now, and the assertion is on
+     * the USER ID: a version that went on writing names would still put a
+     * chip on screen.
+     */
+    PEOPLE = [
+      { id: "u-2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi", username: "sina", role: "member" },
+    ];
+    MEETING = meeting({ call_id: null });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "دعوت افراد" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: /سینا سپاسی/ }));
+
+    await waitFor(() => expect(added).toEqual([["u-2"]]));
+    /* and NOT through the old door: a name must never reach the text array
+       for somebody who has an account here */
+    expect(patched).toEqual([]);
   });
 });

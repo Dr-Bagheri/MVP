@@ -136,6 +136,17 @@ describe("what the card names", () => {
   it("the first name-like field, and where a move is going — the generic rule for tools without an entry", () => {
     expect(consentDetail("delete_task", { task_id: "t-1", title: "جمع‌آوری صدای خام" })).toBe("جمع‌آوری صدای خام");
     expect(consentDetail("create_task", { project: "دیتابیس صوتی" })).toBe("دیتابیس صوتی");
+    /* A LIST OF PEOPLE IS THE OBJECT (db/0202). `invite_to_meeting` carries
+       its people in an array, and a card that could read only strings named
+       nothing at all — «دعوت به جلسه» with no names is a yes to inviting
+       anybody, which is the exact shape this function exists to end. */
+    expect(consentDetail("invite_to_meeting", { meeting_id: "m-1", invitees: ["@sina", "@shahla"] }))
+      .toBe("@sina، @shahla");
+    /* and a long list is summarised rather than dumped: a card nobody reads
+       is a card nobody checks */
+    expect(consentDetail("invite_to_meeting", {
+      meeting_id: "m-1", invitees: ["a", "b", "c", "d", "e", "f", "g"],
+    })).toBe("a، b، c، d، e +2");
     expect(consentDetail("update_task", { task_id: "t-1", title: "کار", folder: "دیتابیس صوتی" })).toBe("کار \u2190 دیتابیس صوتی");
     expect(consentDetail("update_task", { task_id: "t-1", title: "کار", column: "در حال انجام" })).toBe("کار \u2190 در حال انجام");
   });

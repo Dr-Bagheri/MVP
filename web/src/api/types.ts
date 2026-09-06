@@ -27,7 +27,7 @@ export type { AgentCardKind };
 export type { AgentCard, ConnectorItem, ConnectorProvider, ConnectorSourceKind, ConnectorStatus, WorkflowCard };
 /* 0144 tasks + 0145 meetings, inherited from the producer (never mirrored) */
 export type {
-  MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature,
+  MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature, MeetingAttendee,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,

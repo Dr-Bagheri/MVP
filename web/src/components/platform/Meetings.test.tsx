@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeetingRecord } from "@/api/types";
+import { meetingFixture } from "@/test/fixtures";
 
 /**
  * The meetings LIST's contract facts, after the 2026-09-01 rebuild against
@@ -30,17 +31,16 @@ const pushSpy = vi.fn();
 const updateSpy = vi.fn();
 let TOPICS: Array<{ id: string; name: string }> = [];
 
+/* THROUGH THE SHARED FIXTURE, not a second copy of it (2026-09-06). This
+   was a hand-written twin of `meetingFixture`, and db/0202's one new field
+   turned up in all three copies on the same typecheck — which is the drift
+   `src/test/fixtures.ts` was extracted to prevent, arriving on schedule.
+   Only this suite's own defaults stay here. */
 function meeting(over: Partial<MeetingRecord>): MeetingRecord {
-  return {
-    id: "m-1", title: "جلسهٔ برنامه‌ریزی", scheduled_at: "2099-01-01T09:00:00.000Z",
-    duration_minutes: 60, mode: "online", topic_id: null, topic: null, location: null,
-    description: "", invitees: [], agenda: [], call_id: null, call_title: null,
-    archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
-    host_name: "سینا", host_name_en: null,
-    video_url: null, video_provider: null,
-    minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
+  return meetingFixture({
+    title: "جلسهٔ برنامه‌ریزی", scheduled_at: "2099-01-01T09:00:00.000Z",
     ...over,
-  };
+  });
 }
 
 let LIST: MeetingRecord[] = [];

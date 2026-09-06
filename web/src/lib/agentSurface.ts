@@ -137,6 +137,11 @@ export const SURFACE_TOOLS: readonly string[] = [
 export const NAVIGABLE = /^\/(assistant|meetings|tasks|projects|chat|integrations|profile|echo(\/(record|upload|calls|records|summaries|archive))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/* deliberately loose: this decides whether a string is an ADDRESS for
+   somebody outside the organisation or a NAME the platform failed to
+   resolve — and the server validates the address itself. A strict pattern
+   here would turn a real address into "no colleague matched that name". */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface SurfaceContext {
   /** locale-aware push — the i18n router's, so /fa|/en is not the tool's problem */
@@ -1585,28 +1590,67 @@ export async function executeClientTool(
       try {
         const { api } = await import("@/api/client");
         /*
-         * READ, THEN APPEND. `invitees` is a whole-array write, so sending
-         * only the new names would silently uninvite everybody already on the
-         * list — the lost-update hazard this repo already recorded against
-         * `allowed_models`, arriving here as "the agent removed four people
-         * while adding one". The read is what makes this an ADD.
+         * A COLLEAGUE IS AN ACCOUNT, NOT A NAME (db/0202, user directive
+         * 2026-09-06: "the agents add members based on the knowledge that
+         * they have and their names ... in case of adding members to a task
+         * or invitation for chat or meetings those names are useless and the
+         * user name and member name in user management should be used").
+         *
+         * This tool used to write whatever string the model produced into
+         * `meeting.invitees` — so an agent could put «دکتر باقری» on a
+         * meeting that already had «drbagheri» on it, tell nobody, and
+         * report success. Each name is now resolved against user management
+         * and added as a ROW, which also mints the invitation.
+         *
+         * An EMAIL still goes in the text list, because that is a real
+         * address for somebody with no account here. Anything else REFUSES
+         * and names the near misses: a name the platform cannot resolve is
+         * precisely the useless one, and writing it down would be the model
+         * inventing a participant.
          */
-        const meeting = await api.meetingDetail(id);
-        const seen = new Set(meeting.invitees.map((v) => v.trim().toLowerCase()));
-        const merged = [
-          ...meeting.invitees,
-          ...adding.filter((v) => !seen.has(v.trim().toLowerCase())),
-        ];
-        if (merged.length === meeting.invitees.length) {
-          /* everybody named was already there — a true statement, and a
-             different one from "added", which the model should be able to say */
-          return { ok: true, detail: "they were already invited" };
+        const emails: string[] = [];
+        const ids: string[] = [];
+        const names: string[] = [];
+        const unknown: string[] = [];
+        for (const raw of adding) {
+          const who = await resolveColleague(raw);
+          if (who.ok) { ids.push(who.id); names.push(who.name); continue; }
+          if (EMAIL_RE.test(raw)) { emails.push(raw); continue; }
+          unknown.push(`${raw} (${who.detail})`);
         }
-        await api.updateMeeting(id, { invitees: merged.slice(0, 100) });
+        if (ids.length === 0 && emails.length === 0) {
+          return { ok: false, detail: unknown.join("; ") };
+        }
+        if (ids.length > 0) await api.addMeetingAttendees(id, ids);
+        if (emails.length > 0) {
+          /*
+           * READ, THEN APPEND, for the text half. `invitees` is a
+           * whole-array write, so sending only the new addresses would
+           * silently uninvite everybody already on the list — the
+           * lost-update hazard this repo recorded against `allowed_models`,
+           * arriving here as "the agent removed four people while adding
+           * one". The read is what makes this an ADD.
+           */
+          const meeting = await api.meetingDetail(id);
+          const seen = new Set(meeting.invitees.map((v) => v.trim().toLowerCase()));
+          const merged = [...meeting.invitees, ...emails.filter((v) => !seen.has(v.toLowerCase()))];
+          if (merged.length > meeting.invitees.length) {
+            await api.updateMeeting(id, { invitees: merged.slice(0, 100) });
+          }
+        }
         announceChange("calls");
-        return { ok: true, detail: `invited ${merged.length - meeting.invitees.length}` };
-      } catch {
-        return { ok: false, detail: "that meeting's invitees could not be changed" };
+        /* the people are NAMED back, and anybody who could not be resolved
+           is named too: "invited 2" over a list of three is a success
+           report with a silent omission inside it */
+        const said = [...names, ...emails].join("، ");
+        return {
+          ok: true,
+          detail: unknown.length === 0
+            ? `invited ${said}`
+            : `invited ${said}; not matched: ${unknown.join("; ")}`,
+        };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "that meeting's invitees could not be changed") };
       }
     }
     case "update_meeting": {

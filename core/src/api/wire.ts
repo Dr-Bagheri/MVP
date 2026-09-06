@@ -56,7 +56,7 @@ export type {
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,
   TaskRecurrenceRecord,
 } from "./tasks.ts";
-export type { MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature } from "./meetings.ts";
+export type { MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature, MeetingAttendee } from "./meetings.ts";
 export type { ProjectRecord, ProjectTone, ProjectWorkloadRow } from "./projects.ts";
 export type { ChatChannelRecord, ChatMessageRecord, ChatReactionRecord, ChatReplyPreview } from "./chat.ts";
 export type { JoinInviteRecord, InviteKind } from "./invites.ts";

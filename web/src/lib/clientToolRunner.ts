@@ -123,6 +123,7 @@ const NAMING: Readonly<Record<string, Naming>> = {
   delete_task_label: { subject: ["label"] },
   update_chat_room: { subject: ["room"], to: ["name"], flag: "archived" },
   create_chat_room: { subject: ["name"] },
+  invite_to_meeting: { subject: ["invitees"] },
 };
 
 const EXCERPT_CHARS = 60;
@@ -135,8 +136,24 @@ const EXCERPT_CHARS = 60;
  */
 export function consentDetail(tool: string, args: unknown): string | null {
   const a = (args ?? {}) as Record<string, unknown>;
-  const str = (key: string): string | null =>
-    typeof a[key] === "string" && (a[key] as string).trim() !== "" ? (a[key] as string).trim() : null;
+  const str = (key: string): string | null => {
+    const raw = a[key];
+    if (typeof raw === "string") return raw.trim() === "" ? null : raw.trim();
+    /* A LIST OF NAMES IS AN OBJECT. `invite_to_meeting` takes people in an
+       array, and a card that could only read strings named nothing at all —
+       which is the shape this whole function exists to end: a yes to the
+       verb is a yes to anybody. Five, then a count, because a card is read
+       in a glance and a wall of forty names is not read. */
+    if (Array.isArray(raw)) {
+      const items = raw.filter((v): v is string => typeof v === "string" && v.trim() !== "")
+        .map((v) => v.trim());
+      if (items.length === 0) return null;
+      return items.length <= 5
+        ? items.join("، ")
+        : `${items.slice(0, 5).join("، ")} +${items.length - 5}`;
+    }
+    return null;
+  };
   const first = (keys: readonly string[]): string | null => keys.map(str).find((v) => v !== null) ?? null;
 
   const naming = NAMING[tool];

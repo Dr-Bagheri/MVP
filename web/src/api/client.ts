@@ -1758,6 +1758,34 @@ export const api = {
       headers: { "content-type": "application/json" },
     });
   },
+  /**
+   * WHO IS COMING (db/0202) — colleagues, by their ACCOUNT.
+   *
+   * Adding somebody and telling them about it is ONE request: core writes the
+   * rows and mints the invitation together, so the bell carries the accept and
+   * reject the same way a chat room's does. The `invitees` text list is what
+   * is left of the old shape and now holds only people with no account here.
+   */
+  async addMeetingAttendees(id: string, userIds: string[]): Promise<MeetingRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/attendees`, {
+      method: "POST", body: JSON.stringify({ user_ids: userIds }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async removeMeetingAttendee(id: string, userId: string): Promise<MeetingRecord> {
+    return bff(
+      `/api/meetings/${encodeURIComponent(id)}/attendees/${encodeURIComponent(userId)}`,
+      { method: "DELETE" },
+    );
+  },
+  /**
+   * I AM HERE (db/0202). Sent when a member on the roster opens a meeting
+   * that is being HELD — so the transcript's roster can name who was in the
+   * room instead of numbering voices. Silent for a reader who is not on it.
+   */
+  async markMeetingAttended(id: string): Promise<void> {
+    await bff<null>(`/api/meetings/${encodeURIComponent(id)}/attended`, { method: "POST" });
+  },
   /** the video room's join token — minted server-side, never in the browser */
   async meetingRoomToken(id: string): Promise<{ token: string; url: string; expires_at: string }> {
     return bff(`/api/meetings/${encodeURIComponent(id)}/token`, { method: "POST" });

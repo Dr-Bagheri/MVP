@@ -2,6 +2,7 @@
 
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { speakerNaming } from "@/lib/speakerNaming";
 import { api } from "@/api/client";
 import type { Call, CallNote, CallStatus, Me, Person, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
 import { ToolbarShell } from "@/components/platform/ToolbarShell";
@@ -850,11 +851,16 @@ export default function CallDetailPage({
       .slice(0, 5);
   }, [allCalls, call, id]);
 
+  /* NEVER THE INTERNAL LABEL, AND NEVER THE ID (2026-09-06). This read
+     `person_name ?? label ?? speakerId`, so an unlinked voice rendered as
+     the diarizer's «S1·1» and an unknown one as a raw uuid — a database key
+     in the place a person's name goes. See lib/speakerNaming.ts. */
   const speakerName = useCallback((speakerId: string | null) => {
-    if (speakerId === null) return t("unattributed");
-    const speaker = speakers.find((s) => s.id === speakerId);
-    return speaker?.person_name ?? speaker?.label ?? speakerId;
-  }, [speakers, t]);
+    const naming = speakerNaming(speakerId, speakers);
+    return naming.kind === "person" ? naming.name
+      : naming.kind === "ordinal" ? t("speakerNamed", { n: digits(naming.n, locale) })
+        : t("unattributed");
+  }, [speakers, t, locale]);
 
   const speakerIndex = useCallback(
     (speakerId: string | null) =>

@@ -3,45 +3,65 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { OrgPersonRecord } from "@/api/types";
+import type { MeetingRecord, OrgPersonRecord } from "@/api/types";
 import { Overlay } from "@/components/platform/Overlay";
+import { Avatar } from "@/components/Avatar";
 import { IconCheck, IconClose, IconCopy, IconSearch } from "@/components/icons";
 import { personName } from "@/lib/format";
 import { Skeleton } from "@/components/scaffold";
 
 /**
- * WHO IS COMING — the meeting's invitees, chosen from the organisation or
- * typed as an address (user directive, 2026-09-02: "when you press on invite
- * this window must pop up, and you can add people from all org to it — it
- * should work both for members and admins — or you can send emails to them").
+ * WHO IS COMING — and being told about it is the SAME ACT (db/0202).
  *
- * Two ways in, because there are two kinds of person:
+ * ── What was wrong, and why this is a rewrite rather than a patch ─────────
  *
- *   COLLEAGUES are picked from a list. `orgPeople` is the directory every
- *   picker on the platform uses, and it returns names and roles and NEVER
- *   emails — a member browsing their colleagues is not a reason to hand out
- *   an address book.
+ * A colleague used to be added as a NAME: the picker wrote `personName(...)`
+ * into `meeting.invitees`, a text array. Three consequences, all of them
+ * visible in the user's own screenshot of a three-person meeting:
  *
- *   EVERYONE ELSE is typed. An invitee outside the platform has no row to
- *   pick, which is exactly why `meeting.invitees` is a text array rather than
- *   a set of user ids (0145 wrote that reasoning down; this is the surface
- *   that needed it), and why the guest link sits in this window too — the
- *   answer to "how does this person actually get in" is only useful beside
- *   the place you add them.
+ *   · the same person appeared twice under two spellings («drbagheri» beside
+ *     «دکتر باقری»), because a name typed on one surface and a name resolved
+ *     on another are two different strings about one person — the
+ *     two-spellings defect, wearing a roster;
+ *   · nobody was TOLD. A second dialog («دعوت همکاران») minted the
+ *     invitations, so being put on a meeting and hearing about it were two
+ *     buttons and could come apart in either direction;
+ *   · and the platform threw away the one fact it had: WHICH ACCOUNT. A name
+ *     cannot be matched to a speaker, to a notification, or to an attendance.
+ *
+ * So the model changed underneath: a colleague is a ROW keyed by their
+ * account (0202), and adding them mints the invitation in the same request —
+ * the bell carries accept and reject exactly as it does for a chat room
+ * (0189's cards, which already knew the meeting kind).
+ *
+ * ── Two kinds of person, still ────────────────────────────────────────────
+ *
+ *   COLLEAGUES are picked from the directory. `orgPeople` is the same list
+ *   every picker on the platform uses — user management's own rows — and it
+ *   returns names and roles and NEVER emails.
+ *
+ *   EVERYONE ELSE is typed, and stays in `invitees`. That is all the text
+ *   array is for now, which is what 0145 wrote it down for in the first
+ *   place: a person outside the platform has no row to pick, and the guest
+ *   link sits in this window because "how does this person actually get in"
+ *   is only useful beside the place you add them.
  *
  * MEMBERS AND ADMINS ALIKE, and there is no role check here on purpose: the
- * directory is org-scoped and the meeting's own policies decide who may edit
- * it. A check in a dialog is a check the server does not have.
+ * meeting's own policies decide who may edit it. A check in a dialog is a
+ * check the server does not have.
  */
 export function InviteDialog({
-  invitees,
-  onChange,
+  meeting,
+  onMeeting,
+  onFailed,
   onClose,
   guestLinkCopied,
   onCopyGuestLink,
 }: {
-  invitees: string[];
-  onChange: (next: string[]) => void;
+  meeting: MeetingRecord;
+  /** the server's answer, adopted — never an optimistic local roster */
+  onMeeting: (next: MeetingRecord) => void;
+  onFailed: () => void;
   onClose: () => void;
   /** true once a link has been minted and put on the clipboard this session */
   guestLinkCopied: boolean;
@@ -52,30 +72,80 @@ export function InviteDialog({
   const [people, setPeople] = useState<OrgPersonRecord[] | null>(null);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
+  /** the ids in flight, so one row cannot be pressed twice into two requests */
+  const [busy, setBusy] = useState<string[]>([]);
 
   useEffect(() => {
     void api.orgPeople().then(setPeople).catch(() => setPeople([]));
   }, []);
 
+  const onMeetingIds = useMemo(
+    () => new Set(meeting.attendees.map((a) => a.user_id)),
+    [meeting.attendees],
+  );
+  /**
+   * WHO CANNOT BE TAKEN OFF: the people who actually came.
+   *
+   * Adding and removing here are a PLAN being corrected — a mis-picked
+   * colleague, a change of mind — and a plan is not a record. But db/0202's
+   * row also carries `attended_at`, so once somebody has been in the room,
+   * removing them would erase the platform's own evidence of it: the fact
+   * the transcript's roster reads, and the one this whole migration exists
+   * to keep. That is a delete, and this dialog is not where a record gets
+   * deleted.
+   *
+   * It is also what makes the removal above genuinely non-destructive, and
+   * therefore what the confirm guard's entry says (confirm.guard.test.ts):
+   * this control can only ever unmake a plan.
+   *
+   * Read by the two CONTROLS and nowhere else. A third copy inside `toggle`
+   * would be a wall no press could reach — which reads as rigour, cannot
+   * fail, and is how the rule that matters ends up untested (found by
+   * verify-red on exactly that line).
+   */
+  const wasHere = useMemo(
+    () => new Set(meeting.attendees.filter((a) => a.attended).map((a) => a.user_id)),
+    [meeting.attendees],
+  );
+
   const shown = useMemo(() => {
     const rows = people ?? [];
     const q = query.trim().toLowerCase();
     if (q === "") return rows;
-    /* through `personName`, the way every other search on this platform
-       matches a person — a colleague findable by one of their two names and
-       not the other is a colleague the search says does not exist */
-    return rows.filter((p) => personName(p, locale).toLowerCase().includes(q));
-  }, [people, query, locale]);
+    /* BOTH NAMES AND THE HANDLE — the way every other search on this platform
+       matches a person. A colleague findable by one of their two names and
+       not the other is a colleague the search says does not exist, and the
+       username is what somebody types when they know it. */
+    return rows.filter((p) =>
+      [p.display_name, p.display_name_en ?? "", p.username ?? ""]
+        .some((s) => s.toLowerCase().includes(q)));
+  }, [people, query]);
 
-  const toggle = (name: string) => {
-    onChange(invitees.includes(name) ? invitees.filter((v) => v !== name) : [...invitees, name]);
+  const toggle = (userId: string) => {
+    if (busy.includes(userId)) return;
+    setBusy((cur) => [...cur, userId]);
+    const call = onMeetingIds.has(userId)
+      ? api.removeMeetingAttendee(meeting.id, userId)
+      : api.addMeetingAttendees(meeting.id, [userId]);
+    void call
+      .then(onMeeting)
+      .catch(onFailed)
+      .finally(() => setBusy((cur) => cur.filter((v) => v !== userId)));
   };
 
+  /* the typed half writes the TEXT list, which is the only thing it can
+     honestly write: somebody with no account here has no row to add */
   const addTyped = () => {
     const name = draft.trim();
-    if (name === "" || invitees.includes(name)) { setDraft(""); return; }
-    onChange([...invitees, name]);
+    if (name === "" || meeting.invitees.includes(name)) { setDraft(""); return; }
     setDraft("");
+    void api.updateMeeting(meeting.id, { invitees: [...meeting.invitees, name] })
+      .then(onMeeting).catch(onFailed);
+  };
+
+  const removeTyped = (name: string) => {
+    void api.updateMeeting(meeting.id, { invitees: meeting.invitees.filter((v) => v !== name) })
+      .then(onMeeting).catch(onFailed);
   };
 
   return (
@@ -93,6 +163,12 @@ export function InviteDialog({
           <IconClose width={14} height={14} />
         </button>
       </div>
+
+      {/* WHAT PRESSING A ROW DOES, said once. 0189's own rule: an invitation
+          grants nothing — a meeting is org-readable already — so the honest
+          sentence is that the person is put on the meeting and told about
+          it, which is a CONSEQUENCE and not an explanation (R21). */}
+      <p className="mb-2 text-xs text-fg-muted">{t("inviteNotifies")}</p>
 
       <label className="relative block">
         <span className="sr-only">{t("inviteSearch")}</span>
@@ -126,14 +202,20 @@ export function InviteDialog({
           <ul className="space-y-1">
             {shown.map((person) => {
               const name = personName(person, locale);
-              const chosen = invitees.includes(name);
+              const chosen = onMeetingIds.has(person.id);
+              const isHost = person.id === meeting.created_by;
               return (
                 <li key={person.id}>
                   <button
                     type="button"
                     aria-pressed={chosen}
-                    onClick={() => toggle(name)}
-                    className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-start transition-colors ${
+                    /* THE HOST IS ALREADY IN THE MEETING — they made it. A
+                       row that could add them would mint an invitation to
+                       their own meeting, and one that could remove them
+                       would promise something the record does not have. */
+                    disabled={isHost || wasHere.has(person.id) || busy.includes(person.id)}
+                    onClick={() => toggle(person.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-start transition-colors disabled:opacity-60 ${
                       chosen
                         ? "border-accent bg-accent-soft"
                         : "border-transparent hover:border-border hover:bg-surface-2"
@@ -160,8 +242,18 @@ export function InviteDialog({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-fg">{name}</span>
-                      <span className="block text-[10px] text-fg-subtle">{person.role}</span>
+                      <span className="block text-[10px] text-fg-subtle">
+                        {/* the HANDLE beside the role: it is what makes two
+                            colleagues with one display name tellable apart,
+                            and it is the name user management shows */}
+                        {person.username === null ? person.role : `@${person.username} · ${person.role}`}
+                      </span>
                     </span>
+                    {isHost ? (
+                      <span className="shrink-0 rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] text-fg-subtle">
+                        {t("memberHost")}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               );
@@ -199,15 +291,41 @@ export function InviteDialog({
         </button>
       </div>
 
-      {invitees.length > 0 ? (
+      {/* THE PEOPLE ON THE MEETING, in one place — colleagues by their user
+          management name, then the typed guests. Two lists would ask the
+          reader to work out which half somebody is in; one list with a
+          removable chip each answers "who is coming" the way the card on the
+          page behind this dialog does. */}
+      {meeting.attendees.length + meeting.invitees.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
-          {invitees.map((name) => (
+          {meeting.attendees.map((a) => (
+            <span key={a.user_id} className="flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-fg">
+              <Avatar name={personName(a, locale)} size="xs" />
+              {personName(a, locale)}
+              {/* the person who was in the room keeps their place, and the
+                  chip says why rather than offering a control that refuses */}
+              {a.attended ? (
+                <span className="text-[10px] text-accent">{t("attendedMark")}</span>
+              ) : (
+                <button
+                  type="button"
+                  aria-label={t("removeInvitee", { name: personName(a, locale) })}
+                  disabled={busy.includes(a.user_id)}
+                  onClick={() => toggle(a.user_id)}
+                  className="text-fg-subtle hover:text-danger disabled:opacity-50"
+                >
+                  <IconClose width={12} height={12} />
+                </button>
+              )}
+            </span>
+          ))}
+          {meeting.invitees.map((name) => (
             <span key={name} className="flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-fg">
               {name}
               <button
                 type="button"
                 aria-label={t("removeInvitee", { name })}
-                onClick={() => onChange(invitees.filter((v) => v !== name))}
+                onClick={() => removeTyped(name)}
                 className="text-fg-subtle hover:text-danger"
               >
                 <IconClose width={12} height={12} />
