@@ -56,11 +56,10 @@ type Props = {
   onClose: () => void;
   /** the record as the server returned it — created, or re-read after an edit */
   onSaved: (project: ProjectRecord) => void;
-  onFailed: () => void;
 } & ({ mode: "create"; project?: undefined } | { mode: "edit"; project: ProjectRecord });
 
 export function ProjectDialog(props: Props) {
-  const { people, meId, onClose, onSaved, onFailed } = props;
+  const { people, meId, onClose, onSaved } = props;
   const editing = props.mode === "edit" ? props.project : null;
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
@@ -71,6 +70,12 @@ export function ProjectDialog(props: Props) {
   const [icon, setIcon] = useState<string | null>(editing ? editing.icon : "📁");
   const [members, setMembers] = useState<string[]>(editing?.member_ids ?? []);
   const [busy, setBusy] = useState(false);
+  /* A REFUSED WRITE KEEPS THE DIALOG (2026-09-06, the check-up). It used to
+     call an `onFailed` that every parent answered by CLOSING it — the name,
+     the summary, the tone and the roster gone with a toast at the top of a
+     page the person was no longer looking at. The refusal is said HERE, over
+     the draft it refused, and the draft stays to be sent again. */
+  const [refused, setRefused] = useState(false);
 
   const patch = useMemo(() => {
     const body: Partial<{ name: string; summary: string; tone: ProjectTone; icon: string | null }> = {};
@@ -91,6 +96,7 @@ export function ProjectDialog(props: Props) {
   const submit = () => {
     if (!canSubmit) return;
     setBusy(true);
+    setRefused(false);
     const run = editing
       ? (async () => {
           if (Object.keys(patch).length > 0) await api.updateProject(editing.id, patch);
@@ -105,7 +111,7 @@ export function ProjectDialog(props: Props) {
           icon,
           member_ids: members,
         });
-    void run.then(onSaved).catch(() => { setBusy(false); onFailed(); });
+    void run.then(onSaved).catch(() => { setBusy(false); setRefused(true); });
   };
 
   const title = editing ? t("edit") : t("newProject");
@@ -213,6 +219,8 @@ export function ProjectDialog(props: Props) {
         ) : null}
       </div>
 
+      {refused ? <p role="alert" className="mt-3 text-xs text-danger">{t("writeFailed")}</p> : null}
+
       <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
         <button type="button" onClick={onClose} className={FOOTER_CANCEL}>
           {tCommon("cancel")}
@@ -249,7 +257,12 @@ export function TonePicker({ value, onChange, label }: {
   onChange: (tone: ProjectTone) => void;
   label: string;
 }) {
-  const t = useTranslations("projects");
+  /* the colour names are COMMON words (2026-09-06): the task board's label
+     and column pickers say them too, and two namespaces spelling eight
+     colours is the pair that drifts. Named `tCommon`, never a second `t`:
+     keys.test resolves a file's `t(...)` calls to ONE namespace, and a
+     rebound `t` sent every key in this file looking in the wrong one. */
+  const tCommon = useTranslations("common");
   return (
     <div>
       <span className={FIELD_LABEL}>{label}</span>
@@ -258,7 +271,7 @@ export function TonePicker({ value, onChange, label }: {
           <button
             key={tone}
             type="button"
-            aria-label={t(`tone_${tone}`)}
+            aria-label={tCommon(`tone_${tone}`)}
             aria-pressed={value === tone}
             onClick={() => onChange(tone)}
             className={`btn btn-icon hover:bg-surface-2 ${value === tone ? "ring-2 ring-accent" : ""}`}

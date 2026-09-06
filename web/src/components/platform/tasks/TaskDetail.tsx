@@ -121,7 +121,10 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
   const end = (
     <>
             {task.call_id !== null ? (
-              <Link href={`/meetings?call=${task.call_id}`}
+              /* the RECORD's own page (2026-09-06, the check-up): this linked
+                 `/meetings?call=`, a page that reads no such parameter, so the
+                 chip opened the meetings list and dropped the call on the way */
+              <Link href={`/calls/${task.call_id}`}
                 className="btn btn-sm bg-accent-soft font-medium text-accent">
                 <IconVideo width={12} height={12} />
                 <span className="max-w-[280px] truncate">{task.call_title ?? t("recordGone")}</span>
@@ -646,13 +649,14 @@ function ScheduleRow({ task, onChanged, onFailed }: {
             </button>
           </div>
           <div className={DIALOG_BODY}>
-          {/* the SAME fields the create dialog offers, forced on — the switch
-              would be a second way to say what «توقف تکرار» already says */}
+          {/* the SAME fields the create dialog offers, forced on — no
+              `onRepeats`, so the fields draw NO switch: a checkbox wired to
+              nothing (which is what stood here until 2026-09-06) is a control
+              that does not respond, and «توقف تکرار» is the way off */}
           <ScheduleFields
             repeats
             gapDays={gapDays}
             until={until}
-            onRepeats={() => undefined}
             onGapDays={setGapDays}
             onUntil={setUntil}
           />

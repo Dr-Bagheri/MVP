@@ -50,62 +50,109 @@ export function openChatLive(
     source?: (url: string) => EventSource;
     setTimer?: (fn: () => void, ms: number) => number;
     clearTimer?: (id: number) => void;
+    /** a one-shot timer for the reconnect backoff (setTimeout by default) */
+    later?: (fn: () => void, ms: number) => number;
+    cancelLater?: (id: number) => void;
+    /** the jitter source — injectable so a test can pin the delay */
+    random?: () => number;
   } = {},
 ): () => void {
   const getTicket = deps.ticket ?? (() => api.chatTicket());
   const makeSource = deps.source ?? ((url: string) => new EventSource(url));
   const setTimer = deps.setTimer ?? ((fn, ms) => window.setInterval(fn, ms));
   const clearTimer = deps.clearTimer ?? ((id) => window.clearInterval(id));
+  const later = deps.later ?? ((fn, ms) => window.setTimeout(fn, ms));
+  const cancelLater = deps.cancelLater ?? ((id) => window.clearTimeout(id));
+  const random = deps.random ?? Math.random;
 
   let stopped = false;
   let source: EventSource | null = null;
   let poller: number | null = null;
+  let retry: number | null = null;
+  let attempt = 0;
 
   const startPolling = () => {
     if (stopped || poller !== null) return;
     handlers.onState("polling");
     poller = setTimer(() => handlers.onPoll(), POLL_MS);
   };
+  const stopPolling = () => {
+    if (poller === null) return;
+    clearTimer(poller);
+    poller = null;
+  };
 
-  handlers.onState("connecting");
-  void getTicket()
-    .then(({ direct_url }) => {
-      if (stopped) return;
-      if (direct_url === null) {
-        /* core does not know its own public address. Polling is slower and
-           it WORKS, which a stream at a guessed URL would not. */
+  /*
+   * THE RECONNECT IS OURS (2026-09-06). The ticket in the stream's URL is
+   * single-use, so EventSource's own retry could only ever present a spent
+   * ticket and get a 401 — which the spec treats as permanent. One dropped
+   * connection (a deploy, a laptop lid, a proxy) therefore meant polling for
+   * the rest of the page's life, with the state pill honestly saying so. So
+   * the source is closed on error, polling starts as the floor, and a NEW
+   * ticket is minted after a jittered backoff; a successful open clears the
+   * poller, or a live room would double-deliver forever.
+   */
+  const scheduleReconnect = () => {
+    if (stopped || retry !== null) return;
+    attempt += 1;
+    const base = Math.min(30_000, 2_000 * 2 ** (attempt - 1));
+    const delay = Math.round(base * (0.75 + random() * 0.5));
+    retry = later(() => { retry = null; connect(); }, delay);
+  };
+
+  const connect = () => {
+    if (stopped) return;
+    if (attempt === 0) handlers.onState("connecting");
+    void getTicket()
+      .then(({ direct_url }) => {
+        if (stopped) return;
+        if (direct_url === null) {
+          /* core does not know its own public address. Polling is slower and
+             it WORKS, which a stream at a guessed URL would not. */
+          startPolling();
+          return;
+        }
+        const es = makeSource(direct_url);
+        source = es;
+        es.onopen = () => {
+          if (stopped) return;
+          attempt = 0;
+          stopPolling();
+          handlers.onState("live");
+        };
+        for (const type of EVENT_TYPES) {
+          es.addEventListener(type, (event) => {
+            try {
+              handlers.onEvent(JSON.parse((event as MessageEvent).data) as ChatEvent);
+            } catch {
+              /* a malformed frame is not a reason to tear down a working
+                 stream — the catch-up read will carry whatever was in it */
+            }
+          });
+        }
+        es.onerror = () => {
+          if (stopped) return;
+          es.close();
+          if (source === es) source = null;
+          startPolling();
+          scheduleReconnect();
+        };
+      })
+      .catch(() => {
+        if (stopped) return;
         startPolling();
-        return;
-      }
-      const es = makeSource(direct_url);
-      source = es;
-      es.onopen = () => { if (!stopped) handlers.onState("live"); };
-      for (const type of EVENT_TYPES) {
-        es.addEventListener(type, (event) => {
-          try {
-            handlers.onEvent(JSON.parse((event as MessageEvent).data) as ChatEvent);
-          } catch {
-            /* a malformed frame is not a reason to tear down a working
-               stream — the catch-up read will carry whatever was in it */
-          }
-        });
-      }
-      es.onerror = () => {
-        /* EventSource retries on its own, at the interval the server's
-           `retry:` set. What it does NOT do is retry after a non-200: the
-           spec fails the connection permanently. So the poll lane starts
-           here as the floor, and the catch-up read on the next open makes a
-           double-delivery harmless. */
-        if (!stopped) startPolling();
-      };
-    })
-    .catch(() => { if (!stopped) startPolling(); });
+        scheduleReconnect();
+      });
+  };
+
+  connect();
 
   return () => {
     stopped = true;
     handlers.onState("off");
     source?.close();
-    if (poller !== null) clearTimer(poller);
+    stopPolling();
+    if (retry !== null) cancelLater(retry);
   };
 }
 

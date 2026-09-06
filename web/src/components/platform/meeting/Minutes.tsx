@@ -293,7 +293,7 @@ export function MinutesTab({ meeting, callId, myName, myId, onChanged }: {
 
         <section className="mt-4">
           <h3 className="text-sm font-bold text-accent">{digits(3, locale)}. {t("ext_decisions")}</h3>
-          {items === null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
+          {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
             : decisions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoDecisions")}</p>
               : (
                 <ol className="mt-1.5 space-y-1.5">
@@ -311,7 +311,7 @@ export function MinutesTab({ meeting, callId, myName, myId, onChanged }: {
 
         <section className="mt-4">
           <h3 className="text-sm font-bold text-accent">{digits(4, locale)}. {t("ext_actions")}</h3>
-          {items === null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
+          {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
             : actions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
               : (
                 <ul className="mt-1.5 space-y-1.5">

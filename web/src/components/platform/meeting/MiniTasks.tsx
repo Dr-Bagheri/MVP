@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { TaskCardRecord, TaskColumnRecord } from "@/api/types";
 import { IconCheck, IconPlus } from "@/components/icons";
 import { digits } from "@/lib/format";
+import { SkeletonLines } from "@/components/scaffold";
 
 /**
  * تسک‌ها — the meeting's own slice of the shared board, drawn as the
@@ -34,7 +35,7 @@ export function MeetingTasksBoard({ callId }: {
   }, []);
   useEffect(load, [load]);
 
-  if (board === null) return <p className="p-4 text-sm text-fg-muted">…</p>;
+  if (board === null) return <div className="p-4"><SkeletonLines lines={4} /></div>;
   if (board === "failed") return <p className="p-4 text-sm text-fg-muted">{t("readFailed")}</p>;
 
   const mine = board.tasks.filter((task) => task.call_id === callId);

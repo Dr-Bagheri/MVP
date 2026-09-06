@@ -9,7 +9,7 @@ import {
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
 import { api } from "@/api/client";
-import { personName } from "@/lib/format";
+import { hourInResolvedZone, personName } from "@/lib/format";
 import { useLocale } from "next-intl";
 import type { Me } from "@/api/types";
 import {
@@ -57,7 +57,10 @@ function GreetingHead() {
     void api.me().then(setMe).catch(() => setMe(null));
   }, []);
 
-  const hour = new Date().getHours();
+  /* the PLATFORM's hour, not the browser's (2026-09-06): the top bar's clock
+     beside this greeting reads the stored zone, and «شب بخیر» under a clock
+     that says ten in the morning is the two-clocks defect wearing a hello */
+  const hour = hourInResolvedZone(new Date().toISOString());
   const salute = hour < 5 ? t("greetNight")
     : hour < 12 ? t("greetMorning")
       : hour < 16 ? t("greetNoon")

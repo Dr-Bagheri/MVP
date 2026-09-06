@@ -126,9 +126,15 @@ export function Chat({ meId, isAdmin, people }: {
       .catch(() => { if (mode === "open") setMessages([]); });
   }, []);
 
+  /* the read mark is PER ROOM: `seq` is a table-wide identity, so a busy
+     room's mark carried into a quiet one meant the quiet room's newest
+     message (a smaller number) never counted as read while you stood in it
+     (2026-09-06) */
+  const acked = useRef(0);
   useEffect(() => {
     if (current === null) return;
     tip.current = 0;
+    acked.current = 0;
     setMessages(null);
     setTyping(null);
     setFailedAgent(null);
@@ -164,7 +170,6 @@ export function Chat({ meId, isAdmin, people }: {
      Debounced, and acknowledged EXPLICITLY rather than as a side effect of
      rendering: the unread mark has to stay where it is while somebody reads
      the messages under it. */
-  const acked = useRef(0);
   useEffect(() => {
     if (current === null || messages === null || messages.length === 0) return;
     const newest = messages[messages.length - 1]!.seq;
@@ -432,7 +437,6 @@ export function Chat({ meId, isAdmin, people }: {
             setCurrent(room.id);
             loadChannels();
           }}
-          onFailed={() => { setCreating(false); setError(t("writeFailed")); }}
         />
       ) : null}
 
@@ -449,10 +453,9 @@ export function Chat({ meId, isAdmin, people }: {
   );
 }
 
-function NewChannelDialog({ onClose, onCreated, onFailed }: {
+function NewChannelDialog({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (channel: ChatChannelRecord) => void;
-  onFailed: () => void;
 }) {
   const t = useTranslations("chat");
   const tCommon = useTranslations("common");
@@ -460,6 +463,8 @@ function NewChannelDialog({ onClose, onCreated, onFailed }: {
   const [topic, setTopic] = useState("");
   const [busy, setBusy] = useState(false);
   const [taken, setTaken] = useState(false);
+  /* a refused write keeps the dialog and its draft — see ProjectDialog */
+  const [refused, setRefused] = useState(false);
 
   return (
     <Overlay onClose={onClose} label={t("newChannel")} size="sm">
@@ -485,6 +490,7 @@ function NewChannelDialog({ onClose, onCreated, onFailed }: {
             placeholder={t("channelTopicPlaceholder")} className="input w-full" />
         </label>
       </div>
+      {refused ? <p role="alert" className="mt-3 text-xs text-danger">{t("writeFailed")}</p> : null}
       <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
         <button type="button" onClick={onClose} className="btn text-fg-muted hover:text-fg">
           {tCommon("cancel")}
@@ -494,6 +500,7 @@ function NewChannelDialog({ onClose, onCreated, onFailed }: {
           disabled={name.trim() === "" || busy}
           onClick={() => {
             setBusy(true);
+            setRefused(false);
             void api.createChatChannel({ name: name.trim(), topic: topic.trim() })
               .then(onCreated)
               .catch((error: unknown) => {
@@ -501,7 +508,7 @@ function NewChannelDialog({ onClose, onCreated, onFailed }: {
                 /* the server names the field; a conflict belongs ON it, not
                    in a toast that leaves the person guessing which input */
                 if ((error as { code?: string }).code === "chat_name_taken") setTaken(true);
-                else onFailed();
+                else setRefused(true);
               });
           }}
           className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50"

@@ -55,6 +55,12 @@ const EXCLUDED: Record<string, string> = {
     "not mirrored: `AuditSource` is imported from `@echo/core/wire` and the " +
     "values from this module, so no local union exists to drift. An assertion " +
     "would compare a type with itself and could never fail.",
+  ADMIN_ACTIONS:
+    "not mirrored: the audit screen reads `ADMIN_ACTIONS` from this module as " +
+    "the list of codes it can NAME (2026-09-06) and keeps no local union — a " +
+    "code the list gains renders as itself until the catalogues learn it, and " +
+    "AuditLogs.test asks both catalogues for every member. Same reasoning as " +
+    "AUDIT_SOURCES: importing, not copying.",
   AGENT_RUN_STATUSES:
     "core-internal: web/ never renders a run's lifecycle state, so mirroring it " +
     "would be a union we own and never read — dead surface that still has to be " +

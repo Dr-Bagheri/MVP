@@ -18,15 +18,18 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
  * a description and two short fields, and at 576px they stretched across a
  * line far longer than anything they hold.
  */
-const WIDTH = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-3xl" } as const;
+const WIDTH = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-3xl", xl: "max-w-5xl" } as const;
 
-export function Overlay({ children, onClose, label, wide = false, size }: {
+export function Overlay({ children, onClose, label, wide = false, size, flush = false }: {
   children: ReactNode;
   onClose: () => void;
   label: string;
   /** @deprecated pass `size` — kept so every existing caller still reads true */
   wide?: boolean;
   size?: keyof typeof WIDTH;
+  /** no inset of its own: the caller draws edge-to-edge chrome (the detail
+   *  frame's top bar and its body/rail hairline) — 2026-09-06 */
+  flush?: boolean;
 }) {
   return (
     <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -36,9 +39,9 @@ export function Overlay({ children, onClose, label, wide = false, size }: {
            by the callers, in their own header, so it is hidden rather than
            doubled — two X buttons in one corner is the two-spellings defect
            at its smallest */
-        className={`${WIDTH[size ?? (wide ? "lg" : "sm")]} max-h-[88vh] gap-0 overflow-hidden rounded-2xl border-border bg-surface p-4 shadow-island [&>button:last-child]:hidden`}
+        className={`${WIDTH[size ?? (wide ? "lg" : "sm")]} max-h-[88vh] gap-0 overflow-hidden rounded-2xl border-border bg-surface ${flush ? "p-0" : "p-4"} shadow-island [&>button:last-child]:hidden`}
       >
-        <div className="flex max-h-[calc(88vh-2rem)] min-h-0 flex-col">{children}</div>
+        <div className={`flex ${flush ? "max-h-[88vh]" : "max-h-[calc(88vh-2rem)]"} min-h-0 flex-col`}>{children}</div>
       </DialogContent>
     </Dialog>
   );

@@ -93,8 +93,14 @@ export interface AssistantSnapshot {
  */
 export interface SurfaceAdapter {
   handleClientTool: (event: Extract<AgentEvent, { type: "client_tool_call" }>) => Promise<void>;
-  /** the thread was settled — refetch the persisted rows, refresh drafts */
-  onSettled?: (reason: SettleReason) => void;
+  /**
+   * the thread was settled — refetch the persisted rows, refresh drafts.
+   * `asOf` is the run this settle belongs to; hand it back to
+   * `adoptAssistantThread`, which drops a refetch that lands after a newer
+   * run started (2026-09-06: the post-`done` read replaced the next
+   * question's live thread, and its answer streamed into nothing).
+   */
+  onSettled?: (reason: SettleReason, asOf: number) => void;
   /**
    * Every token, for a surface that SPEAKS the answer. The sidebar starts
    * talking at the first finished sentence rather than after the last one, so
@@ -116,6 +122,19 @@ let state: AssistantSnapshot = {
 
 const listeners = new Set<() => void>();
 let controller: AbortController | null = null;
+/** counts runs; a settle and a refetch carry the number of the run they are about */
+let runSeq = 0;
+/**
+ * THE BELT UNDER A CLIENT TOOL (2026-09-06). The surface's card answers a
+ * write's consent — and a surface can go away with the card open (a rail
+ * link mid-question). Its promise then never settled, `consume` stayed
+ * suspended on it, `done` was never read, `streaming` stayed true and every
+ * composer refused until a reload. The surfaces settle their own card on
+ * unmount now; this is the wait's ceiling for anything they miss — longer
+ * than the server's 120 s, so the server's own timeout answers first and
+ * this only ends a wait nobody is left to end.
+ */
+const CLIENT_TOOL_WAIT_MS = 130_000;
 let adapter: SurfaceAdapter | null = null;
 
 function publish(next: Partial<AssistantSnapshot>): void {
@@ -156,8 +175,12 @@ export function registerAssistantSurface(next: SurfaceAdapter): () => void {
 
 /** Replace the thread with rows read from the server (resume, adopt, reload). */
 export function adoptAssistantThread(
-  sessionId: string | null, messages: AgentMessage[], floor: string[] = [],
+  sessionId: string | null, messages: AgentMessage[], floor: string[] = [], asOf?: number,
 ): void {
+  /* a refetch about an OLDER run than the one running now is stale by
+     definition — adopting it would replace the live thread with rows that
+     predate the question the person just sent */
+  if (asOf !== undefined && asOf !== runSeq) return;
   publish({ sessionId, messages, floor, error: null });
   if (sessionId !== null) setLiveConversation(sessionId);
 }
@@ -320,7 +343,17 @@ async function runStream(
   start: (signal: AbortSignal) => AsyncGenerator<AgentEvent>,
 ): Promise<Outcome> {
   const hadSession = state.sessionId !== null;
-  controller = new AbortController();
+  /*
+   * MINE, not "the" controller (2026-09-06). A run that was superseded — a
+   * stale card answered after «گفت‌وگوی تازه» started the next question —
+   * used to resume, hit its AbortError, settle (the page refetched and
+   * REPLACED the live thread), and then null the controller and publish
+   * `streaming: false` in the middle of the run that had taken its place.
+   * Every write below acts only while this run still owns the controller.
+   */
+  const mine = new AbortController();
+  controller = mine;
+  runSeq += 1;
   const progress = { sawAny: false, sawDone: false };
   try {
     await consume(start(controller.signal), replyId, progress);
@@ -340,7 +373,7 @@ async function runStream(
          screen; the server's own rules decide what persists, and the settle
          hook refetches exactly that. */
       patch(replyId, (m) => ({ ...m, streaming: false }));
-      settle("aborted");
+      if (controller === mine) settle("aborted");
     } else {
       /*
        * Settle the turn the way `done` would have. A reply that said NOTHING
@@ -375,14 +408,16 @@ async function runStream(
       settle("failed");
     }
   } finally {
-    controller = null;
-    publish({ streaming: false });
+    if (controller === mine) {
+      controller = null;
+      publish({ streaming: false });
+    }
   }
   return "settled";
 }
 
 function settle(reason: SettleReason): void {
-  adapter?.onSettled?.(reason);
+  adapter?.onSettled?.(reason, runSeq);
 }
 
 async function consume(
@@ -434,7 +469,21 @@ async function consume(
          * than pretending: an unanswered tool call is visible as a run that
          * stalls, where a fabricated result is not visible at all.
          */
-        await adapter?.handleClientTool(event);
+        {
+          /* raced against this run's own abort and the belt above: a card
+             whose surface vanished cannot keep the stream from reading `done` */
+          const signal = controller?.signal;
+          let timer: ReturnType<typeof setTimeout> | null = null;
+          const belt = new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, CLIENT_TOOL_WAIT_MS);
+            signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+          try {
+            await Promise.race([adapter?.handleClientTool(event) ?? Promise.resolve(), belt]);
+          } finally {
+            if (timer !== null) clearTimeout(timer);
+          }
+        }
         break;
       case "agent_message": {
         /*

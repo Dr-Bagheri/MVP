@@ -7,7 +7,7 @@ import type { MailDraft, MailSourceMessage } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { Link } from "@/i18n/routing";
-import { formatRelativeDate, formatTime } from "@/lib/format";
+import { digits, formatRelativeDate, formatTime } from "@/lib/format";
 
 /**
  * M43 — the reply, in the thread, with the one button that sends it.
@@ -268,7 +268,7 @@ function SourcePanel({ message, locale }: { message: MailSourceMessage; locale: 
         <SourceMark />
         <span className="text-xs font-medium text-fg-muted">{t("sources")}</span>
         <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-fg-subtle">
-          {sources.length}
+          {digits(sources.length, locale)}
         </span>
         <span className="ms-auto text-[11px] text-fg-subtle">{open ? t("hideSource") : t("showSource")}</span>
         <Chevron open={open} />

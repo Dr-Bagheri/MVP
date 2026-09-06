@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { IconClose } from "@/components/icons";
+import { Overlay } from "./Overlay";
 import { PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
 
 /**
@@ -26,6 +27,17 @@ import { PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
  * (a link out, the panel's one primary act), `notice` is the alert line under
  * the bar, `rail` is the 283px column. What a panel SAYS is its own; where it
  * says it is this file's.
+ *
+ * ON THE PLATFORM'S ONE DIALOG SHELL (2026-09-06, the check-up). This was a
+ * hand-rolled fixed layer — a backdrop div with an onClick and a div wearing
+ * `role="dialog"` — the exact shape Overlay's header names as lacking a focus
+ * trap, focus return, an inert background, scroll lock and Escape. The two
+ * details wore it because it was extracted from one of them on 2026-09-05,
+ * before anybody pressed Escape on it. It is Overlay now (`xl`, `flush`), so
+ * it behaves as every other pop-up on the platform; the body and the rail
+ * scroll INSIDE the card, which is what every other dialog does with a tall
+ * body. The frame's signature — the one class string a second copy would have
+ * to carry — is the body/rail grid below (detailPanel.guard).
  */
 export function DetailPanel({ label, closeLabel, onClose, start, end, notice, rail, children }: {
   label: string;
@@ -38,18 +50,7 @@ export function DetailPanel({ label, closeLabel, onClose, start, end, notice, ra
   children: ReactNode;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-bg/60 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        onClick={(e) => e.stopPropagation()}
-        className="my-6 flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-island"
-      >
+    <Overlay onClose={onClose} label={label} size="xl" flush>
         {/* ── the top bar: close and the acts ─────────────────────────── */}
         <div className="flex items-center justify-between gap-2 border-b border-border p-3">
           <div className="flex items-center gap-1.5">
@@ -73,11 +74,10 @@ export function DetailPanel({ label, closeLabel, onClose, start, end, notice, ra
             and the hairline between them is the container's (panelStyle):
             "they all seem connected" was a rail of six fields with air and
             no lines between them. */}
-        <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-[1fr_283px]">
+        <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto md:grid-cols-[1fr_283px]">
           <div className={`min-h-0 p-5 ${PANEL_SECTIONS}`}>{children}</div>
           <aside className={`border-t border-border p-5 md:border-s md:border-t-0 ${RAIL_SECTIONS}`}>{rail}</aside>
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }

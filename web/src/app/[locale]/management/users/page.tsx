@@ -189,7 +189,12 @@ export default function UsersPage() {
     const rank = (r: User["role"]): number => (r === "owner" ? 3 : r === "admin" ? 2 : 1);
     return rank(me.role) > rank(u.role);
   };
-  const listed = rows.filter((m) => m.status !== "pending");
+  /* NO FILTER ON STATUS (2026-09-06, the check-up). A `rows.filter(m =>
+     m.status !== "pending")` stood here while the note above the table said
+     the opposite — "the rows are still VISIBLE here … so an admin can see
+     who is waiting". The decision moved to the platform console (0153); the
+     information did not, and the filter made the page contradict its own
+     sentence. */
   /** Derived from the live rows so the panel refreshes with every load(). */
   const detailUser = detailId === null ? null : (rows.find((u) => u.id === detailId) ?? null);
 
@@ -334,7 +339,7 @@ export default function UsersPage() {
               menu, the quiet dot for the ordinary good state */}
           <DataTable
             hideHeader
-            rows={listed}
+            rows={rows}
             loading={!loaded}
             /* `noMatches` named a search this screen has not had since
                2026-08-26, so an org whose members are all pending read as a

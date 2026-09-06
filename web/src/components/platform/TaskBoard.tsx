@@ -27,7 +27,8 @@ import {
   IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
   IconTrash, IconUser, IconVideo, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
-import { digits, personName } from "@/lib/format";
+import { dayKeyOf, digits, personName } from "@/lib/format";
+import { SkeletonLines } from "@/components/scaffold";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 
 /**
@@ -51,6 +52,7 @@ type PriorityFilter = TaskPriority | "all";
 
 export function TaskBoard() {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   /* the four SEEDED column names localize until somebody renames one — the
      board writes them into the database in Persian on first visit */
   const seededName = useSeededName();
@@ -224,21 +226,24 @@ export function TaskBoard() {
   const source = view === "archive" ? archive : board;
   const visible = useMemo(() => {
     const rows = source?.tasks ?? [];
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = start.getTime() + 86_400_000;
+    /* TODAY IS THE PLATFORM'S DAY (2026-09-06, the check-up). This read
+       browser midnight, so «مهلت امروز» on a machine outside the stored zone
+       kept a card due late tonight and dropped one due this morning — while
+       the card's own due label, drawn in the resolved zone, said the
+       opposite. One day key, the one every date on this board already uses. */
+    const today = dayKeyOf(new Date());
     return rows.filter((task) =>
       (priority === "all" || task.priority === priority)
       && (topic === "all" || task.topic_id === topic)
       && (!mineOnly || me === null
           || task.assignee_ids.includes(me.id) || task.created_by === me.id)
-      && (!dueToday || (task.due_at !== null
-          && new Date(task.due_at).getTime() >= start.getTime()
-          && new Date(task.due_at).getTime() < end)));
+      && (!dueToday || (task.due_at !== null && dayKeyOf(task.due_at) === today)));
   }, [source, priority, topic, mineOnly, dueToday, me]);
 
   if (failed) return <p className="p-6 text-sm text-fg-muted">{t("readFailed")}</p>;
-  if (board === null) return <p className="p-6 text-sm text-fg-muted">…</p>;
+  /* the frame while the board loads — an ellipsis reads as *this is broken*,
+     not *this is coming* (the loading rule, 2026-09-02) */
+  if (board === null) return <div className="p-6"><SkeletonLines lines={6} /></div>;
 
   const columnCards = (columnId: string) =>
     visible.filter((task) => task.column_id === columnId)
@@ -616,7 +621,7 @@ export function TaskBoard() {
                           <button
                             key={tone}
                             type="button"
-                            aria-label={tone}
+                            aria-label={tCommon(`tone_${tone}`)}
                             onClick={() => {
                               setToneMenu(null);
                               void api.updateTaskColumn(col.id, { tone }).then(load).catch(refusal);
@@ -743,7 +748,7 @@ export function TaskBoard() {
       ) : null}
 
       {view === "archive" ? (
-        archive === null ? <p className="p-4 text-sm text-fg-muted">…</p>
+        archive === null ? <div className="p-4"><SkeletonLines lines={4} /></div>
           : archive.tasks.length === 0 ? <p className="p-4 text-sm text-fg-muted">{t("archiveEmpty")}</p>
             : (
               <TaskListView
@@ -825,7 +830,6 @@ export function TaskBoard() {
           meId={me?.id ?? null}
           onClose={() => setCreatingProject(false)}
           onSaved={() => { setCreatingProject(false); load(); }}
-          onFailed={() => { setCreatingProject(false); refusal(); }}
         />
       ) : null}
     </div>

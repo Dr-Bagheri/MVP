@@ -15,8 +15,10 @@ import { describe, expect, it } from "vitest";
  */
 const SRC = join(process.cwd(), "src");
 
-/** the frame's first line — the one string every copy would have to carry */
-const FRAME = "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto";
+/** the frame's signature — the body/rail grid, the one string every copy
+ *  would have to carry (the frame stands on Overlay since 2026-09-06, so its
+ *  first line is no longer its own) */
+const FRAME = "grid min-h-0 flex-1 gap-0 overflow-y-auto md:grid-cols-[1fr_283px]";
 
 function sources(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

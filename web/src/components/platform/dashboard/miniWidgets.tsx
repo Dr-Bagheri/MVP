@@ -13,7 +13,7 @@ import {
   IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, digits, formatDayMonth, formatTime, hourInResolvedZone, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
+import { dayKeyOf, digits, formatDayMonth, formatTime, hourInResolvedZone, monthGrid, monthKeyOf, weekRangeLabel, weekStrip } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -724,12 +724,12 @@ export function StatsWidget() {
   const upcoming = Array.isArray(meetings)
     ? meetings.filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null).length
     : meetings === null ? null : "unreadable" as const;
+  /* THE CALENDAR DECIDES WHICH MONTH THIS IS (2026-09-06): the count used
+     the browser's Gregorian month, so on the Persian screen «جلسات این ماه»
+     spanned two Jalali months and never matched the calendar one tile over */
+  const monthNow = monthKeyOf(new Date(), locale);
   const thisMonth = Array.isArray(meetings)
-    ? meetings.filter((m) => {
-        const d = new Date(m.scheduled_at);
-        const t0 = new Date();
-        return d.getFullYear() === t0.getFullYear() && d.getMonth() === t0.getMonth();
-      }).length
+    ? meetings.filter((m) => monthKeyOf(m.scheduled_at, locale) === monthNow).length
     : meetings === null ? null : "unreadable" as const;
   const taskRate = tasks === null ? null
     : tasks === "unreadable" ? "unreadable" as const

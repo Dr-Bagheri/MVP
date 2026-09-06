@@ -30,7 +30,7 @@ import {
 } from "@/lib/recordingEngine";
 import { uploadAudioFile } from "@/lib/uploadFile";
 import { Avatar } from "@/components/Avatar";
-import { digits, formatClock, formatDate, formatDuration, formatTime, personName, instantFromFields } from "@/lib/format";
+import { digits, formatClock, formatDate, formatDuration, formatTime, personName, instantFromFields, nowFields } from "@/lib/format";
 
 /**
  * THE MEETING'S OWN PAGE — the big-milestone round (user directive,
@@ -978,14 +978,20 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
   onClose: () => void;
 }) {
   const t = useTranslations("meetings");
-  const at = new Date(meeting.scheduled_at);
   const [title, setTitle] = useState(meeting.title);
-  const [date, setDate] = useState(
-    `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`,
-  );
-  const [time, setTime] = useState(
-    `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`,
-  );
+  /*
+   * THE PLATFORM'S CLOCK ON THE WAY IN AS WELL AS OUT (2026-09-06, the
+   * check-up). These fields were prefilled from `at.getHours()` — the
+   * BROWSER's zone — and saved through `instantFromFields`, which reads them
+   * in the STORED zone. On a machine outside that zone, opening this dialog
+   * and pressing save with nothing changed moved the meeting by the offset:
+   * a write the person never made, on the one field they did not touch. The
+   * create dialog took `nowFields` on 2026-09-02; this is its sibling, found
+   * four days later, because a laptop already in the stored zone cannot
+   * show it. Same helper, same zone, so the round trip is the identity.
+   */
+  const [date, setDate] = useState(() => nowFields(new Date(meeting.scheduled_at)).date);
+  const [time, setTime] = useState(() => nowFields(new Date(meeting.scheduled_at)).time);
   /*
    * THE TOPIC IS AN ID, and this dialog used to send the NAME.
    *

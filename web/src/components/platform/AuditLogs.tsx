@@ -6,7 +6,7 @@ import { IconCheck, IconGavel, IconHistory, IconRobot, IconTrash } from "@/compo
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { BffError } from "@/api/client";
-import { AUDIT_SOURCES } from "@echo/core/vocabulary";
+import { ADMIN_ACTIONS, AUDIT_SOURCES } from "@echo/core/vocabulary";
 import type { AuditCursor, AuditEntry, AuditSource, User } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { DataTable } from "@/components/DataTable";
@@ -87,11 +87,20 @@ const entryKey = (entry: AuditEntry) => `${entry.source}:${entry.id}`;
 const isKnownSource = (value: string): value is AuditSource =>
   (AUDIT_SOURCES as readonly string[]).includes(value);
 
-/** `action` is a closed vocabulary for two of the three sources — and an open
- *  one for `admin_action`, whose values are whatever wrote them. Translating
- *  only what we know keeps an unrecognised code visible as a code instead of
- *  being mapped onto the nearest label that happens to exist. */
+/** `action` is a closed vocabulary for every source we know how to name.
+ *  Translating only what we know keeps an unrecognised code visible as a code
+ *  instead of being mapped onto the nearest label that happens to exist.
+ *
+ *  `admin_action` joined the map on 2026-09-06 (the check-up). Its column is
+ *  free TEXT in the schema so a new operation needs no migration — but its
+ *  values are `ADMIN_ACTIONS`, one list in core, and this map reads that list
+ *  rather than retyping it, so a code added there cannot fall behind here
+ *  silently: the coverage test asks both catalogues for every member. Until
+ *  then a third of the feed read `member_role_changed` in a monospace face on
+ *  a Persian page whose whole job is to say what happened. A code NOT in the
+ *  list still renders as itself. */
 const TRANSLATABLE_ACTIONS: Record<string, readonly string[]> = {
+  admin_action: ADMIN_ACTIONS,
   proposal_decision: ["approve", "reject"],
   agent_run: ["ok", "error", "running"],
   /*

@@ -88,6 +88,18 @@ describe("Management · Users role gate", () => {
     expect(members).not.toHaveBeenCalled();
   });
 
+  it("lists a PENDING member beside the active ones — an admin can see who is waiting", async () => {
+    /* the page's own note says the rows stay visible and only the DECISION
+       moved to the platform console (0153); a status filter contradicted it
+       for four days (2026-09-06) */
+    const waiting: User = { ...member, id: "u-7", username: "newcomer", display_name: "تازه‌وارد", status: "pending" };
+    members.mockResolvedValue([admin, member, waiting]);
+    me.mockResolvedValue(admin);
+    render(<UsersPage />);
+    expect(await screen.findByText("تازه‌وارد")).toBeTruthy();
+    expect(screen.getByText("عضو ساده")).toBeTruthy();
+  });
+
   it("renders the surface for an admin — proving the gate is not simply always closed", async () => {
     me.mockResolvedValue(admin);
     render(<UsersPage />);

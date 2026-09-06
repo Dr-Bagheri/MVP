@@ -149,3 +149,73 @@ describe("openChatLive", () => {
     expect(cleared).toEqual([7]);
   });
 });
+
+describe("openChatLive — after a drop (2026-09-06)", () => {
+  it("mints a fresh ticket after a jittered backoff, polls meanwhile, and stops polling once live again", async () => {
+    const sources: ReturnType<typeof fakeSource>[] = [];
+    const tickets = vi.fn(async () => ({ direct_url: "https://api.example/v1/chat/stream?ticket=t" }));
+    const states: string[] = [];
+    const laters: Array<{ fn: () => void; ms: number }> = [];
+    const intervals: Array<() => void> = [];
+    let cleared = 0;
+    const stop = openChatLive(
+      { onEvent: () => undefined, onPoll: () => undefined, onState: (s) => states.push(s) },
+      {
+        ticket: tickets,
+        source: () => { const f = fakeSource(); sources.push(f); return f.es; },
+        setTimer: (fn) => { intervals.push(fn); return intervals.length; },
+        clearTimer: () => { cleared += 1; },
+        later: (fn, ms) => { laters.push({ fn, ms }); return laters.length; },
+        cancelLater: () => undefined,
+        random: () => 0.5,
+      },
+    );
+    await Promise.resolve(); await Promise.resolve();
+    sources[0]!.open();
+    expect(states).toEqual(["connecting", "live"]);
+
+    /* the connection drops */
+    sources[0]!.fail();
+    expect(states[states.length - 1]).toBe("polling");
+    expect(intervals.length, "polling is the floor").toBe(1);
+    /* the old code stopped here: EventSource retried the spent ticket, got a
+       401, and the page polled for the rest of its life */
+    expect(laters.length, "a reconnect is scheduled").toBe(1);
+    expect(laters[0]!.ms).toBe(2_000); // 2 s × (0.75 + 0.5 × 0.5)
+    expect(tickets).toHaveBeenCalledTimes(1);
+
+    laters[0]!.fn();
+    await Promise.resolve(); await Promise.resolve();
+    expect(tickets, "a FRESH ticket, not the spent one").toHaveBeenCalledTimes(2);
+    expect(sources.length).toBe(2);
+
+    sources[1]!.open();
+    expect(states[states.length - 1]).toBe("live");
+    expect(cleared, "the poller is cleared once the stream is live again").toBe(1);
+    stop();
+  });
+
+  it("the backoff doubles while the relay stays down, and never past thirty seconds", async () => {
+    const laters: number[] = [];
+    let pending: (() => void) | null = null;
+    const stop = openChatLive(
+      { onEvent: () => undefined, onPoll: () => undefined, onState: () => undefined },
+      {
+        ticket: async () => { throw new Error("down"); },
+        source: () => fakeSource().es,
+        setTimer: () => 1,
+        clearTimer: () => undefined,
+        later: (fn, ms) => { laters.push(ms); pending = fn; return laters.length; },
+        cancelLater: () => undefined,
+        random: () => 0.5,
+      },
+    );
+    for (let i = 0; i < 6; i += 1) {
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      pending!();
+    }
+    await Promise.resolve(); await Promise.resolve();
+    expect(laters.slice(0, 6)).toEqual([2_000, 4_000, 8_000, 16_000, 30_000, 30_000]);
+    stop();
+  });
+});

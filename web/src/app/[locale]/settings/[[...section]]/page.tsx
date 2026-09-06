@@ -1,11 +1,12 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { TwoPane } from "@/components/platform/TwoPane";
-import { SETTINGS_SECTIONS, useSettingsGroups } from "@/components/platform/SettingsPane";
+import { useSettingsGroups } from "@/components/platform/SettingsPane";
+import { settingsSection } from "@/components/platform/settingsSections";
 import { PageHeader, Section } from "@/components/scaffold";
 
 /**
@@ -71,9 +72,14 @@ export default function SettingsPage({
   params: Promise<{ section?: string[] }>;
 }) {
   const t = useTranslations("settings");
+  const router = useRouter();
   const { section } = use(params);
-  const slug = section?.[0] ?? "general";
-  const active = SETTINGS_SECTIONS.find((s) => s.slug === slug) ?? SETTINGS_SECTIONS[0]!;
+  /* a slug nothing serves goes HOME rather than rendering General under its
+     address (settingsSections.settingsSection, 2026-09-06) */
+  const active = settingsSection(section?.[0]);
+  useEffect(() => {
+    if (!active.known) router.replace("/settings");
+  }, [active.known, router]);
 
   const groups = useSettingsGroups();
 

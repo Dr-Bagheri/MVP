@@ -45,6 +45,12 @@ const EMOJI = [
   "❤️", "🎉", "🚀", "⭐", "💡", "📌", "⏰", "☕",
 ];
 
+/** does the draft already address this handle, as a WORD? (exported for its test) */
+export function draftNamesHandle(draft: string, handle: string): boolean {
+  const wanted = `@${handle}`.toLowerCase();
+  return draft.split(/\s+/).some((word) => word.toLowerCase() === wanted);
+}
+
 export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
   disabled: boolean;
   people: OrgPersonRecord[];
@@ -113,9 +119,11 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
        cannot fail is a guard the next reader trusts. */
     const handle = replyTo?.agent_handle ?? null;
     if (handle === null || handle === "") return;
-    setDraft((cur) => (new RegExp(`(?:^|\s)@${handle}\b`, "i").test(cur)
-      ? cur
-      : `@${handle} ${cur.trimStart()}`));
+    /* no regex: `\b` inside a template literal is a BACKSPACE, not a word
+       boundary (the same trap this repo recorded in a test on 2026-09-06),
+       so the old guard matched nothing and a cancel-then-reply prepended the
+       handle twice. Words, compared as words. */
+    setDraft((cur) => (draftNamesHandle(cur, handle) ? cur : `@${handle} ${cur.trimStart()}`));
     box.current?.focus();
     /* on the TARGET's id, not on the object: the parent rebuilds `replyTo`
        on every message that arrives, and a dependency on the object would

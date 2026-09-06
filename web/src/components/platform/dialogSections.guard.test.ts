@@ -19,6 +19,11 @@ const ONE_BLOCK: Record<string, string> = {
   "meeting/InviteDialog.tsx": "a search box over a list, then two sections that already draw their own hairlines",
   "InvitePeople.tsx": "one list of colleagues over one footer",
   "ProjectDetail.tsx": "its dialog is the members list alone; the detail itself is DetailPanel, which divides",
+  /* the frame stands on Overlay since 2026-09-06 (Escape, the focus trap, the
+     scroll lock), so this guard sees it as a pop-up; its body IS divided — by
+     PANEL_SECTIONS and RAIL_SECTIONS, the two-column form of DIALOG_BODY, and
+     the assertion below holds it to both */
+  "DetailPanel.tsx": "the two-column detail frame: PANEL_SECTIONS + RAIL_SECTIONS divide it, not DIALOG_BODY",
 };
 
 const ROOT = join(__dirname);

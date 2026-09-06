@@ -223,3 +223,48 @@ describe("press and release (2026-09-05)", () => {
     expect(heard).toEqual(["سلام دنیا"]);
   });
 });
+
+describe("a fast re-press (2026-09-06)", () => {
+  it("does not open a second recogniser while the first is still winding down — that session's end reopens", () => {
+    const { result } = renderHook(() => useDictation("fa-IR", () => undefined));
+    act(() => result.current.toggle());
+    expect(opened()).toBe(1);
+    const first = latest();
+    /* release: stop() is asked, but Chrome has not fired `end` yet */
+    first.onend = null; // hold the end back, as Chrome does for up to ~800 ms
+    act(() => result.current.toggle());
+    expect(first.stopped).toBe(true);
+    /* press again inside that gap */
+    act(() => result.current.toggle());
+    /* the old code opened a second recogniser here; Chrome then aborted the
+       first, whose `aborted` switched the wish off under the new one */
+    expect(opened(), "no second session while the first is alive").toBe(1);
+    expect(result.current.status).toBe("listening");
+  });
+
+  it("THE CONTROL: after the wound-down session actually ends, the wish reopens a fresh one", () => {
+    const { result } = renderHook(() => useDictation("fa-IR", () => undefined));
+    act(() => result.current.toggle());
+    const first = latest();
+    const held = first.onend;
+    first.onend = null;
+    act(() => result.current.toggle());   // release
+    act(() => result.current.toggle());   // re-press inside the gap
+    first.onend = held;
+    act(() => first.onend?.());           // Chrome's late `end`
+    reopen();
+    expect(opened()).toBe(2);
+    expect(result.current.status).toBe("listening");
+  });
+
+  it("five transient errors in a row stop the wish — a mic nothing can hear stops pulsing", () => {
+    const { result } = renderHook(() => useDictation("fa-IR", () => undefined));
+    act(() => result.current.toggle());
+    for (let i = 0; i < 5; i += 1) {
+      const live = latest();
+      act(() => { live.onerror?.({ error: "network" }); live.endsByItself(); });
+      reopen();
+    }
+    expect(result.current.status).toBe("idle");
+  });
+});

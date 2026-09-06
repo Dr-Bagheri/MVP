@@ -1,5 +1,5 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_WIDGETS, defaultLayout, writeLayout } from "@/lib/dashboardLayout";
 
 /**
@@ -180,5 +180,22 @@ describe("reading, or arranging", () => {
     /* and the shipped board is more than one tile, so the assertion above is
        not satisfied by the single remembered one */
     expect(shipped.tiles.length, "the default board cannot tell the two apart").toBeGreaterThan(1);
+  });
+});
+
+import { __setPreferencesForTest } from "@/lib/preferences";
+
+describe("the greeting reads the platform's clock (2026-09-06)", () => {
+  afterEach(() => { vi.useRealTimers(); __setPreferencesForTest({ timezone: "auto" }); });
+
+  it("says good morning when it is morning in the STORED zone, whatever the browser's hour", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-17T20:00:00.000Z")); // 10:00 on the 18th in Kiritimati
+    __setPreferencesForTest({ timezone: "Pacific/Kiritimati" });
+    await act(async () => { render(<Dashboard />); });
+    /* the top bar's clock beside this greeting reads the stored zone; a
+       «شب بخیر» under a clock that says ten in the morning is two clocks */
+    expect(screen.getByText(/صبح بخیر/)).toBeTruthy();
+    expect(screen.queryByText(/شب بخیر/)).toBeNull();
   });
 });

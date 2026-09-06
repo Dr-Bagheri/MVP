@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { ADMIN_ACTIONS } from "@echo/core/vocabulary";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditCursor, AuditEntry, AuditPage, User } from "@/api/types";
@@ -542,21 +545,43 @@ const CAPTURED_ADMIN = [
 ] as unknown as AuditEntry[];
 
 describe("real admin_action rows", () => {
-  it("renders free-text action codes literally instead of mapping them to a label", async () => {
-    audit.mockResolvedValue(page(CAPTURED_ADMIN));
+  it("names the admin's actions in the reader's language — and leaves a code it does not know as a code", async () => {
+    audit.mockResolvedValue(page([
+      ...CAPTURED_ADMIN,
+      /* THE CONTROL: a code core has not taught this screen — rendered as
+         itself, never mapped onto the nearest label that happens to exist */
+      { ...CAPTURED_ADMIN[0]!, id: "adm-unknown", action: "member_teleported" } as AuditEntry,
+    ]));
     render(<AuditLogs />);
 
     /*
-     * `action` on `admin_action` is free text by design — a new admin
-     * operation must be able to name itself without a migration — so the
-     * closed set lives in core/ and can gain a member at any time. A
-     * client-side label map would silently fall behind and, worse, would map
-     * an unrecognised code onto whichever nearby label happens to exist.
-     * Translating ONLY the two closed vocabularies is what makes these render
-     * as what they are: codes.
+     * `action` on `admin_action` is free TEXT in the schema (a new operation
+     * needs no migration) and a closed LIST in core (`ADMIN_ACTIONS`). This
+     * screen reads that list rather than retyping it, so a code added there
+     * cannot fall behind here silently — the next test asks both catalogues
+     * for every member. Until 2026-09-06 the whole source rendered in a
+     * monospace face on a Persian page whose one job is to say what happened;
+     * the earlier version of this test pinned that as the design, on the
+     * argument that a client map falls behind — which is true of a map
+     * written by hand and not of one derived from the producer.
      */
-    expect(await screen.findByText("org_updated")).toBeTruthy();
-    expect(screen.getByText("member_role_changed")).toBeTruthy();
+    expect(await screen.findByText("تنظیمات سازمان ویرایش شد")).toBeTruthy();
+    expect(screen.getByText("نقش عضو تغییر کرد")).toBeTruthy();
+    expect(screen.queryByText("org_updated")).toBeNull();
+    expect(screen.getByText("member_teleported")).toBeTruthy();
+  });
+
+  it("every admin action core can record has a label in BOTH catalogues", () => {
+    const catalogue = (locale: string) =>
+      (JSON.parse(readFileSync(join(process.cwd(), "src/messages", `${locale}.json`), "utf8")) as
+        { audit: { action: Record<string, string> } }).audit.action;
+    const fa = catalogue("fa");
+    const en = catalogue("en");
+    expect(ADMIN_ACTIONS.length, "the producer's list is not empty").toBeGreaterThan(0);
+    for (const code of ADMIN_ACTIONS) {
+      expect(fa, `fa audit.action.${code}`).toHaveProperty(code);
+      expect(en, `en audit.action.${code}`).toHaveProperty(code);
+    }
   });
 
   it("shows an unrecognised detail key under its own name", async () => {
@@ -598,11 +623,11 @@ describe("real admin_action rows", () => {
     audit.mockImplementation(fakeServer(rows, 1));
     render(<AuditLogs />);
 
-    await screen.findByText("org_updated");
-    expect(screen.queryByText("member_role_changed")).toBeNull(); // limit 1 truly split them
+    await screen.findByText("تنظیمات سازمان ویرایش شد");
+    expect(screen.queryByText("نقش عضو تغییر کرد")).toBeNull(); // limit 1 truly split them
 
     await userEvent.click(screen.getByRole("button", { name: /رویدادهای قدیمی‌تر/ }));
-    expect(await screen.findByText("member_role_changed")).toBeTruthy();
+    expect(await screen.findByText("نقش عضو تغییر کرد")).toBeTruthy();
     expect(screen.getAllByRole("row")).toHaveLength(3); // both entries + header
   });
 });

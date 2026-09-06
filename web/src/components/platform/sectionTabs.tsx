@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useLocale } from "next-intl";
+import { digits } from "@/lib/format";
 
 /**
  * THE PLATFORM'S ONE SUB-MENU.
@@ -129,6 +131,7 @@ export function SectionTabs<K extends string>({
   onSelect: (key: K) => void;
   className?: string;
 }) {
+  const locale = useLocale();
   return (
     /*
      * `tablist`, not `navigation`: nothing here changes the address, and
@@ -150,7 +153,7 @@ export function SectionTabs<K extends string>({
         >
           {tab.label}
           {tab.count !== undefined ? (
-            <span className="badge-num text-[10px] opacity-70">{tab.count}</span>
+            <span className="badge-num text-[10px] opacity-70">{digits(tab.count, locale)}</span>
           ) : null}
         </button>
       ))}

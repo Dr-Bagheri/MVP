@@ -378,6 +378,9 @@ export function AssistantSidebar() {
        otherwise opening the assistant page after "new conversation" would
        resume the one just left behind, the exact opposite of what it says */
     resetAssistantSession();
+    consentRef.current?.("no");
+    consentRef.current = null;
+    setConsent(null);
     follow.repin();
     notify(t("newConversationStarted"));
   }
@@ -540,7 +543,10 @@ export function AssistantSidebar() {
   /** an utterance the loop decided is a COMMAND — barge-in aware */
   function routeCommand(text: string): void {
     if (speakingRef.current) stopSpeaking(); // barge-in over speaking
-    if (streamingRef.current) {
+    /* the store's run, not only this panel's: a question typed on the page
+       is streaming too, and a spoken command during it used to vanish
+       (the store refused it, nothing queued it) */
+    if (streamingRef.current || assistantSnapshot().streaming) {
       // barge-in over thinking: abort the run; its unwind asks the new thing
       pendingCommandRef.current = { text, viaVoice: true };
       stopAssistant();
@@ -706,15 +712,12 @@ export function AssistantSidebar() {
       reveal();
       if (request.sessionId) void loadSession(request.sessionId);
       if (request.draft) {
-        // the composer is uncontrolled here — fill after the pane mounts; a
-        // DRAFT only: the person sends it, or doesn't
-        const draft = request.draft;
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.value = draft;
-            inputRef.current.focus();
-          }
-        }, 80);
+        /* the composer is CONTROLLED (`value={input}`): a value written onto
+           the element bypassed React's state, so `send()` saw an empty
+           string and the next render snapped the box back to empty
+           (2026-09-06). State first; the focus can wait for the mount. */
+        setInput(request.draft);
+        setTimeout(() => inputRef.current?.focus(), 80);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -870,15 +873,19 @@ export function AssistantSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member]);
 
+  /* the pending card's answer, held so an unmount, a hidden panel or a fresh
+     conversation can answer «نه» for a person who is no longer looking at it */
+  const consentRef = useRef<((answer: ConsentAnswer) => void) | null>(null);
   const askConsent = useCallback((label: string, detail: string | null): Promise<ConsentAnswer> => {
     return new Promise<ConsentAnswer>((resolve) => {
+      consentRef.current = resolve;
       setConsent({ label, detail, resolve });
     });
   }, []);
 
   async function submit(question: string, viaVoice: boolean) {
     const trimmed = question.trim();
-    if (!trimmed || streamingRef.current) return;
+    if (!trimmed || streamingRef.current || assistantSnapshot().streaming) return;
     reveal();
     /* sending re-pins: the person just acted at the composer, and a thread
        that does not show the question they sent reads as having eaten it */
@@ -1021,7 +1028,7 @@ export function AssistantSidebar() {
      * assistant on it is a room talking to itself.
      */
     if (!visible) return;
-    return registerAssistantSurface({
+    const off = registerAssistantSurface({
     onDelta: (delta) => {
       replyTextRef.current += delta;
       speakNewSentences(false);
@@ -1041,6 +1048,7 @@ export function AssistantSidebar() {
       handleClientToolCall(event, {
         askConsent: async (label, detail) => {
           const answer = await askConsent(label, detail);
+          consentRef.current = null;
           setConsent(null);
           return answer;
         },
@@ -1055,7 +1063,28 @@ export function AssistantSidebar() {
         onRecordingStarted: () => { muteReplyRef.current = true; stopSpeaking(); },
       }),
     });
+    return off;
   }, [visible, askConsent, router, pathname, speakNewSentences]);
+
+  /**
+   * THE CARD DOES NOT OUTLIVE ITS SURFACE (2026-09-06) — see Hub for the
+   * report. Two doors out for this panel: it goes INVISIBLE (the person
+   * walked onto the assistant page, where it renders nothing and could hold
+   * a card alive that nobody can see), or it unmounts. Neither is the
+   * registration effect's cleanup, which re-runs on every navigation while
+   * the panel stays open — a decline riding that would answer cards the
+   * person was still looking at.
+   */
+  useEffect(() => {
+    if (visible) return;
+    consentRef.current?.("no");
+    consentRef.current = null;
+    setConsent(null);
+  }, [visible]);
+  useEffect(() => () => {
+    consentRef.current?.("no");
+    consentRef.current = null;
+  }, []);
 
   if (!visible) return null;
 
@@ -1558,7 +1587,7 @@ function ComposerMenu({
               connectors.map((row) => (
                 <DropdownMenuItem
                   key={row.provider}
-                  onSelect={() => router.push("/settings/integrations")}
+                  onSelect={() => router.push("/integrations")}
                 >
                   <span className="flex min-w-0 flex-1 items-center gap-2">
                     <span
@@ -1573,7 +1602,7 @@ function ComposerMenu({
               ))
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => router.push("/settings/integrations")}>
+            <DropdownMenuItem onSelect={() => router.push("/integrations")}>
               {manageLabel}
             </DropdownMenuItem>
           </DropdownMenuSubContent>

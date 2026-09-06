@@ -138,6 +138,7 @@ function LabelEditor({ label, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   const [name, setName] = useState(label?.name ?? "");
   const [color, setColor] = useState<TaskLabelColor>(label?.color ?? "grey");
   const [busy, setBusy] = useState(false);
@@ -185,7 +186,9 @@ function LabelEditor({ label, onClose, onSaved }: {
             <button
               key={tone}
               type="button"
-              aria-label={tone}
+              /* the colour's NAME in the page's language (2026-09-06): the
+                 raw token read «grey» to a screen reader on a Persian page */
+              aria-label={tCommon(`tone_${tone}`)}
               aria-pressed={color === tone}
               onClick={() => setColor(tone)}
               /* 2026-09-03: `.btn btn-icon`. This was carried as a keep whose
@@ -696,22 +699,29 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
   repeats: boolean;
   gapDays: string;
   until: string | null;
-  onRepeats: (on: boolean) => void;
+  /** absent = the schedule is FORCED ON and no switch is drawn (the task
+   *  detail, where «توقف تکرار» is the way off) — a checkbox that ignores
+   *  its press is worse than none (2026-09-06) */
+  onRepeats?: (on: boolean) => void;
   onGapDays: (value: string) => void;
   onUntil: (value: string | null) => void;
 }) {
   const t = useTranslations("tasks");
   return (
     <div className="well p-3">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={repeats}
-          onChange={(e) => onRepeats(e.target.checked)}
-          className="h-4 w-4 accent-[var(--accent)]"
-        />
-        <span className="text-xs font-medium text-fg">{t("scheduleRepeats")}</span>
-      </label>
+      {onRepeats !== undefined ? (
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={repeats}
+            onChange={(e) => onRepeats(e.target.checked)}
+            className="h-4 w-4 accent-[var(--accent)]"
+          />
+          <span className="text-xs font-medium text-fg">{t("scheduleRepeats")}</span>
+        </label>
+      ) : (
+        <span className="block text-xs font-medium text-fg">{t("scheduleRepeats")}</span>
+      )}
       <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("scheduleExplain")}</p>
 
       {repeats ? (

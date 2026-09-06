@@ -51,6 +51,7 @@ if (typeof window.PointerEvent === "undefined") {
 const pushSpy = vi.fn();
 const created: Record<string, unknown>[] = [];
 const deleted: string[] = [];
+let createRefused = false;
 const patches: { id: string; body: Record<string, unknown> }[] = [];
 
 function project(over: Partial<ProjectRecord>): ProjectRecord {
@@ -94,6 +95,7 @@ vi.mock("@/api/client", () => ({
     projects: async (opts?: { archived?: boolean }) => (opts?.archived === true ? [] : LIST),
     project: async () => ONE,
     createProject: async (input: Record<string, unknown>) => {
+      if (createRefused) throw new Error("refused");
       created.push(input);
       return project({ id: "p-new", name: String(input.name) });
     },
@@ -138,6 +140,7 @@ async function columnOf(name: string): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
+  createRefused = false;
   LIST = [];
   TASKS = [];
   COLUMNS = [{ id: "c-1", name: "انجام‌شده", tone: "green", position: 1 }];
@@ -507,5 +510,22 @@ describe("nothing the author wrote to themselves", () => {
     for (const fragment of ["/*", "*/", "px, measured"]) {
       expect(text).not.toContain(fragment);
     }
+  });
+});
+
+describe("a refused write keeps the dialog (2026-09-06)", () => {
+  it("says so INSIDE the dialog, over the draft it refused, and leaves the draft to be sent again", async () => {
+    createRefused = true;
+    render(<Projects isAdmin meId="u-1" />);
+    await userEvent.click(await screen.findByRole("button", { name: /افزودن پروژه/ }));
+    await userEvent.type(await screen.findByLabelText("نام پروژه"), "بازطراحی");
+    await userEvent.click(screen.getByRole("button", { name: /ساخت پروژه/ }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("alert").textContent).toBe("ذخیره نشد — دوباره تلاش کنید.");
+    /* the old code CLOSED the dialog on refusal — name, summary, tone and
+       roster gone, with a line at the top of a page nobody was reading */
+    expect(within(dialog).getByLabelText("نام پروژه")).toHaveValue("بازطراحی");
+    expect(within(dialog).getByRole("button", { name: /ساخت پروژه/ })).not.toBeDisabled();
   });
 });

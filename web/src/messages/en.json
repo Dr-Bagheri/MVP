@@ -271,7 +271,16 @@
       "running": "Running",
       "call": "Record deleted",
       "person": "Person deleted",
-      "member": "Member deleted"
+      "member": "Member deleted",
+      "org_updated": "Organization settings updated",
+      "member_role_changed": "Member role changed",
+      "member_status_changed": "Member status changed",
+      "member_renamed": "Member renamed",
+      "member_accepted": "Member accepted",
+      "member_password_set": "Member password set",
+      "member_deleted": "Member deleted",
+      "invitation_issued": "Invitation issued",
+      "invitation_revoked": "Invitation revoked"
     },
     "target": {
       "proposal": "Assistant proposal",
@@ -864,6 +873,14 @@
     "youWereMentioned": "you were mentioned in this message"
   },
   "common": {
+    "tone_grey": "Grey",
+    "tone_blue": "Blue",
+    "tone_green": "Green",
+    "tone_amber": "Amber",
+    "tone_red": "Red",
+    "tone_purple": "Purple",
+    "tone_teal": "Teal",
+    "tone_pink": "Pink",
     "cancel": "Cancel",
     "confirm": "Confirm",
     "save": "Save",
@@ -994,7 +1011,7 @@
     "title": "API gateway",
     "intro": "Any system can push audio in and pull transcripts, summaries and answers out — under the same permission wall you are under. The named connectors further down this page get built on this gateway later.",
     "adminOnly": "This section belongs to organization admins",
-    "adminOnlyNote": "Only an admin can create and revoke keys and webhooks. If you need an integration, ask your organization's admin to create a key in your name; that key can do what you can do.",
+    "adminOnlyNote": "Only an admin can create and revoke keys. If you need an integration, ask your organization's admin to create a key in your name; that key can do what you can do.",
     "keys": "API keys",
     "keysNote": "Every key is created in one member's name and can do exactly what that member can do — no more. If that member is disabled, the key stops working the same moment, with no rotation needed.",
     "keysEmpty": "No keys yet.",
@@ -1046,7 +1063,6 @@
     "paused": "Paused",
     "pause": "Pause",
     "resume": "Resume",
-    "pauseNote": "Pausing keeps the webhook and its delivery history; nothing is deleted.",
     "colWhen": "When",
     "copy": "Copy",
     "copied": "Copied",
@@ -1100,7 +1116,7 @@
         "step3": "The assistant acts, not only talks: it creates tasks, records meetings, searches the records and opens pages. Every change is shown to you first and is not written until you confirm; on that card you can allow the rest of this session so it stops asking — a delete always asks.",
         "step4": "The microphone beside the box is speaking instead of typing. With a hotkey chosen in the assistant settings, it listens while you hold the key and stops when you let go — wherever the caret is.",
         "step5": "The assistant strip on every page is the same conversation; what you said on the assistant page continues in the strip, and back.",
-        "step6": "Past conversations stay in the history and continue from there; each is titled by its first question. Change the model from the menu beside the box."
+        "step6": "Past conversations stay in the history and continue from there; each is titled by its first question."
       },
       "meetings": {
         "step1": "«New meeting» takes a title, a date and time, a folder and the way it is held: online, in person, or an uploaded recording. The row above the list switches between list and calendar and between all, upcoming, held and archive; the second row is the folders.",
@@ -1239,7 +1255,7 @@
     "subtitle": "The data sources the assistant and your workflows read from."
   },
   "legal": {
-    "version": "Version 2026-08-16",
+    "version": "Version 2026-09-06",
     "termsTitle": "Terms of service & privacy",
     "ownershipTitle": "1. Your recordings are yours",
     "ownershipBody": "Audio you record or upload, its transcripts, and everything derived from them belong to your organization. The transcript is the source of truth; derived artifacts are rebuildable and carry their provenance.",
@@ -1250,7 +1266,7 @@
     "retentionTitle": "4. Deletion",
     "retentionBody": "Deleting a call hides it immediately and permanently purges its audio, transcript and derivatives after the retention window. Conversations with the assistant are archived, never silently deleted.",
     "securityTitle": "5. Security",
-    "securityBody": "Sessions are httpOnly cookies; tokens never transit the browser. Content never appears in logs. Outbound webhooks carry identifiers and status only, signed with your secret.",
+    "securityBody": "Sessions are httpOnly cookies; tokens never transit the browser. Content never appears in logs.",
     "changesTitle": "6. Changes",
     "changesBody": "A revision of these terms changes the version date above. The text never changes silently."
   },
@@ -2287,14 +2303,6 @@
     "fieldProgress": "Progress",
     "fieldSummary": "Short description",
     "fieldTone": "Colour",
-    "tone_grey": "Grey",
-    "tone_blue": "Blue",
-    "tone_green": "Green",
-    "tone_amber": "Amber",
-    "tone_red": "Red",
-    "tone_purple": "Purple",
-    "tone_teal": "Teal",
-    "tone_pink": "Pink",
     "manageMembers": "Project members",
     "moveTitle": "Move the project's work",
     "moveBody": "{n} unfinished tasks of “{name}” will move to the “{column}” column.",

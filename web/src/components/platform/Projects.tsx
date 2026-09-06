@@ -378,7 +378,6 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
             setCreating(false);
             router.push(`/projects?project=${p.id}`);
           }}
-          onFailed={() => { setCreating(false); setError(t("writeFailed")); }}
         />
       ) : null}
     </div>
@@ -527,7 +526,10 @@ function ProjectList({ projects, cardsOf, people, locale }: {
                 done: digits(p.task_done, locale), total: digits(p.task_total, locale),
               })}
             </span>
-            <span className="flex shrink-0 -space-x-1.5">
+            {/* the overlap is LOGICAL — `-space-x` is a physical margin and
+                stacked the faces the wrong way on the Persian page; the same
+                stack the header draws further down */}
+            <span className="flex shrink-0 items-center gap-0 [&>*+*]:-ms-1.5">
               {members.slice(0, 3).map((m) => (
                 <Avatar key={m.id} name={personName(m, locale)} size="xs" />
               ))}

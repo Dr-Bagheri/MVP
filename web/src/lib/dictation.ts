@@ -126,6 +126,9 @@ export function useDictation(
   /** words heard, not yet finalised — delivered if the session dies on them */
   const pendingRef = useRef("");
 
+  /** consecutive transient errors (network / audio-capture) since the last word */
+  const errorRunRef = useRef(0);
+
   const cancelReopen = useCallback(() => {
     if (reopenRef.current !== null) {
       clearTimeout(reopenRef.current);
@@ -165,6 +168,7 @@ export function useDictation(
       pendingRef.current = interim.trim();
       const said = finals.trim();
       if (said) onTextRef.current(said);
+      errorRunRef.current = 0; // something was heard: the run of errors is over
     };
     rec.onerror = (e) => {
       const fatal = e.error === "not-allowed" || e.error === "service-not-allowed";
@@ -182,7 +186,20 @@ export function useDictation(
          no-speech, network, audio-capture — is transient: the `end` that
          follows reopens, and the status is NOT touched here, because the
          microphone is still wanted and about to be open again. */
-      if (e.error === "aborted") wantRef.current = false;
+      /* only the LIVE session's abort is the person's; a superseded one
+         aborting while its successor already listens must not switch the
+         wish off under the successor (2026-09-06) */
+      if (e.error === "aborted" && recRef.current === rec) wantRef.current = false;
+      /* a transient error that repeats is not transient: offline, or no
+         device — count it, and after five in a row stop wanting, so the
+         button stops pulsing over a microphone nothing can hear */
+      if (e.error === "network" || e.error === "audio-capture") {
+        errorRunRef.current += 1;
+        if (errorRunRef.current >= 5) {
+          wantRef.current = false;
+          errorRunRef.current = 0;
+        }
+      }
     };
     rec.onend = () => {
       if (recRef.current === rec) recRef.current = null;
@@ -226,6 +243,12 @@ export function useDictation(
     }
     wantRef.current = true;
     setStatus("listening");
+    /* a fast re-press lands while the last session is still winding down
+       (Chrome takes up to ~800 ms to fire `end` after stop()). Opening a
+       second recogniser then made Chrome abort the first, whose `aborted`
+       switched the wish off under the new one: mic open, status idle, key
+       dead. With the wish set, that session's own `onend` reopens. */
+    if (recRef.current !== null) return;
     open();
   }, [cancelReopen, open]);
 

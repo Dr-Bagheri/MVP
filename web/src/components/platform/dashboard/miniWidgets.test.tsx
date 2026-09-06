@@ -284,6 +284,26 @@ describe("the stat strip (the reference's four figures)", () => {
     expect(totalCard.textContent).toContain("—");
   });
 
+  it("counts «جلسات این ماه» by the CALENDAR's month — two Jalali months inside one May", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-17T12:00:00.000Z")); // 27 Ordibehesht 1405
+    MEETINGS = async () => [
+      meetingRow({ id: "m-in", scheduled_at: "2026-05-01T12:00:00.000Z" }),  // 11 Ordibehesht — this month
+      meetingRow({ id: "m-out", scheduled_at: "2026-05-25T12:00:00.000Z" }), // 4 Khordad — the same May, the NEXT month
+    ];
+    TASKS = async () => ({ columns: [], topics: [], tasks: [] } as never);
+    try {
+      await act(async () => { render(<StatsWidget />); });
+      /* the old count took the browser's Gregorian month and said ۲ on the
+         Persian screen, one tile away from a calendar that disagreed */
+      const monthCard = screen.getByText("جلسات این ماه").closest("a")!;
+      expect(monthCard.textContent).toContain("۱");
+      expect(monthCard.textContent).not.toContain("۲");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("computes the task rate from done over live tasks", async () => {
     MEETINGS = async () => [];
     TASKS = async () => ({

@@ -392,6 +392,17 @@ export function dayKeyOf(iso: string | Date): number {
   return Date.UTC(y, m - 1, d);
 }
 
+/**
+ * The year-and-month a moment falls in — under the ACTIVE calendar, in the
+ * resolved zone. Two moments share it exactly when the calendar the person
+ * reads says they are in the same month: 4 Khordad and 11 Ordibehesht are
+ * both May, and «جلسات این ماه» counted them together (2026-09-06).
+ */
+export function monthKeyOf(iso: string | Date, locale: string): string {
+  const { y, m } = activeParts(dayKeyOf(iso), locale);
+  return `${y}-${m}`;
+}
+
 /** the active calendar's (year, month, day) for a day key */
 function activeParts(key: number, locale: string): { y: number; m: number; d: number } {
   const date = new Date(key);

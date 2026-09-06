@@ -1,8 +1,9 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Call, MeetingRecord } from "@/api/types";
 import { meetingFixture } from "@/test/fixtures";
+import { __setPreferencesForTest } from "@/lib/preferences";
 
 /**
  * The meeting page's contract facts (the big-milestone shape):
@@ -79,6 +80,8 @@ let CALL: Call | null = null;
    loading state is a state at all; a mock that resolves at once renders the
    frame for no measurable moment (audit finding, 2026-09-02) */
 let DETAIL_GATE: Promise<MeetingRecord> | null = null;
+/** every PATCH body the page sent */
+const patched: Record<string, unknown>[] = [];
 
 /* the REAL BffError: the screen branches on `instanceof` and on its `code`,
    and a hand-written stand-in makes every instanceof answer false while the
@@ -99,7 +102,12 @@ vi.mock("@/api/client", async () => ({
     updateMeetingItem: async () => undefined,
     deleteMeetingItem: async () => undefined,
     meetingDetail: async () => DETAIL_GATE ?? MEETING,
-    updateMeeting: async (_id: string, body: Record<string, unknown>) => ({ ...MEETING, ...body }),
+    /* the edit dialog reads the topic list on mount (2026-09-04) */
+    meetingTopics: async () => [],
+    updateMeeting: async (_id: string, body: Record<string, unknown>) => {
+      patched.push(body);
+      return { ...MEETING, ...body };
+    },
     getCall: async () => CALL,
     me: async () => ({ id: "u-me", display_name: "سینا", display_name_en: null }),
     taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
@@ -124,6 +132,7 @@ beforeEach(() => {
   MEETING = meeting({});
   CALL = null;
   DETAIL_GATE = null;
+  patched.length = 0;
   startSpy.mockClear();
   tokenSpy.mockClear();
 });
@@ -360,5 +369,29 @@ describe("MeetingPage", () => {
     await waitFor(() =>
       expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
     expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
+  });
+});
+
+describe("the edit dialog reads the platform's clock (2026-09-06)", () => {
+  afterEach(() => __setPreferencesForTest({ timezone: "auto" }));
+
+  it("saving the plan with nothing changed keeps the instant — in the STORED zone, not the browser's", async () => {
+    /*
+     * The zone is one no machine running this suite sits in (UTC+14), so the
+     * fixture disagrees with the browser everywhere. Until 2026-09-06 the
+     * dialog prefilled its fields from `getHours()` — the browser's clock —
+     * and saved them through `instantFromFields` — the stored zone — so a
+     * save that touched nothing moved the meeting by the offset between the
+     * two. The create dialog was fixed on 2026-09-02; this one was not.
+     */
+    __setPreferencesForTest({ timezone: "Pacific/Kiritimati" });
+    MEETING = meeting({ call_id: null, scheduled_at: "2026-05-07T22:09:00.000Z" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getAllByRole("button", { name: "ویرایش" })[0]!);
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "ذخیره" }));
+    await waitFor(() => expect(patched).toHaveLength(1));
+    expect(patched[0]!.scheduled_at).toBe("2026-05-07T22:09:00.000Z");
   });
 });

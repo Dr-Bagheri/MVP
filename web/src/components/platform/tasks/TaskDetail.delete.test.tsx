@@ -148,3 +148,17 @@ describe("TaskDetail — the red button", () => {
     expect(deleteTask).not.toHaveBeenCalled();
   });
 });
+
+describe("the record chip (2026-09-06)", () => {
+  it("opens the RECORD's own page — never the meetings list with a parameter nothing reads", () => {
+    render(
+      <TaskDetail
+        task={{ ...TASK, call_id: "c-9", call_title: "جلسهٔ هفتگی" }}
+        columns={COLUMNS} topics={TOPICS} labels={LABELS} people={PEOPLE}
+        onClose={vi.fn()} onChanged={vi.fn()} onLabelsChanged={vi.fn()}
+      />,
+    );
+    const chip = screen.getByRole("link", { name: /جلسهٔ هفتگی/ });
+    expect(chip.getAttribute("href")).toBe("/calls/c-9");
+  });
+});

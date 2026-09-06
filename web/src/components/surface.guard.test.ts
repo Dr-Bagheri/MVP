@@ -55,8 +55,9 @@ const REMAINING: Record<string, number> = {
   // ── fields wearing a card's corner: R5's business ────────────────────
   "components/platform/tasks/TaskDetail.tsx": 2,  // the title and description editors
   "components/platform/tasks/TaskDialogs.tsx": 2, // the label field (177) and the label popover (347)
-  // ── the one detail frame (R18), the shell, the assistant's composer ──
-  "components/platform/DetailPanel.tsx": 1,
+  // ── the shell, the assistant's composer (the detail frame, R18, stands on
+  //    Overlay since 2026-09-06 and draws no card of its own — its entry left
+  //    when the guard fired in the stale-entry direction) ──
   "components/platform/IconRail.tsx": 1,
   "components/platform/Hub.tsx": 1,            // the assistant is a structural exception by ruling
 };

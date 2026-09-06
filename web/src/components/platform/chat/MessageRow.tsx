@@ -9,7 +9,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { IconAsk } from "@/components/icons";
-import { digits, personName } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, formatRelativeDate, formatTime, personName } from "@/lib/format";
 import { MessageBody } from "./MessageBody";
 
 /**
@@ -63,8 +63,14 @@ export function grouped(message: ChatMessageRecord, previous: ChatMessageRecord 
   const gap = new Date(message.created_at).getTime() - new Date(previous.created_at).getTime();
   if (gap > GROUP_WINDOW_MS) return false;
   /* a day change breaks the group even inside five minutes — 23:58 and 00:01
-     belong under different headers however close they are */
-  return new Date(message.created_at).getDate() === new Date(previous.created_at).getDate();
+     belong under different headers however close they are; the day is the
+     PLATFORM's day (dayKeyOf), the one the divider below is drawn on */
+  return dayKeyOf(message.created_at) === dayKeyOf(previous.created_at);
+}
+
+/** the first message of a day — the row that carries the day's divider */
+function opensDay(message: ChatMessageRecord, previous: ChatMessageRecord | null): boolean {
+  return previous === null || dayKeyOf(message.created_at) !== dayKeyOf(previous.created_at);
 }
 
 export function MessageRow({ message, previous, people, meId, locale, onReply, onReact }: {
@@ -126,6 +132,24 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
   );
 
   return (
+    <>
+      {/* THE DAY, said once (2026-09-06, the check-up). Rows carried a time
+          and nothing else, so a room read across days as one afternoon:
+          «۲۳:۵۸» and «۰۰:۰۱» sat a line apart with nothing between them saying
+          the date had turned. Not a <time>: only a message has one, and the
+          room's tests count them to tell a message from a note. */}
+      {opensDay(message, previous) ? (
+        <div
+          role="separator"
+          aria-label={formatDate(message.created_at, locale)}
+          title={formatDate(message.created_at, locale)}
+          className="my-3 flex items-center gap-3 text-[11px] text-fg-subtle"
+        >
+          <span className="h-px flex-1 bg-border" aria-hidden />
+          <span>{formatRelativeDate(message.created_at, locale)}</span>
+          <span className="h-px flex-1 bg-border" aria-hidden />
+        </div>
+      ) : null}
     <div
       className={`group relative -mx-2 rounded-lg px-2 py-0.5 ${head ? "mt-2" : ""} ${
         /* not colour alone: a tint AND a border AND a word */
@@ -165,9 +189,10 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
               {t("agentTag")}
             </span>
           ) : null}
+          {/* the resolved zone and the page's digits — every other clock on the
+              platform goes through formatTime; this one asked the browser */}
           <time className="badge-num text-[10px] text-fg-subtle" dateTime={message.created_at}>
-            {new Date(message.created_at).toLocaleTimeString(locale === "fa" ? "fa-IR" : "en-GB",
-              { hour: "2-digit", minute: "2-digit" })}
+            {formatTime(message.created_at, locale)}
           </time>
         </div>
       ) : null}
@@ -237,7 +262,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
           {items}
         </DropdownMenuContent>
       </DropdownMenu>
-
     </div>
+    </>
   );
 }

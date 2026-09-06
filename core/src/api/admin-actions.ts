@@ -44,37 +44,16 @@
 import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import type { SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
+import { ADMIN_ACTIONS, type AdminAction } from "./vocabulary.ts";
+
+/* the list itself moved to vocabulary.ts on 2026-09-06 (the web reads it
+   through @echo/core/vocabulary); re-exported so this stays its home for
+   every caller that learned it here */
+export { ADMIN_ACTIONS, type AdminAction };
 
 /**
  * The closed set of things an admin can be recorded doing.
- *
- * Free text in the schema on purpose — a new admin operation should not need
- * a migration to name itself — but not free FORM: db/0054 enforces
- * `^[a-z][a-z0-9_]*$`, so a `setSetting` typo fails immediately instead of
- * quietly becoming a second action nobody notices in the log. This constant
- * is the vocabulary that shape check protects.
  */
-export const ADMIN_ACTIONS = [
-  "org_updated",
-  "member_role_changed",
-  "member_status_changed",
-  /** An admin changed a member's display name or username (0064-era: the
-   *  detail panel edits identity fields; FIELD names recorded, never values —
-   *  a name is a person). */
-  "member_renamed",
-  "member_accepted",
-  /** An admin set a member's password (0137). The password itself is never
-   *  recorded, obviously — but neither is anything about it: no length, no
-   *  strength score, no hash prefix. What the log carries is that it
-   *  happened, to whom, by whom, and how many sessions the reset ended,
-   *  because that last number is the part an auditor is actually reading
-   *  for. */
-  "member_password_set",
-  "member_deleted",
-  "invitation_issued",
-  "invitation_revoked",
-] as const;
-export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
 export interface AdminActionRecord {
   action: AdminAction;

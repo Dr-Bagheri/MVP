@@ -100,6 +100,9 @@ export function Hub() {
   /* the standing yes, drawn while it is on so it can be taken back from where
      it is seen (lib/consentGrant.ts) */
   const sessionGrant = useSyncExternalStore(subscribeConsentGrant, consentGrantedForSession, consentGrantServer);
+  /* the pending card's answer, held so an unmount or a fresh conversation can
+     answer «نه» for a person who is no longer looking at it (2026-09-06) */
+  const consentRef = useRef<((answer: ConsentAnswer) => void) | null>(null);
   
   const locale = useLocale();
   const router = useRouter();
@@ -540,7 +543,14 @@ export function Hub() {
     }
   }, []);
 
-  const adoptThread = useCallback(async (id: string) => {
+  /**
+   * `asOf`: the run a settle-refetch belongs to (the store drops it if a
+   * newer run started meanwhile). `wanted`: asked right before adoption, so
+   * a resume that was superseded by a second `?c=` while its rows were on
+   * the way adopts nothing (2026-09-06: the slower of two fetches used to
+   * win, and the skeleton stayed up forever over the wrong thread).
+   */
+  const adoptThread = useCallback(async (id: string, asOf?: number, wanted?: () => boolean) => {
     const versionAtStart = resetVersionRef.current;
     const [thread, verdicts] = await Promise.all([
       api.agentThread(id),
@@ -548,10 +558,11 @@ export function Hub() {
     ]);
     /* A just-cleared hub must not be repopulated by an older in-flight fetch. */
     if (versionAtStart !== resetVersionRef.current) return;
+    if (wanted !== undefined && !wanted()) return;
     /* one call: the thread, the id, and the sidebar handoff are one fact, and
        `adoptAssistantThread` publishes them together — a tick apart and the
        skeleton would flash once more over a thread that had already arrived */
-    adoptAssistantThread(id, thread.messages, thread.floor);
+    adoptAssistantThread(id, thread.messages, thread.floor, asOf);
     setHeldThreadId(id);
     setFeedback(verdicts);
     setStarted(true);
@@ -608,7 +619,7 @@ export function Hub() {
        would yank a reader who scrolled up mid-answer */
     follow.repin();
     let cancelled = false;
-    void adoptThread(continueId).then(() => {
+    void adoptThread(continueId, undefined, () => !cancelled).then(() => {
       if (cancelled) return;
       /* a resumed conversation shows its drafts again: the card is the only
          place the reply can be sent from inside the product, so coming back
@@ -638,6 +649,11 @@ export function Hub() {
        button just cleared: a "new conversation" that follows you back into
        the platform as the old one. */
     resetAssistantSession();
+    /* a card left open by the conversation just cleared is answered «نه»,
+       not left clickable over the next one */
+    consentRef.current?.("no");
+    consentRef.current = null;
+    setConsent(null);
     follow.repin();
     setHeldThreadId(null);
     setInput("");
@@ -682,14 +698,21 @@ export function Hub() {
    */
   useEffect(() => {
     const key = `neurai-draft-${resumeId ?? "new"}`;
-    const saved = sessionStorage.getItem(key);
-    if (saved) setInput(saved);
+    /* wrapped like every other storage read in web/src: a browser that blocks
+       site data throws on the accessor, and an effect that throws unmounts
+       the page (2026-09-06 — this pair was the one unwrapped access) */
+    try {
+      const saved = sessionStorage.getItem(key);
+      if (saved) setInput(saved);
+    } catch { /* no draft to restore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per conversation
   }, [resumeId]);
   useEffect(() => {
     const key = `neurai-draft-${resumeId ?? "new"}`;
-    if (input) sessionStorage.setItem(key, input);
-    else sessionStorage.removeItem(key);
+    try {
+      if (input) sessionStorage.setItem(key, input);
+      else sessionStorage.removeItem(key);
+    } catch { /* a draft that cannot be kept is not an error the person can act on */ }
   }, [input, resumeId]);
 
   const idle = messages.length === 0;
@@ -718,20 +741,25 @@ export function Hub() {
    * only one of them handled `client_tool_call`, which is how a recording
    * asked for on this page hung until the 120-second timeout.
    */
-  useEffect(() => registerAssistantSurface({
+  useEffect(() => {
+    const off = registerAssistantSurface({
     handleClientTool: (event) => handleClientToolCall(event, {
       /* the card below answers this; a surface that cannot ask is refused by
          the runner (it used to fall through — the comment that stood here
          claimed the opposite of what the code did) */
       askConsent: async (label, detail) => {
-        const answer = await new Promise<ConsentAnswer>((resolve) => setConsent({ label, detail, resolve }));
+        const answer = await new Promise<ConsentAnswer>((resolve) => {
+          consentRef.current = resolve;
+          setConsent({ label, detail, resolve });
+        });
+        consentRef.current = null;
         setConsent(null);
         return answer;
       },
       push: router.push,
       switchLocale: (next) => router.replace("/assistant", { locale: next }),
     }),
-    onSettled: (reason) => {
+    onSettled: (reason, asOf) => {
       const id = assistantSnapshot().sessionId;
       if (!id) return;
       /*
@@ -746,10 +774,26 @@ export function Hub() {
        * half-answer disappear and be told it was cut off.
        */
       if (reason === "failed") return;
-      void adoptThread(id).catch(() => undefined);
+      void adoptThread(id, asOf).catch(() => undefined);
       if (reason === "done") void refreshDrafts(id);
     },
-  }), [router, adoptThread, refreshDrafts]);
+    });
+    return off;
+  }, [router, adoptThread, refreshDrafts]);
+
+  /**
+   * THE CARD DOES NOT OUTLIVE ITS SURFACE (2026-09-06). Navigating away with
+   * a consent card open left its promise pending forever: the store stayed
+   * suspended on it, `done` was never read, and every composer refused until
+   * a reload. Leaving is a «نه». An UNMOUNT-only effect, deliberately apart
+   * from the registration above: that one re-runs whenever its deps change
+   * (a router object per render in some harnesses), and a decline riding
+   * its cleanup answered cards nobody had left.
+   */
+  useEffect(() => () => {
+    consentRef.current?.("no");
+    consentRef.current = null;
+  }, []);
 
   /**
    * `text` is the auto-run's: state is not readable in the same tick it is
@@ -1307,7 +1351,9 @@ export function Hub() {
               onCreate={(kind) => { setCreateKind(kind); setCreateOpen(false); }}
               onAttachFile={() => fileRef.current?.click()}
               onToggleWeb={() => setWebSearch((v) => !v)}
-              onManageConnectors={() => router.push("/settings/integrations")}
+              /* `/integrations` is the page (2026-09-03); `/settings/integrations`
+                 fell through the settings resolver to General with nothing said */
+              onManageConnectors={() => router.push("/integrations")}
             />
           </span>
           {streaming ? (

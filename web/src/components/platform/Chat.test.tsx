@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatChannelRecord, ChatMessageRecord, OrgPersonRecord } from "@/api/types";
 
 /**
@@ -60,7 +60,10 @@ vi.mock("@/api/client", () => ({
     markChatRead: async () => undefined,
     setChatJoined: async () => undefined,
     updateChatChannel: async () => CHANNELS[0]!,
-    createChatChannel: async () => CHANNELS[0]!,
+    createChatChannel: async () => {
+      if (createRoomRefused) throw new Error("refused");
+      return CHANNELS[0]!;
+    },
     chatTicket: async () => ({ ticket: "t", direct_url: null }),
     /* AgentAvatar reads the roster to draw a portrait. Without this the
        component throws INSIDE a promise and the suite reports "مریم not
@@ -78,6 +81,8 @@ function channel(over: Partial<ChatChannelRecord>): ChatChannelRecord {
     ...over,
   };
 }
+
+let createRoomRefused = false;
 
 function message(over: Partial<ChatMessageRecord>): ChatMessageRecord {
   return {
@@ -99,6 +104,7 @@ const PEOPLE: OrgPersonRecord[] = [
 import { Chat } from "./Chat";
 
 beforeEach(() => {
+  createRoomRefused = false;
   CHANNELS = [channel({})];
   MESSAGES = [];
   posted.length = 0;
@@ -341,5 +347,39 @@ describe("the composer", () => {
     await userEvent.type(box, "@r");
     await waitFor(() => expect(screen.queryByText("@roya")).toBeInTheDocument());
     expect(screen.queryByText("رضا")).toBeNull();
+  });
+});
+
+import { __setPreferencesForTest } from "@/lib/preferences";
+
+describe("the room dialog and the day (2026-09-06)", () => {
+  afterEach(() => __setPreferencesForTest({ timezone: "auto" }));
+
+  it("a refused room keeps the dialog and the name typed into it", async () => {
+    createRoomRefused = true;
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    await userEvent.click(await screen.findByRole("button", { name: /اتاق تازه/ }));
+    await userEvent.type(await screen.findByLabelText("نام اتاق"), "طراحی");
+    await userEvent.click(screen.getByRole("button", { name: "ساخت اتاق" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("alert").textContent).toBe("ذخیره نشد — دوباره تلاش کنید.");
+    expect(within(dialog).getByLabelText("نام اتاق")).toHaveValue("طراحی");
+  });
+
+  it("draws ONE divider per day, and the time in the platform's zone", async () => {
+    __setPreferencesForTest({ timezone: "Asia/Tokyo" });
+    MESSAGES = [
+      message({ id: "m-1", seq: 1, body: "روز اول", created_at: "2026-09-01T08:00:00.000Z" }),
+      message({ id: "m-2", seq: 2, body: "همان روز", created_at: "2026-09-01T09:00:00.000Z" }),
+      message({ id: "m-3", seq: 3, body: "روز دوم", created_at: "2026-09-02T08:00:00.000Z" }),
+    ];
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const log = await screen.findByRole("log", { name: "پیام‌ها" });
+    await within(log).findByText("روز دوم");
+    /* two days, two lines — the second message of a day gets none */
+    expect(within(log).getAllByRole("separator")).toHaveLength(2);
+    /* 08:00Z is 17:00 in Tokyo; the browser's clock says otherwise on every
+       machine outside it, which is the bug this pins */
+    expect(within(log).getAllByRole("time")[0]!.textContent).toBe("۱۷:۰۰");
   });
 });

@@ -151,6 +151,44 @@ export const AUDIT_SOURCES = ["admin_action", "proposal_decision", "agent_run", 
 export type AuditSource = (typeof AUDIT_SOURCES)[number];
 
 /**
+ * What an admin can be recorded doing (`echo.admin_action.action`).
+ *
+ * Free text in the schema on purpose — a new admin operation should not need
+ * a migration to name itself — but not free FORM: db/0054 enforces
+ * `^[a-z][a-z0-9_]*$`, so a `setSetting` typo fails immediately instead of
+ * quietly becoming a second action nobody notices in the log. This constant
+ * is the vocabulary that shape check protects.
+ *
+ * It lives HERE, beside the other closed lists, rather than in
+ * api/admin-actions.ts where it was born (moved 2026-09-06): the web's audit
+ * screen names these actions in the reader's language and derives its
+ * coverage from this list, and `@echo/core/vocabulary` is the one module the
+ * browser bundle may import — admin-actions.ts pulls the database helpers in
+ * behind it.
+ */
+export const ADMIN_ACTIONS = [
+  "org_updated",
+  "member_role_changed",
+  "member_status_changed",
+  /** An admin changed a member's display name or username (0064-era: the
+   *  detail panel edits identity fields; FIELD names recorded, never values —
+   *  a name is a person). */
+  "member_renamed",
+  "member_accepted",
+  /** An admin set a member's password (0137). The password itself is never
+   *  recorded, obviously — but neither is anything about it: no length, no
+   *  strength score, no hash prefix. What the log carries is that it
+   *  happened, to whom, by whom, and how many sessions the reset ended,
+   *  because that last number is the part an auditor is actually reading
+   *  for. */
+  "member_password_set",
+  "member_deleted",
+  "invitation_issued",
+  "invitation_revoked",
+] as const;
+export type AdminAction = (typeof ADMIN_ACTIONS)[number];
+
+/**
  * `echo.member_role` — and published NOW, before it changes, on purpose.
  *
  * M23 revokes the two-role rule and adds `owner`. I published this list while

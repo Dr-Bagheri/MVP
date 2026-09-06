@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
   TaskLabelRecord, TaskTopicRecord,
@@ -583,5 +583,28 @@ describe("the archive keeps up with its own writes (2026-09-05)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("این کار دیگر وجود ندارد.");
     expect(screen.queryByText("این تغییر ذخیره نشد."), "a missing task reported as a failed save").toBeNull();
     await waitFor(() => expect(screen.queryByText("کار بایگانی")).toBeNull());
+  });
+});
+
+import { __setPreferencesForTest } from "@/lib/preferences";
+
+describe("«مهلت امروز» is the platform's today (2026-09-06)", () => {
+  afterEach(() => { vi.useRealTimers(); __setPreferencesForTest({ timezone: "auto" }); });
+
+  it("keeps a card due today in the STORED zone and drops one due yesterday there — whatever the browser's clock says", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-17T12:00:00.000Z")); // 02:00 on the 18th in Kiritimati (UTC+14)
+    __setPreferencesForTest({ timezone: "Pacific/Kiritimati" });
+    boardTasks = [
+      card({ id: "t-today", title: "امروزِ سکو", due_at: "2026-05-18T05:00:00.000Z" }),                          // 19:00 on the 18th there
+      card({ id: "t-gone", title: "دیروزِ سکو", column_id: "col-doing", due_at: "2026-05-17T09:00:00.000Z" }), // 23:00 on the 17th there
+    ];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("امروزِ سکو")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /مهلت امروز/ }));
+    /* the old code took browser midnight: on any machine west of the date
+       line it kept the yesterday card and dropped today's */
+    expect(screen.getByText("امروزِ سکو")).toBeInTheDocument();
+    expect(screen.queryByText("دیروزِ سکو")).toBeNull();
   });
 });

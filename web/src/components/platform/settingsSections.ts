@@ -53,6 +53,28 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { slug: "audit-logs", group: "compliance" },
 ];
 
+/**
+ * Slugs the settings page SERVES without listing — sign-in methods and the
+ * legal documents left the menu (2026-09-02) with the note that "the page
+ * still resolves at its own address". It did not: the resolver fell back to
+ * General for anything off the menu, so /settings/legal opened General under
+ * a legal address and the sentence was false for four days (2026-09-06).
+ */
+export const OFF_MENU_SLUGS: readonly string[] = ["sso", "legal"];
+
+/**
+ * Which section a /settings address names. `known: false` is a slug nothing
+ * serves — the caller sends the person to /settings rather than drawing
+ * General under a wrong address, which reads as "this section is General".
+ */
+export function settingsSection(slug: string | undefined): { slug: string; href?: string; known: boolean } {
+  const wanted = slug ?? "general";
+  const listed = SETTINGS_SECTIONS.find((s) => s.slug === wanted);
+  if (listed !== undefined) return listed.href === undefined ? { slug: listed.slug, known: true } : { slug: listed.slug, href: listed.href, known: true };
+  if (OFF_MENU_SLUGS.includes(wanted)) return { slug: wanted, known: true };
+  return { slug: "general", known: false };
+}
+
 const GROUP_ORDER_LIST: readonly SettingsGroup[] = [
   "configuration", "assistant", "service", "connections", "compliance",
 ];

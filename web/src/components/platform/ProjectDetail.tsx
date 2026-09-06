@@ -262,7 +262,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
             <span className={RAIL_LABEL}>{t("fieldTone")}</span>
             <span className="flex items-center gap-2">
               <span className={`h-3 w-3 rounded-md ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-              <span className={RAIL_VALUE}>{t(`tone_${project.tone}`)}</span>
+              <span className={RAIL_VALUE}>{tCommon(`tone_${project.tone}`)}</span>
             </span>
           </div>
 
@@ -417,7 +417,6 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           meId={meId}
           onClose={() => setEditing(false)}
           onSaved={(p) => { setEditing(false); setProject(p); }}
-          onFailed={() => { setEditing(false); setError(t("writeFailed")); }}
         />
       ) : null}
 

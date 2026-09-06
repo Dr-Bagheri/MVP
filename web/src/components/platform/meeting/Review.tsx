@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { Call, Speaker, TranscriptSegment } from "@/api/types";
 import { IconCheck, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
 import { digits, formatClock } from "@/lib/format";
+import { SkeletonLines } from "@/components/scaffold";
 
 /**
  * بازبینی — the reference's review surface, on Echo's real artifacts:
@@ -402,7 +403,7 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
     return () => { alive = false; };
   }, [callId]);
 
-  if (segments === null) return <p className="p-4 text-sm text-fg-muted">…</p>;
+  if (segments === null) return <div className="p-4"><SkeletonLines lines={5} /></div>;
   if (segments === "failed") return <p className="p-4 text-sm text-fg-muted">{t("readFailed")}</p>;
   /* RECORDED BUT SILENT is its own state, not an empty transcript: the
      pipeline finished, the audio is there, and no speech was found —

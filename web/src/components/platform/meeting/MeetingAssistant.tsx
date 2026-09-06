@@ -16,7 +16,7 @@ import { IconAgent, IconCopy, IconRetry, IconSend } from "@/components/icons";
  * hub uses for a chip — so the agent's own tools search this record first.
  * Nothing here is a second assistant: it is the platform's, pointed.
  */
-interface Turn { role: "user" | "assistant"; text: string }
+interface Turn { role: "user" | "assistant"; text: string; failed?: boolean; author?: string }
 
 export function MeetingAssistant({ callId, title }: { callId: string; title: string }) {
   const t = useTranslations("meetings");
@@ -42,6 +42,7 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
     setDraft("");
     setTurns((prev) => [...prev, { role: "user", text: question }, { role: "assistant", text: "" }]);
     void (async () => {
+      let sawDone = false;
       try {
         const engine = recorderSnapshot();
         const live = engine.phase === "recording" || engine.phase === "paused"
@@ -63,14 +64,40 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
               const next = [...prev];
               const last = next[next.length - 1];
               if (last !== undefined && last.role === "assistant") {
-                next[next.length - 1] = { role: "assistant", text: last.text + event.delta };
+                next[next.length - 1] = { ...last, text: last.text + event.delta };
               }
               return next;
             });
           }
+          /* a colleague answered in this thread (M48): her own turn, with her
+             name — it used to be dropped on the floor here */
+          if (event.type === "agent_message" && event.text.trim() !== "") {
+            setTurns((prev) => [...prev, { role: "assistant", text: event.text, author: event.name }]);
+          }
+          /* the run ended and said so: an empty assistant turn stops
+             spinning and is marked, rather than thinking forever */
+          if (event.type === "done") {
+            sawDone = true;
+            if (event.failed) {
+              setTurns((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last !== undefined && last.role === "assistant") next[next.length - 1] = { ...last, failed: true };
+                return next;
+              });
+              setFailed(true);
+            }
+          }
         }
+        if (!sawDone) throw new Error("stream ended without done");
       } catch {
         setFailed(true);
+        setTurns((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last !== undefined && last.role === "assistant" && last.text === "") next[next.length - 1] = { ...last, failed: true };
+          return next;
+        });
       } finally {
         setBusy(false);
       }
@@ -124,10 +151,13 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
               <div className={turn.role === "user"
                 ? "max-w-[80%] rounded-2xl bg-accent px-3.5 py-2 text-sm leading-7 text-on-accent"
                 : "min-w-0 flex-1"}>
-                {turn.text === "" && turn.role === "assistant" ? (
+                {turn.text === "" && turn.role === "assistant" && !turn.failed ? (
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-border border-t-accent" aria-hidden />
                 ) : (
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{turn.text}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-fg">
+                    {turn.author ? <span className="me-1.5 font-semibold">{turn.author}:</span> : null}
+                    {turn.text}
+                  </p>
                 )}
                 {turn.role === "assistant" && turn.text !== "" ? (
                   <button
