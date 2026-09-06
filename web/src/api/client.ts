@@ -98,6 +98,9 @@ import { announceChange, announceWrite } from "@/lib/refreshBus";
  * the vendor, and "this isn't yours" points at nobody. A screen that only knows
  * `403` has to pick one of those sentences and will be wrong twice.
  */
+/** core's `MAX_SEGMENTS`: the largest page one transcript read may carry */
+const TRANSCRIPT_PAGE = 2000;
+
 export class BffError extends Error {
   constructor(
     readonly status: number,
@@ -1150,10 +1153,35 @@ export const api = {
    * must not render as a meeting where nobody spoke.
    */
   async getTranscript(callId: string): Promise<TranscriptSegment[]> {
-    const { segments } = await bff<{ call_id: string; segments: TranscriptSegment[] }>(
-      `/api/calls/${callId}/transcript`,
-    );
-    return segments;
+    /*
+     * THE WHOLE TRANSCRIPT, page by page (2026-09-06, the check-up). Core
+     * bounds one read at 500 segments by default and 2000 at most, and this
+     * asked once with no bound — so a long meeting stopped mid-sentence with
+     * nothing on screen saying so. Pages walk by time: the next page starts
+     * at the last segment's end, and `end_ms >= from_ms` re-serves the
+     * boundary segment, which the id set drops.
+     */
+    const out: TranscriptSegment[] = [];
+    const seen = new Set<string>();
+    let fromMs: number | null = null;
+    for (;;) {
+      const params = new URLSearchParams({ limit: String(TRANSCRIPT_PAGE) });
+      if (fromMs !== null) params.set("from_ms", String(fromMs));
+      const { segments } = await bff<{ call_id: string; segments: TranscriptSegment[] }>(
+        `/api/calls/${callId}/transcript?${params.toString()}`,
+      );
+      for (const segment of segments) {
+        if (seen.has(segment.id)) continue;
+        seen.add(segment.id);
+        out.push(segment);
+      }
+      if (segments.length < TRANSCRIPT_PAGE) return out;
+      const last = segments[segments.length - 1]!;
+      /* a page that did not advance the clock is the end, whatever its size:
+         the loop must terminate on a pathological transcript too */
+      if (fromMs !== null && last.end_ms <= fromMs) return out;
+      fromMs = last.end_ms;
+    }
   },
   // correctLine was DELETED here (2026-08-20 tenancy audit), not swapped: it
   // had zero callers and no server wire — a fixture that mutated a local copy
@@ -1516,10 +1544,16 @@ export const api = {
     });
   },
 
-  async taskBoard(opts?: { archived?: boolean }): Promise<{
+  async taskBoard(opts?: { archived?: boolean; seed?: false }): Promise<{
     columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[];
   }> {
-    const suffix = opts?.archived ? "?archived=1" : "";
+    /* `seed: false` asks core NOT to create the default columns on an empty
+       board — the read tools' spelling; the screen omits it (2026-09-06) */
+    const params = new URLSearchParams();
+    if (opts?.archived) params.set("archived", "1");
+    if (opts?.seed === false) params.set("seed", "0");
+    const query = params.toString();
+    const suffix = query === "" ? "" : `?${query}`;
     return cachedRead(
       `task-board${suffix}`,
       () => bff<{ columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[] }>(`/api/tasks/board${suffix}`),
@@ -2513,12 +2547,20 @@ export const api = {
    * Titles are SERVER-derived from the first question and never rewritten —
    * the client must not re-derive them, or two spellings of one title drift.
    */
-  async agentSessions(archived = false): Promise<AssistantSession[]> {
+  async agentSessions(
+    archived = false,
+    /** keyset paging, core's shape: `before` is the last row's
+     *  `last_message_at`; `limit` caps the page (2026-09-06) */
+    page?: { before?: string; limit?: number },
+  ): Promise<AssistantSession[]> {
     /* **LIVE** — `GET /api/assistant/sessions`, core's own ordering (most
        recently active first, nulls last). Titles are server-derived and the
        owner may rename them (M27); the client never re-derives one. */
+    const params = new URLSearchParams({ archived: String(archived) });
+    if (page?.before !== undefined) params.set("before", page.before);
+    if (page?.limit !== undefined) params.set("limit", String(page.limit));
     const { sessions } = await bff<{ sessions: AssistantSession[] }>(
-      `/api/assistant/sessions?archived=${archived}`,
+      `/api/assistant/sessions?${params.toString()}`,
     );
     return sessions;
   },

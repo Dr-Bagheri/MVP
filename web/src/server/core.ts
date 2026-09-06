@@ -24,6 +24,9 @@ export type CoreErrorKind =
   | "not_found"
   | "invalid"
   | "conflict"
+  /** the CONNECTED PROVIDER said no (core's 502 `kind: "provider"`) — a
+   *  connection to repair, not a server to retry (2026-09-06) */
+  | "provider"
   | "upstream";
 
 /**
@@ -198,7 +201,16 @@ export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Prom
     );
   }
   if (!response.ok) {
-    throw new CoreError("upstream", response.status, await safeDetail(response));
+    /* a 5xx is OURS unless core declared otherwise: `kind: "provider"` is
+       Google (or Microsoft) refusing, carried with its code and status class,
+       and it used to flatten into `upstream` here — so the integrations page
+       offered a retry for a token that needed reconnecting */
+    const body = await safeBody(response);
+    if (body.kind === "provider") {
+      throw new CoreError("provider", response.status, body.error ?? `HTTP ${response.status}`,
+        typeof body.code === "string" ? body.code : undefined);
+    }
+    throw new CoreError("upstream", response.status, body.error ?? body.message ?? `HTTP ${response.status}`);
   }
 
   if (init.raw) return response as T;

@@ -56,9 +56,12 @@ vi.mock("@/i18n/routing", () => ({
 }));
 
 const connectorItems = vi.fn(async () => ITEMS);
+const { BffError: RealBffError } = await vi.importActual<typeof import("@/api/client")>("@/api/client");
 const disconnectConnector = vi.fn(async () => undefined);
 
 vi.mock("@/api/client", () => ({
+  /* the real class, so the page's `instanceof BffError` can be true here */
+  BffError: RealBffError,
   api: {
     connectors: () =>
       HOLD_CONNECTORS
@@ -206,5 +209,21 @@ describe("the integration detail page", () => {
     });
     expect(within(table).queryByText("Weekly sync")).toBeNull();
     expect(within(table).getByText("جلسهٔ برنامه‌ریزی")).toBeTruthy();
+  });
+});
+
+describe("which nothing (2026-09-06)", () => {
+  it("a PROVIDER refusal says so — a connection to repair, not a list that failed to load", async () => {
+    connectorItems.mockRejectedValueOnce(new RealBffError(502, "provider", "the connected provider refused the request", "provider_refused"));
+    await act(async () => { render(<IntegrationDetail slug="google-calendar" />); });
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toBe("سرویس متصل درخواست را رد کرد. اتصال را از نو برقرار کنید.");
+  });
+
+  it("THE CONTROL: our own failure keeps the old sentence", async () => {
+    connectorItems.mockRejectedValueOnce(new RealBffError(500, "upstream", "unexpected"));
+    await act(async () => { render(<IntegrationDetail slug="google-calendar" />); });
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toBe("فهرست موارد بارگیری نشد. اتصال را بررسی کنید و دوباره تلاش کنید.");
   });
 });

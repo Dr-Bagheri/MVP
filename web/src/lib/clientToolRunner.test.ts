@@ -117,14 +117,36 @@ describe("a yes for the session", () => {
 });
 
 describe("what the card names", () => {
-  it("the first name-like field, and where a move is going", () => {
-    expect(consentDetail({ task_id: "t-1", title: "جمع‌آوری صدای خام" })).toBe("جمع‌آوری صدای خام");
-    expect(consentDetail({ project: "دیتابیس صوتی" })).toBe("دیتابیس صوتی");
-    expect(consentDetail({ task_id: "t-1", title: "کار", folder: "دیتابیس صوتی" })).toBe("کار \u2190 دیتابیس صوتی");
-    expect(consentDetail({ task_id: "t-1", title: "کار", column: "در حال انجام" })).toBe("کار \u2190 در حال انجام");
+  it("the first name-like field, and where a move is going — the generic rule for tools without an entry", () => {
+    expect(consentDetail("delete_task", { task_id: "t-1", title: "جمع‌آوری صدای خام" })).toBe("جمع‌آوری صدای خام");
+    expect(consentDetail("create_task", { project: "دیتابیس صوتی" })).toBe("دیتابیس صوتی");
+    expect(consentDetail("update_task", { task_id: "t-1", title: "کار", folder: "دیتابیس صوتی" })).toBe("کار \u2190 دیتابیس صوتی");
+    expect(consentDetail("update_task", { task_id: "t-1", title: "کار", column: "در حال انجام" })).toBe("کار \u2190 در حال انجام");
   });
   it("nothing to name is null, not an empty string the card would render as a dash", () => {
-    expect(consentDetail({ task_id: "t-1" })).toBeNull();
-    expect(consentDetail(undefined)).toBeNull();
+    expect(consentDetail("update_task", { task_id: "t-1" })).toBeNull();
+    expect(consentDetail("navigate", undefined)).toBeNull();
+    expect(consentDetail("rename_record", { title: "kickoff" }), "a new title with no record to rename").toBeNull();
+  });
+  it("names the OBJECT and not its new value, per tool (2026-09-06)", () => {
+    /* every one of these named the wrong half under the generic rule: the
+       first name-like key in a fixed order, which is the NEW value whenever a
+       tool carries both */
+    expect(consentDetail("rename_record", { record: "call 3", title: "kickoff" })).toBe("call 3 → kickoff");
+    expect(consentDetail("update_project", { project: "الف", name: "ب" })).toBe("الف → ب");
+    expect(consentDetail("update_task_column", { column: "در حال انجام", name: "انجام", archived: false })).toBe("در حال انجام → انجام ✗");
+    expect(consentDetail("set_member_role", { member: "amir", role: "admin" })).toBe("amir → admin");
+    expect(consentDetail("set_member_status", { member: "amir", status: "disabled" })).toBe("amir → disabled");
+    expect(consentDetail("set_project_member", { project: "الف", member: "sina", member_of: false })).toBe("الف: sina ✗");
+    expect(consentDetail("set_role_permission", { role: "member", capability: "tasks.delete", allowed: true })).toBe("tasks.delete: member ✓");
+    expect(consentDetail("set_model_allowed", { model_id: "google/gemini", allowed: false })).toBe("google/gemini ✗");
+    expect(consentDetail("invite_member", { email: "a@b.ir", role: "member" })).toBe("a@b.ir → member");
+    expect(consentDetail("delete_record", { record: "جلسهٔ هفتگی" })).toBe("جلسهٔ هفتگی");
+    expect(consentDetail("share_conversation", { conversation: "بودجه", shared: false })).toBe("بودجه ✗");
+  });
+  it("quotes the words a person is about to send in their own name, cut at sixty", () => {
+    expect(consentDetail("send_member_message", { member: "sina", message: "سلام، جلسه ساعت ده" })).toBe("sina: «سلام، جلسه ساعت ده»");
+    const long = "ا".repeat(80);
+    expect(consentDetail("send_member_message", { member: "sina", message: long })).toBe(`sina: «${"ا".repeat(60)}…»`);
   });
 });

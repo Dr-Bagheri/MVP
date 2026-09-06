@@ -12,7 +12,7 @@
  * to ten with a control that goes nowhere. So: ten of fourteen ARE shown, the
  * eleventh is NOT, and the numbers reach it.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetRefreshBus } from "@/lib/refreshBus";
@@ -100,5 +100,45 @@ describe("history table × the house pager", () => {
 
     expect(screen.getAllByRole("row")).toHaveLength(5);
     expect(screen.queryByRole("navigation")).toBeNull();
+  });
+});
+
+describe("older conversations (2026-09-06)", () => {
+  beforeEach(() => resetRefreshBus());
+
+  it("a FULL first page offers the older ones, asks with `before`, and appends them", async () => {
+    const full = Array.from({ length: 50 }, (_, i) => ({
+      id: `f-${i + 1}`, title: `old-${String(i + 1).padStart(2, "0")}`,
+      created_at: "2026-08-01T00:00:00Z",
+      last_message_at: new Date(Date.UTC(2026, 7, 20, 0, 59 - i)).toISOString(),
+      message_count: 1,
+    }));
+    const older = [{
+      id: "g-1", title: "older-01", created_at: "2026-07-01T00:00:00Z",
+      last_message_at: "2026-07-01T00:00:00.000Z", message_count: 1,
+    }];
+    agentSessions.mockReset().mockImplementation(async (_archived: boolean, page?: { before?: string }) =>
+      page?.before === undefined ? full : older);
+    render(<ConversationsPage />);
+    await screen.findByText("old-01");
+    expect(agentSessions).toHaveBeenCalledWith(false, { limit: 50 });
+    /* fifty rows at ten a page: five numbers */
+    expect(numbered(screen.getByRole("navigation"))).toHaveLength(5);
+
+    await userEvent.click(screen.getByRole("button", { name: "گفت‌وگوهای قدیمی‌تر" }));
+    /* the cursor is the LAST row's last_message_at — core's keyset */
+    await waitFor(() =>
+      expect(agentSessions).toHaveBeenLastCalledWith(false, { before: full[49]!.last_message_at, limit: 50 }));
+    /* the older row is appended (a sixth page appears) and, the older page
+       being short, the door closes */
+    await waitFor(() => expect(numbered(screen.getByRole("navigation"))).toHaveLength(6));
+    expect(screen.queryByRole("button", { name: "گفت‌وگوهای قدیمی‌تر" })).toBeNull();
+  });
+
+  it("THE CONTROL: a short page offers nothing older", async () => {
+    agentSessions.mockReset().mockResolvedValue(SESSIONS);
+    render(<ConversationsPage />);
+    await screen.findByText("chat-01");
+    expect(screen.queryByRole("button", { name: "گفت‌وگوهای قدیمی‌تر" })).toBeNull();
   });
 });

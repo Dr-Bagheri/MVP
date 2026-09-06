@@ -2651,8 +2651,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.get("/v1/tasks/board", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);
-    const query = (request.query ?? {}) as { archived?: unknown };
-    return reply.send(await tasks.board(identity, { archived: query.archived === "1" }));
+    const query = (request.query ?? {}) as { archived?: unknown; seed?: unknown };
+    /* `seed=0`: a READ that must not write — the agents' column listing
+       through the browser (2026-09-06). The screen's first visit still seeds;
+       tasks.board's header says why the flag is explicit. */
+    return reply.send(await tasks.board(identity, {
+      archived: query.archived === "1",
+      ...(query.seed === "0" ? { seed: false } : {}),
+    }));
   });
 
   app.post("/v1/tasks", async (request, reply) => {

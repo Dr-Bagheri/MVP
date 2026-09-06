@@ -239,13 +239,44 @@ export function createRunner({ queue, handlers, config, sink, log }: RunnerOptio
     result: PollResult,
   ): Promise<void> {
     const base = { step: handler.name, msg_id: message.msgId, attempt: message.readCt };
+    let failure: unknown = null;
     try {
       await handler.handle(message.body, { attempt: message.readCt, log });
-      await queue.remove(handler.queue, message.msgId);
+    } catch (error) {
+      failure = error;
+    }
+    if (failure === null) {
+      /*
+       * THE STEP IS DONE; ONLY THE RECEIPT CAN FAIL NOW (2026-09-06, the
+       * check-up). `remove` used to sit inside the handler's try, so a
+       * transient database error on the delete was read as the STEP failing:
+       * the message was delayed and the handler ran again as a retry —
+       * transcribing the part a second time, at the provider's price, for a
+       * step that had finished. A failed remove is logged and left to the
+       * visibility timeout, which redelivers exactly as a lost receipt should;
+       * every handler is idempotent under redelivery by design (the UNIQUE
+       * walls trip loudly), and that is the right cost for this case.
+       */
+      try {
+        await queue.remove(handler.queue, message.msgId);
+      } catch (error) {
+        log.warn({ ...base, error_type: "remove_failed", ...debugMessage(error) },
+          "step done; the message could not be removed and will redeliver after the visibility timeout");
+      }
       result.done++;
       log.info(base, "step done");
       return;
-    } catch (error) {
+    }
+    /*
+     * The failure path is guarded as a whole: a `delay`, `archive` or sink
+     * that throws used to escape processOne, reject the batch's Promise.all,
+     * and leave the OTHER queues' claimed messages sitting until their
+     * visibility timeout. It is logged under its own error_type and the
+     * message stays claimed — the same redelivery, without taking the poll
+     * down with it.
+     */
+    try {
+      const error = failure;
       const decision = disposition(error, message.readCt, config);
 
       if (decision.action === "retry") {
@@ -278,6 +309,9 @@ export function createRunner({ queue, handlers, config, sink, log }: RunnerOptio
         reason: decision.reason,
         exhausted: decision.exhausted,
       });
+    } catch (error) {
+      log.error({ ...base, error_type: "recovery_failed", ...debugMessage(error) },
+        "the failure path itself failed; the message stays claimed until its visibility timeout");
     }
   }
 

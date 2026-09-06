@@ -69,6 +69,18 @@ export interface ChatSink {
 }
 
 const HEARTBEAT_MS = 15_000;
+/**
+ * A STREAM IS AUTHORIZED ONCE, AT CONNECT — so it must not live forever
+ * (2026-09-06, the check-up's security lens). The ticket proves membership
+ * for sixty seconds; after that the socket carries every message the org
+ * writes, full bodies, to whoever held it, for as long as it stays open —
+ * a member removed from the org at 10:00 would read the room until the tab
+ * closed. Ending each stream after ten minutes makes the reader re-mint a
+ * ticket, which is `requireActive` again; the client's reconnect (built the
+ * same day: fresh ticket, jittered backoff) is what makes this cost one
+ * request every ten minutes and nothing a person notices.
+ */
+const LIFETIME_MS = 10 * 60_000;
 /** 3000ms in Chromium and 5000ms in Firefox, both FIXED with no jitter — so
     every client dropped by a deploy reconnects in one tight cluster. The
     server's own `retry:` is the only place a spread can be introduced. */
@@ -126,10 +138,14 @@ export function createChatBus() {
       if (closed) return;
       closed = true;
       clearInterval(beat);
+      clearTimeout(life);
       detach();
       open.delete(close);
       try { sink.end(); } catch { /* the socket is already gone */ }
     };
+    /* the lifetime — see LIFETIME_MS; the reader comes back with a new ticket */
+    const life = setTimeout(close, LIFETIME_MS);
+    life.unref?.();
     open.add(close);
     return close;
   }

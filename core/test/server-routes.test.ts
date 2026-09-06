@@ -965,3 +965,39 @@ describe("GET /v1/workflows/starters — the shipped library", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe("the board read's seed flag (2026-09-06)", () => {
+  /* the fake answers [] for the columns select, which is the empty board
+     the seeding branch acts on; the statements are recorded so the test can
+     say whether an INSERT happened, not whether the answer looked right */
+  function recording() {
+    const seen: string[] = [];
+    const db = fakeDb();
+    const original = db.withIdentity.bind(db);
+    db.withIdentity = ((identity: unknown, fn: (tx: SqlTx) => Promise<unknown>) =>
+      original(identity as never, async (tx: SqlTx) => {
+        const unsafe = tx.unsafe.bind(tx);
+        (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = ((sql: string, params?: unknown[]) => {
+          seen.push(sql);
+          return unsafe(sql, params);
+        }) as SqlTx["unsafe"];
+        return fn(tx);
+      })) as typeof db.withIdentity;
+    return { db, seen };
+  }
+  const inserts = (log: string[]) => log.filter((s) => /insert into echo\.task_column/i.test(s));
+
+  it("`seed=0` reads an empty board and creates NOTHING — a read tool must not write", async () => {
+    const { db, seen } = recording();
+    const res = await server(db).inject({ method: "GET", url: "/v1/tasks/board?seed=0", headers: authed });
+    expect(res.statusCode).toBe(200);
+    expect(inserts(seen)).toEqual([]);
+  });
+
+  it("THE CONTROL: the screen's read (no flag) still seeds the four default columns", async () => {
+    const { db, seen } = recording();
+    const res = await server(db).inject({ method: "GET", url: "/v1/tasks/board", headers: authed });
+    expect(res.statusCode).toBe(200);
+    expect(inserts(seen)).toHaveLength(4);
+  });
+});

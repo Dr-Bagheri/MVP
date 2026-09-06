@@ -911,7 +911,9 @@
     "delete": "Delete",
     "deleteConfirmTitle": "Delete “{title}”?",
     "deleteConfirmBody": "The conversation is taken out of History and does not come back to any list.",
-    "deleteFailed": "Could not delete — try again."
+    "deleteFailed": "Could not delete — try again.",
+    "loadMore": "Older conversations",
+    "loadMoreFailed": "Older conversations could not be loaded — try again."
   },
   "dashboard": {
     "density": "Density",
@@ -1193,6 +1195,7 @@
     "accessPrivate": "Private",
     "assetAvailable": "Available",
     "assetsFailed": "The asset list could not be loaded. Check the connection and try again.",
+    "assetsRefused": "The connected provider refused the request. Reconnect the integration.",
     "assetsTitle": "Assets",
     "availableHint": "Browse and connect your data sources.",
     "availableTitle": "Available integrations",

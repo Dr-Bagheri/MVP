@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
+import { api, BffError } from "@/api/client";
 import type { ConnectorItem, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { PlatformShell } from "./PlatformShell";
@@ -58,6 +58,10 @@ export function IntegrationDetail({ slug }: { slug: string }) {
   /** undefined = loading · null = the fetch failed · [] = genuinely empty —
       three different nothings, three different sentences */
   const [items, setItems] = useState<ConnectorItem[] | null | undefined>(undefined);
+  /* WHICH nothing (2026-09-06): the provider refusing is a connection to
+     repair; our read failing is a retry — the sentence under the empty list
+     has to know which, and the BFF carries the kind now */
+  const [providerRefused, setProviderRefused] = useState(false);
   const [query, setQuery] = useState("");
   /** bumping this re-runs the items fetch — the gear's "refresh the list" */
   const [tick, setTick] = useState(0);
@@ -91,9 +95,14 @@ export function IntegrationDetail({ slug }: { slug: string }) {
     setItems(undefined);
     /* the fetch names the SOURCE from the catalogue entry — mail, calendar,
        drive or meet — which is exactly what the row click promised */
+    setProviderRefused(false);
     api.connectorItems(entry.provider, entry.source)
       .then((rows) => { if (!stale) setItems(rows); })
-      .catch(() => { if (!stale) setItems(null); });
+      .catch((error: unknown) => {
+        if (stale) return;
+        setItems(null);
+        setProviderRefused(error instanceof BffError && error.kind === "provider");
+      });
     return () => { stale = true; };
   }, [entry, live, tick]);
 
@@ -333,7 +342,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                       <div className="mt-4">
                         {items === null ? (
                           <p role="status" className="py-8 text-center text-sm text-danger">
-                            {t("assetsFailed")}
+                            {providerRefused ? t("assetsRefused") : t("assetsFailed")}
                           </p>
                         ) : (
                           /* ten rows then pages — the table rule (M42) rides

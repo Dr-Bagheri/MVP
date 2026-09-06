@@ -151,7 +151,6 @@ async function resolveMember(handle: string): Promise<
 > {
   const { api } = await import("@/api/client");
   const rows = await api.members({ search: handle });
-  if (rows.length === 1) return { ok: true, id: rows[0]!.id };
   const lowered = handle.trim().toLowerCase();
   const exact = rows.filter((row) =>
     row.username?.toLowerCase() === lowered
@@ -159,7 +158,19 @@ async function resolveMember(handle: string): Promise<
     || row.display_name.toLowerCase() === lowered);
   if (exact.length === 1) return { ok: true, id: exact[0]!.id };
   if (rows.length === 0) return { ok: false, detail: "no member matched that name" };
-  return { ok: false, detail: `${rows.length} members matched — ask the user which one, by username` };
+  /* A LONE PARTIAL MATCH IS NOT A PERSON (2026-09-06, the check-up). The
+     server's search is a prefix filter — right for a directory, and it made
+     «ali» resolve to the only Alireza — and this used to accept a single row
+     whatever it was. The consent card names the handle the model PASSED, not
+     the person that row turned out to be, so the yes covered somebody else.
+     The candidates are named so the model can ask by username. */
+  const names = rows.slice(0, 5).map((row) => row.username ? `@${row.username}` : row.display_name).join("، ");
+  return {
+    ok: false,
+    detail: rows.length === 1
+      ? `no exact match — the closest is ${names}; confirm with the user by username`
+      : `${rows.length} members matched (${names}) — ask the user which one, by username`,
+  };
 }
 
 /**
@@ -192,16 +203,22 @@ async function resolveColleague(handle: string): Promise<
     || (row.username ?? "").toLowerCase() === lowered;
   const exact = rows.filter(matches);
   if (exact.length === 1) return { ok: true, id: exact[0]!.id, name: exact[0]!.display_name };
+  /* the LOOSE matches are named and never chosen (2026-09-06): a lone
+     substring hit used to be accepted, and a message «به سینا» went to the
+     one colleague whose name CONTAINS سینا — with the consent card naming
+     the handle, not the person. See resolveMember. */
   const loose = rows.filter((row) =>
     row.display_name.toLowerCase().includes(lowered)
     || (row.display_name_en ?? "").toLowerCase().includes(lowered));
-  if (loose.length === 1) return { ok: true, id: loose[0]!.id, name: loose[0]!.display_name };
   if (loose.length === 0) return { ok: false, detail: "no colleague matched that name" };
+  const names = loose.slice(0, 5).map((r) => r.username ? `@${r.username}` : r.display_name).join("، ");
   return {
     ok: false,
     /* names them, because "3 matched" leaves the model with nothing to ask
        about and it will guess one */
-    detail: `several colleagues matched: ${loose.slice(0, 5).map((r) => r.display_name).join("، ")} — ask the user which`,
+    detail: loose.length === 1
+      ? `no exact match — the closest is ${names}; confirm with the user`
+      : `several colleagues matched: ${names} — ask the user which`,
   };
 }
 
@@ -1080,7 +1097,10 @@ export async function executeClientTool(
     case "list_task_columns": {
       try {
         const { api } = await import("@/api/client");
-        const board = await api.taskBoard();
+        /* `seed: false` — a READ tool must not write (core tasks.board's own
+           rule): the screen's first visit may create the four default
+           columns, an agent's listing may not (2026-09-06) */
+        const board = await api.taskBoard({ seed: false });
         return { ok: true, detail: JSON.stringify(board.columns) };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the board could not be read") };
@@ -1697,10 +1717,19 @@ export async function executeClientTool(
         const rows = await api.meetings();
         const lowered = name.toLowerCase();
         const exact = rows.filter((m) => (m.title ?? "").toLowerCase() === lowered);
-        const hit = exact.length === 1
-          ? exact[0]
-          : rows.filter((m) => (m.title ?? "").toLowerCase().includes(lowered))[0];
-        if (hit === undefined) return { ok: false, detail: "no meeting matched that title" };
+        /* one exact title wins; otherwise ONE partial opens (this is
+           navigation, undone by the back button) and several partials ask —
+           the FIRST of several used to be opened, in whatever order the list
+           came (2026-09-06) */
+        const partial = exact.length === 1 ? exact : rows.filter((m) => (m.title ?? "").toLowerCase().includes(lowered));
+        if (partial.length === 0) return { ok: false, detail: "no meeting matched that title" };
+        if (partial.length > 1) {
+          return {
+            ok: false,
+            detail: `several meetings matched: ${partial.slice(0, 5).map((m) => `«${m.title}»`).join("، ")} — ask the user which`,
+          };
+        }
+        const hit = partial[0]!;
         surface.push(`/meetings/${hit.id}`);
         return { ok: true, detail: `opened «${hit.title}»` };
       } catch (cause) {

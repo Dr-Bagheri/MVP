@@ -17,6 +17,10 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits, formatDate } from "@/lib/format";
 import { untitledNumbers } from "@/lib/sessionTitles";
 
+/** core's DEFAULT_PAGE, asked for explicitly so "a full page" is a fact
+ *  this file can test rather than a server default it has to remember */
+const HISTORY_PAGE = 50;
+
 /**
  * Conversation history — the records as a TABLE, the same card-table
  * anatomy every other sub-page uses, beside the assistant sub-menu.
@@ -38,6 +42,13 @@ export default function ConversationsPage() {
   const locale = useLocale();
   /** `null` = not fetched; `[]` = genuinely none. */
   const [sessions, setSessions] = useState<AssistantSession[] | null>(null);
+  /* THE DOOR PAST THE FIRST PAGE (2026-09-06, the check-up). Core bounds the
+     list at fifty (DEFAULT_PAGE) and offers `before`; the page never asked,
+     so a person with sixty conversations saw fifty and a pager that ended,
+     which reads exactly like a person who has had fifty. `hasMore` is what
+     the last answer said: a FULL page means the server may hold older rows. */
+  const [hasMore, setHasMore] = useState(false);
+  const [paging, setPaging] = useState(false);
   /** the row awaiting the platform's are-you-sure (see the dialog below) */
   const [confirmDelete, setConfirmDelete] = useState<AssistantSession | null>(null);
   /* a removal's failure is still never swallowed — it goes to the
@@ -46,8 +57,31 @@ export default function ConversationsPage() {
   /* refresh bus: archiving from anywhere (this table, the dock's agent) */
   const sessionsEpoch = useRefreshEpoch("sessions");
   useEffect(() => {
-    void api.agentSessions().then(setSessions);
+    void api.agentSessions(false, { limit: HISTORY_PAGE }).then((rows) => {
+      setSessions(rows);
+      setHasMore(rows.length >= HISTORY_PAGE);
+    });
   }, [sessionsEpoch]);
+
+  const loadOlder = async () => {
+    const last = sessions?.[sessions.length - 1];
+    /* core's keyset is `last_message_at`; a row with none sorts LAST and has
+       nothing older behind it — the door closes there */
+    if (!last || last.last_message_at === null || paging) return;
+    setPaging(true);
+    try {
+      const older = await api.agentSessions(false, { before: last.last_message_at, limit: HISTORY_PAGE });
+      setSessions((cur) => {
+        const known = new Set((cur ?? []).map((s) => s.id));
+        return [...(cur ?? []), ...older.filter((s) => !known.has(s.id))];
+      });
+      setHasMore(older.length >= HISTORY_PAGE && older[older.length - 1]!.last_message_at !== null);
+    } catch {
+      notify(t("loadMoreFailed"), "warn");
+    } finally {
+      setPaging(false);
+    }
+  };
 
   const numbers = untitledNumbers(sessions ?? []);
   /* ten rows, then numbers — the house rule, arriving by import. The list is
@@ -146,6 +180,15 @@ export default function ConversationsPage() {
             ]}
           />
           <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+          {/* the pager walks what is loaded; this asks the server for what is
+              not — the audit log's pair, for the same reason (AuditLogs.tsx) */}
+          {hasMore && sessions !== null ? (
+            <div className="mt-4 flex justify-center">
+              <button type="button" className="btn-secondary" disabled={paging} onClick={() => void loadOlder()}>
+                {paging ? tCommon("loading") : t("loadMore")}
+              </button>
+            </div>
+          ) : null}
         </PageContainer>
 
       {/* The platform's one destructive-action dialog. The title names the

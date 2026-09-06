@@ -235,6 +235,30 @@ describe("runner", () => {
     expect(sink.onDeadLetter).not.toHaveBeenCalled();
   });
 
+  it("a failed REMOVE after a finished step is a lost receipt, not a failed step — nothing is delayed (2026-09-06)", async () => {
+    /* the remove used to sit inside the handler's try: a transient error on
+       the delete read as the STEP failing, and the handler ran again as a
+       retry — a part transcribed twice for a step that had finished */
+    const { queue, calls } = fakeQueue([{ msgId: 7, readCt: 1, body: payload }]);
+    const failing: Queue = { ...queue, remove: async () => { throw new Error("connection reset"); } };
+    const sink = { onDeadLetter: vi.fn() };
+    const runner = createRunner({ queue: failing, handlers: [handlerThat(async () => {})], config, sink, log: silent });
+    const result = await runner.poll();
+    expect(result).toMatchObject({ claimed: 1, done: 1, retried: 0, deadLettered: 0 });
+    expect(calls.delayed, "the step ran once and must not be scheduled to run again").toEqual([]);
+    expect(sink.onDeadLetter).not.toHaveBeenCalled();
+  });
+
+  it("a sink that throws does not take the poll down — the batch finishes and the message stays claimed", async () => {
+    const { queue, calls } = fakeQueue([{ msgId: 9, readCt: 3, body: payload }]);
+    const sink = { onDeadLetter: async () => { throw new Error("sink is down"); } };
+    const runner = createRunner({
+      queue, handlers: [handlerThat(async () => { throw new Error("boom"); })], config, sink, log: silent,
+    });
+    await expect(runner.poll()).resolves.toMatchObject({ claimed: 1, deadLettered: 1 });
+    expect(calls.archived).toEqual([9]);
+  });
+
   it("delays the message and does NOT notify the sink on a retryable failure", async () => {
     const { queue, calls } = fakeQueue([{ msgId: 8, readCt: 1, body: payload }]);
     const sink = { onDeadLetter: vi.fn() };

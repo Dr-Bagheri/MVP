@@ -25,10 +25,14 @@ const updateTaskTopic = vi.fn();
 const taskDetail = vi.fn();
 const createTask = vi.fn();
 const orgPeople = vi.fn();
+const meetings = vi.fn();
+const sendMemberMessage = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     createTask: (...args: unknown[]) => createTask(...args),
     orgPeople: (...args: unknown[]) => orgPeople(...args),
+    meetings: (...args: unknown[]) => meetings(...args),
+    sendMemberMessage: (...args: unknown[]) => sendMemberMessage(...args),
     members: (...args: unknown[]) => members(...args),
     projects: (...args: unknown[]) => projects(...args),
     createProject: (...args: unknown[]) => createProject(...args),
@@ -455,5 +459,63 @@ describe("the hands of 2026-09-05 — projects and folders, named the way a pers
     const missing = await executeClientTool("update_task_topic", { topic: "بازاریابی", name: "x" }, ctx);
     expect(missing.ok).toBe(false);
     expect(missing.detail).toContain("فروش");
+  });
+});
+
+describe("a name resolves exactly or not at all (2026-09-06, the check-up)", () => {
+  beforeEach(() => {
+    members.mockReset(); orgPeople.mockReset(); meetings.mockReset();
+    sendMemberMessage.mockReset(); setUserStatus.mockReset(); taskBoard.mockReset();
+  });
+
+  it("a lone PARTIAL match is not a person — «ali» with only Alireza refuses and names the candidate", async () => {
+    /* the server's search is a prefix filter, and this used to accept its
+       single row whatever it was; the consent card names the handle the
+       model PASSED, so the yes covered somebody else */
+    const { ctx } = surface();
+    members.mockResolvedValue([{ id: "u-1", username: "alireza", email: "a@x.ir", display_name: "علیرضا" }]);
+    const result = await executeClientTool("set_member_status", { member: "ali", status: "disabled" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("@alireza");
+    expect(setUserStatus).not.toHaveBeenCalled();
+  });
+
+  it("a message goes only to an EXACT colleague; a substring names the closest and sends nothing", async () => {
+    const { ctx } = surface();
+    orgPeople.mockResolvedValue([{ id: "u-2", display_name: "سینا محمدی", display_name_en: null, username: "sina" }]);
+    const loose = await executeClientTool("send_member_message", { member: "سینا", message: "سلام" }, ctx);
+    expect(loose.ok).toBe(false);
+    expect(loose.detail).toContain("@sina");
+    expect(sendMemberMessage).not.toHaveBeenCalled();
+    /* THE CONTROL: the handle is exact, and the message goes */
+    sendMemberMessage.mockResolvedValue(undefined);
+    const exact = await executeClientTool("send_member_message", { member: "@sina", message: "سلام" }, ctx);
+    expect(exact.ok, exact.detail).toBe(true);
+    expect(sendMemberMessage).toHaveBeenCalledWith("u-2", "سلام");
+  });
+
+  it("open_meeting: one partial title opens, several ask by name — never the first of the list", async () => {
+    const { ctx, push } = surface();
+    meetings.mockResolvedValue([
+      { id: "m-1", title: "جلسهٔ هفتگی تیم" },
+      { id: "m-2", title: "جلسهٔ هفتگی مدیران" },
+      { id: "m-3", title: "بودجه" },
+    ]);
+    const several = await executeClientTool("open_meeting", { meeting: "هفتگی" }, ctx);
+    expect(several.ok).toBe(false);
+    expect(several.detail).toContain("جلسهٔ هفتگی تیم");
+    expect(several.detail).toContain("جلسهٔ هفتگی مدیران");
+    expect(push).not.toHaveBeenCalled();
+    const one = await executeClientTool("open_meeting", { meeting: "بودج" }, ctx);
+    expect(one.ok).toBe(true);
+    expect(push).toHaveBeenCalledWith("/meetings/m-3");
+  });
+
+  it("list_task_columns asks for an UNSEEDED board — a read tool must not write", async () => {
+    const { ctx } = surface();
+    taskBoard.mockResolvedValue({ columns: [], topics: [], tasks: [] });
+    const result = await executeClientTool("list_task_columns", {}, ctx);
+    expect(result.ok).toBe(true);
+    expect(taskBoard).toHaveBeenCalledWith({ seed: false });
   });
 });

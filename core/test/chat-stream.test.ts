@@ -95,6 +95,25 @@ describe("the chat bus", () => {
     }
   });
 
+  it("ends every stream after ten minutes — the reader must prove membership again (2026-09-06)", () => {
+    vi.useFakeTimers();
+    try {
+      const bus = createChatBus();
+      const s = sink();
+      bus.open("org-a", s);
+      vi.advanceTimersByTime(9 * 60_000);
+      expect(s.ended, "nine minutes in, the stream is still open").toBe(false);
+      vi.advanceTimersByTime(61_000);
+      expect(s.ended).toBe(true);
+      /* and nothing beats after the end — the timers went with the stream */
+      const beats = s.chunks.filter((c) => c.startsWith(": ")).length;
+      vi.advanceTimersByTime(60_000);
+      expect(s.chunks.filter((c) => c.startsWith(": ")).length).toBe(beats);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stops delivering to a closed stream", () => {
     const bus = createChatBus();
     const s = sink();

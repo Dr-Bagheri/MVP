@@ -28,3 +28,22 @@ describe("coreFetch and 204 No Content", () => {
     await expect(coreFetch("/v1/anything")).resolves.toEqual({ ok: true });
   });
 });
+
+describe("coreFetch and a provider's refusal (2026-09-06)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a 502 whose body declares `kind: provider` keeps the kind and the code — it is a connection to repair, not a server to retry", async () => {
+    vi.stubGlobal("fetch", async () => new Response(
+      JSON.stringify({ error: "the connected provider refused the request", kind: "provider", code: "provider_refused", params: { status: 403 } }),
+      { status: 502, headers: { "content-type": "application/json" } },
+    ));
+    await expect(coreFetch("/v1/connectors/google/items")).rejects.toMatchObject({
+      kind: "provider", status: 502, code: "provider_refused",
+    });
+  });
+
+  it("THE CONTROL: a bare 502 is still ours — upstream", async () => {
+    vi.stubGlobal("fetch", async () => new Response("bad gateway", { status: 502 }));
+    await expect(coreFetch("/v1/anything")).rejects.toMatchObject({ kind: "upstream", status: 502 });
+  });
+});

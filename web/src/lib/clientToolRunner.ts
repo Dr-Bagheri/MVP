@@ -56,16 +56,98 @@ export interface ClientToolSurface {
 type ClientToolCall = Extract<AgentEvent, { type: "client_tool_call" }>;
 
 /**
- * What the consent card names, from the call's own arguments: the first
- * name-like field, plus the destination when the call moves something. Pure,
- * so it is testable and so a card can never show less than the args carry.
+ * HOW EACH WRITE TOOL NAMES ITS OBJECT on the consent card.
+ *
+ * `subject` is the thing acted on (first non-empty key wins); `to` is what
+ * it becomes («سینا → admin»); `with` are the other facts a yes should
+ * cover, after a colon; `flag` is the boolean that decides the direction
+ * (✓ grants / ✗ removes); `excerpt` quotes the first sixty characters of a
+ * text a person is about to SEND in their own name.
+ *
+ * Per tool, because the generic first-name-like-field rule (kept below as
+ * the fallback) got the ORDER wrong wherever a tool carries both the object
+ * and its new value: `update_project {project, name}` named the NEW name
+ * and not the project it was renaming; `rename_record {record, title}` named
+ * the title it was about to write; `send_member_message` named the member and
+ * dropped the message — the one card where the words ARE the object
+ * (2026-09-06, the check-up's agents lens).
  */
-export function consentDetail(args: unknown): string | null {
+interface Naming {
+  subject: readonly string[];
+  to?: readonly string[];
+  with?: readonly string[];
+  flag?: string;
+  excerpt?: string;
+}
+
+const NAMING: Readonly<Record<string, Naming>> = {
+  send_member_message: { subject: ["member"], excerpt: "message" },
+  set_member_status: { subject: ["member"], to: ["status"] },
+  set_member_role: { subject: ["member"], to: ["role"] },
+  rename_member: { subject: ["member"], to: ["display_name", "username"] },
+  invite_member: { subject: ["email"], to: ["role"] },
+  revoke_invitation: { subject: ["email"] },
+  rename_record: { subject: ["record"], to: ["title"] },
+  set_record_scope: { subject: ["record"], to: ["scope"] },
+  archive_record: { subject: ["record"] },
+  unarchive_record: { subject: ["record"] },
+  delete_record: { subject: ["record"] },
+  restore_record: { subject: ["record"] },
+  rename_speaker: { subject: ["label"], with: ["record"] },
+  link_speaker: { subject: ["person"], with: ["record"] },
+  delete_conversation: { subject: ["conversation"] },
+  archive_conversation: { subject: ["conversation"], flag: "archived" },
+  share_conversation: { subject: ["conversation"], flag: "shared" },
+  run_workflow: { subject: ["workflow"] },
+  set_model_allowed: { subject: ["model_id"], flag: "allowed" },
+  set_role_permission: { subject: ["capability"], with: ["role"], flag: "allowed" },
+  update_project: { subject: ["project"], to: ["name"] },
+  archive_project: { subject: ["project"], flag: "archived" },
+  delete_project: { subject: ["project"] },
+  set_project_member: { subject: ["project"], with: ["member"], flag: "member_of" },
+  update_task_topic: { subject: ["topic"], to: ["name"], flag: "archived" },
+  update_task_column: { subject: ["column"], to: ["name"], flag: "archived" },
+  update_task_label: { subject: ["label"], to: ["name"] },
+  delete_task_label: { subject: ["label"] },
+  update_chat_room: { subject: ["room"], to: ["name"], flag: "archived" },
+  create_chat_room: { subject: ["name"] },
+};
+
+const EXCERPT_CHARS = 60;
+
+/**
+ * What the consent card names, from the call's own arguments. Pure, so it is
+ * testable and so a card can never show less than the args carry. A tool with
+ * no entry above gets the generic rule: the first name-like field, plus the
+ * destination when the call moves something.
+ */
+export function consentDetail(tool: string, args: unknown): string | null {
   const a = (args ?? {}) as Record<string, unknown>;
   const str = (key: string): string | null =>
     typeof a[key] === "string" && (a[key] as string).trim() !== "" ? (a[key] as string).trim() : null;
-  const subject = ["title", "name", "project", "topic", "room", "label", "column", "member", "meeting", "question"]
-    .map(str).find((v) => v !== null) ?? null;
+  const first = (keys: readonly string[]): string | null => keys.map(str).find((v) => v !== null) ?? null;
+
+  const naming = NAMING[tool];
+  if (naming !== undefined) {
+    const subject = first(naming.subject);
+    if (subject === null) return null;
+    let out = subject;
+    const to = naming.to === undefined ? null : first(naming.to);
+    if (to !== null) out += ` → ${to}`;
+    const facts = (naming.with ?? []).map(str).filter((v): v is string => v !== null);
+    if (facts.length > 0) out += `: ${facts.join("، ")}`;
+    if (naming.flag !== undefined && typeof a[naming.flag] === "boolean") out += a[naming.flag] ? " ✓" : " ✗";
+    if (naming.excerpt !== undefined) {
+      const text = str(naming.excerpt);
+      if (text !== null) {
+        const cut = text.length > EXCERPT_CHARS ? `${text.slice(0, EXCERPT_CHARS)}…` : text;
+        out += `: «${cut}»`;
+      }
+    }
+    return out;
+  }
+
+  const subject = first(["title", "name", "project", "topic", "room", "label", "column", "member", "meeting", "question"]);
   const destination = str("folder") ?? (subject !== str("column") ? str("column") : null);
   if (subject === null && destination === null) return null;
   return [subject, destination === null ? null : `← ${destination}`].filter(Boolean).join(" ");
@@ -111,7 +193,7 @@ export async function handleClientToolCall(
         await answer(false, "this surface cannot ask for consent — the assistant strip can, or set the assistant to act on its own");
         return;
       }
-      const reply = await surface.askConsent(event.label, consentDetail(event.args));
+      const reply = await surface.askConsent(event.label, consentDetail(event.tool, event.args));
       if (reply === "no") {
         await answer(false, "the user declined");
         return;
