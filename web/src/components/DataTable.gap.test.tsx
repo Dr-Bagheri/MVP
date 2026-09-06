@@ -8,8 +8,8 @@ import { DataTable } from "./DataTable";
  * THE FIRST ROW SITS AT THE GAP (user, 2026-09-06: "gap in the images, fix
  * it"). Every table page measured 30px from its toolbar to the first row
  * against the board's 13: `border-spacing` paints a band above the first
- * row, and a headless table also carries its sr-only header row — 1px, with
- * a band on either side — inside the layout. The two rules in globals.css
+ * row, and a headless table also carries its sr-only header row — no height,
+ * with a band on either side — inside the layout. The two rules in globals.css
  * take that back; this checks the class reaches the table and the rules say
  * what the measurement asked for, since a stylesheet is the one place a
  * reviewer cannot see a number fail.
@@ -32,8 +32,10 @@ describe("a table's first row and the gap above it", () => {
     expect(headed.container.querySelector("table")!.className).not.toMatch(/table-headless/);
   });
 
-  it("the stylesheet takes back one band above a headed table and two bands plus the hidden row above a headless one", () => {
+  it("the stylesheet takes back one band above a headed table and two bands above a headless one", () => {
     expect(rule(".table-cards")).toMatch(/margin-top:\s*calc\(-1 \* var\(--table-row-gap, 8px\)\)/);
-    expect(rule(".table-cards.table-headless")).toMatch(/margin-top:\s*calc\(-2 \* var\(--table-row-gap, 8px\) - 1px\)/);
+    /* exactly two bands: a first draft took back a pixel more for the hidden
+       row and every table's first row sat 1px above the gap (measured live) */
+    expect(rule(".table-cards.table-headless")).toMatch(/margin-top:\s*calc\(-2 \* var\(--table-row-gap, 8px\)\);/);
   });
 });

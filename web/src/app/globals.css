@@ -1041,14 +1041,16 @@
   margin-top: calc(-1 * var(--table-row-gap, 8px));
 }
 /* a HEADLESS table (DataTable `hideHeader`): the header row is `sr-only`,
-   and Chrome keeps a positioned <thead> in the table's layout — a 1px row
-   with a spacing band above and below it, 17px of nothing between the
-   toolbar and the first card. Taken back here, so the first card sits at
-   the gap like the board's first column. Measured on production 2026-09-06:
-   users 147→163, models 151→167, security and audit 197→213 (table top →
-   first row), each exactly two bands and the hidden row. */
+   and Chrome keeps a positioned <thead> in the table's layout — a row of no
+   height with a spacing band above and below it, 16px of nothing between
+   the toolbar and the first card. Taken back here, so the first card sits
+   at the gap like the board's first column. Measured on production
+   2026-09-06: users 147→163, models 151→167, security and audit 197→213
+   (table top → first row), each exactly two bands; a first draft took back
+   17 and put the row 1px ABOVE the gap on every page, which is how the
+   measurement earned its second reading. */
 .table-cards.table-headless {
-  margin-top: calc(-2 * var(--table-row-gap, 8px) - 1px);
+  margin-top: calc(-2 * var(--table-row-gap, 8px));
 }
 .table-cards > tbody > tr > td {
   background: rgb(var(--surface));
