@@ -4922,3 +4922,63 @@ sessions) for the cross-session narrative.
   discriminates — an empty body is the 400 the 2026-09-06 fix installed, a real
   body is 401).
   db 202 migrations · core 1416 tests · web 1279 tests + gate + sweep.
+- 2026-09-06 (night — THE CONNECTORS WALKED ON PRODUCTION, and the connect
+  dialog was handing out the person's own password; commit b93d32d): the
+  user asked whether the nine connectors and the MCP door had finished, the
+  limit having landed near them. They HAD — 76f8e90 was whole, and the
+  check found it so: ten providers registered on both sides, eight client
+  hands, all locale keys in both catalogues, core and web typechecks clean,
+  the registry's 14 tests and the page's 11 green. What was missing was the
+  one thing green tests cannot supply, and the extension was back, so the
+  page was finally OPENED.
+  **Fourteen tiles, and the two that are absent are absent on purpose.** The
+  catalogue holds sixteen; `INTEGRATIONS` filters by core's own
+  `OFFERED_CONNECTOR_PROVIDERS`, where Microsoft is deliberately off ("we
+  just go with the google" for mail and calendar, OneDrive being its own
+  provider on the same Azure app). So the shelf reads: four Google
+  «متصل است», seven OAuth «روی سرور پیکربندی نشده», three token connectors
+  «وصل نشده». The seven render as plain DIVs rather than buttons — checked
+  in the DOM, not inferred — which is the card's own rule holding: a claim
+  about the product must not look like something to press.
+  **THE DEFECT, and it is the reason the walk was worth taking.** Opening
+  the MCP dialog showed the «توکن دسترسی» box filled with dots and the
+  «نشانی سرور» box filled with `info@neurai.pt` — Chrome's password manager
+  had put the person's OWN ACCOUNT PASSWORD into a field whose value is
+  posted to a third party, and the green «اتصال» button was ENABLED over it.
+  A person pressing it without looking would have sent their platform
+  password to whatever URL sat above it, and the screen looked exactly like
+  a form that had helpfully remembered something.
+  One attribute caused it: the secret carried `autocomplete="off"`, and
+  **Chrome IGNORES `off` on a `type="password"` field** — documented
+  behaviour, not a bug, and the reason the fix reads as already-correct to
+  anyone reviewing the source. `new-password` is the token Chrome honours,
+  and marking the secret with it also stops the box beside it being filled
+  as a username. The product already knew this vocabulary — sign-in asks
+  `current-password`, the change form asks `new-password` — so the ONE place
+  that asked for the inert token was the one place where the secret belongs
+  to somebody else's service. The inputs also stopped being anonymous (an
+  unnamed box beside a password is what a heuristic reads as the username to
+  fill) and carry the 1Password and LastPass opt-outs, which read their own
+  attributes and not this one.
+  **The test holds both halves** — `new-password` present AND `off` absent —
+  because either alone is green against the shipped bug, across Telegram and
+  MCP; three mutations were run red (the bug restored, the manager
+  attributes dropped, the input made anonymous). jsdom does not autofill, so
+  the attribute is all a test can hold, which is why the browser is the
+  proof: after the deploy, MCP's two boxes, Telegram's one and WhatsApp's
+  three all read `filled: false` with the secrets at `new-password`, and the
+  connect button sat DISABLED over the empty pair where it had been live and
+  green over a password.
+  Minted, and it is rule 12's own sentence arriving at a security boundary:
+  **a field that reads as helpfully pre-filled is indistinguishable from a
+  field the person filled** — and the attribute that was supposed to prevent
+  it was present, correct-looking, and inert. Third instance of the
+  artifact-reads-as-satisfied class this week, after `w-control-sm` and
+  `text-on-accent`; the difference here is that the inert attribute's cost
+  was a credential rather than a colour.
+  **Still the operator's, unchanged:** the seven OAuth connectors need their
+  apps created and `echo_platform_<provider>_oauth_client_id/_secret` on the
+  server (docs/CONNECTORS.md names each console, redirect URI and scope set)
+  — until then their tiles say so and refuse to be pressed. The three token
+  connectors need nothing from the server and can be connected now.
+  db 202 migrations · core 1416 tests · web 1280 tests + gate + sweep.
