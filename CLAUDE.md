@@ -4509,3 +4509,73 @@ sessions) for the cross-session narrative.
   Still owed: the user's decision on the five lost tasks and the stray
   folders.
   db 194 migrations · core 1384 tests · web 1131 tests + gate + sweep.
+- 2026-09-06 (afternoon — THE THREAD FOLLOWS WHAT CHANGES SIZE, AND THE
+  FOLLOW LEARNS ITS OWN ECHO; commits c513c82, 1e3598a): one screenshot and
+  one sentence — "the messages from agents or echo go under the field of
+  vision … it must scroll itself, it's a bug" — and, in the same message,
+  "forget the five lost tasks and the stray folders, it's not important":
+  that item is CLOSED, no recreation, no cleanup, nothing owed.
+  **The cause was in four copies.** Every thread surface followed by hand,
+  and the assistant page's copy ran on the MESSAGE LIST alone — the consent
+  card, the refusal line, the standing-yes line, a mail draft, the floor chip
+  pushing the composer up, the composer's third line are not messages, so
+  each landed below the fold and stayed there until the reader went looking.
+  The sidebar's copy had the opposite fault too: an unconditional
+  `scrollIntoView` on the list, which dragged a scrolled-up reader back down
+  on every delta and still never ran for the card. The room had a third copy;
+  the meeting panel had none.
+  **One mechanism** — `useThreadFollow` in lib/threadFollow.ts beside the
+  pure `shouldStick`: a ResizeObserver on the box and on its ONE content
+  wrapper, delivered after layout and before paint, so a pinned reader never
+  sees the frame in which the newest line sits below the edge; `pinned` is
+  moved only by the reader's own scroll events and their own send or opened
+  thread; `followPage` keeps the assistant page's mobile case (below md the
+  page scrolls, not the box). A consumer's part is three attachments and one
+  call, and the surface tests assert the STRUCTURE — the card renders inside
+  the observed wrapper; a sibling would be invisible to the follow. jsdom has
+  no ResizeObserver, so `test/resizeObserver.ts` fakes one the tests drive.
+  `py-5` on the page's box is the fade's own width: `.fade-scroll` masks the
+  last 1.25rem and the newest line sat half-ghosted in it whenever the thread
+  was pinned; the follow test reads the edge from the stylesheet and holds
+  the pair.
+  **THE ECHO — found on production within the hour, with the first version
+  live.** The probe read "256 px above the bottom" after a growth, and the
+  instrumented observer said it had FIRED and settled nothing: a programmatic
+  scrollTop write fires its `scroll` event a frame LATER, in the rendering
+  steps, after React has landed the next message or the card — judged against
+  the new geometry the echo reads as the reader having left, `pinned` flips
+  false a frame after `repin` set it, and the delivery in the same frame does
+  nothing. The handler now recognises an event whose scrollTop is exactly
+  where the last write left the box as ours and judges only the rest. The
+  hook test's instrument had to CLAMP like a browser before the case was
+  even representable — a fake that stored `scrollHeight` as the position made
+  every echo look pinned by arithmetic. Minted: **a fake that cannot clamp
+  cannot echo** — rule 9 pointed at a scroll box.
+  **And the probe was asleep.** The MCP tab was a BACKGROUND tab, and a hidden
+  document runs no rendering steps — no rAF, no ResizeObserver deliveries, no
+  scroll events — so two readings said "not followed" about code that had
+  never been given a frame to follow in (the Browser-pane rAF lesson of
+  2026-09-05, in the user's own Chrome this time). `document.visibilityState`
+  plus a rAF race is the probe's precondition now (INVALID otherwise); a
+  screenshot renders exactly one frame, which is when the deliveries land,
+  and the state is read right after. Recorded in memory.
+  **Proven on production in the user's Chrome (1e3598a)**, the thread box
+  held to 260 px for the probe because the real thread was shorter than the
+  box at that window (constraint removed after): a request for a test task
+  drew the card 234 px below the box's bottom while the tab slept; on the
+  first rendered frame the observer's delivery took the distance from 256 to
+  0 and the card sat fully inside the box with 22.1 px under it (= the
+  padding = the fade edge, 21.875 at root 17.5); declined with «نه», nothing
+  created, Echo's answer landed at the bottom with 22.4 px under it; the
+  sidebar, opened on /meetings, went from 21 above its bottom to 0 on its
+  first frame with 13.1 px under the last line (its own py-3), and was shut
+  again to keep the stored choice. Not captured: the console during the
+  probe (tracking began after it).
+  Verified: web 1143 tests in 177 files (11 new — the hook's ten including
+  the echo, the page's card, the panel's card), typecheck, build gate (run
+  through PowerShell: the gate spawns `next.CMD`, which cannot find node from
+  the Bash tool and prints BUILD GATE FAILED — a harness red, not a build
+  red), encoding sweep (1205 files), token verifier; verify-red: four surface
+  assertions red before the surfaces changed, the echo case red before the
+  hook learned it.
+  db 194 migrations · core 1384 tests · web 1143 tests + gate + sweep.
