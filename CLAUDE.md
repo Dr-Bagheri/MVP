@@ -4439,3 +4439,73 @@ sessions) for the cross-session narrative.
   and Sina's deadline) and removing the stray folders are writes on the live
   board and wait for the user's word. The README screenshots leave the owed
   list: the user said they are not needed any more.
+- 2026-09-06 (midday — A CALLED COLLEAGUE STAYS, TWO NAMES GET TWO ANSWERS,
+  AND EVERY AGENT REACHES THE WHOLE PLATFORM; commit f937427; db 0194): the
+  user's two asks and three rulings — "understand all parts of the platform,
+  so I don't see them say I don't have access, but under the role permission
+  per user"; "when I ask for Roya she should keep talking back until I say
+  someone else's name, like humans do"; then: full tool set for all three,
+  yes; two names in one message → both answer; released only by a name or
+  the × button. Recorded as **M48** in ARCHITECTURE.md, which the `route`
+  event had cited for two days without a section to point at.
+  **The floor.** `agent_session.floor text[]` (0194; an immutable
+  `echo.floor_ok` for the handle shape and a ceiling of eight). The router
+  (`agent/router.ts`) grew `namesIn` — every name, in order of address — and
+  `decide(named, floor, incumbent, known)`: names set the floor and all the
+  named answer in turn; no name → the floor answers; nothing → Echo; a floor
+  of exactly [echo] is stored as `[]`, one state one spelling. The 2026-09-04
+  reading is reversed for one case (a follow-up after a CALLED colleague) and
+  kept for the case that drove it — `current_agent`, who spoke last, decides
+  nothing, and no topic is read. The ask route writes the floor BEFORE the
+  stream opens, sends it as a `floor` event right after `session`, runs the
+  first named as the streamed answer and every other named colleague after
+  it — a full run each, same tools, same hands, the earlier answers in view,
+  landing as its own `agent_message` with `after: true` (a delegate's
+  paragraph stays BEFORE Echo's conclusion; a second floor-holder's answer
+  goes after the first's, because that is the order they spoke). The thread
+  read returns `{messages, floor}` so a reload draws the chip before anybody
+  types; `PUT /v1/assistant/sessions/:id/floor` is the ×. On the web the
+  store carries `floor`, `FloorChip` («در گفت‌وگو با رؤیا ×») sits above
+  both composers, and the client-side mention router (`agentMention.ts`) is
+  DELETED — the server names, and a surface's `agent` counts on the first
+  message of a new conversation only, so an agent's page can open a thread
+  with her on the floor without dragging the person back after «اکو».
+  **One reach.** The analyst/operator split of the platform reads is gone —
+  `toolsFor()` is the whole registry for Echo, for a colleague answering
+  under her own name and for a colleague Echo calls; the `specialism` tag
+  left every tool rather than staying as a field nothing reads. Every
+  agent's prompt carries `PLATFORM_MAP` and `REACH_RULE`
+  (`agent/platform-map.ts`): the product part by part, and "your reach is
+  the person's reach — never «دسترسی ندارم»; a refusal is about THEIR role
+  and says who can". Coverage is derived from the tool registries
+  (`platform-map.test.ts`) and **its first run found five tools no area
+  described** (whoami_surface, mark_notification_read, create_person,
+  set_model_allowed, set_role_permission) — a true positive before any
+  green. The colleagues' descriptions lost their "CANNOT" sentences; 0194
+  appended the reach and floor manners to their stored instructions under a
+  sentinel, asserting 0192's and 0193's paragraphs still there.
+  **Two of my own instruments were wrong before the code was.** A test
+  heading check written as `new RegExp(\`· ${heading}\\b\`)` inside a
+  TEMPLATE LITERAL made `\b` a BACKSPACE, not a word boundary — the regex
+  printed as `/· SURFACES/` with an invisible character and matched nothing
+  — the exact class the encoding sweep exists for, one layer up; and the
+  same edit went through a `python - <<EOF` heredoc that decoded its own
+  source as cp1252, so «· PROJECTS (پروژه):» landed in the test as
+  mojibake. Rewritten through the UTF-8 file tool with a plain `toContain`.
+  The mirror test asserted the second answer's position AFTER `done`, where
+  the hub re-reads the thread from a mock that knew no floor and no second
+  turn — anchored before `done` now, on the mechanism under test.
+  **Proven on production in the user's Chrome**, one thread: «رؤیا بیا
+  اینجا» → chip «در گفت‌وگو با رؤیا ×» and Roya's own greeting «سلام!
+  اینجام، چطور می‌تونم کمکت کنم؟»; an unnamed follow-up → Roya again, chip
+  kept; «آوا و اکو، شما هم یک جمله بگید» → Ava answered first and Echo after
+  her as its own message, chip «در گفت‌وگو با آوا و اکو ×»; the × → chip
+  gone, the session's floor reads `[]` from the server, and the next unnamed
+  message was Echo's. Core deployed (both units active, health 200, the
+  floor route and the map on disk); web on Vercel; 0194 applied. Verified:
+  core 1384 tests, web 1131 (six mention tests left with their module),
+  both typechecks, build gate, encoding sweep (1203 files), verify-red on
+  the router, the second responder, the store's `after` and the chip.
+  Still owed: the user's decision on the five lost tasks and the stray
+  folders.
+  db 194 migrations · core 1384 tests · web 1131 tests + gate + sweep.
