@@ -379,10 +379,27 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   {
     name: "create_task",
     label: { fa: "ساختن تسک", en: "Creating a task" },
+    /*
+     * A FOLDER IS NOT A PROJECT (user, 2026-09-06: "they still don't
+     * understand the difference between folder and projects — a folder is
+     * for you to group your own tasks in one place; projects are next to it,
+     * added by admins for you; when I ask them to create a project they must
+     * go there, make it, and add tasks with the person who has to do them").
+     * The distinction is taught HERE, on the tool that files the card, and
+     * the two places are two parameters — a name resolved against the wrong
+     * list is a refusal, not a near miss.
+     */
     description:
       "Add a card to the task board and open it. Use it when the user asks for "
       + "something to be tracked, assigned or remembered as work — not for a "
-      + "note to themselves, which belongs on the record it is about.",
+      + "note to themselves, which belongs on the record it is about. WHERE IT "
+      + "GOES: a PROJECT (پروژه) is an admin's order of work with people on it — "
+      + "it has a page of its own and owns a folder of the same name on the "
+      + "board; a FOLDER (پوشه) is a person's own grouping of their tasks. Work "
+      + "for a project is filed with `project`, a personal grouping with `folder`, "
+      + "never both. «یک پروژه بساز با این تسک‌ها» means create_project first, "
+      + "then one create_task per piece of work with project=<its name> and "
+      + "assignee=<who does it>.",
     parameters: obj({
       title: str("The task, in a few words."),
       description: str("Anything the person doing it needs. Optional."),
@@ -391,14 +408,32 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
         + " (e.g. 2026-09-07T17:00:00+03:30), resolved against the current instant"
         + " in your instructions. Optional.",
       ),
+      priority: strEnum(["low", "medium", "high", "critical"], "How urgent it is. Optional."),
+      project: str(
+        "The PROJECT it belongs to, by name as list_projects returns it — the"
+        + " card is filed in that project's folder and counts toward it. Optional.",
+      ),
+      folder: str(
+        "A personal FOLDER on the board, by name as list_tasks's `folders` returns"
+        + " it. Not for a project's work — that is `project`. Optional.",
+      ),
+      column: str(
+        "The column to start it in, by name — e.g. «برای انجام», «در حال انجام»."
+        + " Defaults to the board's first column.",
+      ),
       /*
        * ONE STEP, not two. "Make a task for Sina" is a single sentence and it
        * should be a single act — creating and then telling the person to open
        * the board and assign it themselves is the product asking them to
-       * finish its job. `assign_task` still exists for a task that already
-       * exists; this is for the one being made.
+       * finish its job. And ONE TRANSACTION (2026-09-04): the person rides the
+       * same create, so a name the surface cannot resolve refuses the create
+       * rather than filing an orphan. `assign_task` still exists for a task
+       * that already exists; this is for the one being made.
        */
-      assignee: str("Who it is for — a colleague's id from list_members. Optional."),
+      assignee: str(
+        "Who does it — a colleague by @handle, username or name (as"
+        + " list_colleagues returns them), or their id. Optional.",
+      ),
     }, ["title"]),
     effect: "write",
   },
@@ -492,8 +527,9 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
          gives the board's own wording when you need to be sure. */
       column: str("The column to move it to, by name — e.g. «در حال انجام», «Done»."),
       folder: str(
-        "The folder (topic) to file it under, by name — a project's folder"
-        + " included. «بدون پوشه» or \"none\" takes it out of its folder.",
+        "The folder to file it under, by name — a project's folder has the"
+        + " project's name, so «move it into project X» is folder=X. «بدون"
+        + " پوشه» or \"none\" takes it out of its folder.",
       ),
     }, ["task_id", "title"]),
     effect: "write",
@@ -893,9 +929,12 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   },
   {
     name: "create_task_topic",
-    label: { fa: "ساخت موضوع تسک", en: "Creating a task topic" },
-    description: "Add a topic that tasks can be filed under.",
-    parameters: obj({ name: str("The topic's name.") }, ["name"]),
+    label: { fa: "ساختن پوشهٔ تسک", en: "Creating a task folder" },
+    description:
+      "Add a personal FOLDER on the board that the person's own tasks can be "
+      + "filed under. NOT a project: a project — an admin's order of work with "
+      + "people on it, with a folder made for it — is create_project.",
+    parameters: obj({ name: str("The folder's name.") }, ["name"]),
     effect: "write",
   },
   {
@@ -1117,7 +1156,11 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       "Create a project — an order of work with its own people — on the board. "
       + "This is what 'open a project for X', 'set up a project' and «پروژه بساز» "
       + "mean. Creating it also creates its folder on the task board. Admins "
-      + "only; the server refuses anyone else.",
+      + "only; the server refuses anyone else. A project is NOT a folder: a "
+      + "folder is a person's own grouping of their tasks (create_task_topic); "
+      + "a project is work handed to people. After creating one, file its work "
+      + "IN it — one create_task per piece, with project=<its name> and "
+      + "assignee=<who does it> — rather than leaving the project empty.",
     parameters: obj({
       name: str("What the project is called."),
       summary: str("One or two lines on what it is for. Optional."),

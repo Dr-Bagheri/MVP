@@ -124,6 +124,14 @@ describe("breadcrumb trail", () => {
     expect(trailFor("/settings/audit-logs").at(-1)!.label).toBe("settings.section.audit-logs");
   });
 
+  it("opens the projects page under the board — «تسک‌ها / پروژه‌ها» (user, 2026-09-06)", () => {
+    expect(trailFor("/projects").map((c) => c.href)).toEqual(["/tasks", "/projects"]);
+    expect(trailFor("/projects").map((c) => c.label)).toEqual(["platform.tasks", "platform.projects"]);
+    /* and a project's own (redirecting) address still climbs through both */
+    expect(trailFor("/projects/0c5c0e02-1111-2222-3333-444455556666").map((c) => c.href))
+      .toEqual(["/tasks", "/projects", "/projects/0c5c0e02-1111-2222-3333-444455556666"]);
+  });
+
   it("returns nothing for a route with no trail", () => {
     expect(trailFor("/sign-in")).toEqual([]);
   });
@@ -174,13 +182,14 @@ describe("the trail's own assumptions", () => {
        trail — leaving it parented to Settings would have been a crumb
        offering a door back to a menu that no longer lists it, which the
        Settings-parent check below now forbids outright. */
-    /* «/echo» left the set on 2026-09-04 with the surface itself, and
-       «/projects» joined it the same day — a rail entry begins its own trail,
-       and parenting it to Tasks would put a crumb on the project page naming
-       the board rather than the section the person is standing in */
+    /* «/echo» left the set on 2026-09-04 with the surface itself. «/projects»
+       joined it the same day as a rail entry, LEFT the rail on 2026-09-05
+       (an admin's surface, reached from the board's first row) and on
+       2026-09-06 the user asked for the trail to say so — «تسک‌ها /
+       پروژه‌ها» — so it is parented to /tasks below and is not a root */
     expect(roots).toEqual([
       "/", "/agents", "/assistant", "/chat", "/help", "/integrations",
-      "/management", "/meetings", "/platform", "/profile", "/projects",
+      "/management", "/meetings", "/platform", "/profile",
       "/search", "/settings", "/tasks", "/workflows",
     ]);
     for (const pattern of Object.keys(TRAIL)) {

@@ -176,7 +176,7 @@ export function DataTable<T>({
             separated card rows in the meetings list's own clothes, so every
             table in the product changed by editing one class rather than
             fifteen screens (user directive, 2026-09-02) */}
-        <table className="table-cards w-full min-w-max">
+        <table className={`table-cards w-full min-w-max${hideHeader ? " table-headless" : ""}`}>
           <thead className={hideHeader ? "sr-only" : undefined}>
             <tr>
               {selecting ? (

@@ -346,8 +346,11 @@ const DESCRIPTION: Readonly<Record<string, (own: string) => string>> = {
     + "columns and tasks, assigns and moves work, sets up meetings and rooms. "
     + "Every change she makes is shown to the person for a yes first. Hand her "
     + "a whole batch of work in ONE brief — the list, who each piece is for, "
-    + "the deadlines you know. She CANNOT read the audit trail or summary "
-    + "history; ask Ava for those.",
+    + "the deadlines you know. She knows a FOLDER from a PROJECT: a folder is "
+    + "a person's own grouping of tasks; a project is an admin's order of work "
+    + "with people, made with create_project and filled with "
+    + "create_task(project=…, assignee=…). She CANNOT read the audit trail or "
+    + "summary history; ask Ava for those.",
   ava: (own) =>
     `Ask آوا, the analyst colleague. ${own} `
     + "She reads the record: transcripts, summaries and their versions, the "
@@ -385,6 +388,13 @@ function colleagueBriefing(name: string, locale: string | undefined): string {
     "اگر اکو کاری به تو سپرده، همان را با ابزارهایت انجام بده — تسک بساز و واگذار",
     "و جابه‌جا کن، پروژه و پوشه بساز. هر تغییری اول به کاربر نشان داده می‌شود و تا",
     "تأیید نکند اعمال نمی‌شود؛ پس بگو چه کردی و چه چیزی هنوز منتظر تأیید است.",
+    /* a folder is not a project (2026-09-06) — the same sentence the
+       migration 0193 gives their stored instructions, so the briefing and the
+       persona cannot disagree */
+    "پوشه با پروژه فرق دارد: پوشه دسته‌بندی شخصی تسک‌های خود آدم است؛ پروژه دستورِ",
+    "کارِ مدیر است با آدم‌هایش و پوشه‌ای به همان نام روی برد. وقتی پروژه خواستند،",
+    "اول با create_project بسازش و بعد تسک‌هایش را با create_task داخل همان پروژه",
+    "و برای مسئولش بگذار — نه یک پوشهٔ خالی به‌جایش.",
     language,
   ].join(" ");
 }

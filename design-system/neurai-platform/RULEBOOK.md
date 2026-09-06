@@ -362,6 +362,12 @@ loosened rule — and the user's "except this part" is what puts one there.
   tables render with NO header row (`hideHeader`; the `<thead>` stays
   sr-only) — the user's ruling for tables whose cells read without column
   names. Not a general rule: a table whose columns need naming keeps its row.
+- **2026-09-06:** the first row sits AT THE GAP. `border-spacing` also paints
+  its band above the first row, and a headless table carried its sr-only
+  header row inside the layout as well — every table page measured 30 px from
+  its toolbar to the first row against the board's 13. `.table-cards` takes
+  one band back, `.table-headless` two bands and the hidden row (globals.css;
+  `DataTable.gap.test`).
 
 - **Today:** `DataTable` is the one table — rows are `.table-cards` (16,
   border painted on the cells with logical corners), head `text-group-label`

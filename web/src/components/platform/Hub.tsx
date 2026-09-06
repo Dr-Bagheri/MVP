@@ -27,7 +27,10 @@ import { DocumentIcon, MicIcon, PlusIcon } from "./icons";
 import { mentionedAgent } from "@/lib/agentMention";
 import { liveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
-import { handleClientToolCall } from "@/lib/clientToolRunner";
+import { handleClientToolCall, type ConsentAnswer } from "@/lib/clientToolRunner";
+import {
+  consentGrantServer, consentGrantedForSession, revokeSessionConsent, subscribeConsentGrant,
+} from "@/lib/consentGrant";
 import { Icon } from "@/components/icons";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -92,8 +95,11 @@ export function Hub() {
      silent yes — the runner refuses that now, and this is how the page asks) */
   const [consent, setConsent] = useState<
     | null
-    | { label: string; detail: string | null; resolve: (allowed: boolean) => void }
+    | { label: string; detail: string | null; resolve: (answer: ConsentAnswer) => void }
   >(null);
+  /* the standing yes, drawn while it is on so it can be taken back from where
+     it is seen (lib/consentGrant.ts) */
+  const sessionGrant = useSyncExternalStore(subscribeConsentGrant, consentGrantedForSession, consentGrantServer);
   
   const locale = useLocale();
   const router = useRouter();
@@ -744,9 +750,9 @@ export function Hub() {
          the runner (it used to fall through — the comment that stood here
          claimed the opposite of what the code did) */
       askConsent: async (label, detail) => {
-        const allowed = await new Promise<boolean>((resolve) => setConsent({ label, detail, resolve }));
+        const answer = await new Promise<ConsentAnswer>((resolve) => setConsent({ label, detail, resolve }));
         setConsent(null);
-        return allowed;
+        return answer;
       },
       push: router.push,
       switchLocale: (next) => router.replace("/assistant", { locale: next }),
@@ -1164,15 +1170,27 @@ export function Hub() {
                 {tPresence("consentAsk", { action: consent.label })}
                 {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
               </p>
-              <div className="mt-2 flex gap-2">
-                <button type="button" className="btn-primary btn-sm" onClick={() => consent.resolve(true)}>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary btn-sm" onClick={() => consent.resolve("once")}>
                   {tPresence("allow")}
                 </button>
-                <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve(false)}>
+                {/* the yes for the whole session (2026-09-06) — the button
+                    itself says what it never covers */}
+                <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("session")}>
+                  {tPresence("allowSession")}
+                </button>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("no")}>
                   {tPresence("decline")}
                 </button>
               </div>
             </div>
+          ) : sessionGrant ? (
+            <p className="mt-3 flex flex-wrap items-center gap-2 text-detail text-fg-muted">
+              <span>{tPresence("sessionGranted")}</span>
+              <button type="button" className="btn btn-sm" onClick={revokeSessionConsent}>
+                {tPresence("sessionRevoke")}
+              </button>
+            </p>
           ) : null}
           {drafts.map((draft) => (
             <MailDraftCard

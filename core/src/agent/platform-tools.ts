@@ -55,6 +55,7 @@ import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
 import { createMeetingsRepo } from "../api/meetings.ts";
 import { createTasksRepo } from "../api/tasks.ts";
+import { createProjectsRepo } from "../api/projects.ts";
 import { createMembersRepo } from "../api/members.ts";
 import { createAuditRepo } from "../api/audit.ts";
 import { createOrgRepo } from "../api/org.ts";
@@ -262,9 +263,11 @@ export function createPlatformTools(): PlatformTool[] {
       name: "list_tasks",
       label: "تخته تسک‌ها",
       description:
-        "The task board: every column and the cards on it, with owners, "
-        + "deadlines, priority and labels. The place to answer what is in "
-        + "flight, what is late, and who is carrying it.",
+        "The task board: every column, the folders (each saying whether it is a "
+        + "project's — a project owns a folder of its own name; the rest are "
+        + "personal groupings) and the cards, with owners, deadlines, priority "
+        + "and labels. The place to answer what is in flight, what is late, and "
+        + "who is carrying it.",
       parameters: Type.Object({
         archived: Type.Optional(Type.Boolean()),
       }),
@@ -273,10 +276,21 @@ export function createPlatformTools(): PlatformTool[] {
            default columns on a first visit; an agent asking what is on the
            board must answer "nothing" rather than build one, and on a role
            with SELECT only the attempt is an error rather than a board. */
-        const board = await createTasksRepo(deps.db)
-          .board(identity, { archived: args.archived === true, seed: false });
+        const [board, projects] = await Promise.all([
+          createTasksRepo(deps.db).board(identity, { archived: args.archived === true, seed: false }),
+          createProjectsRepo(deps.db).list(identity),
+        ]);
+        /* THE FOLDERS, each saying whether it is a project's (0181: a project
+           owns a folder of its own name). Until 2026-09-06 the board's
+           folders were not in this answer at all and no tool listed the
+           projects — the model was asked to tell a person's grouping from
+           an admin's order of work while it could see neither. */
+        const projectOf = new Map(
+          projects.flatMap((p) => (p.topic_id !== null ? [[p.topic_id, p.name] as const] : [])),
+        );
         return {
           columns: board.columns,
+          folders: board.topics.map((t) => ({ id: t.id, name: t.name, project: projectOf.get(t.id) ?? null })),
           tasks: capped(board.tasks, CAP),
         };
       },
@@ -304,6 +318,44 @@ export function createPlatformTools(): PlatformTool[] {
       parameters: Type.Object({}),
       async run({ identity, deps }) {
         return capped(await createTasksRepo(deps.db).labels(identity));
+      },
+    }),
+
+    /*
+     * PROJECTS (2026-09-06). Every active member sees every project (0181),
+     * and until today no tool showed them — `update_project`'s own description
+     * pointed at a `list_projects` that did not exist. "both": Ava files what
+     * she finds as work, and work for a project has to be filed IN it.
+     */
+    tool<{ archived?: boolean }>("both", {
+      name: "list_projects",
+      label: "پروژه‌ها",
+      description:
+        "The projects — an admin's orders of work, each with its people, its "
+        + "folder on the task board (the same name) and progress counted off "
+        + "the tasks filed there. NOT the same thing as a folder: a folder is a "
+        + "person's own grouping of their tasks. Read it before create_task with "
+        + "`project`, and to answer who is on what.",
+      parameters: Type.Object({
+        archived: Type.Optional(Type.Boolean()),
+      }),
+      async run({ identity, deps }, args) {
+        const [rows, board] = await Promise.all([
+          createProjectsRepo(deps.db).list(identity, { archived: args.archived === true }),
+          createTasksRepo(deps.db).board(identity, { archived: false, seed: false }),
+        ]);
+        const folderName = new Map(board.topics.map((t) => [t.id, t.name] as const));
+        return capped(rows.map((project) => ({
+          id: project.id,
+          name: project.name,
+          summary: project.summary,
+          tone: project.tone,
+          folder: project.topic_id !== null ? folderName.get(project.topic_id) ?? null : null,
+          member_ids: project.member_ids,
+          task_total: project.task_total,
+          task_done: project.task_done,
+          archived: project.archived_at !== null,
+        })));
       },
     }),
 

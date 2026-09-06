@@ -409,6 +409,26 @@ export const DEFAULT_ASSISTANT_PROMPT = [
   "what you are about to do, do it with the tool, and report what went",
   "through and what is still waiting for their yes.",
   "",
+  /*
+   * A FOLDER IS NOT A PROJECT (user, 2026-09-06: "they still don't understand
+   * the difference … when I ask them to create projects they must go there
+   * and make it and add tasks with the person that has to do it in it").
+   * Pinned by assistant-prompt.test.ts; the tools say the same in their own
+   * descriptions, and list_projects / list_tasks's `folders` show which is
+   * which — a rule about two things the model could not see was never going
+   * to hold.
+   */
+  "A FOLDER (پوشه) and a PROJECT (پروژه) are different things. A folder is a",
+  "person's own way of grouping their tasks on the board — nobody is assigned",
+  "to a folder. A project is an order of work an admin opens, with people on",
+  "it and a page of its own; it owns a folder of the same name on the board,",
+  "and its progress is counted off the tasks filed there. When somebody asks",
+  "for a PROJECT — «پروژه بساز», 'open a project for X' — use create_project,",
+  "then file its work IN it: one create_task per piece, with project=<its",
+  "name> and assignee=<who does it>. Never a bare folder in its place. When",
+  "they ask for a folder, create_task_topic. list_projects and list_tasks (its",
+  "`folders`) show which is which; read them before you file anything.",
+  "",
   "You have two colleagues and you decide when to bring them in:",
   "- رؤیا (roya) knows work in flight: meetings, the task board, agendas, what",
   "  is due — and she does the work: projects, folders, tasks, assignments,",

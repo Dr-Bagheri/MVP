@@ -3137,7 +3137,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   /** what a room answer may read: rows every active member can already read */
   const ROOM_TOOLS = [
-    "list_tasks", "get_task", "list_task_labels",
+    "list_tasks", "get_task", "list_task_labels", "list_projects",
     "list_meetings", "get_meeting", "list_meeting_items", "list_meeting_folders",
     "list_colleagues", "whoami",
   ];

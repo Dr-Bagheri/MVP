@@ -81,6 +81,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     key: "projects",
     icon: "folder",
     tools: [
+      "list_projects",
       "create_project", "update_project", "archive_project", "delete_project",
       "set_project_member",
     ],

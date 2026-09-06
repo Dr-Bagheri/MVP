@@ -151,6 +151,22 @@ describe("the registry", () => {
       .toContain("new_title");
   });
 
+  it("create_task says WHERE the card goes — a project or a folder, by name — and WHO does it, by handle (2026-09-06)", () => {
+    /*
+     * "They still don't understand the difference between folder and
+     * projects." A rule about two things the tool could not express was
+     * never going to hold: the card is filed by naming the PROJECT or the
+     * FOLDER, the description teaches the difference and the sequence, and
+     * the person rides the same create.
+     */
+    const tool = CLIENT_TOOLS.find((t) => t.name === "create_task")!;
+    const props = Object.keys((tool.parameters as { properties: Record<string, unknown> }).properties);
+    for (const name of ["project", "folder", "assignee", "column", "priority"]) expect(props, name).toContain(name);
+    expect(tool.description).toMatch(/PROJECT/);
+    expect(tool.description).toMatch(/FOLDER/);
+    expect(tool.description).toContain("create_project first");
+  });
+
   it("labels carry BOTH languages — the chip reads in the asker's UI language", () => {
     for (const tool of CLIENT_TOOLS) {
       expect(tool.label.fa.length, tool.name).toBeGreaterThan(0);

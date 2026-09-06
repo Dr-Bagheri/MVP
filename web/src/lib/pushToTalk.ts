@@ -43,10 +43,20 @@ const REFUSED = new Set([
   /* modifiers alone: a bare Shift press would fire on every capital letter */
   "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
   "AltLeft", "AltRight", "MetaLeft", "MetaRight", "CapsLock",
+  /* the WRITING keys of the main block (2026-09-06). The hotkey wins inside
+     every text box now — that is what makes it work after dictation has
+     focused the composer — so a key that prints a character would take that
+     character away from every field in the product. Letters and digits are
+     matched by pattern below; these are the rest of the block. The numpad
+     stays bindable: NumpadDecimal is a chosen key, not a way to write. */
+  "Space", "Comma", "Period", "Slash", "Semicolon", "Quote", "Backquote",
+  "BracketLeft", "BracketRight", "Backslash", "Minus", "Equal",
+  "IntlBackslash", "IntlRo", "IntlYen",
 ]);
+const WRITES = /^(Key[A-Z]|Digit[0-9])$/;
 
 export function isBindableKey(code: string): boolean {
-  return code !== "" && !REFUSED.has(code);
+  return code !== "" && !REFUSED.has(code) && !WRITES.test(code);
 }
 
 let current: string | null = null;
@@ -57,6 +67,14 @@ export function pushToTalkKey(): string | null {
   if (!hydrated && typeof window !== "undefined") {
     try {
       current = localStorage.getItem(KEY);
+      /* a binding this version refuses is not a binding: a letter stored by
+         an earlier version would now swallow that letter in every field, so
+         it is dropped here rather than honoured (the settings card then reads
+         «کلیدی انتخاب نشده است» — true, and one press away from a good one) */
+      if (current !== null && !isBindableKey(current)) {
+        current = null;
+        localStorage.removeItem(KEY);
+      }
     } catch {
       /* storage can throw outright under some privacy settings — the cost is
          a hotkey that does not persist, which looks like never having set one */

@@ -179,11 +179,17 @@ async function resolveColleague(handle: string): Promise<
   { ok: true; id: string; name: string } | { ok: false; detail: string }
 > {
   const { api } = await import("@/api/client");
+  const trimmed = handle.trim();
+  /* an id is already an answer (the older tool descriptions asked for one) */
+  if (UUID_RE.test(trimmed)) return { ok: true, id: trimmed, name: trimmed };
   const rows = await api.orgPeople();
-  const lowered = handle.trim().toLowerCase();
-  const matches = (row: { display_name: string; display_name_en: string | null }) =>
+  /* «@sina» and «sina» name the same colleague — the handle is what the
+     chat's mention picker offers, so it is what a person will say */
+  const lowered = trimmed.replace(/^@/, "").toLowerCase();
+  const matches = (row: { display_name: string; display_name_en: string | null; username?: string | null }) =>
     row.display_name.toLowerCase() === lowered
-    || (row.display_name_en ?? "").toLowerCase() === lowered;
+    || (row.display_name_en ?? "").toLowerCase() === lowered
+    || (row.username ?? "").toLowerCase() === lowered;
   const exact = rows.filter(matches);
   if (exact.length === 1) return { ok: true, id: exact[0]!.id, name: exact[0]!.display_name };
   const loose = rows.filter((row) =>
@@ -290,6 +296,7 @@ function byName<T extends { id: string; name: string }>(
 }
 
 const TONES = new Set(["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"]);
+const TASK_PRIORITIES = new Set(["low", "medium", "high", "critical"]);
 
 /**
  * AN ID IS NOT A NAME A PERSON CAN CHECK (2026-09-06, the small hours). A run
@@ -1595,42 +1602,88 @@ export async function executeClientTool(
       try {
         const { api } = await import("@/api/client");
         const board = await api.taskBoard();
-        const column = board.columns[0];
+        /*
+         * WHERE IT GOES (user, 2026-09-06: "they still don't understand the
+         * difference between a folder and a project — a folder is for you to
+         * group your own tasks; projects are next to it, added by admins for
+         * you; when I ask them to create a project they must go there, make
+         * it, and add tasks with the person who has to do them").
+         *
+         * A PROJECT is an admin's order of work with people on it; it owns a
+         * folder of its own name on the board (0181), and a card filed there
+         * counts toward its progress. A FOLDER is a person's own grouping.
+         * Both are named the way a person names them and resolved against
+         * the org's own lists; a name nothing matches refuses with the real
+         * names, so the model can say them back rather than file the card in
+         * a folder that merely sounds alike.
+         */
+        let topicId: string | undefined;
+        let filedIn: string | null = null;
+        const wantedProject = typeof a.project === "string" ? a.project.trim() : "";
+        const wantedFolder = typeof a.folder === "string" ? a.folder.trim() : "";
+        if (wantedProject !== "") {
+          const hit = byName(await api.projects(), wantedProject, "project");
+          if (!hit.ok) return { ok: false, detail: hit.detail };
+          if (hit.row.topic_id === null) {
+            return { ok: false, detail: `the project «${hit.row.name}» has no folder on the board any more — an admin has to give it one` };
+          }
+          topicId = hit.row.topic_id;
+          filedIn = hit.row.name;
+        } else if (wantedFolder !== "") {
+          const hit = byName(board.topics, wantedFolder, "folder");
+          if (!hit.ok) return { ok: false, detail: hit.detail };
+          topicId = hit.row.id;
+          filedIn = hit.row.name;
+        }
+        /* the column by name, or the board's first */
+        let column = board.columns[0];
+        const wantedColumn = typeof a.column === "string" ? a.column.trim() : "";
+        if (wantedColumn !== "") {
+          const hit = byName(board.columns, wantedColumn, "column");
+          if (!hit.ok) return { ok: false, detail: hit.detail };
+          column = hit.row;
+        }
         if (column === undefined) {
           /* a real state with its own sentence, not a crash: an org whose
              board has no columns cannot hold a card yet */
           return { ok: false, detail: "this board has no columns to put a card in" };
         }
-        const task = await api.createTask({
+        /*
+         * THE PERSON, IN THE SAME CREATE. "Make a task for Sina" is one
+         * sentence and one act; and it is one TRANSACTION (2026-09-04): a
+         * card that exists and belongs to nobody is indistinguishable from
+         * one nobody has got to yet, which on an order board is the failure
+         * that matters — so an assignee the surface cannot resolve refuses
+         * the whole create, by name, rather than filing an orphan.
+         */
+        let assigneeId: string | undefined;
+        let assigneeName: string | null = null;
+        const wantedAssignee = typeof a.assignee === "string" ? a.assignee.trim() : "";
+        if (wantedAssignee !== "") {
+          const who = await resolveColleague(wantedAssignee);
+          if (!who.ok) return { ok: false, detail: who.detail };
+          assigneeId = who.id;
+          assigneeName = who.name;
+        }
+        const priority = typeof a.priority === "string" && TASK_PRIORITIES.has(a.priority) ? a.priority : undefined;
+        await api.createTask({
           title,
           column_id: column.id,
+          ...(topicId !== undefined ? { topic_id: topicId } : {}),
           ...(typeof a.description === "string" && a.description.trim() !== ""
             ? { description: a.description.trim() } : {}),
           ...(typeof a.due === "string" && a.due.trim() !== "" ? { due_at: a.due } : {}),
+          ...(priority !== undefined ? { priority: priority as never } : {}),
+          ...(assigneeId !== undefined ? { assignees: [assigneeId] } : {}),
         });
-        /*
-         * ASSIGNED IN THE SAME BREATH. "Make a task for Sina" is one sentence
-         * and should be one act — creating it and then telling the person to
-         * open the board and assign it themselves is the product handing its
-         * job back. Best-effort on purpose: a task that exists unassigned is a
-         * far better outcome than a failed creation, so the assignment's
-         * refusal is REPORTED rather than thrown, and the sentence says which
-         * half happened.
-         */
-        let assigned = false;
-        if (typeof a.assignee === "string" && a.assignee.trim() !== "") {
-          assigned = await api.setTaskAssignee(task.id, a.assignee.trim(), true)
-            .then(() => true).catch(() => false);
-        }
         surface.push("/tasks");
-        announceChange("members");
+        announceChange("tasks");
+        if (wantedProject !== "") announceChange("projects");
         return {
           ok: true,
-          detail: typeof a.assignee === "string" && a.assignee.trim() !== ""
-            ? (assigned
-              ? `the task «${title}» was added and assigned`
-              : `the task «${title}» was added, but it could not be assigned`)
-            : `the task «${title}» was added`,
+          detail: `the task «${title}» was added`
+            + (filedIn !== null ? ` in «${filedIn}»` : "")
+            + (assigneeName !== null ? ` for ${assigneeName}` : ""),
         };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the task was not created") };

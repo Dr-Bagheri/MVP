@@ -13,6 +13,35 @@
  * this" (unsupported), "the person said no" (denied), and "it stopped"
  * (idle) are three different nothings, and the button must not render
  * them as one.
+ *
+ * ── THE SESSION IS NOT THE MICROPHONE ────────────────────────────────────
+ *
+ * Four user reports, one cause. 2026-09-04: "it will be cut mid command";
+ * "the voice hotkey does not work now". 2026-09-05: "make it push to talk".
+ * 2026-09-06: "after a couple of seconds it does not hear me any more, and
+ * it gave me less than half the sentences I talked."
+ *
+ * Chrome ENDS A RECOGNITION SESSION BY ITSELF — on a pause, on a network
+ * hiccup, on its own timers — whatever `continuous` says. So "is the
+ * microphone open" and "is a session running" stop being the same question
+ * the moment the person pauses for breath, and every earlier version of this
+ * file conflated them somewhere: `onend` went to idle (the cut command); a
+ * transient error reported idle (the dead hotkey); a restart of the SAME
+ * object inside `onend` that threw was treated as the person stopping (the
+ * mic that stops hearing after a couple of seconds); and with
+ * `interimResults` off, every word Chrome had heard but not yet finalised
+ * when the session died went nowhere (the half sentences).
+ *
+ * So this file keeps three things apart and never lets one stand in for
+ * another:
+ *   · `wantRef`   — the PERSON's wish: the button pressed, the key held
+ *   · `recRef`    — the live SESSION, if there is one right now
+ *   · `pendingRef`— the words heard so far that Chrome has not finalised
+ * A session that ends while the wish stands is REOPENED — a fresh object,
+ * after a short delay, because restarting the object that just died is the
+ * call that used to throw — and everything it had heard lands in the box
+ * before it goes. Press and release, the status, and the reopen all read
+ * the wish, never the session.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -43,6 +72,15 @@ function recognitionCtor(): (new () => RecognitionLike) | undefined {
 }
 
 /**
+ * How long after Chrome closes a session before a fresh one is opened. Long
+ * enough for the engine to release the capture it just closed (a start on
+ * its heels is the call that failed), short enough that a breath in the
+ * middle of a sentence loses nothing — the pending words are already in the
+ * box by then.
+ */
+export const REOPEN_DELAY_MS = 150;
+
+/**
  * WHAT A MIC LOOKS LIKE WHILE IT IS LISTENING (user report, 2026-09-05: "the
  * mic in the chat does not show when it is active — make the 3 of them the
  * same way").
@@ -60,10 +98,6 @@ function recognitionCtor(): (new () => RecognitionLike) | undefined {
  * One function, so there is one answer. It returns the WHOLE tone — ground
  * and ink together — precisely so no caller has to compose it with a base
  * class that also sets a colour.
- *
- * The states are meant to be told apart at a glance rather than read: bright
- * accent on a soft ground while it is listening, muted ink with no ground
- * while it is not, and a pulse only on the live one.
  */
 export function micTone(status: DictationStatus): string {
   return status === "listening"
@@ -76,144 +110,148 @@ export function useDictation(
   onText: (text: string) => void,
 ): { status: DictationStatus; toggle: () => void; start: () => void; stop: () => void } {
   const [status, setStatus] = useState<DictationStatus>("idle");
-  const recRef = useRef<RecognitionLike | null>(null);
-  // ref, not closure: onresult fires long after the render that created it,
-  // and a stale onText would append into an input state that no longer exists
+  // refs, not closures: the handlers fire long after the render that created
+  // them, and a stale onText would append into an input state that no longer
+  // exists
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
-  /*
-   * DOES THE PERSON STILL WANT THE MIC OPEN?
-   *
-   * Separate from "is a recogniser running", because those stop being the
-   * same thing the moment the browser ends a session by itself — which it
-   * does, constantly. See `onend`.
-   */
+  const langRef = useRef(lang);
+  langRef.current = lang;
+  /** the person's wish — pressed, or holding the key */
   const wantRef = useRef(false);
+  /** the live session, if any */
+  const recRef = useRef<RecognitionLike | null>(null);
+  /** a reopen waiting its delay */
+  const reopenRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** words heard, not yet finalised — delivered if the session dies on them */
+  const pendingRef = useRef("");
 
-  const toggle = useCallback(() => {
-    if (recRef.current) {
-      wantRef.current = false;
-      recRef.current.stop();
-      return;
+  const cancelReopen = useCallback(() => {
+    if (reopenRef.current !== null) {
+      clearTimeout(reopenRef.current);
+      reopenRef.current = null;
     }
+  }, []);
+
+  const open = useCallback(function open(): void {
     const Ctor = recognitionCtor();
     if (!Ctor) {
+      wantRef.current = false;
       setStatus("unsupported");
       return;
     }
     const rec = new Ctor();
-    rec.lang = lang;
-    rec.interimResults = false;
+    rec.lang = langRef.current;
+    /* interim results ON: they are the words this file delivers when a
+       session dies mid-sentence. Chrome resends the whole unfinished phrase
+       on every event, so the pending text is REPLACED each time, and a final
+       clears what it finalised by no longer being interim. */
+    rec.interimResults = true;
     rec.continuous = true;
     rec.onresult = (e) => {
-      let text = "";
-      for (let i = e.resultIndex; i < e.results.length; i += 1) {
+      let finals = "";
+      let interim = "";
+      for (let i = 0; i < e.results.length; i += 1) {
         const r = e.results[i];
-        if (r?.isFinal) text += r[0].transcript;
+        if (!r) continue;
+        if (r.isFinal) {
+          /* a final is new only from resultIndex on — earlier finals were
+             delivered by the event that finalised them */
+          if (i >= e.resultIndex) finals += r[0].transcript;
+        } else {
+          interim += r[0].transcript;
+        }
       }
-      if (text.trim()) onTextRef.current(text.trim());
+      pendingRef.current = interim.trim();
+      const said = finals.trim();
+      if (said) onTextRef.current(said);
     };
     rec.onerror = (e) => {
       const fatal = e.error === "not-allowed" || e.error === "service-not-allowed";
-      /* a refused microphone is not something to reopen — and `aborted` is
-         a stop we asked for. Anything else is transient and `onend` retries. */
-      if (fatal || e.error === "aborted") wantRef.current = false;
       if (fatal) {
+        /* a refused microphone is not something to reopen — and nothing it
+           "heard" is worth keeping */
+        wantRef.current = false;
+        pendingRef.current = "";
         setStatus("denied");
         return;
       }
-      /*
-       * A TRANSIENT ERROR MUST NOT REPORT IDLE (user report, 2026-09-04: "the
-       * voice hotkey does not work now — it was working and adding my command
-       * to the prompt box").
-       *
-       * `no-speech` is what Chrome sends when somebody pauses, which is most
-       * of the time. This said `idle` unconditionally, and `onend` then
-       * reopened the session — so the microphone was open while the screen and
-       * every caller believed it was closed. Push-to-talk asks
-       * `status !== "listening"` before starting, so the NEXT press called
-       * toggle on a live recogniser and STOPPED it: the hotkey did nothing,
-       * twice in a row, forever.
-       *
-       * The fix is in `onend`, which says `listening` again the moment it
-       * reopens — ONE mechanism, and the provable one: a probe that removed
-       * the guard which used to stand here left the suite green, because the
-       * restart overwrites this status either way. Two mechanisms where
-       * neither can fail for its own reason is a place for a future edit to
-       * hide, so this is a plain `idle` and the restart is what corrects it.
-       */
-      setStatus("idle");
+      /* `aborted` is a stop somebody asked for — this hook's teardown, or a
+         second recogniser taking the one microphone Chrome allows; reopening
+         after it would fight that caller forever. Everything else —
+         no-speech, network, audio-capture — is transient: the `end` that
+         follows reopens, and the status is NOT touched here, because the
+         microphone is still wanted and about to be open again. */
+      if (e.error === "aborted") wantRef.current = false;
     };
     rec.onend = () => {
-      /*
-       * CHROME ENDS THE SESSION ON A PAUSE, whatever `continuous` says.
-       *
-       * User report, 2026-09-04: "when I am doing a voice command it will be
-       * cut mid command — it seems it has a limit for writing down a
-       * paragraph and did not get the full command." There is no length
-       * limit. The recogniser stops itself after a few seconds of silence,
-       * `onend` fires, and this went straight to idle — so thinking for a
-       * breath in the middle of a sentence ended the dictation, and the half
-       * already transcribed sat in the box looking like all of it.
-       *
-       * `continuous = true` is what makes people believe otherwise; it keeps
-       * a session alive across pauses WITHIN a phrase, and the engine still
-       * closes the session. The only thing that actually keeps a microphone
-       * open is reopening it, so that is what this does — while the person
-       * has not asked for it to stop.
-       */
+      if (recRef.current === rec) recRef.current = null;
+      /* what it heard and never finalised goes into the box, not the void */
+      const unfinished = pendingRef.current;
+      pendingRef.current = "";
+      if (unfinished) onTextRef.current(unfinished);
       if (wantRef.current) {
-        try {
-          rec.start();
-          /* and it is listening again — said out loud, because a transient
-             error may have been reported in between and the status is what
-             every caller reads to decide whether to start or stop */
-          setStatus("listening");
-          return;
-        } catch {
-          /* start() throws if the engine is not ready to be restarted; fall
-             through and report idle rather than spin */
-          wantRef.current = false;
-        }
+        cancelReopen();
+        reopenRef.current = setTimeout(() => {
+          reopenRef.current = null;
+          if (wantRef.current && recRef.current === null) open();
+        }, REOPEN_DELAY_MS);
+        return;
       }
-      recRef.current = null;
       // denied/unsupported must survive the end event — they are the message
       setStatus((s) => (s === "listening" ? "idle" : s));
     };
     recRef.current = rec;
-    wantRef.current = true;
-    setStatus("listening");
     try {
       rec.start();
+      setStatus("listening");
     } catch {
+      /* the engine refused to open at all — say so rather than spin */
       recRef.current = null;
       wantRef.current = false;
       setStatus("idle");
     }
-  }, [lang]);
+  }, [cancelReopen]);
+
+  const toggle = useCallback(() => {
+    if (wantRef.current) {
+      wantRef.current = false;
+      cancelReopen();
+      const live = recRef.current;
+      /* stop, not abort: Chrome finalises the last phrase on stop and sends
+         it before `end`, so a release mid-word still lands the word */
+      if (live) live.stop();
+      else setStatus("idle"); // released inside the reopen gap: nothing to stop
+      return;
+    }
+    wantRef.current = true;
+    setStatus("listening");
+    open();
+  }, [cancelReopen, open]);
 
   useEffect(
     () => () => {
-      /* the flag first: aborting fires `onend`, and a teardown that reopened
-         the microphone on the way out is the worst possible restart */
+      /* the wish first: aborting fires `end`, and a teardown that reopened
+         the microphone on the way out is the worst possible restart; the
+         pending words go too — the box they were for is going away */
       wantRef.current = false;
+      cancelReopen();
+      pendingRef.current = "";
       recRef.current?.abort?.();
     },
-    [],
+    [cancelReopen],
   );
 
   /*
-   * PRESS AND RELEASE, decided by the truth rather than by the rendered status
-   * (user, 2026-09-05: "make it push to talk, not push to activate — you need
-   * to hold it while you are talking"). The hotkey used to call `toggle`
-   * guarded by `status`, and `status` is React state: it lags a keystroke by
-   * a frame, and Chrome's `no-speech` sets it to idle for a moment while the
-   * recogniser is being reopened — so a release that landed in that moment
-   * saw "idle", did nothing, and left the microphone open. The key had become
-   * a switch. `recRef` is what is actually running, and these two ask it.
+   * PRESS AND RELEASE (user, 2026-09-05: "push to talk, not push to activate")
+   * read the WISH, never the rendered status and never the session: the
+   * status is React state a frame behind, and the session is null for the
+   * length of every reopen gap — a release that landed in that gap and asked
+   * "is a session running?" would find none, do nothing, and leave the
+   * microphone to reopen itself under a finger that had already let go.
    */
-  const start = useCallback(() => { if (recRef.current === null) toggle(); }, [toggle]);
-  const stop = useCallback(() => { if (recRef.current !== null) toggle(); }, [toggle]);
+  const start = useCallback(() => { if (!wantRef.current) toggle(); }, [toggle]);
+  const stop = useCallback(() => { if (wantRef.current) toggle(); }, [toggle]);
 
   return { status, toggle, start, stop };
 }

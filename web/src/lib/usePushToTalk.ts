@@ -35,10 +35,18 @@ import { pushToTalkKey } from "./pushToTalk";
  *  · `event.code`, the PHYSICAL key, matching what was stored: the same key
  *    yields a different character on a Persian layout, and a hotkey that stops
  *    working when you switch input language is one nobody trusts.
- *  · a CHARACTER key pressed while TYPING is a character. Somebody writing
- *    «سلام» into any field must not open a microphone because their hotkey
- *    is a letter — while F9 and the like work from inside the composer, which
- *    is exactly where dictation writes (user report, 2026-09-04).
+ *  · THE HOTKEY NEVER TYPES, wherever the caret is (user report, 2026-09-06:
+ *    "after I release the key the prompt box gets selected because the text
+ *    came into it, but I can't press the button any more because it will
+ *    start typing"). Dictation FOCUSES the box it fills, so the second press
+ *    of a hotkey that also prints a character — the stored NumpadDecimal
+ *    prints «.» — used to land in a field and be refused as typing: the key
+ *    worked exactly once per page. Now a press of the bound key is the hotkey
+ *    everywhere and its default is swallowed on the first keydown AND on the
+ *    repeats a held key sends, or the box fills with dots while you talk.
+ *    The protection that used to live here — a letter must stay a letter
+ *    while somebody writes «سلام» — moved to where it belongs: the WRITING
+ *    keys cannot be bound at all (lib/pushToTalk.ts `isBindableKey`).
  *  · `event.repeat` — holding a key fires keydown continuously.
  *  · the RELEASE is unconditional once a press was answered: a keyup with the
  *    caret anywhere, a window blur (alt-tab under the finger), the answering
@@ -61,17 +69,16 @@ function answering(): Surface | null {
   return best;
 }
 
-const typing = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement
-  && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
-
 function down(event: KeyboardEvent): void {
   const hotkey = pushToTalkKey();
-  if (hotkey === null || event.code !== hotkey || event.repeat || holding !== null) return;
-  if (typing(event.target) && event.key.length === 1) return;
+  if (hotkey === null || event.code !== hotkey) return;
+  /* swallowed BEFORE the repeat/holding guards: a held key repeats keydown
+     and each repeat would type, and the box under it is the one dictation
+     is filling */
+  event.preventDefault();
+  if (event.repeat || holding !== null) return;
   const surface = answering();
   if (surface === null) return;
-  event.preventDefault();
   holding = surface;
   surface.handlers.current.onPress();
 }

@@ -67,10 +67,14 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/tasks": { label: "platform.tasks" },
   "/meetings": { label: "platform.meetings" },
   "/meetings/[id]": { entity: true, parent: "/meetings" },
-  /* 0181 — projects. The detail crumb is the project's NAME, fed by the
-     page through useCrumbTitle; `entity` is what says the label is data. */
   "/chat": { label: "platform.chat" },
-  "/projects": { label: "platform.projects" },
+  /* 0181 — projects, UNDER THE BOARD (user, 2026-09-06: "for the projects
+     page add the tree address like the image, with tasks / projects"). The
+     page left the rail on 2026-09-05 and is reached from the board's own
+     first row, so its trail says where you came from: «تسک‌ها / پروژه‌ها».
+     A project itself is a panel over that page (R18); its old address
+     redirects there, and the entity entry keeps that redirect's crumb data. */
+  "/projects": { label: "platform.projects", parent: "/tasks" },
   "/projects/[id]": { entity: true, parent: "/projects" },
 
   /* the connected accounts a workflow runs on, beside the workflows */

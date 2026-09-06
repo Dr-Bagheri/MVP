@@ -1492,6 +1492,32 @@ Echo's standing orders, pinned by `core/test/assistant-prompt.test.ts`;
 the colleagues' own instructions gained the matching paragraph in
 db/0192.
 
+**[AMENDED 2026-09-06 — a yes for the session; a folder is not a project;
+user directive: "when they ask, add the option to give permission for the
+whole session so they don't ask one after the other" and "they still don't
+understand the difference between folder and projects … give them the
+access and the understanding"]** (1) The consent card has a third answer,
+«برای این نشست (به‌جز حذف)»: the surface remembers it for the BROWSER
+SESSION (`web/src/lib/consentGrant.ts` — `sessionStorage`, so a reload keeps
+it and a new tab does not), answers every later `requires_consent` at once,
+and draws a standing line with the revoke beside it while the grant is on.
+It never covers a tool named `delete_*` — the verb the board was lost to on
+2026-09-06 keeps its card whatever was granted. The server is not told: the
+dial (M36) and `requires_consent` are unchanged, the person's finger is what
+moved, and a grant that outlived the tab would be a setting and belong on
+the dial. (2) The agents could not SEE the difference they were asked to
+respect: no tool listed the projects (the `update_project` description named
+a `list_projects` that did not exist) and `list_tasks` omitted the board's
+folders. `list_projects` (specialism both; in the room set — every active
+member reads every project, 0181) and `folders` on `list_tasks`, each folder
+saying whether it is a project's, make the two visible; `create_task` files
+by `project` or `folder` by name, resolved against the right list, with the
+person (`assignee` by @handle, username or name) in the same create — an
+unresolved name refuses the create rather than filing an orphan. Echo's
+standing orders, the colleagues' briefing and descriptions, and db/0193
+carry the same sentence: a folder is a person's grouping, a project is an
+admin's order of work with people, and a project's work is filed IN it.
+
 ## M34 — Presence: the agent is always there [user-approved 2026-08-21; placement amended 2026-08-22]
 
 One persistent dock on every route (orb ↔ panel, Ctrl/⌘-E), including the

@@ -29,7 +29,10 @@ import {
   subscribeVoicePrefs, voicePrefs, voicePrefsServer,
 } from "@/lib/voicePrefs";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
-import { handleClientToolCall } from "@/lib/clientToolRunner";
+import { handleClientToolCall, type ConsentAnswer } from "@/lib/clientToolRunner";
+import {
+  consentGrantServer, consentGrantedForSession, revokeSessionConsent, subscribeConsentGrant,
+} from "@/lib/consentGrant";
 import {
   subscribeAssistantOpen,
   subscribeRecordingLive,
@@ -402,8 +405,11 @@ export function AssistantSidebar() {
   const streaming = live.streaming;
   const [consent, setConsent] = useState<
     | null
-    | { label: string; detail: string | null; resolve: (allowed: boolean) => void }
+    | { label: string; detail: string | null; resolve: (answer: ConsentAnswer) => void }
   >(null);
+  /* the standing yes, drawn while it is on so it can be taken back from where
+     it is seen (lib/consentGrant.ts) */
+  const sessionGrant = useSyncExternalStore(subscribeConsentGrant, consentGrantedForSession, consentGrantServer);
   /** voice state: null = idle; "command" = the post-wake window */
   const [listening, setListening] = useState<"command" | null>(null);
   /** the assistant's own voice is on the speakers */
@@ -873,8 +879,8 @@ export function AssistantSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member]);
 
-  const askConsent = useCallback((label: string, detail: string | null): Promise<boolean> => {
-    return new Promise<boolean>((resolve) => {
+  const askConsent = useCallback((label: string, detail: string | null): Promise<ConsentAnswer> => {
+    return new Promise<ConsentAnswer>((resolve) => {
       setConsent({ label, detail, resolve });
     });
   }, []);
@@ -1046,9 +1052,9 @@ export function AssistantSidebar() {
        */
       handleClientToolCall(event, {
         askConsent: async (label, detail) => {
-          const allowed = await askConsent(label, detail);
+          const answer = await askConsent(label, detail);
           setConsent(null);
-          return allowed;
+          return answer;
         },
         push: router.push,
         // the top bar's own switch mechanism: same route, other locale
@@ -1259,23 +1265,39 @@ export function AssistantSidebar() {
                     {t("consentAsk", { action: consent.label })}
                     {consent.detail ? <span className="font-semibold"> — «{consent.detail}»</span> : null}
                   </p>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
                       className="btn-primary btn-sm"
-                      onClick={() => consent.resolve(true)}
+                      onClick={() => consent.resolve("once")}
                     >
                       {t("allow")}
+                    </button>
+                    {/* the yes for the whole session (2026-09-06) — the
+                        button itself says what it never covers */}
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => consent.resolve("session")}
+                    >
+                      {t("allowSession")}
                     </button>
                     <button
                       type="button"
                       className="btn-secondary btn-sm"
-                      onClick={() => consent.resolve(false)}
+                      onClick={() => consent.resolve("no")}
                     >
                       {t("decline")}
                     </button>
                   </div>
                 </div>
+              ) : sessionGrant ? (
+                <p className="flex flex-wrap items-center gap-2 text-detail text-fg-muted">
+                  <span>{t("sessionGranted")}</span>
+                  <button type="button" className="btn btn-sm" onClick={revokeSessionConsent}>
+                    {t("sessionRevoke")}
+                  </button>
+                </p>
               ) : null}
               <div ref={endRef} />
             </div>

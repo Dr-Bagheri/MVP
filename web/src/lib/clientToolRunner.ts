@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { AgentEvent } from "@/api/types";
 import { executeClientTool } from "./agentSurface";
+import { grantConsentForSession, sessionGrantCovers } from "./consentGrant";
 
 /**
  * PERFORMING A CLIENT TOOL, once, for every surface that advertises one.
@@ -34,12 +35,18 @@ import { executeClientTool } from "./agentSurface";
  * that must never differ — that every path answers the server exactly once,
  * including the refusals and the throws.
  */
+/**
+ * What the person answered on the card: this once, for the rest of the
+ * browser session (deletes excepted — see lib/consentGrant.ts), or no.
+ */
+export type ConsentAnswer = "once" | "session" | "no";
+
 export interface ClientToolSurface {
-  /** ask the person; `undefined` means this surface performs writes unasked */
   /** ask the person before a write; `detail` names the OBJECT (a task's
       title, a project's name) so the yes is informed — a card that says
-      only the verb was approved seven times in a row on 2026-09-06 */
-  askConsent?: ((label: string, detail: string | null) => Promise<boolean>) | undefined;
+      only the verb was approved seven times in a row on 2026-09-06.
+      `undefined` means this surface CANNOT ask, and the runner refuses. */
+  askConsent?: ((label: string, detail: string | null) => Promise<ConsentAnswer>) | undefined;
   push(path: string): void;
   switchLocale(next: string): void;
   /** starting or resuming a recording silences the spoken reply, where there is one */
@@ -95,16 +102,21 @@ export async function handleClientToolCall(
        the comment beside the page's surface said the opposite. The server's
        `requires_consent` is the person's dial; a surface with no way to
        honour it has no business performing the call. */
-    if (event.requires_consent) {
+    /* the standing yes (2026-09-06): a person who answered «برای این نشست»
+       on an earlier card is not asked again this session — except for a
+       delete, which always asks; `sessionGrantCovers` is where that line is
+       drawn, so a surface cannot draw it differently */
+    if (event.requires_consent && !sessionGrantCovers(event.tool)) {
       if (!surface.askConsent) {
         await answer(false, "this surface cannot ask for consent — the assistant strip can, or set the assistant to act on its own");
         return;
       }
-      const allowed = await surface.askConsent(event.label, consentDetail(event.args));
-      if (!allowed) {
+      const reply = await surface.askConsent(event.label, consentDetail(event.args));
+      if (reply === "no") {
         await answer(false, "the user declined");
         return;
       }
+      if (reply === "session") grantConsentForSession();
     }
 
     const result = await executeClientTool(event.tool, event.args, {

@@ -23,8 +23,12 @@ const createProject = vi.fn();
 const deleteProject = vi.fn();
 const updateTaskTopic = vi.fn();
 const taskDetail = vi.fn();
+const createTask = vi.fn();
+const orgPeople = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
+    createTask: (...args: unknown[]) => createTask(...args),
+    orgPeople: (...args: unknown[]) => orgPeople(...args),
     members: (...args: unknown[]) => members(...args),
     projects: (...args: unknown[]) => projects(...args),
     createProject: (...args: unknown[]) => createProject(...args),
@@ -352,6 +356,7 @@ describe("the hands of 2026-09-05 — projects and folders, named the way a pers
   beforeEach(() => {
     members.mockReset(); projects.mockReset(); createProject.mockReset();
     deleteProject.mockReset(); taskBoard.mockReset(); updateTaskTopic.mockReset();
+    createTask.mockReset(); orgPeople.mockReset();
   });
 
   it("create_project resolves the people by name and presses the SAME create the dialog does", async () => {
@@ -385,6 +390,59 @@ describe("the hands of 2026-09-05 — projects and folders, named the way a pers
     const once = await executeClientTool("delete_project", { project: "آزمایش" }, ctx);
     expect(once.ok).toBe(true);
     expect(deleteProject).toHaveBeenCalledWith("p-1");
+  });
+
+  /*
+   * A FOLDER IS NOT A PROJECT (user, 2026-09-06). A project owns a folder of
+   * its own name, so the two are told apart by WHICH LIST the name is
+   * resolved against — and the card lands in the project's folder, with its
+   * person, in the one create the board's own dialog makes.
+   */
+  it("create_task files the card in the PROJECT's folder and hands it to the person, in one create", async () => {
+    projects.mockResolvedValue([{ id: "p-1", name: "دیتابیس صوتی", topic_id: "tp-9" }]);
+    taskBoard.mockResolvedValue({
+      columns: [{ id: "c-1", name: "برای انجام" }, { id: "c-2", name: "در حال انجام" }],
+      topics: [{ id: "tp-9", name: "دیتابیس صوتی" }, { id: "tp-2", name: "شخصی" }],
+      tasks: [],
+    });
+    orgPeople.mockResolvedValue([{ id: "u-2", display_name: "سینا", display_name_en: null, username: "sina" }]);
+    createTask.mockResolvedValue({ id: "t-1" });
+    const { ctx } = surface();
+    const result = await executeClientTool(
+      "create_task", { title: "جمع‌آوری صدای خام", project: "دیتابیس صوتی", assignee: "@sina", column: "در حال انجام" }, ctx,
+    );
+    expect(result.ok, result.detail).toBe(true);
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({
+      title: "جمع‌آوری صدای خام", topic_id: "tp-9", column_id: "c-2", assignees: ["u-2"],
+    }));
+    expect(result.detail).toContain("دیتابیس صوتی");
+    expect(result.detail).toContain("سینا");
+  });
+
+  it("an unknown project refuses and NAMES the projects — it never files the card under a folder that merely sounds alike", async () => {
+    projects.mockResolvedValue([{ id: "p-1", name: "الف", topic_id: "tp-1" }]);
+    taskBoard.mockResolvedValue({ columns: [{ id: "c-1", name: "برای انجام" }], topics: [{ id: "tp-x", name: "ب" }], tasks: [] });
+    const { ctx } = surface();
+    const result = await executeClientTool("create_task", { title: "x", project: "ب" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("الف");
+    expect(createTask).not.toHaveBeenCalled();
+  });
+
+  it("`folder` resolves against the board's own folders, and a person nobody matches refuses the whole create", async () => {
+    taskBoard.mockResolvedValue({ columns: [{ id: "c-1", name: "برای انجام" }], topics: [{ id: "tp-2", name: "شخصی" }], tasks: [] });
+    orgPeople.mockResolvedValue([{ id: "u-2", display_name: "سینا", display_name_en: null, username: "sina" }]);
+    createTask.mockResolvedValue({ id: "t-2" });
+    const { ctx } = surface();
+    const filed = await executeClientTool("create_task", { title: "یادداشت", folder: "شخصی" }, ctx);
+    expect(filed.ok).toBe(true);
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ topic_id: "tp-2", column_id: "c-1" }));
+    expect(projects, "a folder is resolved on the board, not among the projects").not.toHaveBeenCalled();
+
+    const orphan = await executeClientTool("create_task", { title: "y", assignee: "کسی" }, ctx);
+    expect(orphan.ok).toBe(false);
+    expect(createTask, "an unresolved person filed an unowned card").toHaveBeenCalledTimes(1);
   });
 
   it("update_task_topic renames a folder by its current name, and names the folders when none matches", async () => {

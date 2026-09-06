@@ -1033,6 +1033,22 @@
 .table-cards {
   border-collapse: separate;
   border-spacing: 0 var(--table-row-gap, 8px);
+  /* THE SPACING IS BETWEEN ROWS, NOT ABOVE THE FIRST (user, 2026-09-06:
+     "gap in the images, fix it" — every table page measured 30px from its
+     toolbar to the first row against the board's 13). `border-spacing`
+     also paints its band above the first row, so the table is pulled up by
+     one band and the first thing in it starts where the table starts. */
+  margin-top: calc(-1 * var(--table-row-gap, 8px));
+}
+/* a HEADLESS table (DataTable `hideHeader`): the header row is `sr-only`,
+   and Chrome keeps a positioned <thead> in the table's layout — a 1px row
+   with a spacing band above and below it, 17px of nothing between the
+   toolbar and the first card. Taken back here, so the first card sits at
+   the gap like the board's first column. Measured on production 2026-09-06:
+   users 147→163, models 151→167, security and audit 197→213 (table top →
+   first row), each exactly two bands and the hidden row. */
+.table-cards.table-headless {
+  margin-top: calc(-2 * var(--table-row-gap, 8px) - 1px);
 }
 .table-cards > tbody > tr > td {
   background: rgb(var(--surface));

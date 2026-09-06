@@ -7,24 +7,24 @@ import { setPushToTalkKey } from "./pushToTalk";
  * THE HOTKEY, AND WHERE THE CARET IS.
  *
  * User report, 2026-09-04: "the hotkey works in the side menu bar with the mic
- * getting selected, but in the AI assistant page it does not."
+ * getting selected, but in the AI assistant page it does not." The assistant
+ * page puts the caret in its composer on mount, so `event.target` was that
+ * textarea and a typing guard refused. User report, 2026-09-06: "after I
+ * release the key the prompt box gets selected because the text came into
+ * it, but I can't press the button any more because it will start typing" —
+ * the stored key prints a character, and the same guard refused it inside the
+ * box dictation had just focused: the key worked exactly once per page.
  *
- * Both surfaces run this hook, so the difference was never the surface — it
- * was FOCUS. The assistant page puts the caret in its composer on mount, so
- * `event.target` was that textarea and the typing guard refused; the panel
- * does not, so the same key worked. The composer is also exactly where
- * dictation writes, which makes "your caret is in a text box" the worst
- * possible reason to refuse a microphone.
- *
- * The guard still has a job — a hotkey bound to a LETTER must stay a letter
- * while somebody is writing «سلام» — so the rule is about the KEY, not the
- * target: a key that would type a character is refused inside a field, and
- * every other key is allowed.
+ * So the rule is now the plain one: the bound key is the hotkey wherever the
+ * caret is, and it never types — not on the press, not on the repeats a held
+ * key sends. Which keys may be bound is decided in pushToTalk.ts (a writing
+ * key cannot), and tested there.
  */
-function press(code: string, key: string, target?: EventTarget): void {
-  const event = new KeyboardEvent("keydown", { code, key, bubbles: true });
+function press(code: string, key: string, target?: EventTarget, repeat = false): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", { code, key, bubbles: true, cancelable: true, repeat });
   if (target) Object.defineProperty(event, "target", { value: target });
   window.dispatchEvent(event);
+  return event;
 }
 function release(code: string, key: string): void {
   window.dispatchEvent(new KeyboardEvent("keyup", { code, key, bubbles: true }));
@@ -54,23 +54,32 @@ describe("push to talk", () => {
     expect(onRelease).toHaveBeenCalledTimes(1);
   });
 
-  it("still refuses a LETTER key while somebody is writing", () => {
+  it("a key that prints a character is the hotkey inside the composer too, and types nothing — press or repeat", () => {
     /*
-     * The control, and the reason the guard exists at all: bound to a letter,
-     * the key has to stay a letter inside a field or typing «سلام» opens a
-     * microphone. Without this, "always fire" passes the test above and breaks
-     * every text box in the product.
+     * The 2026-09-06 report. NumpadDecimal prints «.»; held inside the box
+     * dictation just focused, it has to start the microphone once and put
+     * no dot in the box — on the first keydown or on any of the repeats a
+     * held key sends. Verified red twice: with the old typing guard the press
+     * was refused; with the repeat guard ahead of preventDefault, the repeats
+     * typed.
      */
-    setPushToTalkKey("KeyS");
+    setPushToTalkKey("NumpadDecimal");
     const onPress = vi.fn();
     renderHook(() => usePushToTalk({ onPress, onRelease: vi.fn() }));
+    const box = fieldWithCaret();
 
-    act(() => press("KeyS", "س", fieldWithCaret()));
-    expect(onPress, "a letter hotkey fired while typing").not.toHaveBeenCalled();
+    const first = press("NumpadDecimal", ".", box);
+    expect(onPress, "the hotkey was refused because a text box had focus").toHaveBeenCalledTimes(1);
+    expect(first.defaultPrevented, "the press typed its character").toBe(true);
 
-    /* and the same key OUTSIDE a field is the hotkey it was bound as */
-    act(() => press("KeyS", "س", document.body));
-    expect(onPress).toHaveBeenCalledTimes(1);
+    const again = press("NumpadDecimal", ".", box, true);
+    expect(onPress, "a repeat started dictation again").toHaveBeenCalledTimes(1);
+    expect(again.defaultPrevented, "a repeat typed its character").toBe(true);
+
+    /* and a key that is NOT the hotkey is left alone in the same box */
+    const other = press("KeyS", "س", box);
+    expect(other.defaultPrevented).toBe(false);
+    act(() => release("NumpadDecimal", "."));
   });
 
   it("does nothing at all until a key is chosen", () => {
