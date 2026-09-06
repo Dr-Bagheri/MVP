@@ -4824,3 +4824,101 @@ sessions) for the cross-session narrative.
   acceptance and recorded in docs/CONNECTORS.md's sibling note here when
   it happens).
   db 201 migrations · ml 145 tests · core 1410 tests · web 1256 tests + gate + sweep.
+- 2026-09-06 (evening — A MEETING HAS MEMBERS AND ONE HOST: the recording is
+  the host's, the roster is an account, a voice is never called S1; commits
+  8071d6b, 0f39199; db 0202): a seven-item directive from three screenshots,
+  taken whole.
+  **THE TOP BAR AND THE WHITEBOARD (8071d6b).** The end cluster is one height
+  in the user's own order — bell, chat, theme, a divider, then the fa/en pair
+  — and the two odd buttons took a NEW `.btn-icon-sm`, because `.btn-icon` is
+  28 and the locale pair the user called right is 34. Writing that class
+  exposed a real hole: `w-control-sm` named a token the width scale never
+  declared, so Tailwind emitted NOTHING and the class was inert while reading
+  as correct — the `text-on-accent` shape again, in the control family this
+  time. The token landed AND units.guard gained a cross-read: every `w-`/`h-`/
+  `min-h-` inside the six control classes must resolve in tailwind.config's
+  own scales. The search box is `input-sm` at `w-80` so its whole hint fits.
+  The whiteboard's ink is a ROLE, not a colour: five inks resolved through a
+  per-theme palette, so black and brown left the dark canvas and white left
+  the light one, and a stroke stores the role beside the hex so a saved
+  drawing follows the theme it is read in.
+  **THE RECORDING IS THE HOST'S (0202).** Every colleague on a meeting could
+  start and end its take. The wall is a TRIGGER on `meeting.call_id` — only
+  `created_by` may move it — and it is silent when no actor is set, so the
+  purge's own `set null` cannot raise it (the 0188/0132 class). The screen
+  agrees with the wall rather than offering a button the server refuses, and a
+  colleague gets the SENTENCE, not a disabled control. When the host finishes,
+  every other page moves to the record by itself: the engine lives in the
+  host's browser, so the others ask, and what they wait for is the record —
+  the same fact the host's own `end()` waits for.
+  **Verify-red found two duplicate walls in one batch**, and both had the same
+  shape: deleting `beginTake`'s host check left the suite GREEN because the
+  auto-start effect carried a second copy that stopped the call before it could
+  be refused, and deleting `toggle`'s attendance check left it green because
+  two disabled controls stood in front of it. This file already carried the
+  verdict for its own upload guard — the check belongs at the altitude where
+  the act happens, and a second copy "read as extra rigour and made the test
+  for it vacuous". Collapsed both; both mutations now fail by name. A third
+  test was vacuous for its own reason: `queryByRole("button", {name: /هم‌رسانی/})`
+  named a string the button never had («شروع ضبط و اشتراک صدا»), so it could
+  not have failed — rewritten as the discriminating pair, host and colleague,
+  one fixture.
+  **THE ROSTER IS AN ACCOUNT.** «drbagheri» beside «دکتر باقری» was one person
+  listed twice, because a colleague was added as whatever string a surface
+  happened to hold. `echo.meeting_attendee` is keyed by the account; adding
+  somebody is ONE request that also mints 0189's invitation, so the two
+  buttons that could come apart — a picker that wrote a name, a separate
+  «دعوت اعضا» that notified — are one act, and the bell carries accept and
+  reject the way a chat room's does. Names resolve at read time from user
+  management. The text array keeps only people with no account, which is what
+  0145 wrote it for; `InviteDialog` was REWRITTEN rather than patched, because
+  "a colleague is a name" was the model, not a line.
+  **WHO WAS ACTUALLY HERE.** `attended_at` is stamped by the person themselves
+  on opening a meeting being held — the server walls it to the caller's own
+  row and is silent for a reader who is not on the roster, so curiosity does
+  not put anybody in the room. Marked in the AFFIRMATIVE only: a missing mark
+  is silence, «نیامد» would be a claim about somebody who joined from a phone
+  the platform never saw. And the confirm guard fired on the new
+  `removeMeetingAttendee`, correctly — so the PRODUCT changed rather than the
+  rule: somebody who was in the room cannot be taken off the meeting, which is
+  what makes the guard's new entry true instead of argued. Un-planning is not
+  a delete; un-remembering is.
+  **A VOICE IS NEVER CALLED «S1·1».** Both transcript surfaces spelled
+  `person_name ?? label`, so the diarizer's own string reached the reader, and
+  the call page fell through to a raw uuid — a database key where a name goes.
+  One resolver now, and the ordinal is the speaker's POSITION in the roster:
+  `S1·1` and `S1·2` are two rows and are NOT known to be one person, because
+  diarization runs per part, so numbering by the label would invent exactly
+  the attribution nothing here may invent. The right shape already existed in
+  the Recorder («گویندهٔ ۱») and had never travelled — and the key had to be
+  added to BOTH consuming namespaces, since a key present in another namespace
+  satisfies a grep and renders raw (third instance of that trap).
+  **THE AGENTS USE THE PLATFORM'S OWN NAMES.** `invite_to_meeting` wrote
+  whatever the model produced into the text list — no account, nobody told, and
+  «invited 1» reported over a list of three. It resolves against user
+  management now, adds by id, refuses a name matching nothing and says which
+  were close; an email still reaches the text list, read-then-append. The
+  consent card names the PEOPLE: `consentDetail` could read only strings, so a
+  tool whose object is a list named nothing at all — «دعوت به جلسه» with no
+  names is a yes to inviting anybody, the exact shape that function exists to
+  end.
+  **Two fixture findings.** The two hand-written copies of `meetingFixture`
+  became callers of it — 0202's one new field turned up in all three on the
+  same typecheck, which is the drift `src/test/fixtures.ts` was extracted to
+  prevent, arriving on schedule. And a verify-red stayed green because the
+  refusal it tested was reached by an UNMOCKED read throwing rather than by
+  the rule: the fixture has to let the wrong answer succeed, or it cannot tell
+  the two apart. db test 101 also went red for a true reason — it linked a
+  recording as a member who was not the host — and its setup moved to the
+  host, since that block's subject is the delete.
+  **Deploy note re-learned the hard way:** the api runs from
+  `/opt/neurai/app/core`, and an extract into `/opt/neurai` succeeded, restarted
+  cleanly and changed nothing. The first probe could not see it — new routes
+  404, control 404, indistinguishable — and only a KNOWN-GOOD sibling
+  (`/recording`, 401) turned the reading into a diagnosis. The stray tree was
+  removed after checking nothing referenced it.
+  Deployed: 0202 on production; core on Hetzner (both units active, health 200,
+  all three routes 401 against a 404 control); web on Vercel (the BFF pair
+  discriminates — an empty body is the 400 the 2026-09-06 fix installed, a real
+  body is 401).
+  db 202 migrations · core 1416 tests · web 1279 tests + gate + sweep.
