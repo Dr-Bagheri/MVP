@@ -18,6 +18,7 @@ import pino from "pino";
 import postgres from "postgres";
 
 import { buildServer } from "./server.ts";
+import { connectorCredentialsFromEnv } from "./connector-providers.ts";
 import { createDb, type SqlClient } from "../db/identity.ts";
 import { initWatchtower, reportError } from "../observe/watchtower.ts";
 
@@ -186,16 +187,10 @@ export async function main(): Promise<void> {
     connectorOAuth: {
       publicWebUrl: process.env.echo_platform_web_url,
       encryptionKey: process.env.echo_platform_connector_encryption_key,
-      providers: {
-        google: {
-          clientId: process.env.echo_platform_google_oauth_client_id,
-          clientSecret: process.env.echo_platform_google_oauth_client_secret,
-        },
-        microsoft: {
-          clientId: process.env.echo_platform_microsoft_oauth_client_id,
-          clientSecret: process.env.echo_platform_microsoft_oauth_client_secret,
-        },
-      },
+      /* every OAuth app's pair, by the registry's names
+         (`echo_platform_<provider>_oauth_client_id/secret`) — one reader for
+         the api and the worker, so the two cannot spell a name differently */
+      providers: connectorCredentialsFromEnv(process.env),
     },
     /**
      * ON, and it was off.

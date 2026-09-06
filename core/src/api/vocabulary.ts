@@ -393,7 +393,27 @@ export const EXTRACT_SCHEMA_NAMES = [
 /** the connector sources a `fetch` step may read */
 export const FETCH_SOURCE_KINDS = ["calendar_event", "mail_message"] as const;
 
-export const OFFERED_CONNECTOR_PROVIDERS = ["google"] as const;
+/**
+ * Every provider the connector registry can speak (core/src/api/
+ * connector-providers.ts), published HERE because the web reads this file and
+ * must never import the registry (it touches node:dns). The registry imports
+ * this list and adds behaviour; db/0199's provider check names the same
+ * names, asserted by connector-providers.test.ts.
+ */
+export const CONNECTOR_PROVIDERS = [
+  "google", "microsoft",
+  "zoom", "slack", "telegram", "jira", "notion", "github", "whatsapp", "dropbox", "onedrive", "mcp",
+] as const;
+export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number];
+
+export const OFFERED_CONNECTOR_PROVIDERS = [
+  "google",
+  /* 2026-09-06 (user directive, "built these"): the registry's nine. Microsoft
+     stays OFF the offer ("we just go with the google" for mail and calendar);
+     OneDrive is its own provider on the same Azure app, so the files come
+     without the Outlook tiles. */
+  "zoom", "slack", "telegram", "jira", "notion", "github", "whatsapp", "dropbox", "onedrive", "mcp",
+] as const;
 
 /**
  * M41 L1 — the facts that may trigger a workflow (P4; closed).

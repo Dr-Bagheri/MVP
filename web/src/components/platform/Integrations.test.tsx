@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectorStatus } from "@/api/types";
 import fa from "../../messages/fa.json";
+import { INTEGRATIONS } from "./integrationsCatalogue";
 
 /**
  * The integrations page has one failure mode that renders perfectly: a tile
@@ -66,8 +67,13 @@ vi.mock("@/i18n/routing", () => ({
 
 /** a vi.fn so the briefing test can assert WHEN the OAuth flow starts */
 const connectorAuthorization = vi.fn(async () => "https://accounts.example.test/authorize");
+/** the pasted-credential door; its implementation is set per test */
+const connectTokenConnector = vi.fn(async (): Promise<ConnectorStatus> => { throw new Error("unset"); });
+const { BffError: RealBffError } = await vi.importActual<typeof import("@/api/client")>("@/api/client");
 
 vi.mock("@/api/client", () => ({
+  /* the real class, so the dialog's `instanceof BffError` can be true here */
+  BffError: RealBffError,
   api: {
     connectors: async () => CONNECTORS,
     me: async () => ({
@@ -77,15 +83,30 @@ vi.mock("@/api/client", () => ({
       created_at: "2026-01-01T00:00:00.000Z", calendar: "auto", timezone: "auto",
     }),
     connectorAuthorization: (...args: unknown[]) => connectorAuthorization(...args as []),
+    connectTokenConnector: (...args: unknown[]) => connectTokenConnector(...args as []),
   },
 }));
 
 const { Integrations } = await import("./Integrations");
 
+/** a registry provider the operator has switched on and this person has not connected */
+const TELEGRAM_OFFERED: ConnectorStatus = {
+  provider: "telegram",
+  configured: true,
+  status: "not_connected",
+  account_label: null,
+  expires_at: null,
+  can_draft: false,
+  can_drive: false,
+  polled_at: null,
+  messages_seen: 0,
+};
+
 beforeEach(() => {
   cleanup();
   push.mockClear();
   connectorAuthorization.mockClear();
+  connectTokenConnector.mockReset();
   /*
    * Google alone. Microsoft came off the OFFER (user directive, 2026-08-28:
    * "we just go with the google") — the server still speaks Graph and an
@@ -244,8 +265,12 @@ describe("the integrations page", () => {
     await act(async () => { render(<Integrations />); });
 
     const notConfigured = "روی سرور پیکربندی نشده";
-    // all four Google tiles wear the status, and none is a control
-    expect(screen.getAllByText(notConfigured).length).toBe(4);
+    /* every tile wears the status and none is a control: the Google row says
+       not configured, and no other provider has a row — the same claim about
+       the deployment, read off the one code path. The count is the
+       CATALOGUE's, never a literal, so a provider joining the offer cannot
+       turn this into a fact about the fixture. */
+    expect(screen.getAllByText(notConfigured).length).toBe(INTEGRATIONS.length);
     expect(screen.queryByRole("button", { name: /^اتصال / })).toBeNull();
 
     /*
@@ -267,7 +292,11 @@ describe("the integrations page", () => {
     }];
     await act(async () => { render(<Integrations />); });
 
-    expect(screen.queryByText(notConfigured)).toBeNull();
+    /* the four Google tiles no longer wear the sentence — the providers with
+       no row in the fixture still do, so the count drops by exactly Google's
+       tiles, never to zero */
+    expect(screen.getAllByText(notConfigured).length)
+      .toBe(INTEGRATIONS.filter((entry) => entry.provider !== "google").length);
     /* the TILE is the control, named for what it connects — four tiles, four
        names, so a screen reader is not offered «اتصال گوگل» four times */
     for (const name of ["جی‌میل", "تقویم گوگل", "گوگل درایو", "گوگل میت"]) {
@@ -368,7 +397,10 @@ describe("the integrations page", () => {
     const grid = gmail.parentElement!;
     expect(grid.className).toContain("md:grid-cols-4");
     expect(grid.className).toContain("grid-cols-2");
-    expect(grid.children.length).toBe(4);
+    /* one tile per OFFERED integration — the producer's list, so a provider
+       that joins the offer without a tile, or a tile for one that left it,
+       both go red here by count */
+    expect(grid.children.length).toBe(INTEGRATIONS.length);
 
     // every tile: THIS provider's mark (inline — no remote brand asset), the name, the status
     const tiles = [
@@ -386,6 +418,24 @@ describe("the integrations page", () => {
       expect(tile.className).toBe(gmail.className);
     }
 
+    /* EVERY tile on the shelf — the nine connectors of 2026-09-06 included —
+       is the same shape and carries its own mark: the set of marks drawn
+       equals the catalogue's slugs, so a connector added without a mark (the
+       house-icon fallback would render fine) is named here. A not-configured
+       tile is a box, not a button, so it is found through the grid rather
+       than by role; the shape is the button's class string minus the two
+       utilities only a control wears. */
+    const shape = gmail.className.replace(/ cursor-pointer hover:bg-surface-2$/, "");
+    expect(shape).not.toBe(gmail.className);
+    const marks = new Set<string>();
+    for (const child of Array.from(grid.children)) {
+      expect(child.className.startsWith(shape), `${child.textContent} wears the tile shape`).toBe(true);
+      const mark = child.querySelector("svg[data-brand]");
+      expect(mark, `${child.textContent} has a brand mark`).not.toBeNull();
+      marks.add(mark!.getAttribute("data-brand")!);
+    }
+    expect([...marks].sort()).toEqual(INTEGRATIONS.map((entry) => entry.slug).sort());
+
     // and nothing else: no description, no provider line
     expect(within(grid).queryByText(fa.integrations.gmailDesc)).toBeNull();
     expect(within(grid).queryByText("گوگل")).toBeNull();
@@ -393,6 +443,95 @@ describe("the integrations page", () => {
     // a connected tile opens its own page
     fireEvent.click(gmail);
     expect(push).toHaveBeenCalledWith("/integrations/gmail");
+  });
+
+  /**
+   * THE OAUTH BRIEFING (user directive, 2026-08-28) through the ONE dialog
+   * (ConnectDialog.tsx, 2026-09-06). The load-bearing assertion is the order:
+   * pressing the tile must NOT start the OAuth flow — the person reads what
+   * the connection enables and that it is private to them first — and the
+   * dialog's own confirm is the only thing that does. A shelf that handed off
+   * on the tile press would pass every presence check and skip the briefing.
+   */
+  it("briefs before an OAuth hand-off, and hands off only on the dialog's confirm", async () => {
+    CONNECTORS = [{ ...TELEGRAM_OFFERED, provider: "google" }];
+    await act(async () => { render(<Integrations />); });
+
+    fireEvent.click(screen.getByRole("button", { name: "اتصال جی‌میل" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(fa.integrations.gmailDesc)).toBeTruthy();
+    expect(within(dialog).getByText(fa.integrations.oneGoogleGrant)).toBeTruthy();
+    expect(connectorAuthorization).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: fa.integrations.connectJustForMe }));
+    });
+    expect(connectorAuthorization).toHaveBeenCalledWith("google", "fa");
+    expect(connectTokenConnector).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A TOKEN CONNECTION NEVER LEAVES THE PAGE (2026-09-06: Telegram, WhatsApp
+   * Business, an MCP server). Asserted as the seam and its consequence: the
+   * fields go to the pasted-credential door — never to the OAuth one — only
+   * once the required field is filled, and the tile turns to «متصل است» in
+   * front of the person because the shelf re-reads the connections. The
+   * refusal half is the provider's own kind: a rejected token stays in the
+   * dialog, named, with nothing stored.
+   */
+  it("connects a token provider inside the page: the field, the vouch, the tile turning connected", async () => {
+    CONNECTORS = [GOOGLE, TELEGRAM_OFFERED];
+    connectTokenConnector.mockImplementation(async () => {
+      const connected: ConnectorStatus = {
+        ...TELEGRAM_OFFERED, status: "connected", account_label: "@neurai_bot", settings: { bot_username: "neurai_bot" },
+      };
+      CONNECTORS = [GOOGLE, connected];
+      return connected;
+    });
+    await act(async () => { render(<Integrations />); });
+
+    const tile = screen.getByRole("button", { name: "اتصال تلگرام" });
+    expect(within(tile).getByText("وصل نشده")).toBeTruthy();
+    fireEvent.click(tile);
+
+    const dialog = await screen.findByRole("alertdialog");
+    /* where the credential comes from, and the field as a PASSWORD box */
+    expect(within(dialog).getByText(fa.integrations.tokenHintTelegram)).toBeTruthy();
+    const field = within(dialog).getByLabelText("توکن بات") as HTMLInputElement;
+    expect(field.type).toBe("password");
+    const confirm = within(dialog).getByRole("button", { name: "اتصال" }) as HTMLButtonElement;
+    expect(confirm.disabled, "nothing to send yet").toBe(true);
+
+    fireEvent.change(field, { target: { value: "123456:ABC-def" } });
+    expect(confirm.disabled).toBe(false);
+    expect(connectTokenConnector).not.toHaveBeenCalled();
+
+    await act(async () => { fireEvent.click(confirm); });
+    expect(connectTokenConnector).toHaveBeenCalledWith("telegram", { secret: "123456:ABC-def" });
+    expect(connectorAuthorization, "a token connection is not an OAuth hand-off").not.toHaveBeenCalled();
+
+    /* the shelf re-read the connections: the same tile is the connected door now */
+    const connected = await screen.findByRole("button", { name: "بازکردن جزئیات تلگرام" });
+    expect(within(connected).getByText("متصل است")).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("a token the provider refuses stays in the dialog, named as the provider's refusal", async () => {
+    CONNECTORS = [GOOGLE, TELEGRAM_OFFERED];
+    connectTokenConnector.mockRejectedValue(new RealBffError(502, "provider"));
+    await act(async () => { render(<Integrations />); });
+
+    fireEvent.click(screen.getByRole("button", { name: "اتصال تلگرام" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText("توکن بات"), { target: { value: "bad" } });
+    await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "اتصال" })); });
+
+    expect(within(dialog).getByRole("alert").textContent).toBe(fa.integrations.tokenRefused);
+    expect(screen.getByRole("alertdialog"), "the dialog stays for a second try").toBeTruthy();
+    /* the control: the tile behind it is still the unconnected door */
+    cleanup();
+    await act(async () => { render(<Integrations />); });
+    expect(screen.getByRole("button", { name: "اتصال تلگرام" })).toBeTruthy();
   });
 
   it("offers nothing Microsoft, anywhere on the page", async () => {

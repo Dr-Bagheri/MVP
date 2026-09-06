@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectorItem, ConnectorStatus } from "@/api/types";
+import fa from "../../messages/fa.json";
 
 /**
  * The detail page's failure modes all render beautifully, which is why each
@@ -80,6 +81,20 @@ vi.mock("@/api/client", () => ({
 }));
 
 const { IntegrationDetail } = await import("./IntegrationDetail");
+
+/** a registry provider, connected — two sources on one page */
+const ZOOM: ConnectorStatus = {
+  provider: "zoom",
+  configured: true,
+  status: "connected",
+  account_label: "amir@example.test",
+  expires_at: "2026-12-01T00:00:00.000Z",
+  can_draft: false,
+  can_drive: false,
+  polled_at: null,
+  messages_seen: 0,
+  settings: {},
+};
 
 beforeEach(() => {
   cleanup();
@@ -192,6 +207,70 @@ describe("the integration detail page", () => {
     // …and says nothing about a connection nobody has asked about yet
     expect(screen.queryByText(/پیکربندی نشده/)).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  /**
+   * A REGISTRY PROVIDER'S PAGE (2026-09-06): one page per connector, its
+   * sources as the platform's second row (R3's chips), opening on the first.
+   * The assertion is again the fetch ARGUMENT — a page that drew the chips
+   * and kept fetching meetings would render a perfect table under «ضبط‌ها».
+   * The control is the Google tile's page, which has ONE source and must not
+   * draw a row of one chip: a control that chooses nothing.
+   */
+  it("opens a connector on its first source and switches by chip — the fetch argument follows", async () => {
+    CONNECTORS = [ZOOM];
+    await act(async () => { render(<IntegrationDetail slug="zoom" />); });
+    await screen.findByRole("table");
+    expect(connectorItems).toHaveBeenCalledWith("zoom", "meetings");
+
+    const sources = screen.getByRole("tablist", { name: fa.integrations.sourcesLabel });
+    const recordings = within(sources).getByRole("tab", { name: /ضبط‌ها/ });
+    expect(within(sources).getByRole("tab", { name: /جلسه‌ها/ }).getAttribute("aria-selected")).toBe("true");
+    await act(async () => { fireEvent.click(recordings); });
+    expect(connectorItems).toHaveBeenLastCalledWith("zoom", "recordings");
+    expect(recordings.getAttribute("aria-selected")).toBe("true");
+
+    // the control: a one-source page draws no source row
+    cleanup();
+    CONNECTORS = [GOOGLE];
+    await act(async () => { render(<IntegrationDetail slug="gmail" />); });
+    await screen.findByRole("table");
+    expect(screen.queryByRole("tablist", { name: fa.integrations.sourcesLabel })).toBeNull();
+  });
+
+  /**
+   * R21 (user, 2026-09-06: "remove the lines of explanation in all
+   * connectors and fix the gap as theme platform"). The header is the name
+   * and NOTHING under it — no provider line, no description — and the body
+   * sits at the platform's gap under a page's first row, not 32px down. Both
+   * halves are absences, because the version that still explains renders
+   * perfectly and is only wrong beside every other page.
+   */
+  it("the header is the name alone, and the body sits at the platform's gap", async () => {
+    await act(async () => { render(<IntegrationDetail slug="gmail" />); });
+    const heading = await screen.findByRole("heading", { name: "جی‌میل" });
+    expect(heading.parentElement!.querySelector("p"), "nothing under the name").toBeNull();
+    expect(screen.queryByText(fa.integrations.gmailDesc)).toBeNull();
+    expect(document.querySelector(".mt-8"), "the old 32px gap").toBeNull();
+    expect(heading.closest("header")!.nextElementSibling!.className, "the body under the header row").toBe("mt-3");
+  });
+
+  it("an MCP connection's page names its server beside the label", async () => {
+    CONNECTORS = [{
+      ...ZOOM, provider: "mcp", account_label: "tools.example.test",
+      settings: { url: "https://tools.example.test/mcp" },
+    }];
+    await act(async () => { render(<IntegrationDetail slug="mcp" />); });
+    await screen.findByRole("table");
+    expect(connectorItems).toHaveBeenCalledWith("mcp", "tools");
+    expect(screen.getByText("https://tools.example.test/mcp")).toBeTruthy();
+    expect(screen.getByText(fa.integrations.settingServer)).toBeTruthy();
+    // the control: a connection with no such setting draws no such row
+    cleanup();
+    CONNECTORS = [ZOOM];
+    await act(async () => { render(<IntegrationDetail slug="zoom" />); });
+    await screen.findByRole("table");
+    expect(screen.queryByText(fa.integrations.settingServer)).toBeNull();
   });
 
   it("answers an unknown slug with a sentence, not a broken screen", async () => {

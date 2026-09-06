@@ -310,6 +310,10 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
   }
 
   for (const row of due) {
+    /* the registry's providers (2026-09-06) are not mailboxes — the door
+       lists every connected row, and polling a Zoom grant as Outlook would
+       be a provider refusal every two minutes wearing the mailbox's name */
+    if (row.provider !== "google" && row.provider !== "microsoft") continue;
     const claimed = await db.withoutIdentity((tx) =>
       tx.unsafe<{ ok: boolean | null }>("select echo.claim_mail_poll($1) as ok", [row.connection_id]));
     if (claimed[0]?.ok !== true) continue;      // another worker has it

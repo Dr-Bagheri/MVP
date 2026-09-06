@@ -27,6 +27,7 @@ import { sweepWorkflowTimers } from "./workflow-triggers.ts";
 import { sweepMailboxes } from "./mail-poll.ts";
 import { sweepMeetings } from "./meeting-prep.ts";
 import { createConnectorsRepo } from "../api/connectors.ts";
+import { connectorCredentialsFromEnv } from "../api/connector-providers.ts";
 import { createMailDraftsRepo } from "../api/mail-drafts.ts";
 import { hasSignalTables } from "../db/capabilities.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
@@ -131,16 +132,7 @@ export async function main(): Promise<void> {
   const connectorOAuth = {
     publicWebUrl: process.env.echo_platform_web_url,
     encryptionKey: process.env.echo_platform_connector_encryption_key,
-    providers: {
-      google: {
-        clientId: process.env.echo_platform_google_oauth_client_id,
-        clientSecret: process.env.echo_platform_google_oauth_client_secret,
-      },
-      microsoft: {
-        clientId: process.env.echo_platform_microsoft_oauth_client_id,
-        clientSecret: process.env.echo_platform_microsoft_oauth_client_secret,
-      },
-    },
+    providers: connectorCredentialsFromEnv(process.env),
   };
   const mailConnectors = createConnectorsRepo(db, connectorOAuth);
 

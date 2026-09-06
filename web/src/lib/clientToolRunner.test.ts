@@ -164,6 +164,14 @@ describe("what the card names", () => {
     expect(consentDetail("correct_transcript", { record: "call 3", segment_id: "s-1", text: "پروژهٔ نورای" })).toBe("call 3: «پروژهٔ نورای»");
     expect(consentDetail("edit_summary", { record: "call 3", body: "خلاصهٔ تازه" })).toBe("call 3: «خلاصهٔ تازه»");
   });
+  it("a connector hand names where it lands and quotes what it carries (2026-09-06)", () => {
+    expect(consentDetail("send_slack_message", { channel: "#general", text: "سلام تیم" })).toBe("#general: «سلام تیم»");
+    expect(consentDetail("send_whatsapp_message", { to: "+989120000000", template: "welcome" })).toBe("+989120000000");
+    expect(consentDetail("create_jira_issue", { project: "NEU", summary: "باگ ورود", description: "…" })).toBe("NEU: «باگ ورود»");
+    expect(consentDetail("create_notion_page", { parent: "یادداشت‌ها", title: "جلسهٔ هفتگی" })).toBe("یادداشت‌ها: «جلسهٔ هفتگی»");
+    expect(consentDetail("create_zoom_meeting", { topic: "هماهنگی", minutes: "30" })).toBe("هماهنگی");
+    expect(consentDetail("call_mcp_tool", { tool: "search", arguments_json: "{\"q\":\"x\"}" })).toBe("search: «{\"q\":\"x\"}»");
+  });
   it("quotes the words a person is about to send in their own name, cut at sixty", () => {
     expect(consentDetail("send_member_message", { member: "sina", message: "سلام، جلسه ساعت ده" })).toBe("sina: «سلام، جلسه ساعت ده»");
     const long = "ا".repeat(80);

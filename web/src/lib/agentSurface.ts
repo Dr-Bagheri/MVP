@@ -11,6 +11,7 @@
 import { recorderControls } from "@/components/echo/recorderControls";
 import { announceChange } from "@/lib/refreshBus";
 import { liveConversation } from "@/lib/liveConversation";
+import type { ConnectorProvider } from "@/api/types";
 
 /** What this web surface advertises on every ask. One list, one truth. */
 export const SURFACE_TOOLS: readonly string[] = [
@@ -95,6 +96,14 @@ export const SURFACE_TOOLS: readonly string[] = [
   "link_speaker",
   "correct_transcript",
   "edit_summary",
+  "send_slack_message",
+  "send_telegram_message",
+  "send_whatsapp_message",
+  "create_jira_issue",
+  "create_github_issue",
+  "create_notion_page",
+  "create_zoom_meeting",
+  "call_mcp_tool",
   "create_person",
   "rename_member",
   "list_allowed_models",
@@ -229,6 +238,74 @@ async function resolveColleague(handle: string): Promise<
 const TASK_LABEL_COLOURS = [
   "grey", "blue", "green", "amber", "red", "purple", "teal", "pink",
 ] as const;
+
+/** the eight hands, mapped to the connector door they open */
+const CONNECTOR_HANDS: Record<string, { provider: ConnectorProvider; action: string; keys: readonly string[] }> = {
+  send_slack_message: { provider: "slack", action: "send_message", keys: ["channel", "text"] },
+  send_telegram_message: { provider: "telegram", action: "send_message", keys: ["chat", "text"] },
+  send_whatsapp_message: { provider: "whatsapp", action: "send_message", keys: ["to", "text", "template", "language"] },
+  create_jira_issue: { provider: "jira", action: "create_issue", keys: ["project", "summary", "description"] },
+  create_github_issue: { provider: "github", action: "create_issue", keys: ["repository", "title", "body"] },
+  create_notion_page: { provider: "notion", action: "create_page", keys: ["parent", "title", "content"] },
+  create_zoom_meeting: { provider: "zoom", action: "create_meeting", keys: ["topic", "starts_at", "minutes"] },
+  call_mcp_tool: { provider: "mcp", action: "call_tool", keys: ["tool"] },
+};
+
+async function connectorHand(tool: string, a: Record<string, unknown>): Promise<SurfaceResult> {
+  const hand = CONNECTOR_HANDS[tool];
+  if (!hand) return { ok: false, detail: `unknown hand ${tool}` };
+  const args: Record<string, unknown> = {};
+  for (const key of hand.keys) {
+    const value = a[key];
+    if (typeof value === "string" && value.trim() !== "") args[key] = value.trim();
+  }
+  if (tool === "call_mcp_tool") {
+    /* the tool's arguments arrive as a JSON string (the schema stays flat);
+       a string that is not an object is refused HERE, before anything is
+       spent — the server would only say 400 */
+    const raw = typeof a.arguments_json === "string" ? a.arguments_json.trim() : "";
+    if (raw) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+          return { ok: false, detail: "arguments_json must be a JSON object" };
+        }
+        args.arguments = parsed;
+      } catch {
+        return { ok: false, detail: "arguments_json is not valid JSON" };
+      }
+    }
+  }
+  try {
+    const { api } = await import("@/api/client");
+    const result = await api.connectorAction(hand.provider, hand.action, args);
+    return handOutcome(tool, result);
+  } catch (cause) {
+    const { status } = cause as { status?: number };
+    if (status === 404) {
+      return { ok: false, detail: `${hand.provider} is not connected for this person — offer the integrations page (/integrations)` };
+    }
+    return { ok: false, detail: refusalDetail(cause, `${hand.provider} refused the action`) };
+  }
+}
+
+/** what to tell the model happened — the provider's own reference, never a body it did not send */
+function handOutcome(tool: string, result: Record<string, unknown>): SurfaceResult {
+  const s = (key: string) => (typeof result[key] === "string" ? String(result[key]) : "");
+  switch (tool) {
+    case "send_slack_message": return { ok: true, detail: `posted to ${s("channel")} (ts ${s("ts")})` };
+    case "send_telegram_message": return { ok: true, detail: `sent to ${s("chat") || "the chat"} (message ${s("message_id")})` };
+    case "send_whatsapp_message": return { ok: true, detail: `sent (message ${s("message_id")})` };
+    case "create_jira_issue": return { ok: true, detail: `created ${s("key")}${s("url") ? ` — ${s("url")}` : ""}` };
+    case "create_github_issue": return { ok: true, detail: `opened #${String(result.number ?? "")}${s("url") ? ` — ${s("url")}` : ""}` };
+    case "create_notion_page": return { ok: true, detail: `created${s("url") ? ` — ${s("url")}` : ""}` };
+    case "create_zoom_meeting": return { ok: true, detail: `created${s("join_url") ? ` — join: ${s("join_url")}` : ""}` };
+    case "call_mcp_tool": return result.is_error === true
+      ? { ok: false, detail: s("text") || "the tool reported an error" }
+      : { ok: true, detail: s("text") || "(no text returned)" };
+    default: return { ok: true, detail: "done" };
+  }
+}
 
 /** a refused api write reads as the SERVER's sentence, not a crash */
 function refusalDetail(cause: unknown, fallback: string): string {
@@ -1304,6 +1381,21 @@ export async function executeClientTool(
         return { ok: false, detail: refusalDetail(cause, "the record could not be retried") };
       }
     }
+
+    /* THE CONNECTORS' HANDS (2026-09-06): each is one action on an outside
+       service through the person's own grant, performed here — in their
+       browser, after the consent card — through the BFF's action door. The
+       arguments pass through as the model wrote them; core's registry
+       validates them like human input and refuses by name. */
+    case "send_slack_message":
+    case "send_telegram_message":
+    case "send_whatsapp_message":
+    case "create_jira_issue":
+    case "create_github_issue":
+    case "create_notion_page":
+    case "create_zoom_meeting":
+    case "call_mcp_tool":
+      return connectorHand(tool, a);
 
     case "correct_transcript": {
       /* the person's own segment edit (PATCH /v1/calls/:id/segments/:sid) on

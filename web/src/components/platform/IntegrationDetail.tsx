@@ -13,8 +13,12 @@ import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { Icon, IconRetry, IconTrash } from "@/components/icons";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
-import { foldSearch, integrationBySlug, useIntegrationCopy } from "./integrationsCatalogue";
+import {
+  foldSearch, integrationBySlug, providerLabelFor, useIntegrationCopy, useSourceLabels, type IntegrationSource,
+} from "./integrationsCatalogue";
 import { BrandMark } from "./brandMarks";
+import { ConnectDialog } from "./ConnectDialog";
+import { FilterChips } from "./sectionTabs";
 
 /**
  * ONE integration: what it reads, and where it stands (user directive,
@@ -53,8 +57,14 @@ export function IntegrationDetail({ slug }: { slug: string }) {
   const locale = useLocale() as "fa" | "en";
   const router = useRouter();
   const copy = useIntegrationCopy();
+  const sourceLabels = useSourceLabels();
 
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
+  /* which of the integration's sources the table shows — a registry provider
+     has several (Zoom: meetings, recordings), a Google tile exactly one */
+  const [source, setSource] = useState<IntegrationSource>(entry?.source ?? "mail");
+  /** the connect dialog (OAuth briefing or token form); null = closed */
+  const [dialog, setDialog] = useState<{ reconnect: boolean } | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   /** undefined = loading · null = the fetch failed · [] = genuinely empty —
       three different nothings, three different sentences */
@@ -97,7 +107,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
     /* the fetch names the SOURCE from the catalogue entry — mail, calendar,
        drive or meet — which is exactly what the row click promised */
     setProviderRefused(false);
-    api.connectorItems(entry.provider, entry.source)
+    api.connectorItems(entry.provider, source)
       .then((rows) => { if (!stale) setItems(rows); })
       .catch((error: unknown) => {
         if (stale) return;
@@ -105,16 +115,15 @@ export function IntegrationDetail({ slug }: { slug: string }) {
         setProviderRefused(error instanceof BffError && error.kind === "provider");
       });
     return () => { stale = true; };
-  }, [entry, live, tick]);
+  }, [entry, live, tick, source]);
 
-  async function connect() {
+  /* every door into a connection is the ONE dialog (ConnectDialog.tsx): it
+     briefs and hands off for OAuth, asks for the fields and vouches for a
+     token — the shelf and this page cannot drift apart on how one connects */
+  function connect(reconnect = false): void {
     if (!entry) return;
     setError(null);
-    try {
-      window.location.assign(await api.connectorAuthorization(entry.provider, locale));
-    } catch {
-      setError(tw("connectFailed"));
-    }
+    setDialog({ reconnect });
   }
 
   /*
@@ -171,9 +180,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
     },
   ];
 
-  const providerLabel = entry
-    ? (entry.provider === "google" ? tw("google") : tw("microsoft"))
-    : "";
+  const providerLabel = entry ? providerLabelFor(entry, copy, tw) : "";
 
   return (
     <PlatformShell>
@@ -217,11 +224,11 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                       SectionMenu heading); the element stays so the page
                       still HAS a heading, only its size comes back to the
                       scale. */}
+                  {/* the NAME and nothing under it (R21; user, 2026-09-06:
+                      "remove the lines of explanation in all connectors") —
+                      the sentence about what the integration reads lives in
+                      the connect dialog, the one place a person decides */}
                   <h1 className="text-pane-title font-semibold text-fg">{name}</h1>
-                  <p className="mt-1 text-xs text-fg-muted">{providerLabel}</p>
-                  <p className="mt-2 max-w-[70ch] text-sm leading-7 text-fg-muted">
-                    {copy[entry.key].description}
-                  </p>
                 </div>
                 {state?.status === "connected" ? (
                   /* the SETTINGS menu (the reference's gear): refresh is a
@@ -250,7 +257,10 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                 ) : null}
               </header>
 
-              <div className="mt-8">
+              {/* the platform's gap under a page's first row — 12px, the
+                  board's own (user, 2026-09-06: "fix the gap as theme
+                  platform"); this sat at 32 */}
+              <div className="mt-3">
                 {connectors === null ? (
                   /* THE ARRIVAL SHAPE (audit finding, 2026-09-02). The
                      overview only routes a CONNECTED tile here — the others
@@ -292,7 +302,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                     {/* audit finding, 2026-09-02: 36px by hand, which is
                         neither .btn (38) nor .btn-sm (34) — the compact
                         control exists, so this asks for it by name */}
-                    <button type="button" className="btn-secondary btn-sm" onClick={() => void connect()}>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => connect(true)}>
                       {tw("reconnect", { provider: providerLabel })}
                     </button>
                   </Card>
@@ -310,12 +320,27 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                     <button
                       type="button"
                       className="btn-secondary btn-sm mt-4"
-                      onClick={() => void connect()}
+                      onClick={() => connect(true)}
                     >
                       {tw("reconnect", { provider: providerLabel })}
                     </button>
                   </Card>
                 ) : (
+                  <>
+                  {/* the integration's SOURCES as the platform's second row
+                      (R3's filter chips) — only where there are several; a
+                      row of one chip is a control that chooses nothing */}
+                  {entry.sources.length > 1 ? (
+                    <FilterChips
+                      label={t("sourcesLabel")}
+                      className="mb-3"
+                      chips={entry.sources.map((key) => ({
+                        key, label: sourceLabels[key], icon: <Icon name={entry.icon} size="sm" />,
+                      }))}
+                      active={source}
+                      onSelect={setSource}
+                    />
+                  ) : null}
                   <div className="grid items-start gap-6 lg:grid-cols-[3fr_2fr]">
                     {/* audit finding, 2026-09-02: this panel and its sibling
                         aside hand-drew the card — 16px corner, 24px padding,
@@ -397,6 +422,25 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                               </span>
                             ) : null}
                           </Row>
+                          {/* the connection's PUBLIC settings (2026-09-06): the
+                              facts a token connection carries beside its label —
+                              the MCP server, the WhatsApp number, the Jira site,
+                              the Slack workspace, the Telegram bot */}
+                          {typeof state.settings?.url === "string" ? (
+                            <Row label={t("settingServer")}><span dir="ltr" className="block truncate">{state.settings.url}</span></Row>
+                          ) : null}
+                          {typeof state.settings?.display_phone_number === "string" && state.settings.display_phone_number ? (
+                            <Row label={t("settingNumber")}><span dir="ltr">{state.settings.display_phone_number}</span></Row>
+                          ) : null}
+                          {typeof state.settings?.site_url === "string" && state.settings.site_url ? (
+                            <Row label={t("settingSite")}><span dir="ltr" className="block truncate">{state.settings.site_url}</span></Row>
+                          ) : null}
+                          {typeof state.settings?.team === "string" && state.settings.team ? (
+                            <Row label={t("settingWorkspace")}>{state.settings.team}</Row>
+                          ) : null}
+                          {typeof state.settings?.bot_username === "string" && state.settings.bot_username ? (
+                            <Row label={t("settingBot")}><span dir="ltr">@{state.settings.bot_username}</span></Row>
+                          ) : null}
                           {/* "Connection created": not on the wire — omitted
                               rather than faked with expires_at or the poll
                               time wearing its costume */}
@@ -447,6 +491,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                       </Card>
                     </aside>
                   </div>
+                  </>
                 )}
               </div>
               {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
@@ -483,6 +528,17 @@ export function IntegrationDetail({ slug }: { slug: string }) {
               .finally(() => setBusy(false));
           }}
           onCancel={() => setAsking(false)}
+        />
+      ) : null}
+      {dialog && entry ? (
+        <ConnectDialog
+          entry={entry}
+          reconnect={dialog.reconnect}
+          onConnected={() => {
+            setDialog(null);
+            void api.connectors().then(setConnectors).catch(() => undefined);
+          }}
+          onCancel={() => setDialog(null)}
         />
       ) : null}
     </PlatformShell>

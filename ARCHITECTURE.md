@@ -2188,3 +2188,74 @@ latency once per reply, not once per sentence. Language of speech:
 script decides; a letterless sentence follows the UI locale — fa speaks
 Persian by default, en English (the same tiebreaker the reply-language
 mirror rule already used).
+
+## M49 — Connectors are a registry, and a connector's hands are the person's [user directive 2026-09-06: "built these: Zoom, Slack, Telegram, Jira, Notion, GitHub, WhatsApp Business, Dropbox/OneDrive, and a generic MCP connector"]
+
+M47 gave the product an integrations page and two hand-written adapters
+(Google, Microsoft). This decision is what turns the shelf into a shelf:
+nine more connectors, and the shape that lets the tenth arrive without a
+new adapter.
+
+**The registry.** `core/src/api/connector-providers.ts` holds one
+`ProviderDef` per provider: its `kind` (`oauth` or `token`), the OAuth
+spec or the token fields, its `sources` (what may be READ), its `actions`
+(what may be DONE), the mappers from the provider's JSON to the one
+`ConnectorItem` shape, and the calls themselves. The repository
+(`connectors.ts`) is generic over it — one OAuth dance parameterised by
+the spec (PKCE, basic-vs-body client auth, form-vs-JSON token bodies,
+Slack's user-token pick, Jira's cloud-id resolution), one token vouch
+(`verify` asks the provider before anything is stored), one encrypted
+store, one revoke. The Google and Microsoft source methods are kept
+byte-for-byte as the legacy tail; the day they move into the registry is
+a refactor, not a decision. The web catalogue mirrors the registry ONE
+TILE PER CONNECTOR; a connector's several sources are chips on its detail
+page (R3's second row), never several tiles — the shape the user named.
+
+**Two grant shapes, one wall.** An OAuth connection is an app the OPERATOR
+registers once (`echo_platform_<provider>_oauth_client_*` in the store,
+shipped by the deploy script, absent = «روی سرور پیکربندی نشده» with
+nothing to press) and a grant each PERSON makes on the provider's screen.
+A token connection is the person's own credential (Telegram's bot token,
+WhatsApp's permanent token and number, an MCP server's URL and bearer),
+pasted into the connect dialog and vouched for by the provider before it
+is stored. Both land in `echo.connector_secret` (AES-256-GCM), which
+`echo_agent` cannot read; the connection row's new `settings` column
+(db/0199) holds PUBLIC facts only — a site URL, a workspace, a bot's
+username, a display number — and its provider CHECK names the twelve.
+CLAUDE.md rule 3 holds: the credential is the person's; the org holds no
+token an agent could reach past them.
+
+**The hands are client tools.** Eight hands — `send_slack_message`,
+`send_telegram_message`, `send_whatsapp_message`, `create_jira_issue`,
+`create_github_issue`, `create_notion_page`, `create_zoom_meeting`,
+`call_mcp_tool` — are performed in the person's browser through
+`POST /v1/connectors/:provider/actions/:action`, on their session, after
+the consent card names the object (the channel and the words, the project
+and the summary, the tool and its arguments). Server-side runs hold no
+route to a connector action, so a worker or a delegated colleague cannot
+post as a person. One read tool, `list_connector_items {provider,
+source}`, covers every provider; "not connected" refuses BY NAME and
+offers the integrations page, never «دسترسی ندارم» (M48's reach rule).
+The platform map gained a CONNECTORS area so every agent can say what is
+connectable.
+
+**The MCP door, and its two limits.** A customer's own system speaks MCP
+once (streamable HTTP, protocol 2025-06-18) and needs no adapter here —
+that is what makes the shelf open-ended. Two rules keep it from becoming a
+hole: the URL must be PUBLIC https (DNS-resolved, private and loopback
+ranges refused — the SSRF guard M17's dispatcher carried, applied to a
+URL a customer typed), and `call_mcp_tool` is NEVER covered by the
+session-wide yes — a remote tool's effect is whatever the remote server
+decides, the one hand whose consequence nobody on this side can name in
+advance, so it is asked about every time. Remote tool descriptions enter
+the prompt as listed data, quoted, never as instructions.
+
+**What this does not decide.** Org-level channels (a shared WhatsApp
+number an admin installs for everyone) are not built: every grant here is
+one person's. Recordings-as-records from Zoom, files attached to a task
+from Dropbox, and a mirrored Jira issue key on a task card are listed in
+docs/CONNECTORS-PLAN.md as the next hands and wait for their own turn.
+Live proof per provider needs the operator's OAuth apps
+(docs/CONNECTORS.md carries the console steps and the env names) or a
+real token; the adapters ship tested against the providers' documented
+shapes, with the live run recorded in that document when it happens.

@@ -25,12 +25,14 @@ describe("sessionGrantEligible — the classes a session-wide yes never covers",
     ["approve_minutes", "minutes approved on the org's behalf"],
     ["share_conversation", "a conversation shared"],
     ["set_model_allowed", "the model list"],
+    ["call_mcp_tool", "a remote tool whose effect nobody on this side can name"],
   ])("%s is never covered (%s)", (tool) => {
     expect(sessionGrantEligible(tool)).toBe(false);
   });
 
   it.each(["create_task", "update_task", "archive_task", "create_project", "update_project", "set_project_member",
-    "rename_speaker", "create_meeting", "update_meeting", "create_room", "rename_task_column"])(
+    "rename_speaker", "create_meeting", "update_meeting", "create_room", "rename_task_column",
+    "create_jira_issue", "create_github_issue", "create_notion_page", "create_zoom_meeting"])(
     "the control: %s is covered — an ordinary create or edit the board can show and a person can undo", (tool) => {
       expect(sessionGrantEligible(tool)).toBe(true);
     });

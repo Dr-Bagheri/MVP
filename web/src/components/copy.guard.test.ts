@@ -76,7 +76,9 @@ const ALLOWED: Record<string, string[]> = {
   // CONSTRAINT — the logo's format; what a connection reads; what the key's
   // assistant permission grants; why Drive needs a re-consent
   "components/platform/OrgFields.tsx": ["orgLogoHint"],
-  "components/platform/Integrations.tsx": ["privacyNote"],
+  // CONSTRAINT — the connect dialog (2026-09-06): what the connection reads,
+  // the privacy facts, and where a pasted credential comes from
+  "components/platform/ConnectDialog.tsx": ["privacyNote", "tokenHintTelegram", "tokenHintWhatsapp", "tokenHintMcp"],
   "components/platform/IntegrationDetail.tsx": ["privacyNote", "reconnectDriveHint"],
   "app/[locale]/management/connectors/_components/MintKeyDialog.tsx": ["allowAssistantHint"],
   // a keyboard hint beside a composer, and the help page, which IS prose

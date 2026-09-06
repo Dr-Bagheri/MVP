@@ -29,6 +29,7 @@ const meetings = vi.fn();
 const sendMemberMessage = vi.fn();
 const editSegment = vi.fn();
 const editSummary = vi.fn();
+const connectorAction = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     createTask: (...args: unknown[]) => createTask(...args),
@@ -53,6 +54,7 @@ vi.mock("@/api/client", () => ({
     updateTask: (...args: unknown[]) => updateTask(...args),
     editSegment: (...args: unknown[]) => editSegment(...args),
     editSummary: (...args: unknown[]) => editSummary(...args),
+    connectorAction: (...args: unknown[]) => connectorAction(...args),
   },
 }));
 
@@ -570,5 +572,81 @@ describe("correct_transcript and edit_summary — the person's own record edits"
     const result = await executeClientTool("edit_summary", { record: "call 3", body: "x" }, ctx);
     expect(result.ok).toBe(false);
     expect(editSummary).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE CONNECTORS' HANDS (2026-09-06). Each is one action on an outside
+ * service through the person's own grant, reached through the BFF's action
+ * door. The seam is the assertion — provider, action and the arguments as
+ * core's registry names them — plus the two refusals only this side can make
+ * before anything is spent: an MCP arguments string that is not a JSON
+ * object, and a provider the person never connected (a 404), which must read
+ * as an offer of the integrations page rather than as a failure.
+ */
+describe("the connectors' hands — one action through the person's own grant", () => {
+  /* BRACES, not an expression body: `mockReset()` returns the mock, and a
+     function returned from beforeEach is a CLEANUP vitest calls after the
+     test — which invoked the mock once more with nobody awaiting it, and the
+     refusal case below failed with its own fixture's rejection while the
+     executor had answered correctly. */
+  beforeEach(() => { connectorAction.mockReset(); });
+
+  it("send_slack_message posts through slack's send_message with channel and text", async () => {
+    const { ctx } = surface();
+    connectorAction.mockResolvedValue({ channel: "C123", ts: "1725000000.000100" });
+    const result = await executeClientTool("send_slack_message", { channel: "#general", text: "سلام تیم" }, ctx);
+    expect(connectorAction).toHaveBeenCalledWith("slack", "send_message", { channel: "#general", text: "سلام تیم" });
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain("1725000000.000100");
+  });
+
+  it("create_jira_issue and create_github_issue reach their own doors and relay the reference", async () => {
+    const { ctx } = surface();
+    connectorAction.mockResolvedValueOnce({ key: "NEU-42", url: "https://neurai.atlassian.net/browse/NEU-42" });
+    const jira = await executeClientTool("create_jira_issue", { project: "NEU", summary: "باگ ورود" }, ctx);
+    expect(connectorAction).toHaveBeenCalledWith("jira", "create_issue", { project: "NEU", summary: "باگ ورود" });
+    expect(jira.ok).toBe(true);
+    expect(jira.detail).toContain("NEU-42");
+
+    connectorAction.mockResolvedValueOnce({ number: 7, url: "https://github.com/o/r/issues/7" });
+    const github = await executeClientTool("create_github_issue", { repository: "o/r", title: "خطا", body: " " }, ctx);
+    /* a blank optional is not sent — the registry would store an empty body */
+    expect(connectorAction).toHaveBeenLastCalledWith("github", "create_issue", { repository: "o/r", title: "خطا" });
+    expect(github.detail).toContain("#7");
+  });
+
+  it("call_mcp_tool parses arguments_json into an object, and refuses what is not one BEFORE any call", async () => {
+    const { ctx } = surface();
+    const notJson = await executeClientTool("call_mcp_tool", { tool: "search", arguments_json: "{oops" }, ctx);
+    expect(notJson.ok).toBe(false);
+    const notObject = await executeClientTool("call_mcp_tool", { tool: "search", arguments_json: "[1,2]" }, ctx);
+    expect(notObject.ok).toBe(false);
+    expect(connectorAction).not.toHaveBeenCalled();
+
+    connectorAction.mockResolvedValue({ text: "3 results", is_error: false });
+    const ok = await executeClientTool("call_mcp_tool", { tool: "search", arguments_json: "{\"q\":\"نورای\"}" }, ctx);
+    expect(connectorAction).toHaveBeenCalledWith("mcp", "call_tool", { tool: "search", arguments: { q: "نورای" } });
+    expect(ok.ok).toBe(true);
+    expect(ok.detail).toBe("3 results");
+
+    /* the remote tool's own error is a refusal, carried in its words */
+    connectorAction.mockResolvedValue({ text: "index offline", is_error: true });
+    const failed = await executeClientTool("call_mcp_tool", { tool: "search" }, ctx);
+    expect(failed.ok).toBe(false);
+    expect(failed.detail).toBe("index offline");
+  });
+
+  it("a provider the person never connected reads as an offer of the integrations page, not a failure", async () => {
+    const { ctx } = surface();
+    /* rejected at CALL time, as the wire does — a promise rejected when the
+       mock is armed is an unhandled rejection by the time the executor's
+       dynamic import of the client resolves, and vitest fails the test with
+       the fixture's own error rather than with what the code did */
+    connectorAction.mockImplementation(async () => { throw Object.assign(new Error("not found"), { status: 404 }); });
+    const result = await executeClientTool("send_telegram_message", { chat: "@neurai", text: "x" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("telegram");
+    expect(result.detail).toContain("/integrations");
   });
 });

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BffError } from "@/api/client";
 import { __setPreferencesForTest } from "@/lib/preferences";
 import type { Call, ConnectorItem, ConnectorStatus } from "@/api/types";
+import { INTEGRATIONS } from "@/components/platform/integrationsCatalogue";
 
 /**
  * THE KINDS OF NOTHING, on a glance surface.
@@ -216,8 +217,11 @@ describe("the connections tile", () => {
     await act(async () => { render(<IntegrationsWidget />); });
 
     expect(screen.getByText("جی‌میل")).toBeTruthy();
-    expect(screen.getAllByRole("listitem")).toHaveLength(4);
-    expect(screen.getAllByText("وصل نشده")).toHaveLength(4);
+    /* one row per OFFERED integration — the catalogue's count, so the nine
+       connectors of 2026-09-06 (and the next one) are in the tile the day
+       they join the offer */
+    expect(screen.getAllByRole("listitem")).toHaveLength(INTEGRATIONS.length);
+    expect(screen.getAllByText("وصل نشده")).toHaveLength(INTEGRATIONS.length);
     expect(screen.queryByText("فعال")).toBeNull();
   });
 
@@ -238,8 +242,9 @@ describe("the connections tile", () => {
     /* the control: with google connected, "not connected" must STOP being
        said about google's own sources — an unconditional word satisfies the
        positive half on its own */
-    expect(screen.getAllByText("فعال")).toHaveLength(4);
-    expect(screen.queryByText("وصل نشده")).toBeNull();
+    const googleRows = INTEGRATIONS.filter((entry) => entry.provider === "google").length;
+    expect(screen.getAllByText("فعال")).toHaveLength(googleRows);
+    expect(screen.getAllByText("وصل نشده")).toHaveLength(INTEGRATIONS.length - googleRows);
   });
 });
 

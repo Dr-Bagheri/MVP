@@ -36,7 +36,9 @@ export const AREAS: readonly Area[] = [
   { key: "records", heading: "RECORDS", stems: [/record/, /call/, /transcript/, /summar/, /speaker/, /voice/, /^search/, /note/, /translate/, /chapter/, /scope/] },
   { key: "rooms", heading: "ROOMS", stems: [/chat_room/, /^send_member_message$/, /conversation/] },
   { key: "people", heading: "PEOPLE", stems: [/member/, /colleague/, /invit/, /^rename_member$/, /^member_stats$/, /audit/, /person/, /role_permission/] },
-  { key: "agents", heading: "AGENTS", stems: [/^ask_/, /agent/, /skill/, /workflow/, /connector/, /^list_models$/] },
+  /* before AGENTS, which used to claim `connector` for the one list tool */
+  { key: "connectors", heading: "CONNECTORS", stems: [/connector/, /slack/, /telegram/, /whatsapp/, /jira/, /github/, /notion/, /zoom/, /mcp/, /dropbox/, /onedrive/] },
+  { key: "agents", heading: "AGENTS", stems: [/^ask_/, /agent/, /skill/, /workflow/, /^list_models$/] },
 ];
 
 /** which area a tool belongs to, or null — the test's whole question */
@@ -76,6 +78,15 @@ export const PLATFORM_MAP = [
   "· PEOPLE: members with roles (member, admin, owner) and statuses,",
   "  invitations, member privileges (what a role may do in THIS org), and the",
   "  audit log of every administrative change.",
+  "· CONNECTORS: the person's OWN connected accounts (the integrations page):",
+  "  Gmail/Google Calendar/Drive/Meet, Zoom, Slack, Telegram (a bot), Jira,",
+  "  Notion, GitHub, WhatsApp Business, Dropbox, OneDrive, and any MCP server",
+  "  they added. list_connectors says what is connected; list_connector_items",
+  "  reads a source (meetings, channels, issues, pages, files, tools…); the",
+  "  hands post a Slack/Telegram/WhatsApp message, create a Jira/GitHub issue,",
+  "  a Notion page, a Zoom meeting, or call an MCP tool — each behind the",
+  "  person's consent card. An account they have not connected is not a",
+  "  refusal about YOU: tell them, and offer the integrations page.",
   "· AGENTS: Echo, رؤیا (roya) and آوا (ava) — and any agent the org made —",
   "  with their instructions, skills, models, web access, workflows and the",
   "  integrations (connected accounts) they run on. Colleagues can be called",

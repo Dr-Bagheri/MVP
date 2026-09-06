@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { coreFetch } from "@/server/core";
+import { CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
-const PROVIDERS = new Set(["google", "microsoft"]);
+/* the producer's list (core's vocabulary), never a second spelling here */
+const PROVIDERS = new Set<string>(CONNECTOR_PROVIDERS);
 
 interface OAuthCookie {
   state?: unknown;
@@ -13,8 +15,10 @@ function cookieName(provider: string): string {
   return `echo_connector_${provider}`;
 }
 
+/* back to the SHELF (2026-09-06) — the page the person left; it read
+   `/workflows` from the days integrations lived there */
 function destination(request: Request, locale: string, query: string): URL {
-  return new URL(`/${locale}/workflows${query}`, request.url);
+  return new URL(`/${locale}/integrations${query}`, request.url);
 }
 
 /** Completes OAuth under the existing BFF session; core validates the exact callback URL and exchanges the code. */

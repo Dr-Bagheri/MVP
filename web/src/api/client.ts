@@ -1896,14 +1896,41 @@ export const api = {
   async connectorItems(
     provider: ConnectorProvider,
     /* the wire's own vocabulary for `GET /v1/connectors/:provider/:source` —
-       drive and meet joined it with M47 (google-only lenses; the server 400s
-       them for microsoft, so the detail page never offers them there) */
-    source: "calendar" | "mail" | "drive" | "meet",
+       the catalogue names each provider's sources (2026-09-06: meetings,
+       channels, issues, pages, files, tools, …) and the server 400s a source a
+       provider does not have, so the detail page never offers one it lacks */
+    source: string,
   ): Promise<ConnectorItem[]> {
     const { items } = await bff<{ items: ConnectorItem[] }>(
-      `/api/connectors/${encodeURIComponent(provider)}/${source}`,
+      `/api/connectors/${encodeURIComponent(provider)}/${encodeURIComponent(source)}`,
     );
     return items;
+  },
+  /**
+   * A PASTED credential (2026-09-06): Telegram's bot token, WhatsApp's token
+   * and number, an MCP server's URL. The fields are the registry's own names;
+   * core asks the provider to vouch for them before storing anything, and a
+   * refusal comes back as the provider's (kind "provider") or ours (a 400).
+   */
+  async connectTokenConnector(provider: ConnectorProvider, fields: Record<string, string>): Promise<ConnectorStatus> {
+    return bff<ConnectorStatus>(`/api/connectors/${encodeURIComponent(provider)}/connect`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(fields),
+    });
+  },
+  /**
+   * A connector ACTION (2026-09-06) — the hands' door: post a Slack/Telegram/
+   * WhatsApp message, create a Jira/GitHub issue, a Notion page, a Zoom
+   * meeting, call an MCP tool. Called by the surface executor after the
+   * consent card, on the person's own session and grant.
+   */
+  async connectorAction(
+    provider: ConnectorProvider, action: string, args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const { result } = await bff<{ result: Record<string, unknown> }>(
+      `/api/connectors/${encodeURIComponent(provider)}/actions/${encodeURIComponent(action)}`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ args }) },
+    );
+    return result;
   },
   /**
    * Disconnect one provider (M47): revokes the grant at the provider, empties

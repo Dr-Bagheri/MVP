@@ -198,6 +198,9 @@ export async function sweepMeetings(options: MeetingPrepOptions, log: StepLogger
   }
 
   for (const row of due) {
+    /* only the two providers with a calendar read (2026-09-06: the registry's
+       providers share the table and are not calendars) */
+    if (row.provider !== "google" && row.provider !== "microsoft") continue;
     const claimed = await db.withoutIdentity((tx) =>
       tx.unsafe<{ ok: boolean | null }>("select echo.claim_meeting_poll($1) as ok", [row.connection_id]));
     if (claimed[0]?.ok !== true) continue;

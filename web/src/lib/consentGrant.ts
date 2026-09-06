@@ -54,6 +54,10 @@ const NEVER_COVERED: readonly RegExp[] = [
   /^approve_minutes$/,
   /^share_conversation$/,
   /^set_model_allowed$/,
+  /* an MCP tool's effect is whatever the remote server decides — the one
+     hand whose consequence nobody on this side can name in advance, so it is
+     asked about every time (2026-09-06, with the connectors) */
+  /^call_mcp_tool$/,
 ];
 
 /**

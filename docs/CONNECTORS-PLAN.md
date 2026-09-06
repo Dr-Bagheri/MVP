@@ -1,5 +1,13 @@
 # Connectors — the plan (proposal, 2026-09-06)
 
+> **Status, 2026-09-06 (later the same day): BUILT.** The user chose all
+> nine plus MCP in one directive, and they shipped as a registry rather than
+> as the per-provider adapters sketched below — see M49 in ARCHITECTURE.md
+> and [CONNECTORS.md](CONNECTORS.md) for what exists and how each is
+> connected. This file stays as the reasoning and the list of hands NOT yet
+> built (recordings as records, files on a task, a mirrored issue key, an
+> org-level channel).
+
 User directive: "in integrations, I want to have the connectors like in
 Claude that give me the ability to use different other APIs and platforms;
 we start with related ones to our work; give me suggestions of 10 of them

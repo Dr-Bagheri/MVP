@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { coreFetch, errorResponse, readJson } from "@/server/core";
+import { CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
-const PROVIDERS = new Set(["google", "microsoft"]);
+/* the producer's list (core's vocabulary), never a second spelling here */
+const PROVIDERS = new Set<string>(CONNECTOR_PROVIDERS);
 
 function cookieName(provider: string): string {
   return `echo_connector_${provider}`;

@@ -89,6 +89,12 @@ const EXCLUDED: Record<string, string> = {
     "web/ renders proposals; it never decides whether one needs approving, " +
     "and a mirror of this list here would be a second place for that rule " +
     "to be true — which is exactly how a wall comes to have two meanings.",
+  CONNECTOR_PROVIDERS:
+    "not mirrored: `ConnectorProvider` is re-exported from core's wire " +
+    "(api/types.ts), and every consumer reads the ARRAY — the two OAuth BFF " +
+    "routes and the connect/action routes check a path segment against it, " +
+    "the catalogue's entries are typed by it. A second spelling here would be " +
+    "the drift this guard exists to catch (2026-09-06, the connector registry).",
   OFFERED_CONNECTOR_PROVIDERS:
     "not mirrored: this is the OFFER, and web/ consumes the array itself at " +
     "runtime — the integrations catalogue, the run dialog's picker and the " +

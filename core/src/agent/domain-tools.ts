@@ -27,15 +27,30 @@
  * same thing for "no such call" as for "not yours" by construction.
  */
 import { Type } from "./pi.ts";
+import type { Identity } from "./types.ts";
 import { ToolDenied, type DomainTool } from "./tools.ts";
 import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
 import { createMembersRepo } from "../api/members.ts";
 import { NotFoundError } from "../api/errors.ts";
 import type { Db } from "../db/identity.ts";
+import type { ConnectorItem, ConnectorProvider } from "../api/connector-providers.ts";
+
+/**
+ * The connector reads a tool may make ON THE PERSON'S OWN GRANT (2026-09-06).
+ * Narrow on purpose: list what is connected, list a source's items — never a
+ * credential, never an action (actions are client tools behind the consent
+ * card). Optional, because a run that has no connectors (a test, a worker
+ * without the store) is a run where the tool refuses by name.
+ */
+export interface ConnectorReads {
+  list(identity: Identity): Promise<{ provider: string; status: string; account_label: string | null }[]>;
+  items(identity: Identity, provider: ConnectorProvider, source: string): Promise<ConnectorItem[]>;
+}
 
 export interface ToolDeps {
   db: Db;
+  connectors?: ConnectorReads | undefined;
 }
 
 /** Results are read by a model with a context window, not by a scrollbar. */

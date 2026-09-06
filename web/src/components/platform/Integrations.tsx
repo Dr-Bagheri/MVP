@@ -9,14 +9,15 @@ import { useRouter } from "@/i18n/routing";
 import { PageContainer, Skeleton } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
-import { ConfirmDialog } from "@/components/rowActions";
 import { Icon, type IconName } from "@/components/icons";
 import { SECTION_ROW_GAP, SectionTabs } from "./sectionTabs";
 import { BrandMark } from "./brandMarks";
+import { ConnectDialog } from "./ConnectDialog";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
 import {
   INTEGRATIONS,
   foldSearch,
+  providerLabelFor,
   useIntegrationCopy,
   type IntegrationEntry,
 } from "./integrationsCatalogue";
@@ -153,8 +154,12 @@ export function Integrations() {
     }
   }
 
-  const providerName = (provider: ConnectorProvider) =>
-    provider === "google" ? tw("google") : tw("microsoft");
+  /* the provider's name: the workflows catalogue's word for the two legacy
+     providers, the tile's own name for a registry provider (one tile each) */
+  const providerName = (provider: ConnectorProvider) => {
+    const entry = INTEGRATIONS.find((row) => row.provider === provider);
+    return entry ? providerLabelFor(entry, copy, tw) : provider;
+  };
 
   /**
    * The chip and the press for one tile, from the state decided above — one
@@ -513,51 +518,20 @@ export function Integrations() {
           </div>
 
       {/*
-        THE CONNECT BRIEFING (user directive: "when you click the one without
-        connections it must show like the image that connect me … make the
-        steps easier and more user friendly"). The theme's one dialog in its
-        non-danger face — not a second modal to style. It says, before the
-        OAuth redirect: what this integration enables, that one Google
-        sign-in covers all four Google sources (so four tiles do not read as
-        four accounts), and the privacy facts that are actually true here —
-        per-person connection (D29), content read on demand, never in logs.
+        THE CONNECT DIALOG — one door for every kind of connection
+        (ConnectDialog.tsx): the OAuth briefing the user asked for on
+        2026-08-28, and since 2026-09-06 the pasted-token form for Telegram,
+        WhatsApp Business and an MCP server. A token connection lands here
+        without leaving the page, so the shelf re-reads the connections and
+        the tile turns to «متصل است» in front of the person.
       */}
       {briefing ? (
-        <ConfirmDialog
-          title={copy[briefing.entry.key].name}
-          danger={false}
-          confirmLabel={
-            briefing.reconnect
-              ? tw("reconnect", { provider: providerName(briefing.entry.provider) })
-              : t("connectJustForMe")
-          }
-          cancelLabel={t("cancel")}
-          body={
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted"
-                  aria-hidden
-                >
-                  <Icon name={briefing.entry.icon} size="lg" />
-                </span>
-                <p className="text-sm leading-6 text-fg-muted">
-                  {copy[briefing.entry.key].description}
-                </p>
-              </div>
-              {briefing.entry.provider === "google" ? (
-                <p className="text-sm leading-6 text-fg-muted">{t("oneGoogleGrant")}</p>
-              ) : null}
-              <div className="well p-4">
-                <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
-                <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
-              </div>
-            </div>
-          }
-          onConfirm={() => {
-            const provider = briefing.entry.provider;
+        <ConnectDialog
+          entry={briefing.entry}
+          reconnect={briefing.reconnect}
+          onConnected={() => {
             setBriefing(null);
-            void connect(provider);
+            void api.connectors().then(setConnectors).catch(() => undefined);
           }}
           onCancel={() => setBriefing(null)}
         />

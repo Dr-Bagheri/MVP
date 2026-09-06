@@ -1,9 +1,21 @@
 /**
- * Google/Microsoft OAuth connections (M30 / D29).
+ * CONNECTORS — the person's own grants to outside services (M30 / D29), and
+ * since 2026-09-06 the registry-driven family behind the integrations shelf.
  *
- * The browser receives connection state and provider item metadata only. OAuth
- * tokens are encrypted before the database write, decrypted only on the
+ * The browser receives connection state and provider item metadata only.
+ * Tokens are encrypted before the database write, decrypted only on the
  * caller-bound server path, and are never handed to an agent/tool or logged.
+ *
+ * TWO GENERATIONS, ONE STORE. Google and Microsoft predate the registry and
+ * keep their own source methods below (Gmail, Outlook, calendars, Drive,
+ * Meet — the mail poller, the meeting prep and the workflow envelopes bind
+ * to their exact shapes). Every provider that arrived with the registry
+ * (connector-providers.ts) is spoken to through it: one OAuth flow for all
+ * of them, one pasted-token flow for the ones that have no OAuth (Telegram,
+ * WhatsApp Business, an MCP server), one `items()` and one `act()`. The
+ * connection row, the encrypted secret, the refresh and the revocation are
+ * the same code for both generations — the wall is the store, and the store
+ * is written once.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
@@ -12,8 +24,12 @@ import { iso, OFFERED_CONNECTOR_PROVIDERS } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
+import {
+  CONNECTOR_PROVIDERS, connectorKind, providerDef,
+  type ConnectorItem, type ConnectorProvider, type OAuthSpec, type ProviderCtx,
+} from "./connector-providers.ts";
 
-export type ConnectorProvider = "google" | "microsoft";
+export type { ConnectorItem, ConnectorProvider } from "./connector-providers.ts";
 export type ConnectorSourceKind = "calendar_event" | "mail_message";
 
 interface ProviderCredentials {
@@ -48,13 +64,12 @@ export interface ConnectorStatus {
    */
   polled_at: string | null;
   messages_seen: number;
-}
-
-export interface ConnectorItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  occurred_at: string | null;
+  /**
+   * The connection's PUBLIC settings (2026-09-06): the MCP server's URL, the
+   * WhatsApp number, the Jira site — facts the detail page shows and an
+   * action needs, never a credential. Absent on the two legacy providers.
+   */
+  settings?: Record<string, unknown>;
 }
 
 /** What a reply needs to know about the message it answers. */
@@ -94,6 +109,7 @@ interface ConnectionRow {
   account_label: string;
   expires_at: string | null;
   scopes: unknown;
+  settings?: unknown;
 }
 
 interface SecretRow {
@@ -115,11 +131,6 @@ interface ProviderTokenResponse {
   token_type?: unknown;
 }
 
-/**
- * Every provider the code CAN speak, which is not the same list as the one
- * the product offers — see OFFERED_CONNECTOR_PROVIDERS in vocabulary.ts.
- */
-const PROVIDERS: readonly ConnectorProvider[] = ["google", "microsoft"];
 /**
  * Read is the floor; DRAFTING is the reason the extra scope is here.
  *
@@ -174,8 +185,31 @@ const MICROSOFT_SCOPES = [
   "Calendars.Read", "Mail.Read", "Mail.ReadWrite", "Mail.Send",
 ] as const;
 
+/**
+ * The two legacy providers' OAuth, in the registry's own vocabulary — so one
+ * `exchange()` and one `refresh()` serve every provider, and the behaviour
+ * these two had before the registry (PKCE, client secret in the body, the
+ * scope list repeated on Microsoft's token calls) is written down where the
+ * newer providers' choices are.
+ */
+const LEGACY_OAUTH: Record<"google" | "microsoft", OAuthSpec> = {
+  google: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: GOOGLE_SCOPES,
+    extraAuthorize: { access_type: "offline", prompt: "consent", include_granted_scopes: "true" },
+    pkce: true, tokenAuth: "body", tokenBody: "form", refreshable: true,
+  },
+  microsoft: {
+    authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    scopes: MICROSOFT_SCOPES,
+    pkce: true, tokenAuth: "body", tokenBody: "form", scopeInTokenBody: true, refreshable: true,
+  },
+};
+
 /** The scope each provider's drafting needs, for the reconnect prompt. */
-const DRAFT_SCOPE: Record<ConnectorProvider, string> = {
+const DRAFT_SCOPE: Partial<Record<ConnectorProvider, string>> = {
   google: "https://www.googleapis.com/auth/gmail.compose",
   microsoft: "Mail.Send",
 };
@@ -187,6 +221,10 @@ function strings(value: unknown): string[] {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function settingsOf(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 /**
@@ -205,8 +243,11 @@ function when(value: string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function providerScopes(provider: ConnectorProvider): readonly string[] {
-  return provider === "google" ? GOOGLE_SCOPES : MICROSOFT_SCOPES;
+function oauthSpec(provider: ConnectorProvider): OAuthSpec {
+  if (provider === "google" || provider === "microsoft") return LEGACY_OAUTH[provider];
+  const spec = providerDef(provider)?.oauth;
+  if (!spec) throw new ValidationError("this connector is connected with a token, not a sign-in", { code: "connector_kind_mismatch" });
+  return spec;
 }
 
 function normalOrigin(value: string | undefined): string | undefined {
@@ -230,19 +271,34 @@ function encryptionKey(value: string | undefined): Buffer | undefined {
   }
 }
 
+/**
+ * "Configured" is a claim about the PRODUCT (this deployment can connect the
+ * provider at all). An OAuth provider needs its app's client pair; a pasted-
+ * token provider needs nothing from the operator — the person brings the
+ * credential — so it is configured whenever the store can encrypt.
+ */
 function configured(options: ConnectorOAuthOptions, provider: ConnectorProvider): boolean {
+  const store = Boolean(normalOrigin(options.publicWebUrl) && encryptionKey(options.encryptionKey));
+  if (connectorKind(provider) === "token") return store;
   const credentials = options.providers?.[provider];
-  return Boolean(normalOrigin(options.publicWebUrl) && encryptionKey(options.encryptionKey)
-    && credentials?.clientId && credentials.clientSecret);
+  return store && Boolean(credentials?.clientId && credentials.clientSecret);
+}
+
+function requireStore(options: ConnectorOAuthOptions): { origin: string; key: Buffer } {
+  const origin = normalOrigin(options.publicWebUrl);
+  const key = encryptionKey(options.encryptionKey);
+  if (!origin || !key) {
+    throw new ValidationError("this connector is not configured on the server", { code: "connector_not_configured" });
+  }
+  return { origin, key };
 }
 
 function requireConfigured(options: ConnectorOAuthOptions, provider: ConnectorProvider): {
   clientId: string; clientSecret: string; origin: string; key: Buffer;
 } {
+  const { origin, key } = requireStore(options);
   const credentials = options.providers?.[provider];
-  const origin = normalOrigin(options.publicWebUrl);
-  const key = encryptionKey(options.encryptionKey);
-  if (!origin || !key || !credentials?.clientId || !credentials.clientSecret) {
+  if (!credentials?.clientId || !credentials.clientSecret) {
     throw new ValidationError("this connector is not configured on the server", { code: "connector_not_configured" });
   }
   return { clientId: credentials.clientId, clientSecret: credentials.clientSecret, origin, key };
@@ -301,7 +357,8 @@ function tokenPayload(response: ProviderTokenResponse, previous?: TokenPayload):
     accessToken: response.access_token,
     refreshToken: typeof response.refresh_token === "string" ? response.refresh_token : previous?.refreshToken ?? null,
     expiresAt: expireAt(response.expires_in),
-    scopes: typeof response.scope === "string" ? response.scope.split(/\s+/).filter(Boolean) : previous?.scopes ?? [],
+    /* a scope list arrives space-separated (OAuth) or comma-separated (Slack, GitHub) */
+    scopes: typeof response.scope === "string" ? response.scope.split(/[\s,]+/).filter(Boolean) : previous?.scopes ?? [],
   };
 }
 
@@ -370,50 +427,56 @@ function base64UrlEncode(value: string): string {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/**
+ * ONE token call for every OAuth provider — the spec says how the secret
+ * travels (Basic header or body), how the body is spelled (form or JSON),
+ * whether PKCE's verifier goes along, and where the token sits in the reply.
+ */
+async function tokenCall(
+  spec: OAuthSpec, config: { clientId: string; clientSecret: string }, fields: Record<string, string>,
+  refusal: string, previous?: TokenPayload,
+): Promise<TokenPayload> {
+  const body: Record<string, string> = {
+    ...fields,
+    ...(spec.tokenAuth === "body" ? { client_id: config.clientId, client_secret: config.clientSecret } : {}),
+    ...(spec.scopeInTokenBody ? { scope: spec.scopes.join(" ") } : {}),
+  };
+  const response = await fetch(spec.tokenUrl, {
+    method: "POST",
+    headers: {
+      "content-type": spec.tokenBody === "json" ? "application/json" : "application/x-www-form-urlencoded",
+      accept: spec.tokenAccept ?? "application/json",
+      ...(spec.tokenAuth === "basic"
+        ? { authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}` }
+        : {}),
+    },
+    body: spec.tokenBody === "json" ? JSON.stringify(body) : new URLSearchParams(body),
+  });
+  if (!response.ok) throw new ValidationError(refusal, { code: refusal.includes("reconnected") ? "connector_reconnect_required" : "connector_authorization_failed" });
+  const json = await response.json() as Record<string, unknown>;
+  /* Slack spells a refusal as 200 + ok:false */
+  if (json.ok === false) throw new ValidationError(refusal, { code: "connector_authorization_failed" });
+  return tokenPayload((spec.pickToken ? spec.pickToken(json) : json) as ProviderTokenResponse, previous);
+}
+
 async function exchangeCode(
   provider: ConnectorProvider, config: { clientId: string; clientSecret: string },
   code: string, codeVerifier: string, redirectUri: string,
 ): Promise<TokenPayload> {
-  const body = new URLSearchParams({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    code,
-    code_verifier: codeVerifier,
-    redirect_uri: redirectUri,
-    grant_type: "authorization_code",
-    ...(provider === "microsoft" ? { scope: providerScopes(provider).join(" ") } : {}),
-  });
-  const endpoint = provider === "google"
-    ? "https://oauth2.googleapis.com/token"
-    : "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  if (!response.ok) throw new ValidationError("the provider did not accept this connection", { code: "connector_authorization_failed" });
-  return tokenPayload(await response.json() as ProviderTokenResponse);
+  const spec = oauthSpec(provider);
+  return tokenCall(spec, config, {
+    grant_type: "authorization_code", code, redirect_uri: redirectUri,
+    ...(spec.pkce ? { code_verifier: codeVerifier } : {}),
+  }, "the provider did not accept this connection");
 }
 
 async function refreshToken(
   provider: ConnectorProvider, config: { clientId: string; clientSecret: string }, previous: TokenPayload,
 ): Promise<TokenPayload> {
   if (!previous.refreshToken) throw new ValidationError("this connector needs to be reconnected", { code: "connector_reconnect_required" });
-  const body = new URLSearchParams({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    refresh_token: previous.refreshToken,
-    grant_type: "refresh_token",
-    ...(provider === "microsoft" ? { scope: providerScopes(provider).join(" ") } : {}),
-  });
-  const endpoint = provider === "google"
-    ? "https://oauth2.googleapis.com/token"
-    : "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-  const response = await fetch(endpoint, {
-    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body,
-  });
-  if (!response.ok) throw new ValidationError("this connector needs to be reconnected", { code: "connector_reconnect_required" });
-  return tokenPayload(await response.json() as ProviderTokenResponse, previous);
+  return tokenCall(oauthSpec(provider), config, {
+    grant_type: "refresh_token", refresh_token: previous.refreshToken,
+  }, "this connector needs to be reconnected", previous);
 }
 
 function base64Url(data: string): string {
@@ -476,11 +539,18 @@ export function gmailEnvelope(
   };
 }
 
+/** the sources and actions the registry knows for a provider — the legacy two are listed by hand */
+export function connectorSources(provider: ConnectorProvider): readonly string[] {
+  if (provider === "google") return ["mail", "calendar", "drive", "meet"];
+  if (provider === "microsoft") return ["mail", "calendar"];
+  return providerDef(provider)?.sources ?? [];
+}
+
 export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}) {
   async function rows(identity: Identity): Promise<ConnectionRow[]> {
     return db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<ConnectionRow>(
       `select id, provider, status, account_label, expires_at, scopes,
-              polled_at, messages_seen
+              polled_at, messages_seen, settings
          from echo.connector_connection
         order by provider`,
     ));
@@ -494,19 +564,20 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
 
   async function token(identity: Identity, provider: ConnectorProvider): Promise<{ connection: ConnectionRow; token: TokenPayload }> {
     const conn = await connection(identity, provider);
-    const config = requireConfigured(options, provider);
+    const { key } = requireStore(options);
     const secret = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<SecretRow>(
       `select encrypted_payload from echo.connector_secret where connection_id = $1 limit 1`, [conn.id],
     ));
     if (!secret[0]) throw new NotFoundError();
-    let current = decrypt(config.key, secret[0].encrypted_payload);
+    let current = decrypt(key, secret[0].encrypted_payload);
     const expiry = current.expiresAt ? Date.parse(current.expiresAt) : NaN;
-    if (Number.isFinite(expiry) && expiry < Date.now() + 60_000) {
+    const renewable = connectorKind(provider) === "oauth" && oauthSpec(provider).refreshable;
+    if (renewable && Number.isFinite(expiry) && expiry < Date.now() + 60_000) {
       try {
-        current = await refreshToken(provider, config, current);
+        current = await refreshToken(provider, requireConfigured(options, provider), current);
         await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
           `update echo.connector_secret set encrypted_payload = $2 where connection_id = $1`,
-          [conn.id, encrypt(config.key, current)],
+          [conn.id, encrypt(key, current)],
         ));
         await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
           `update echo.connector_connection set expires_at = $2, status = 'connected', revoked_at = null where id = $1`,
@@ -527,23 +598,87 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
     return current.token.accessToken;
   }
 
-  async function accountLabel(provider: ConnectorProvider, accessToken: string): Promise<string> {
+  /** the registry's view of a connection: the credential and the public settings */
+  async function providerCtx(identity: Identity, provider: ConnectorProvider): Promise<ProviderCtx> {
+    const current = await token(identity, provider);
+    return { bearer: current.token.accessToken, settings: settingsOf(current.connection.settings) };
+  }
+
+  async function accountLabel(provider: ConnectorProvider, ctx: ProviderCtx): Promise<string> {
     try {
       if (provider === "google") {
         const profile = await providerFetch("https://openidconnect.googleapis.com/v1/userinfo", {
-          headers: { authorization: `Bearer ${accessToken}` },
+          headers: { authorization: `Bearer ${ctx.bearer}` },
         });
         return text(profile.email) || text(profile.name) || "Google account";
       }
-      const profile = await providerFetch("https://graph.microsoft.com/v1.0/me?$select=displayName,userPrincipalName", {
-        headers: { authorization: `Bearer ${accessToken}` },
-      });
-      return text(profile.userPrincipalName) || text(profile.displayName) || "Microsoft account";
+      if (provider === "microsoft") {
+        const profile = await providerFetch("https://graph.microsoft.com/v1.0/me?$select=displayName,userPrincipalName", {
+          headers: { authorization: `Bearer ${ctx.bearer}` },
+        });
+        return text(profile.userPrincipalName) || text(profile.displayName) || "Microsoft account";
+      }
+      const def = providerDef(provider);
+      return def ? await def.accountLabel(ctx) : "Connected account";
     } catch {
       // A successful token exchange remains a connection even if the optional
       // label lookup is unavailable. The UI says provider account, not a made-up name.
-      return provider === "google" ? "Google account" : "Microsoft account";
+      return provider === "google" ? "Google account" : provider === "microsoft" ? "Microsoft account"
+        : `${providerDef(provider)?.brand ?? "Connected"} account`;
     }
+  }
+
+  async function store(
+    identity: Identity, provider: ConnectorProvider, key: Buffer,
+    payload: TokenPayload, label: string, settings: Record<string, unknown>,
+  ): Promise<void> {
+    const inserted = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ id: string }>(
+      `insert into echo.connector_connection
+         (org_id, owner_id, provider, status, account_label, scopes, expires_at, revoked_at, settings)
+       values ($1, $2, $3, 'connected', $4, ${JSONB_PARAM(5)}, $6, null, ${JSONB_PARAM(7)})
+       on conflict (owner_id, org_id, provider) do update
+         set status = 'connected', account_label = excluded.account_label,
+             scopes = excluded.scopes, expires_at = excluded.expires_at,
+             revoked_at = null, settings = excluded.settings
+       returning id`,
+      [identity.orgId, identity.userId, provider, label, toJsonb(payload.scopes), payload.expiresAt, toJsonb(settings)],
+    ));
+    const id = inserted[0]?.id;
+    if (!id) throw new Error("connector connection insert returned no row");
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      `insert into echo.connector_secret (connection_id, org_id, owner_id, encrypted_payload)
+       values ($1, $2, $3, $4)
+       on conflict (connection_id) do update set encrypted_payload = excluded.encrypted_payload`,
+      [id, identity.orgId, identity.userId, encrypt(key, payload)],
+    ));
+  }
+
+  function status(provider: ConnectorProvider, row: ConnectionRow | undefined, isConfigured: boolean): ConnectorStatus {
+    const draftScope = DRAFT_SCOPE[provider];
+    return {
+      provider,
+      configured: isConfigured,
+      status: !isConfigured ? "not_configured" : row?.status ?? "not_connected",
+      account_label: row?.account_label || null,
+      expires_at: row?.expires_at ?? null,
+      /*
+       * Derived from what the PROVIDER granted, never from what we asked
+       * for. A connection made before drafting existed is `connected` and
+       * cannot draft, and the two facts have to be separable or the screen
+       * offers a button that fails at the provider: "connected" would be
+       * standing in for two different states again.
+       */
+      can_draft: draftScope !== undefined && strings(row?.scopes).includes(draftScope),
+      /* same derivation as can_draft: what the provider GRANTED, never
+         what we asked for — a connection made before Drive joined the
+         consent is connected and cannot list files, and the screen has
+         to be able to say "reconnect to grant" instead of failing */
+      can_drive: provider === "google"
+        && strings(row?.scopes).includes("https://www.googleapis.com/auth/drive.readonly"),
+      polled_at: row?.polled_at ? iso(row.polled_at) : null,
+      messages_seen: Number(row?.messages_seen ?? 0),
+      ...(provider === "google" || provider === "microsoft" ? {} : { settings: settingsOf(row?.settings) }),
+    };
   }
 
   return {
@@ -555,36 +690,11 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
        * somebody has already made, or they cannot revoke it from inside the
        * product that asked for it.
        */
-      const offered = PROVIDERS.filter((provider) =>
+      const offered = CONNECTOR_PROVIDERS.filter((provider) =>
         (OFFERED_CONNECTOR_PROVIDERS as readonly string[]).includes(provider)
         || current.some((entry) => entry.provider === provider));
-      return offered.map((provider) => {
-        const row = current.find((entry) => entry.provider === provider);
-        const isConfigured = configured(options, provider);
-        return {
-          provider,
-          configured: isConfigured,
-          status: !isConfigured ? "not_configured" : row?.status ?? "not_connected",
-          account_label: row?.account_label || null,
-          expires_at: row?.expires_at ?? null,
-          /*
-           * Derived from what the PROVIDER granted, never from what we asked
-           * for. A connection made before drafting existed is `connected` and
-           * cannot draft, and the two facts have to be separable or the screen
-           * offers a button that fails at the provider: "connected" would be
-           * standing in for two different states again.
-           */
-          can_draft: strings(row?.scopes).includes(DRAFT_SCOPE[provider]),
-          /* same derivation as can_draft: what the provider GRANTED, never
-             what we asked for — a connection made before Drive joined the
-             consent is connected and cannot list files, and the screen has
-             to be able to say "reconnect to grant" instead of failing */
-          can_drive: provider === "google"
-            && strings(row?.scopes).includes("https://www.googleapis.com/auth/drive.readonly"),
-          polled_at: row?.polled_at ? iso(row.polled_at) : null,
-          messages_seen: Number(row?.messages_seen ?? 0),
-        };
-      });
+      return offered.map((provider) =>
+        status(provider, current.find((entry) => entry.provider === provider), configured(options, provider)));
     },
 
     async authorization(
@@ -593,24 +703,21 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       if (!/^[A-Za-z0-9_-]{24,200}$/.test(state) || !/^[A-Za-z0-9_-]{43,128}$/.test(codeChallenge)) {
         throw new ValidationError("invalid OAuth state", { code: "connector_state_invalid" });
       }
+      const spec = oauthSpec(provider);
       const config = expectedRedirect(options, provider, redirectUri);
       const params = new URLSearchParams({
         client_id: config.clientId,
         redirect_uri: redirectUri,
         response_type: "code",
-        scope: providerScopes(provider).join(" "),
+        ...(spec.scopes.length > 0 ? { scope: spec.scopes.join(" ") } : {}),
         state,
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-        ...(provider === "google" ? { access_type: "offline", prompt: "consent", include_granted_scopes: "true" } : {}),
+        ...(spec.pkce ? { code_challenge: codeChallenge, code_challenge_method: "S256" } : {}),
+        ...(spec.extraAuthorize ?? {}),
       });
-      const endpoint = provider === "google"
-        ? "https://accounts.google.com/o/oauth2/v2/auth"
-        : "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
       // The identity check above is intentional even though it has no rows to
       // touch: issuing an OAuth URL is an action bound to an active member.
       void identity;
-      return { authorization_url: `${endpoint}?${params}` };
+      return { authorization_url: `${spec.authorizeUrl}?${params}` };
     },
 
     async complete(
@@ -621,40 +728,56 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       }
       const config = expectedRedirect(options, provider, redirectUri);
       const payload = await exchangeCode(provider, config, code, codeVerifier, redirectUri);
-      const label = await accountLabel(provider, payload.accessToken);
-      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ id: string }>(
-        `insert into echo.connector_connection
-           (org_id, owner_id, provider, status, account_label, scopes, expires_at, revoked_at)
-         values ($1, $2, $3, 'connected', $4, ${JSONB_PARAM(5)}, $6, null)
-         on conflict (owner_id, org_id, provider) do update
-           set status = 'connected', account_label = excluded.account_label,
-               scopes = excluded.scopes, expires_at = excluded.expires_at,
-               revoked_at = null
-         returning id`,
-        [identity.orgId, identity.userId, provider, label, toJsonb(payload.scopes), payload.expiresAt],
-      ));
-      const id = rows[0]?.id;
-      if (!id) throw new Error("connector connection insert returned no row");
-      await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
-        `insert into echo.connector_secret (connection_id, org_id, owner_id, encrypted_payload)
-         values ($1, $2, $3, $4)
-         on conflict (connection_id) do update set encrypted_payload = excluded.encrypted_payload`,
-        [id, identity.orgId, identity.userId, encrypt(config.key, payload)],
-      ));
+      const ctx: ProviderCtx = { bearer: payload.accessToken, settings: {} };
+      const label = await accountLabel(provider, ctx);
+      /* settings only a token can learn — Jira's site, Slack's own user id;
+         best-effort, because a connection is a connection before its settings */
+      let settings: Record<string, unknown> = {};
+      const def = providerDef(provider);
+      if (def?.afterConnect) {
+        try { settings = await def.afterConnect(ctx); } catch { settings = {}; }
+      }
+      await store(identity, provider, config.key, payload, label, settings);
       return {
-        provider, configured: true, status: "connected", account_label: label,
-        expires_at: payload.expiresAt,
-        /* what the provider ACTUALLY granted this time — a consent screen the
-           person narrowed is a connection that cannot draft, and it says so
-           from the first render rather than at the first attempt */
-        can_draft: payload.scopes.includes(DRAFT_SCOPE[provider]),
-        can_drive: provider === "google"
-          && payload.scopes.includes("https://www.googleapis.com/auth/drive.readonly"),
-        /* a fresh connection has been looked at zero times, which is a fact
-           and not a gap — the table says "Active" until the first poll */
-        polled_at: null,
-        messages_seen: 0,
+        ...status(provider, {
+          id: "", provider, status: "connected", account_label: label, expires_at: payload.expiresAt,
+          scopes: payload.scopes, settings, polled_at: null, messages_seen: 0,
+        }, true),
       };
+    },
+
+    /**
+     * A PASTED credential (2026-09-06): Telegram's bot token, WhatsApp's
+     * access token and number, an MCP server's URL and bearer. The provider
+     * is asked to vouch for it FIRST (getMe, the phone's profile, an MCP
+     * initialize) — a token that does not work is refused here, in the
+     * dialog, never stored as a connection that fails on first use. What
+     * the check learned (the bot's handle, the number, the server's name)
+     * becomes the connection's public settings.
+     */
+    async connectToken(
+      identity: Identity, provider: ConnectorProvider, input: Record<string, unknown>,
+    ): Promise<ConnectorStatus> {
+      const def = providerDef(provider);
+      if (!def?.token || !def.verify) {
+        throw new ValidationError("this connector is connected with a sign-in, not a token", { code: "connector_kind_mismatch" });
+      }
+      const { key } = requireStore(options);
+      const fields: Record<string, string> = {};
+      for (const field of def.token.fields) {
+        const value = input[field];
+        if (typeof value === "string" && value.trim() !== "") fields[field] = value.trim().slice(0, 2_000);
+      }
+      for (const field of def.token.required) {
+        if (!fields[field]) throw new ValidationError(`${field} is required`, { code: "connector_field_required", params: { field } });
+      }
+      const verified = await def.verify(fields);
+      const payload: TokenPayload = { accessToken: verified.bearer, refreshToken: null, expiresAt: null, scopes: [] };
+      await store(identity, provider, key, payload, verified.label, verified.settings);
+      return status(provider, {
+        id: "", provider, status: "connected", account_label: verified.label, expires_at: null,
+        scopes: [], settings: verified.settings, polled_at: null, messages_seen: 0,
+      }, true);
     },
 
     /**
@@ -696,7 +819,17 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
         }
       }
       /* Microsoft has no token-revocation endpoint for this flow; local
-         revocation is the whole mechanism there, stated rather than faked */
+         revocation is the whole mechanism there, stated rather than faked.
+         The registry providers that have one (Zoom, Slack) are told. */
+      const def = providerDef(provider);
+      if (def?.revoke) {
+        try {
+          const ctx = await providerCtx(identity, provider);
+          const credentials = options.providers?.[provider];
+          await def.revoke(ctx, credentials?.clientId && credentials.clientSecret
+            ? { clientId: credentials.clientId, clientSecret: credentials.clientSecret } : null);
+        } catch { /* local revocation stands */ }
+      }
       await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
         /* an empty bytea, passed as a PARAMETER — a string literal here has
            already been mangled once by tooling escaping, which is its own
@@ -708,6 +841,44 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
             set status = 'revoked', revoked_at = now(),
                 mail_cursor = null, mail_cursor_at = null
           where id = $1`, [conn.id]));
+    },
+
+    /**
+     * ONE listing door for every provider (2026-09-06). The legacy two keep
+     * their named methods below — the poller and the prep call those — and
+     * arrive here for the same result; everything newer is the registry's.
+     */
+    async items(identity: Identity, provider: ConnectorProvider, source: string): Promise<ConnectorItem[]> {
+      if (provider === "google" || provider === "microsoft") {
+        if (source === "calendar") return this.calendarEvents(identity, provider);
+        if (source === "mail") return this.mailMessages(identity, provider);
+        /* Google-only lenses; asking Microsoft for them is a caller error, and
+           naming it beats a provider 404 three layers down */
+        if (source === "drive" && provider === "google") return this.driveFiles(identity);
+        if (source === "meet" && provider === "google") return this.meetEvents(identity);
+        throw new ValidationError("unknown connector source", { code: "connector_source_invalid" });
+      }
+      const def = providerDef(provider);
+      if (!def || !def.sources.includes(source)) {
+        throw new ValidationError("unknown connector source", { code: "connector_source_invalid" });
+      }
+      return def.items(await providerCtx(identity, provider), source);
+    },
+
+    /**
+     * ONE action door — reached only from the route the consent card guards
+     * (a client tool in the person's browser), never from a server-side run.
+     * The arguments are model-authored and validated by the provider entry
+     * like human input; the result is data the caller fences.
+     */
+    async act(
+      identity: Identity, provider: ConnectorProvider, action: string, args: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+      const def = providerDef(provider);
+      if (!def || !def.actions.includes(action)) {
+        throw new ValidationError("unknown connector action", { code: "connector_action_invalid" });
+      }
+      return def.act(await providerCtx(identity, provider), action, args);
     },
 
     /**

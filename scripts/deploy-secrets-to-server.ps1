@@ -63,6 +63,23 @@ $optionalConnectors = [ordered]@{
   echo_platform_google_oauth_client_id     = "echo_platform_google_oauth_client_id"
   echo_platform_google_oauth_client_secret = "echo_platform_google_oauth_client_secret"
   echo_platform_connector_encryption_key   = "echo_platform_connector_encryption_key"
+  # the registry's OAuth apps (2026-09-06) — each pair optional; an absent
+  # pair leaves THAT provider "not configured" on the shelf and nothing else.
+  # OneDrive borrows the Microsoft pair when it has none of its own.
+  echo_platform_zoom_oauth_client_id        = "echo_platform_zoom_oauth_client_id"
+  echo_platform_zoom_oauth_client_secret    = "echo_platform_zoom_oauth_client_secret"
+  echo_platform_slack_oauth_client_id       = "echo_platform_slack_oauth_client_id"
+  echo_platform_slack_oauth_client_secret   = "echo_platform_slack_oauth_client_secret"
+  echo_platform_jira_oauth_client_id        = "echo_platform_jira_oauth_client_id"
+  echo_platform_jira_oauth_client_secret    = "echo_platform_jira_oauth_client_secret"
+  echo_platform_notion_oauth_client_id      = "echo_platform_notion_oauth_client_id"
+  echo_platform_notion_oauth_client_secret  = "echo_platform_notion_oauth_client_secret"
+  echo_platform_github_oauth_client_id      = "echo_platform_github_oauth_client_id"
+  echo_platform_github_oauth_client_secret  = "echo_platform_github_oauth_client_secret"
+  echo_platform_dropbox_oauth_client_id     = "echo_platform_dropbox_oauth_client_id"
+  echo_platform_dropbox_oauth_client_secret = "echo_platform_dropbox_oauth_client_secret"
+  echo_platform_microsoft_oauth_client_id     = "echo_platform_microsoft_oauth_client_id"
+  echo_platform_microsoft_oauth_client_secret = "echo_platform_microsoft_oauth_client_secret"
   echo_platform_microsoft_oauth_client_id     = "echo_platform_microsoft_oauth_client_id"
   echo_platform_microsoft_oauth_client_secret = "echo_platform_microsoft_oauth_client_secret"
 }

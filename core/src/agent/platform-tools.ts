@@ -52,6 +52,8 @@
 import { Type } from "./pi.ts";
 import { ToolDenied, type DomainTool } from "./tools.ts";
 import { NotFoundError } from "../api/errors.ts";
+import { CONNECTOR_PROVIDERS, isConnectorProvider } from "../api/connector-providers.ts";
+import type { ConnectorReads } from "./domain-tools.ts";
 import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
 import { createMeetingsRepo } from "../api/meetings.ts";
@@ -66,6 +68,8 @@ import type { Db } from "../db/identity.ts";
 
 export interface PlatformToolDeps {
   db: Db;
+  /** the connector reads on the person's own grant (2026-09-06) — see ConnectorReads in domain-tools.ts */
+  connectors?: ConnectorReads | undefined;
 }
 
 /** Who carries this tool when the run belongs to a delegate. */
@@ -332,6 +336,49 @@ export function createPlatformTools(): PlatformTool[] {
      * pointed at a `list_projects` that did not exist. "both": Ava files what
      * she finds as work, and work for a project has to be filed IN it.
      */
+    /*
+     * THE CONNECTORS' READ (2026-09-06, "connectors like in Claude"). One
+     * tool for every connected account, because the shape is one shape:
+     * a provider, a source, a list of items with a title, a subtitle and a
+     * time. Runs on the person's OWN grant (deps.connectors is the app
+     * connection under their identity) — an account they have not connected
+     * is a refusal that names the integrations page, never an empty list
+     * pretending to be an answer.
+     */
+    tool<{ provider: string; source: string }>({
+      name: "list_connector_items",
+      label: "خواندن از یک اتصال",
+      description:
+        "Read from one of the person's CONNECTED accounts (their own grants, "
+        + "on the integrations page): zoom (meetings, recordings), slack "
+        + "(channels, mentions), telegram (updates — messages sent to their "
+        + "bot), jira (issues, projects), notion (pages, databases), github "
+        + "(issues, pulls, repos), whatsapp (profile, templates), dropbox "
+        + "(files), onedrive (files), mcp (tools, resources — an MCP server "
+        + "they added), google (mail, calendar, drive, meet), microsoft "
+        + "(mail, calendar). Metadata only: id, title, subtitle, when. Use "
+        + "list_connectors first to see what is connected; an account that is "
+        + "not connected refuses — say so and offer /integrations.",
+      parameters: Type.Object({
+        provider: Type.String({ description: "one of: google, microsoft, zoom, slack, telegram, jira, notion, github, whatsapp, dropbox, onedrive, mcp" }),
+        source: Type.String({ description: "that provider's source, e.g. meetings, channels, issues, pages, files, tools" }),
+      }),
+      async run({ identity, deps }, args) {
+        if (!deps.connectors) throw new ToolDenied("connected accounts are not reachable in this run");
+        if (!isConnectorProvider(args.provider)) {
+          throw new ToolDenied(`unknown provider "${args.provider}" — one of ${CONNECTOR_PROVIDERS.join(", ")}`);
+        }
+        try {
+          return capped(await deps.connectors.items(identity, args.provider, args.source));
+        } catch (error) {
+          if (error instanceof NotFoundError) {
+            throw new ToolDenied(`${args.provider} is not connected for this person — they can connect it on the integrations page (/integrations)`);
+          }
+          throw error;
+        }
+      },
+    }),
+
     tool<{ archived?: boolean }>({
       name: "list_projects",
       label: "پروژه‌ها",

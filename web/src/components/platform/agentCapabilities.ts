@@ -135,13 +135,24 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     ],
   },
   {
+    /* the connected accounts (2026-09-06): what is connected, one read over
+       every provider's sources, and the hands — each behind the consent card */
+    key: "connectors",
+    icon: "globe",
+    tools: [
+      "list_connectors", "list_connector_items",
+      "send_slack_message", "send_telegram_message", "send_whatsapp_message",
+      "create_jira_issue", "create_github_issue", "create_notion_page", "create_zoom_meeting",
+      "call_mcp_tool",
+    ],
+  },
+  {
     key: "surface",
     icon: "pulse",
     tools: [
       "start_recording", "pause_recording", "resume_recording", "finish_recording",
       "navigate", "open_call", "set_search", "set_language",
       "whoami_surface", "list_notifications", "mark_notification_read",
-      "list_connectors",
     ],
   },
 ];

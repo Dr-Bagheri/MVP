@@ -70,6 +70,7 @@ import { createAgentRuntime } from "../agent/runtime.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
+import { isConnectorProvider } from "./connector-providers.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
 import { createProjectsRepo } from "./projects.ts";
@@ -299,7 +300,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   // CLIENT tool on the person's own session (client-tools.ts), never as a
   // server-side tool.
   const domainDeps = options.tools === undefined
-    ? ({ db: agentToolsDb(options.db) } as unknown as TDeps)
+    /* `connectors` rides beside the agent-role db (2026-09-06): the
+       connector reads run on the PERSON's own grant through the app
+       connection — the same authority the integrations page uses — so the
+       agent can list their Slack channels or Jira issues without the agent
+       role ever holding a secret (echo_agent has no grant on the secret
+       table, and this is why it does not need one) */
+    ? ({ db: agentToolsDb(options.db), connectors } as unknown as TDeps)
     : options.toolDeps;
 
   const assistant = createAssistant({
@@ -1983,7 +1990,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   };
 
   const connectorProvider = (value: unknown): ConnectorProvider => {
-    if (value === "google" || value === "microsoft") return value;
+    /* the registry is the list (2026-09-06) — a provider it does not know
+       is a caller error here rather than a 404 three layers down */
+    if (isConnectorProvider(value)) return value;
     throw new ValidationError("unknown connector provider", { code: "connector_provider_invalid" });
   };
 
@@ -3719,21 +3728,47 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     ));
   });
 
+  /**
+   * A PASTED credential's door (2026-09-06): Telegram's bot token, WhatsApp's
+   * token and number, an MCP server's URL. The repo asks the provider to
+   * vouch for it before anything is stored; the body's fields are the
+   * registry's own names for that provider, so a client cannot invent one.
+   */
+  app.post("/v1/connectors/:provider/connect", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { provider } = request.params as { provider: unknown };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.send(await connectors.connectToken(identity, connectorProvider(provider), body));
+  });
+
+  /**
+   * A connector ACTION (2026-09-06) — reached from a client tool in the
+   * person's browser, behind the consent card, never from a server-side run:
+   * requireActive and the person's own grant are the whole authority. The
+   * source name is checked by the provider's entry; the arguments are model-
+   * authored and validated there like human input.
+   */
+  app.post("/v1/connectors/:provider/actions/:action", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { provider, action } = request.params as { provider: unknown; action: unknown };
+    if (typeof action !== "string" || !/^[a-z_]{3,40}$/.test(action)) {
+      throw new ValidationError("unknown connector action", { code: "connector_action_invalid" });
+    }
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const args = body.args !== null && typeof body.args === "object" && !Array.isArray(body.args)
+      ? body.args as Record<string, unknown> : {};
+    return reply.send({ result: await connectors.act(identity, connectorProvider(provider), action, args) });
+  });
+
   app.get("/v1/connectors/:provider/:source", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { provider, source } = request.params as { provider: unknown; source: unknown };
-    const parsedProvider = connectorProvider(provider);
-    if (source === "calendar") return reply.send({ items: await connectors.calendarEvents(identity, parsedProvider) });
-    if (source === "mail") return reply.send({ items: await connectors.mailMessages(identity, parsedProvider) });
-    /* Google-only lenses; asking Microsoft for them is a caller error, and
-       naming it beats a provider 404 three layers down */
-    if (source === "drive" && parsedProvider === "google") {
-      return reply.send({ items: await connectors.driveFiles(identity) });
+    if (typeof source !== "string" || !/^[a-z_]{2,32}$/.test(source)) {
+      throw new ValidationError("unknown connector source", { code: "connector_source_invalid" });
     }
-    if (source === "meet" && parsedProvider === "google") {
-      return reply.send({ items: await connectors.meetEvents(identity) });
-    }
-    throw new ValidationError("unknown connector source", { code: "connector_source_invalid" });
+    /* one door for every provider — the legacy two and the registry alike
+       (the per-source branches this route used to hold live in the repo) */
+    return reply.send({ items: await connectors.items(identity, connectorProvider(provider), source) });
   });
 
   /**
