@@ -34,16 +34,24 @@ function Harness({
   );
 }
 
-/** the metrics jsdom will never compute, stated; the WRITES are the observable */
+/**
+ * The metrics jsdom will never compute, stated; the WRITES are the observable.
+ * The setter CLAMPS the way a browser does — a box cannot be scrolled past
+ * its bottom — because the echo case below is only representable when the
+ * read-back value is the clamped one: a fake that stored `scrollHeight` as
+ * the position made every echo look pinned by arithmetic, and the test that
+ * found the production defect could not have gone red against it.
+ */
 function instrument(el: HTMLElement, { scrollHeight, clientHeight }: { scrollHeight: number; clientHeight: number }) {
   const writes: number[] = [];
   let top = 0;
-  Object.defineProperty(el, "scrollHeight", { value: scrollHeight, configurable: true });
-  Object.defineProperty(el, "clientHeight", { value: clientHeight, configurable: true });
+  const max = () => Math.max(0, (el.scrollHeight as number) - (el.clientHeight as number));
+  Object.defineProperty(el, "scrollHeight", { value: scrollHeight, configurable: true, writable: true });
+  Object.defineProperty(el, "clientHeight", { value: clientHeight, configurable: true, writable: true });
   Object.defineProperty(el, "scrollTop", {
     configurable: true,
     get: () => top,
-    set: (value: number) => { top = value; writes.push(value); },
+    set: (value: number) => { top = Math.min(Math.max(0, value), max()); writes.push(value); },
   });
   return { writes, setTop: (value: number) => { top = value; } };
 }
@@ -124,6 +132,38 @@ describe("useThreadFollow — the thread follows what changes size, while the re
     expect(writes).toEqual([1000]);
     act(() => { ro.fire(); });
     expect(writes).toEqual([1000, 1000]);
+  });
+
+  it("THE ECHO: our own write's scroll event, arriving after the content grew, must not unpin the reader", () => {
+    /*
+     * Found on production, 2026-09-06, with the first version of this hook
+     * deployed: a programmatic scrollTop write fires its `scroll` event a
+     * frame LATER, in the rendering steps, and by then React has landed the
+     * next message (or the consent card) in the box. Judged against the new
+     * geometry, that echo reads as "the reader is 256px above the bottom" —
+     * so `pinned` flipped to false a frame after `repin` set it, and the
+     * ResizeObserver delivery in the same frame settled nothing. The reader
+     * had not touched anything. An event whose scrollTop is exactly the
+     * position we last wrote is ours; only the others are theirs.
+     */
+    const { box } = mount();
+    const { writes, setTop } = instrument(box, { scrollHeight: 1000, clientHeight: 400 });
+    act(() => { follow!.repin(); });
+    expect(writes).toEqual([1000]);
+    expect(box.scrollTop).toBe(600); // clamped: the bottom
+    // the next message lands before the echo is processed
+    Object.defineProperty(box, "scrollHeight", { value: 1300, configurable: true, writable: true });
+    fireEvent.scroll(box); // the echo: scrollTop still 600 == what we wrote, content 300px taller
+    act(() => { ro.fire(); }); // the growth's delivery, same frame
+    expect(writes).toEqual([1000, 1300]);
+    expect(box.scrollTop).toBe(900);
+    // THE CONTROL, same shape: a scroll to a position we did NOT write is the reader's and is judged
+    Object.defineProperty(box, "scrollHeight", { value: 1600, configurable: true, writable: true });
+    setTop(700); // the reader dragged to 700: 1600 - 400 - 700 = 500 above the bottom
+    writes.length = 0;
+    fireEvent.scroll(box);
+    act(() => { ro.fire(); });
+    expect(writes).toEqual([]);
   });
 
   it("followPage: brings the content's end into view ONLY while the box itself cannot scroll", () => {

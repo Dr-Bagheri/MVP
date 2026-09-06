@@ -81,6 +81,17 @@ export function shouldStick(
  * pin is still read off the box there, which never scrolls — the mobile
  * layout follows unconditionally, exactly as it did before this hook.
  *
+ * THE ECHO (found on production the same day, with the first version of
+ * this hook live): a programmatic scrollTop write fires its `scroll` event a
+ * frame LATER, in the rendering steps — and by then React has usually landed
+ * the next message or the card in the box. Judged against the new geometry,
+ * that echo reads as "the reader is 256px above the bottom", `pinned` flips
+ * to false a frame after `repin` set it, and the observer's delivery in the
+ * same frame settles nothing: the reader, who touched nothing, is left below
+ * the fold. So the handler tells our writes from their scrolls by position —
+ * an event whose scrollTop is exactly where our last write left the box is
+ * ours and is not judged; every other scroll is the reader's and is.
+ *
  * Without a ResizeObserver (jsdom) nothing follows by itself and `repin`
  * still writes; the tests install a fake and drive it.
  */
@@ -101,6 +112,8 @@ export function useThreadFollow(
   { followPage = false }: { followPage?: boolean } = {},
 ): ThreadFollow {
   const pinned = useRef(true);
+  /** where our LAST write left the box — the echo of that write is known by it */
+  const written = useRef<number | null>(null);
   const box = useRef<HTMLElement | null>(null);
   const content = useRef<HTMLElement | null>(null);
   const observer = useRef<ResizeObserver | null>(null);
@@ -114,6 +127,8 @@ export function useThreadFollow(
        lags its own target and judders; pinning is a position, not an
        animation */
     el.scrollTop = el.scrollHeight;
+    /* read back, not the value written: the browser clamps to the bottom */
+    written.current = el.scrollTop;
     if (page.current && el.scrollHeight <= el.clientHeight) {
       content.current?.scrollIntoView({ block: "end" });
     }
@@ -144,7 +159,13 @@ export function useThreadFollow(
   }, []);
 
   const onScroll = useCallback((event: { currentTarget: ScrollMetrics }) => {
-    pinned.current = shouldStick(event.currentTarget);
+    const el = event.currentTarget;
+    /* our own write's echo — see THE ECHO above; the box may have grown past
+       the threshold since, and that growth is exactly what the observer is
+       about to follow, so it must not be read as the reader leaving */
+    if (written.current !== null && el.scrollTop === written.current) return;
+    written.current = null;
+    pinned.current = shouldStick(el);
   }, []);
 
   const repin = useCallback(() => {
