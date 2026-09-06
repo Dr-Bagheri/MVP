@@ -516,6 +516,52 @@ describe("the integrations page", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
+  /**
+   * THE PASSWORD MANAGER MUST NOT REACH THIS FORM (found on production,
+   * 2026-09-06, by opening the dialog in a real browser).
+   *
+   * The secret carried `autocomplete="off"`, which Chrome IGNORES on a
+   * `type="password"` field — documented behaviour, not a bug — so the
+   * manager filled the token box with the person's OWN ACCOUNT PASSWORD and
+   * the box beside it with their email. Pressing «اتصال» would have sent a
+   * platform password to a third party as an API token, and on screen it
+   * looked like a form that had helpfully remembered something.
+   *
+   * BOTH HALVES are asserted, because either one alone passes against the
+   * shipped bug: the secret must ask for `new-password` (the token Chrome
+   * honours) and must NOT ask for `off` (the token it ignores). A test that
+   * only checked "an autocomplete attribute is present" would have been green
+   * the whole time.
+   *
+   * jsdom does not autofill, so this cannot be proven by rendering — the
+   * attribute IS the mechanism, and the real proof is a browser (recorded in
+   * the Status log with its reading).
+   */
+  it("the secret field refuses the browser's password manager, on every token provider", async () => {
+    for (const [provider, tileName, fieldLabel] of [
+      ["telegram", "اتصال تلگرام", "توکن بات"],
+      ["mcp", "اتصال سرور ام‌سی‌پی", "توکن دسترسی"],
+    ] as const) {
+      CONNECTORS = [GOOGLE, { ...TELEGRAM_OFFERED, provider }];
+      await act(async () => { render(<Integrations />); });
+      fireEvent.click(screen.getByRole("button", { name: tileName }));
+      const dialog = await screen.findByRole("alertdialog");
+
+      const secret = within(dialog).getByLabelText(new RegExp(fieldLabel)) as HTMLInputElement;
+      expect(secret.type, provider).toBe("password");
+      expect(secret.getAttribute("autocomplete"), provider).toBe("new-password");
+      expect(secret.getAttribute("autocomplete"), provider).not.toBe("off");
+      /* the other managers read their own attribute and not this one */
+      expect(secret.getAttribute("data-lpignore"), provider).toBe("true");
+      expect(secret.hasAttribute("data-1p-ignore"), provider).toBe(true);
+      /* and NOT anonymous: an unnamed box beside a password is what a
+         heuristic reads as the username to fill */
+      expect(secret.getAttribute("name"), provider).toBe(`${provider}-secret`);
+
+      cleanup();
+    }
+  });
+
   it("a token the provider refuses stays in the dialog, named as the provider's refusal", async () => {
     CONNECTORS = [GOOGLE, TELEGRAM_OFFERED];
     connectTokenConnector.mockRejectedValue(new RealBffError(502, "provider"));

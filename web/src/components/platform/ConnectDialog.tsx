@@ -122,11 +122,36 @@ export function ConnectDialog({
                   <span className="mb-1 block text-xs font-medium text-fg-subtle">
                     {fieldLabel(t, entry.provider, field.name)}{field.required ? "" : ` (${t("optional")})`}
                   </span>
+                  {/*
+                    NEVER `autocomplete="off"` ON A SECRET HERE (found on
+                    production, 2026-09-06, by opening the dialog).
+                    Chrome IGNORES `off` on a `type="password"` field — it is
+                    documented behaviour, not a bug — so the password manager
+                    filled this box with the PERSON'S OWN ACCOUNT PASSWORD and
+                    the box beside it with their email. A person who pressed
+                    «اتصال» without looking would have sent their platform
+                    password to a third party as an API token, and the two
+                    dots-and-an-email looked exactly like a form that had
+                    helpfully remembered something.
+                    `new-password` is the token Chrome does honour: it marks
+                    the group as a form where a saved credential has no
+                    business, so neither the secret nor the field beside it is
+                    filled. The auth screens already used this vocabulary
+                    correctly; only this dialog did not.
+                    The `data-*` pair is the same refusal for 1Password and
+                    LastPass, which read their own attributes and not this one.
+                    A NAME rather than an anonymous input for the same reason:
+                    an unnamed box beside a password is what a heuristic reads
+                    as a username.
+                  */}
                   <input
                     className="input"
                     dir="ltr"
+                    name={`${entry.provider}-${field.name}`}
                     type={field.name === "secret" ? "password" : "text"}
-                    autoComplete="off"
+                    autoComplete={field.name === "secret" ? "new-password" : "off"}
+                    data-1p-ignore
+                    data-lpignore="true"
                     spellCheck={false}
                     value={fields[field.name] ?? ""}
                     onChange={(event) => setFields((prev) => ({ ...prev, [field.name]: event.target.value }))}
