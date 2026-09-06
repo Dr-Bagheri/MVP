@@ -3,7 +3,7 @@
    capped at 300 seconds on every plan, so a proxied SSE stream would die every
    five minutes forever. The browser opens that one against core directly with
    a ticket (see /api/chat/ticket). */
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function GET() {
   try {
@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     return Response.json(
-      await coreFetch("/v1/chat/channels", { method: "POST", body: await request.json() }),
+      await coreFetch("/v1/chat/channels", { method: "POST", body: await readJson(request) }),
       { status: 201 },
     );
   } catch (error) {

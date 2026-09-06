@@ -1,6 +1,6 @@
 /* 0145 — meetings' BFF: verbatim forwards, the session attached
    server-side. */
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -15,7 +15,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   try {
     const { id } = await ctx.params;
     return Response.json(await coreFetch(`/v1/meetings/${encodeURIComponent(id)}`, {
-      method: "PATCH", body: await request.json(),
+      method: "PATCH", body: await readJson(request),
     }));
   } catch (error) {
     return errorResponse(error);

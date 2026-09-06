@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * A HUMAN's summary edit (0092): a NEW version authored 'human' — the
@@ -9,7 +9,7 @@ import { coreFetch, errorResponse } from "@/server/core";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const body = (await request.json()) as { body?: string };
+    const body = (await readJson(request)) as { body?: string };
     return Response.json(
       await coreFetch<{ version: number }>(
         `/v1/calls/${encodeURIComponent(id)}/summaries/edit`,

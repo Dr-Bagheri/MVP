@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AuthoredSkill } from "@/api/types";
 
 /** One authored skill, full definition — 404 unless the caller may edit it. */
@@ -14,8 +14,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ski
 /** Edit (M29): supplied-flag semantics travel as-is; `model: null` clears the pin. */
 export async function PATCH(request: Request, { params }: { params: Promise<{ skillId: string }> }) {
   const { skillId } = await params;
-  const body = (await request.json()) as Record<string, unknown>;
   try {
+    const body = (await readJson(request)) as Record<string, unknown>;
     return Response.json(
       await coreFetch<AuthoredSkill>(`/v1/skills/${skillId}`, { method: "PATCH", body }),
     );

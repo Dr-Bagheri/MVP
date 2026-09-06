@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * PATCH /api/auth-methods/:provider — flip one sign-in method (0078).
@@ -11,7 +11,7 @@ export async function PATCH(
 ) {
   try {
     const { provider } = await params;
-    const body = (await request.json()) as { enabled?: boolean };
+    const body = (await readJson(request)) as { enabled?: boolean };
     const result = await coreFetch<{ provider: string; enabled: boolean }>(
       `/v1/auth-methods/${encodeURIComponent(provider)}`,
       { method: "PATCH", body: { enabled: body.enabled } },

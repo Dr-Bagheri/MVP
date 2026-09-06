@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * A verdict on one assistant turn (M27). Upserted server-side — pressing
@@ -6,8 +6,8 @@ import { coreFetch, errorResponse } from "@/server/core";
  */
 export async function POST(request: Request, { params }: { params: Promise<{ messageId: string }> }) {
   const { messageId } = await params;
-  const body = (await request.json()) as { verdict?: string; note?: string };
   try {
+    const body = (await readJson(request)) as { verdict?: string; note?: string };
     // core answers 204; `raw` because an empty body is not JSON to parse
     await coreFetch<Response>(`/v1/assistant/messages/${messageId}/feedback`, {
       method: "POST",

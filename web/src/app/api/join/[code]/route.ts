@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * The guest door's BFF leg. Unlike every other route here it carries no
@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
   try {
     return Response.json(await coreFetch<{ title: string; token: string; url: string }>(
       `/v1/join/${encodeURIComponent(code)}`,
-      { method: "POST", body: await request.json(), anonymous: true },
+      { method: "POST", body: await readJson(request), anonymous: true },
     ));
   } catch (error) {
     return errorResponse(error);

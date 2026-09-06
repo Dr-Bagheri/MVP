@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * POST /api/calls/[id]/finish — recording is over, the pipeline owns the
@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   let body: { provisional_transcript?: string } | undefined;
   try {
-    const parsed = (await request.json()) as { provisional_transcript?: unknown };
+    const parsed = (await readJson(request)) as { provisional_transcript?: unknown };
     if (typeof parsed?.provisional_transcript === "string") {
       body = { provisional_transcript: parsed.provisional_transcript };
     }

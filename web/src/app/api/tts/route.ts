@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * POST /api/tts → core's /v1/tts (M37) — binary passthrough.
@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { text?: string; lang?: string };
   try {
+    const body = (await readJson(request)) as { text?: string; lang?: string };
     const upstream = await coreFetch<Response>("/v1/tts", {
       method: "POST",
       body: { text: body.text, lang: body.lang },

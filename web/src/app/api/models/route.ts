@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { ModelsResponse } from "@/api/types";
 
 /**
@@ -26,8 +26,8 @@ export async function GET() {
  * hop as null rather than being coerced into a default here.
  */
 export async function PUT(request: Request) {
-  const { model } = (await request.json()) as { model: string | null };
   try {
+    const { model } = (await readJson(request)) as { model: string | null };
     return Response.json(
       await coreFetch<{ preferred_model: string | null }>("/v1/models/preferred", {
         method: "PUT",

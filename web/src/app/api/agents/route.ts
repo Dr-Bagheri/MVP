@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AgentCard } from "@/api/types";
 
 /**
@@ -20,10 +20,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    /* the PARSED body — coreFetch stringifies once; the stringified version
+       reached core as a JSON string and "agent level is required" answered
+       every valid workshop form from 2026-09-03 to 2026-09-06 */
     return Response.json(await coreFetch<AgentCard>("/v1/agents", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(await request.json()),
+      body: await readJson(request),
     }));
   } catch (error) {
     return errorResponse(error);

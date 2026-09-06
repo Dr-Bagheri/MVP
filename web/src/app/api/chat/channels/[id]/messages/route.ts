@@ -1,7 +1,7 @@
 /* 0184 — a channel's messages. The query params are FORWARDED rather than
    re-derived: `before` pages the scrollback and `after` is the catch-up read
    the stream leans on, and both are the server's to interpret. */
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -26,7 +26,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { id } = await ctx.params;
     return Response.json(
       await coreFetch(`/v1/chat/channels/${encodeURIComponent(id)}/messages`, {
-        method: "POST", body: await request.json(),
+        method: "POST", body: await readJson(request),
       }),
       { status: 201 },
     );

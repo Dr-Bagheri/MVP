@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { OrgRecord } from "@/api/types";
 
 /**
@@ -78,17 +78,17 @@ export const WRITABLE_ORG_KEYS = [
 ] as const;
 
 export async function PATCH(request: Request) {
-  const body = (await request.json()) as Record<string, unknown>;
-
-  /* Forwarded key-by-key, and ABSENT STAYS ABSENT: only what the caller
-     actually supplied is passed on, so the server sees the same
-     distinction the form made. */
-  const patch: Record<string, unknown> = {};
-  for (const key of WRITABLE_ORG_KEYS) {
-    if (key in body) patch[key] = body[key];
-  }
-
   try {
+    const body = (await readJson(request)) as Record<string, unknown>;
+
+    /* Forwarded key-by-key, and ABSENT STAYS ABSENT: only what the caller
+       actually supplied is passed on, so the server sees the same
+       distinction the form made. */
+    const patch: Record<string, unknown> = {};
+    for (const key of WRITABLE_ORG_KEYS) {
+      if (key in body) patch[key] = body[key];
+    }
+
     return Response.json(
       await coreFetch<OrgRecord>("/v1/admin/org", { method: "PATCH", body: patch }),
     );

@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { User } from "@/api/types";
 
 /**
@@ -40,33 +40,33 @@ export async function GET() {
  * model preference has its own route (`PUT /v1/models/preferred`).
  */
 export async function PATCH(request: Request) {
-  const body = (await request.json()) as Record<string, unknown>;
-  /*
-   * The allow-list is WRITTEN OUT, matching core/'s own. A derived list grows
-   * a hole the moment a field is added to the type and forgotten here — which
-   * is the same failure one layer along.
-   *
-   * `calendar`, `timezone` and `locale` join the three names because core/ now
-   * serves and accepts them. They were the reverse of a missing feature:
-   * `app_user.locale` existed all along, NOT NULL, and nothing selected it, so
-   * a preference that should follow someone between devices was invisible to
-   * every client. I reported it as "core has no locale column"; B1 read the
-   * catalogue instead of taking my word, and a column nobody reads turns out to
-   * look exactly like a column that isn't there.
-   *
-   * Not forwarding an unknown key is no longer merely tidy: core/ answers one
-   * with `400 unknown_fields` now, so a typo here surfaces as a refusal that
-   * names the field instead of a save that quietly drops it.
-   */
-  const ALLOWED = [
-    "display_name", "display_name_en", "username", "avatar_url",
-    "calendar", "timezone", "locale",
-    "job_title", "about", "assistant_context",
-  ] as const;
-  const patch: Record<string, unknown> = {};
-  for (const key of ALLOWED) if (key in body) patch[key] = body[key];
-
   try {
+    const body = (await readJson(request)) as Record<string, unknown>;
+    /*
+     * The allow-list is WRITTEN OUT, matching core/'s own. A derived list grows
+     * a hole the moment a field is added to the type and forgotten here — which
+     * is the same failure one layer along.
+     *
+     * `calendar`, `timezone` and `locale` join the three names because core/ now
+     * serves and accepts them. They were the reverse of a missing feature:
+     * `app_user.locale` existed all along, NOT NULL, and nothing selected it, so
+     * a preference that should follow someone between devices was invisible to
+     * every client. I reported it as "core has no locale column"; B1 read the
+     * catalogue instead of taking my word, and a column nobody reads turns out to
+     * look exactly like a column that isn't there.
+     *
+     * Not forwarding an unknown key is no longer merely tidy: core/ answers one
+     * with `400 unknown_fields` now, so a typo here surfaces as a refusal that
+     * names the field instead of a save that quietly drops it.
+     */
+    const ALLOWED = [
+      "display_name", "display_name_en", "username", "avatar_url",
+      "calendar", "timezone", "locale",
+      "job_title", "about", "assistant_context",
+    ] as const;
+    const patch: Record<string, unknown> = {};
+    for (const key of ALLOWED) if (key in body) patch[key] = body[key];
+
     return Response.json(await coreFetch<User>("/v1/me", { method: "PATCH", body: patch }));
   } catch (error) {
     // 400 → `invalid` and 409 → `conflict`, both carrying core/'s sentence:

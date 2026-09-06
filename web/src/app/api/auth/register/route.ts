@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import { readSession } from "@/server/session";
 import type { User } from "@/api/types";
 
@@ -56,27 +56,27 @@ function nameFromToken(accessToken: string): string | undefined {
  * legible — so the client routes to the org-choice step and posts here.
  */
 export async function POST(request: Request) {
-  let { display_name, org_name, join_org } = (await request.json()) as {
-    display_name?: string;
-    org_name?: string;
-    join_org?: string;
-  };
-
-  if (!display_name?.trim()) {
-    const session = await readSession();
-    display_name = session ? nameFromToken(session.accessToken) : undefined;
-  }
-  if (!display_name) {
-    return Response.json({ error: "display_name is required", kind: "invalid" }, { status: 400 });
-  }
-  if (org_name && join_org) {
-    return Response.json(
-      { error: "choose either a new organization or an existing one, not both", kind: "invalid" },
-      { status: 400 },
-    );
-  }
-
   try {
+    let { display_name, org_name, join_org } = (await readJson(request)) as {
+      display_name?: string;
+      org_name?: string;
+      join_org?: string;
+    };
+
+    if (!display_name?.trim()) {
+      const session = await readSession();
+      display_name = session ? nameFromToken(session.accessToken) : undefined;
+    }
+    if (!display_name) {
+      return Response.json({ error: "display_name is required", kind: "invalid" }, { status: 400 });
+    }
+    if (org_name && join_org) {
+      return Response.json(
+        { error: "choose either a new organization or an existing one, not both", kind: "invalid" },
+        { status: 400 },
+      );
+    }
+
     /*
      * No token in the body: core/ takes `id` and `email` from the session's
      * JWT. A 401 here means the cookie is missing or stale, which is a

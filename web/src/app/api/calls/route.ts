@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { Call } from "@/api/types";
 
 /**
@@ -46,7 +46,7 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
+    const body = (await readJson(request)) as {
       title?: string;
       scope?: string;
       source?: string;

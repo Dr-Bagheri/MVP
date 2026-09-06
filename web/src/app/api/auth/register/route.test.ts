@@ -17,6 +17,7 @@ const readSession = vi.fn();
 vi.mock("@/server/core", () => ({
   coreFetch: (...args: unknown[]) => coreFetch(...args),
   errorResponse: () => Response.json({ error: "upstream" }, { status: 502 }),
+  readJson: (request: Request) => request.json(),
 }));
 vi.mock("@/server/session", () => ({
   readSession: () => readSession(),

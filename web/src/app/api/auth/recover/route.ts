@@ -1,4 +1,5 @@
 import { AuthError, requestPasswordRecovery } from "@/server/supabase";
+import { errorResponse, readJson } from "@/server/core";
 
 /**
  * "Send me a recovery email."
@@ -18,7 +19,15 @@ import { AuthError, requestPasswordRecovery } from "@/server/supabase";
  * `verifyRecoveryToken`.
  */
 export async function POST(request: Request) {
-  const { email } = (await request.json()) as { email?: string };
+  // its own try: the catch below answers `ok` ON PURPOSE (no membership
+  // oracle), and an unreadable body is core's 400 `bad_body` — not an "ok"
+  let body: { email?: string };
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return errorResponse(error);
+  }
+  const { email } = body;
   if (!email) {
     return Response.json({ error: "email is required", kind: "invalid" }, { status: 400 });
   }

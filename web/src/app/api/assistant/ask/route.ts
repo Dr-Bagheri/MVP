@@ -1,4 +1,4 @@
-import { coreStream, errorResponse } from "@/server/core";
+import { coreStream, errorResponse, readJson } from "@/server/core";
 
 /**
  * Vercel kills a function at its plan's default duration — ~10s on the
@@ -28,33 +28,33 @@ export async function POST(request: Request) {
    * `session_id` simply never travelled, which is the every-message-starts-
    * a-new-conversation bug wearing a working demo's clothes (rule 10).
    */
-  const body = (await request.json()) as {
-    question?: string;
-    session_id?: string;
-    model?: string;
-    skill?: string;
-    call_id?: string;
-    call_ids?: string[];
-    web?: boolean;
-    agent?: string;
-    workflow?: string;
-    connector_provider?: "google" | "microsoft";
-    source_id?: string;
-    locale?: string;
-    /* M33/M34 — the fields THIS route dropped for a day while both ends
-       were correct (user report, 2026-08-21: "I don't have the ability to
-       navigate" — core never saw the tools this surface advertised). The
-       comment above about two hand-written beliefs described this exact
-       failure, and the route still reproduced it when the wire grew. */
-    client_tools?: string[];
-    context?: { route?: string; entity?: { kind?: string; id?: string } };
-    /* 0167 — the meeting-in-progress channel. Declared AND forwarded, which
-       is two edits in this file and the reason askForward.guard.test.ts now
-       checks that they always come in pairs. */
-    live_text?: string;
-  };
-
   try {
+    const body = (await readJson(request)) as {
+      question?: string;
+      session_id?: string;
+      model?: string;
+      skill?: string;
+      call_id?: string;
+      call_ids?: string[];
+      web?: boolean;
+      agent?: string;
+      workflow?: string;
+      connector_provider?: "google" | "microsoft";
+      source_id?: string;
+      locale?: string;
+      /* M33/M34 — the fields THIS route dropped for a day while both ends
+         were correct (user report, 2026-08-21: "I don't have the ability to
+         navigate" — core never saw the tools this surface advertised). The
+         comment above about two hand-written beliefs described this exact
+         failure, and the route still reproduced it when the wire grew. */
+      client_tools?: string[];
+      context?: { route?: string; entity?: { kind?: string; id?: string } };
+      /* 0167 — the meeting-in-progress channel. Declared AND forwarded, which
+         is two edits in this file and the reason askForward.guard.test.ts now
+         checks that they always come in pairs. */
+      live_text?: string;
+    };
+
     const upstream = await coreStream("/v1/assistant/ask", {
       question: body.question,
       session_id: body.session_id,

@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function PATCH(
   request: Request,
@@ -8,7 +8,7 @@ export async function PATCH(
   try {
     await coreFetch<null>(
       `/v1/meetings/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
-      { method: "PATCH", body: await request.json() },
+      { method: "PATCH", body: await readJson(request) },
     );
     return new Response(null, { status: 204 });
   } catch (error) {

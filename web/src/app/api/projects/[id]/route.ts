@@ -4,7 +4,7 @@
    button could not exist: the grant had to move first. Archiving is still a
    PATCH and still the gentler act; deleting removes the project and leaves
    the board's folder and the room's conversation behind. */
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -19,7 +19,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   try {
     const { id } = await ctx.params;
     return Response.json(await coreFetch(`/v1/projects/${encodeURIComponent(id)}`, {
-      method: "PATCH", body: await request.json(),
+      method: "PATCH", body: await readJson(request),
     }));
   } catch (error) {
     return errorResponse(error);

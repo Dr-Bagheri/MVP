@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { Me } from "@/api/types";
 
 /** db/0112 - the person's standing assistant voice. Forwarded verbatim:
@@ -9,7 +9,7 @@ export async function PATCH(request: Request) {
     return Response.json(
       await coreFetch<Me>("/v1/me/assistant", {
         method: "PATCH",
-        body: await request.json(),
+        body: await readJson(request),
       }));
   } catch (error) {
     return errorResponse(error);

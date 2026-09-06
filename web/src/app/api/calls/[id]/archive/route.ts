@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * Archive / unarchive. core/ exposes these as two verbs
@@ -15,8 +15,8 @@ import { coreFetch, errorResponse } from "@/server/core";
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { archived } = (await request.json()) as { archived: boolean };
   try {
+    const { archived } = (await readJson(request)) as { archived: boolean };
     return Response.json(
       await coreFetch(`/v1/calls/${id}/${archived ? "archive" : "unarchive"}`, { method: "POST" }),
     );

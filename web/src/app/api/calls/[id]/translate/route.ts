@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /** A whole-transcript translation is one long model call — same reasoning
  *  as the ask route: the platform default duration kills it mid-run. */
@@ -13,7 +13,7 @@ export const maxDuration = 300;
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const body = (await request.json()) as { what?: string; model?: string };
+    const body = (await readJson(request)) as { what?: string; model?: string };
     return Response.json(
       await coreFetch(`/v1/calls/${id}/translate`, {
         method: "POST",

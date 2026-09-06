@@ -1,10 +1,10 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
   try {
     return Response.json(await coreFetch<{ changed: boolean }>(`/v1/platform/roots/${userId}`, {
-      method: "DELETE", body: await request.json(),
+      method: "DELETE", body: await readJson(request),
     }));
   } catch (error) {
     return errorResponse(error);

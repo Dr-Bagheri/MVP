@@ -1,4 +1,4 @@
-import { coreStream, errorResponse } from "@/server/core";
+import { coreStream, errorResponse, readJson } from "@/server/core";
 
 /** Same reason as ask/route.ts: an agent run outlives Vercel's default
  *  function duration, and a killed function reads as a dropped stream. */
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
-  const body = (await request.json()) as { model?: string; locale?: string };
   try {
+    const body = (await readJson(request)) as { model?: string; locale?: string };
     const upstream = await coreStream(`/v1/assistant/sessions/${sessionId}/regenerate`, {
       model: body.model,
       locale: body.locale,

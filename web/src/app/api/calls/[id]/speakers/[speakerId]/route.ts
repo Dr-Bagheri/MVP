@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * PATCH a call's speaker: rename the label («S1» → whatever reads better)
@@ -11,7 +11,7 @@ export async function PATCH(
 ) {
   const { id, speakerId } = await params;
   try {
-    const body = (await request.json()) as { person_id?: string | null; label?: string };
+    const body = (await readJson(request)) as { person_id?: string | null; label?: string };
     return Response.json(
       await coreFetch(`/v1/calls/${id}/speakers/${speakerId}`, { method: "PATCH", body }),
     );

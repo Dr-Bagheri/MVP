@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /** M41 P5 — validate-then-insert version N+1. Refusals name step + rule. */
 export async function PUT(
@@ -10,7 +10,7 @@ export async function PUT(
     return Response.json(
       await coreFetch<{ version: number; version_id: string }>(
         `/v1/workflows/manage/${encodeURIComponent(id)}/publish`,
-        { method: "PUT", body: await request.json() },
+        { method: "PUT", body: await readJson(request) },
       ), { status: 201 });
   } catch (error) {
     return errorResponse(error);

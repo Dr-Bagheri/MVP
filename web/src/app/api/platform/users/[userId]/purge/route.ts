@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /** Instant purge of a user (db/0083) — root-walled in core AND SQL. */
 export async function POST(
@@ -7,7 +7,7 @@ export async function POST(
 ) {
   try {
     const { userId } = await params;
-    const body = (await request.json()) as { reason?: string };
+    const body = (await readJson(request)) as { reason?: string };
     return Response.json(
       await coreFetch<{ purged: boolean }>(
         `/v1/platform/users/${encodeURIComponent(userId)}/purge`,

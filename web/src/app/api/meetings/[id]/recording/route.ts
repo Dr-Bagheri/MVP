@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * The room's own recording. Core authorises against the MEETING — the caller
@@ -20,7 +20,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { id } = await params;
   try {
     await coreFetch<null>(`/v1/meetings/${encodeURIComponent(id)}/recording`, {
-      method: "DELETE", body: await request.json(),
+      method: "DELETE", body: await readJson(request),
     });
     return new Response(null, { status: 204 });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 const PROVIDERS = new Set(["google", "microsoft"]);
 
@@ -20,7 +20,7 @@ export async function POST(
   try {
     const { provider } = await params;
     if (!PROVIDERS.has(provider)) return Response.json({ error: "unknown provider" }, { status: 400 });
-    const body = await request.json() as { locale?: unknown };
+    const body = await readJson(request) as { locale?: unknown };
     const locale = body.locale === "fa" ? "fa" : "en";
     const verifier = base64Url(randomBytes(64));
     const state = base64Url(randomBytes(32));

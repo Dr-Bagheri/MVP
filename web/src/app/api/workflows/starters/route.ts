@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AuthoredWorkflow, StarterWorkflow } from "@/api/types";
 
 /**
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   try {
     return Response.json(
       await coreFetch<AuthoredWorkflow>("/v1/workflows/starters", {
-        method: "POST", body: await request.json(),
+        method: "POST", body: await readJson(request),
       }), { status: 201 });
   } catch (error) {
     return errorResponse(error);

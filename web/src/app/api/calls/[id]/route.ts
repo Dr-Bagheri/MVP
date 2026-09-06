@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { Call, CallScope } from "@/api/types";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,8 +13,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 /** Scope switch and archive flag — plain-code paths, no model involved. */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const patch = (await request.json()) as { scope?: CallScope; archived?: boolean };
   try {
+    const patch = (await readJson(request)) as { scope?: CallScope; archived?: boolean };
     return Response.json(
       await coreFetch<Call>(`/v1/calls/${id}`, { method: "PATCH", body: patch }),
     );

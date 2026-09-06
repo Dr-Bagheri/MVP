@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * POST /api/calls/[id]/parts/sign — mint a signed upload URL for one part.
@@ -12,7 +12,7 @@ import { coreFetch, errorResponse } from "@/server/core";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const body = (await request.json()) as { idx: number; content_type: string };
+    const body = (await readJson(request)) as { idx: number; content_type: string };
     return Response.json(
       await coreFetch(`/v1/calls/${id}/parts/sign`, {
         method: "POST",

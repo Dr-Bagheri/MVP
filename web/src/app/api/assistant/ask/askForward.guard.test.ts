@@ -25,13 +25,14 @@ import { describe, expect, it } from "vitest";
  */
 const SOURCE = readFileSync(join(process.cwd(), "src/app/api/assistant/ask/route.ts"), "utf8");
 
-/** the keys in `const body = (await request.json()) as { … }` */
+/** the keys in `const body = (await readJson(request)) as { … }` — inside the
+ *  route's try, so the keys sit at six spaces like the forwarded ones */
 function declaredKeys(source: string): string[] {
-  const start = source.indexOf("const body = (await request.json()) as {");
+  const start = source.indexOf("const body = (await readJson(request)) as {");
   expect(start, "the body type is where this file expects it").toBeGreaterThan(-1);
   const end = source.indexOf("  };", start);
   expect(end, "the body type block is closed").toBeGreaterThan(start);
-  return [...source.slice(start, end).matchAll(/^ {4}(\w+)\??:/gm)].map((m) => m[1]!);
+  return [...source.slice(start, end).matchAll(/^ {6}(\w+)\??:/gm)].map((m) => m[1]!);
 }
 
 /** the keys in the object handed to `coreStream(...)` */

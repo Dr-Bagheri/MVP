@@ -1,5 +1,6 @@
 import { AuthError, setInitialOAuthPassword, signInWithPassword } from "@/server/supabase";
 import { readSession, writeSession } from "@/server/session";
+import { errorResponse, readJson } from "@/server/core";
 
 /**
  * Set the FIRST password on an OAuth-born account before any NeurAI Platform
@@ -41,7 +42,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "no session", kind: "unauthenticated" }, { status: 401 });
   }
 
-  const { new_password } = (await request.json()) as { new_password?: string };
+  // its own try: the catch below speaks GoTrue's taxonomy, and an unreadable
+  // body is core's 400 `bad_body` — never a 500
+  let body: { new_password?: string };
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return errorResponse(error);
+  }
+  const { new_password } = body;
   if (!new_password) {
     return Response.json({ error: "new_password is required", kind: "invalid" }, { status: 400 });
   }

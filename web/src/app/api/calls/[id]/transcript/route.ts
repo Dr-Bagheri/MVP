@@ -12,6 +12,10 @@ import type { TranscriptResponse } from "@/api/types";
  * A call the caller cannot see is 404 from core/, not an empty list — an
  * empty list would assert "this call exists and has no words". We pass that
  * distinction through untouched.
+ *
+ * Read-only. A line correction goes through `segments/[segmentId]` (0092);
+ * the PATCH that lived here targeted `/v1/calls/:id/transcript/:segmentId`,
+ * a path core never registered, and nothing in web/ ever called it.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,26 +29,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   try {
     return Response.json(await coreFetch<TranscriptResponse>(`/v1/calls/${id}/transcript${suffix}`));
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
-
-/**
- * Line correction. A corrected segment KEEPS its identity and is marked
- * edited (SPEC) — so this is a PATCH of one segment, never a replace of the
- * transcript.
- */
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { segmentId, text } = (await request.json()) as { segmentId: string; text: string };
-  try {
-    return Response.json(
-      await coreFetch(`/v1/calls/${id}/transcript/${segmentId}`, {
-        method: "PATCH",
-        body: { text },
-      }),
-    );
   } catch (error) {
     return errorResponse(error);
   }

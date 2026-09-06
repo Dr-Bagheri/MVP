@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * Place a pending arrival into an organisation. Vendor-only; core's route
@@ -9,7 +9,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
   const { userId } = await params;
   try {
     return Response.json(await coreFetch<{ placed: boolean }>(`/v1/platform/users/${userId}/place`, {
-      method: "POST", body: await request.json(),
+      method: "POST", body: await readJson(request),
     }));
   } catch (error) {
     return errorResponse(error);

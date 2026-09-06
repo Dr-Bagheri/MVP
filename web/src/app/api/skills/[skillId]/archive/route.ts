@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AuthoredSkill } from "@/api/types";
 
 /**
@@ -9,11 +9,11 @@ import type { AuthoredSkill } from "@/api/types";
  */
 export async function POST(request: Request, { params }: { params: Promise<{ skillId: string }> }) {
   const { skillId } = await params;
-  const body = (await request.json()) as { archived?: boolean };
-  const path = body.archived === false
-    ? `/v1/skills/${skillId}/unarchive`
-    : `/v1/skills/${skillId}/archive`;
   try {
+    const body = (await readJson(request)) as { archived?: boolean };
+    const path = body.archived === false
+      ? `/v1/skills/${skillId}/unarchive`
+      : `/v1/skills/${skillId}/archive`;
     return Response.json(await coreFetch<AuthoredSkill>(path, { method: "POST", body: {} }));
   } catch (error) {
     return errorResponse(error);

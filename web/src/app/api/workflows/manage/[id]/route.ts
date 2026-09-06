@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AuthoredWorkflow } from "@/api/types";
 
 /** M41 P5/W32 — pause, rename, trigger, ROLLBACK. */
@@ -11,7 +11,7 @@ export async function PATCH(
     return Response.json(
       await coreFetch<AuthoredWorkflow>(
         `/v1/workflows/manage/${encodeURIComponent(id)}`,
-        { method: "PATCH", body: await request.json() },
+        { method: "PATCH", body: await readJson(request) },
       ));
   } catch (error) {
     return errorResponse(error);

@@ -80,10 +80,6 @@ import { announceChange, announceWrite } from "@/lib/refreshBus";
  * M27): the conversation surface is live end to end, and a fixture beside a
  * live wire is two sources for one fact.
  */
-const LATENCY = 180;
-const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(value), ms));
-
 // The last mutable Phase-A session copies (`users`, `me`, `transcripts`) left
 // with their final readers — setPreferredModel went to the wire, and
 // agentRuns/correctLine were deleted as caller-less fixtures (2026-08-20
@@ -2059,12 +2055,13 @@ export const api = {
    * non-owners rather than letting them collect a 403.
    */
   async rejectMember(id: string, reason: string): Promise<void> {
-    await fetch(`/api/admin/members/${id}`, {
+    /* through `bff`, like every other write: a raw fetch cleared no cache and
+       announced nothing, so the bare member listings kept offering a
+       tombstoned person for a minute, and a refusal arrived with no kind */
+    await bff<void>(`/api/admin/members/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason }),
-    }).then((r) => {
-      if (!r.ok) throw new BffError(r.status);
     });
   },
   /** **LIVE** — `PATCH /api/admin/members/:id` with `{status}` (decided members only). */
@@ -2457,8 +2454,7 @@ export const api = {
   },
   /** **LIVE** — revoke, not delete: the row stays, with a date on it. */
   async revokeGatewayKey(id: string): Promise<GatewayKey[]> {
-    const res = await fetch(`/api/gateway/keys/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new BffError(res.status);
+    await bff<void>(`/api/gateway/keys/${encodeURIComponent(id)}`, { method: "DELETE" });
     return api.gatewayKeys();
   },
   /**
@@ -2479,12 +2475,29 @@ export const api = {
     runId: string,
     decision: "confirm" | "reject",
   ): Promise<"ok" | "stale"> {
-    // Phase A: the mock always succeeds. The stale branch is reachable the
-    // moment this becomes a fetch — it is core/ that decides, not us.
-    void proposalId;
-    void runId;
-    void decision;
-    return wait("ok");
+    /*
+     * LIVE since 2026-09-06 — and the record of what stood here matters: this
+     * was the Phase-A mock ("the mock always succeeds") for three weeks
+     * AFTER the route and core's confirm were live, so approving a proposed
+     * transcript correction showed «applied» while the server never heard
+     * of it and the line stayed wrong after a reload. A route with no caller
+     * and a caller that called nothing: 13½ from both ends at once.
+     *
+     * "stale" is core's 404 (the segment is gone, the call changed hands) AND
+     * its 409 (already decided — the replay refusal): both are outcomes, not
+     * faults, and neither gets a retry.
+     */
+    try {
+      await bff(`/api/assistant/proposals/${encodeURIComponent(proposalId)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ run_id: runId, decision }),
+      });
+      return "ok";
+    } catch (error) {
+      if (error instanceof BffError && (error.status === 404 || error.status === 409)) return "stale";
+      throw error;
+    }
   },
 
   /**
@@ -2587,12 +2600,11 @@ export const api = {
   },
   /** **LIVE** — a verdict on one answer; pressing the other thumb updates it. */
   async messageFeedback(messageId: string, verdict: "up" | "down", note?: string): Promise<void> {
-    const res = await fetch(`/api/assistant/messages/${messageId}/feedback`, {
+    await bff<void>(`/api/assistant/messages/${encodeURIComponent(messageId)}/feedback`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ verdict, note }),
     });
-    if (!res.ok) throw new BffError(res.status);
   },
   /** **LIVE** — the caller's verdicts for one thread, keyed by message id. */
   async sessionFeedback(sessionId: string): Promise<Record<string, string>> {

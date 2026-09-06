@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * POST /api/calls/[id]/parts/register — the bytes are in storage, make the
@@ -9,7 +9,7 @@ import { coreFetch, errorResponse } from "@/server/core";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const body = (await request.json()) as { idx: number; offset_ms: number; path: string };
+    const body = (await readJson(request)) as { idx: number; offset_ms: number; path: string };
     return Response.json(
       await coreFetch(`/v1/calls/${id}/parts/register`, {
         method: "POST",

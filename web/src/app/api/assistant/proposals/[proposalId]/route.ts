@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { CoreError, coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * Approve or refuse an inferred write (SPEC/M4 — the human confirmation gate).
@@ -18,15 +18,24 @@ import { coreFetch, errorResponse } from "@/server/core";
  * Owner only — RLS gates on `owns_call`, not org membership and not admin.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ proposalId: string }> }) {
-  const { proposalId } = await params;
-  const { run_id, decision } = (await request.json()) as {
-    run_id: string;
-    decision: "confirm" | "reject";
-  };
-
   try {
+    const { proposalId } = await params;
+    const { run_id, decision } = await readJson<{ run_id?: unknown; decision?: unknown }>(request);
+    /*
+     * The decision is a CLOSED WORD and the id is ENCODED before either joins
+     * a path: this route used to splice both raw, so a body of
+     * `decision: "../../calls"` reached a core route this layer does not
+     * expose (under the caller's own bearer, so no authority was gained —
+     * but a forwarder that can be steered off its route is not forwarding).
+     */
+    if (decision !== "confirm" && decision !== "reject") {
+      throw new CoreError("invalid", 400, "decision must be confirm or reject", "bad_decision");
+    }
+    if (typeof run_id !== "string" || run_id === "") {
+      throw new CoreError("invalid", 400, "run_id is required", "bad_body");
+    }
     return Response.json(
-      await coreFetch(`/v1/assistant/proposals/${proposalId}/${decision}`, {
+      await coreFetch(`/v1/assistant/proposals/${encodeURIComponent(proposalId)}/${decision}`, {
         method: "POST",
         body: { run_id },
       }),

@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * A HUMAN's transcript correction (0092): the line keeps its identity,
@@ -11,7 +11,7 @@ export async function PATCH(
 ) {
   const { id, segmentId } = await params;
   try {
-    const body = (await request.json()) as { text?: string };
+    const body = (await readJson(request)) as { text?: string };
     return Response.json(
       await coreFetch<{ ok: boolean }>(
         `/v1/calls/${encodeURIComponent(id)}/segments/${encodeURIComponent(segmentId)}`,

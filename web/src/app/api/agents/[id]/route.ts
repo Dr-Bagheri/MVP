@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AgentCard } from "@/api/types";
 
 /** Edit one agent (M47). The wall is core's — a row this caller may not write
@@ -13,8 +13,10 @@ export async function PATCH(
       `/v1/agents/${encodeURIComponent(id)}`,
       {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(await request.json()),
+        /* the PARSED body. Stringified twice (2026-09-03 → 09-06) core saw
+           every column as absent, coalesced each to its old value and
+           answered 200 with the unchanged row — a save reporting success. */
+        body: await readJson(request),
       },
     ));
   } catch (error) {

@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /** Member privileges (db/0101) — admin-walled at core, forwarded here. */
 export async function GET() {
@@ -11,7 +11,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const body = (await request.json()) as {
+    const body = (await readJson(request)) as {
       role?: string; capability?: string; allowed?: boolean;
     };
     return Response.json(

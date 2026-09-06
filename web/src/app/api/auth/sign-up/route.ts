@@ -1,6 +1,6 @@
 import { AuthError, signUpWithPassword } from "@/server/supabase";
 import { writeSession } from "@/server/session";
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { User } from "@/api/types";
 
 /**
@@ -20,29 +20,29 @@ import type { User } from "@/api/types";
  * the caller routes to the waiting screen on it.
  */
 export async function POST(request: Request) {
-  const { email, password, display_name, org_name, join_org } = (await request.json()) as {
-    email?: string;
-    password?: string;
-    display_name?: string;
-    org_name?: string;
-    join_org?: string;
-  };
-
-  if (!email || !password || !display_name) {
-    return Response.json(
-      { error: "email, password and display_name are required", kind: "invalid" },
-      { status: 400 },
-    );
-  }
-  if (org_name && join_org) {
-    // core/ 400s on this too; refusing here keeps the message specific
-    return Response.json(
-      { error: "choose either a new organization or an existing one, not both", kind: "invalid" },
-      { status: 400 },
-    );
-  }
-
   try {
+    const { email, password, display_name, org_name, join_org } = (await readJson(request)) as {
+      email?: string;
+      password?: string;
+      display_name?: string;
+      org_name?: string;
+      join_org?: string;
+    };
+
+    if (!email || !password || !display_name) {
+      return Response.json(
+        { error: "email, password and display_name are required", kind: "invalid" },
+        { status: 400 },
+      );
+    }
+    if (org_name && join_org) {
+      // core/ 400s on this too; refusing here keeps the message specific
+      return Response.json(
+        { error: "choose either a new organization or an existing one, not both", kind: "invalid" },
+        { status: 400 },
+      );
+    }
+
     const tokens = await signUpWithPassword(email, password);
     if (!tokens) {
       /*

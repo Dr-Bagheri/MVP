@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /** Mint or revoke a meeting's guest code. Core checks the meeting. */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -6,7 +6,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     return Response.json(await coreFetch<{ join_code: string | null }>(
       `/v1/meetings/${encodeURIComponent(id)}/join-code`,
-      { method: "PUT", body: await request.json() },
+      { method: "PUT", body: await readJson(request) },
     ));
   } catch (error) {
     return errorResponse(error);

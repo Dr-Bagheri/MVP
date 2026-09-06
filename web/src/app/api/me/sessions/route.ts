@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { AuthSessionRow } from "@/api/types";
 
 /**
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 /** 0126 — end one of the caller's own sessions. */
 export async function DELETE(request: Request) {
   try {
-    const { handle } = await request.json() as { handle?: string };
+    const { handle } = await readJson(request) as { handle?: string };
     await coreFetch<void>(
       `/v1/me/sessions/${encodeURIComponent(handle ?? "")}`, { method: "DELETE" });
     return new Response(null, { status: 204 });

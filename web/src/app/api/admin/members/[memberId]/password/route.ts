@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /**
  * db/0137 — an admin sets a member's password.
@@ -26,13 +26,15 @@ export async function PUT(
 ) {
   try {
     const { memberId } = await context.params;
-    const body = (await request.json()) as { password?: string };
+    const body = await readJson<{ password?: string }>(request);
     const result = await coreFetch<{ sessions_ended: number }>(
       `/v1/admin/members/${encodeURIComponent(memberId)}/password`,
       {
         method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: body.password ?? "" }),
+        /* the object, not a string of it: coreFetch stringifies once. The
+           double encoding made core read `password` as undefined and answer
+           "password is required" to every valid reset (2026-08-18 → 09-06). */
+        body: { password: body.password ?? "" },
       },
     );
     return Response.json(result);

@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { Person } from "@/api/types";
 
 /** The people directory (0062): names + org-chart titles. RLS scopes. */
@@ -13,7 +13,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { display_name?: string; title?: string };
+    const body = (await readJson(request)) as { display_name?: string; title?: string };
     return Response.json(
       await coreFetch("/v1/directory", {
         method: "POST",

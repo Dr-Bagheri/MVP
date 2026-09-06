@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { WorkflowCard } from "@/api/types";
 
 export async function GET() {
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     return Response.json(
       await coreFetch<WorkflowCard>("/v1/workflows", {
         method: "POST",
-        body: await request.json(),
+        body: await readJson(request),
       }),
       { status: 201 },
     );

@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { Invitation, MintedInvitation } from "@/api/types";
 
 /** The org's invitations (admin). Prefixes only — a list can never redeem. */
@@ -18,8 +18,8 @@ export async function GET() {
  * surfaced in core's own words.
  */
 export async function POST(request: Request) {
-  const body = (await request.json()) as { email?: string; role?: string; ttl_days?: number };
   try {
+    const body = (await readJson(request)) as { email?: string; role?: string; ttl_days?: number };
     return Response.json(
       await coreFetch<MintedInvitation>("/v1/admin/invitations", {
         method: "POST",

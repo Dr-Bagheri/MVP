@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 /** M41 W13/W17 — the standing decisions: read for members, PUT for admins. */
 export async function GET() {
@@ -16,7 +16,7 @@ export async function PUT(request: Request) {
     return Response.json(
       await coreFetch<{ kind: string; allowed: boolean }>(
         "/v1/workflows/auto-apply",
-        { method: "PUT", body: await request.json() },
+        { method: "PUT", body: await readJson(request) },
       ));
   } catch (error) {
     return errorResponse(error);

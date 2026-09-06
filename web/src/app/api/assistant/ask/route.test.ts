@@ -18,6 +18,7 @@ const coreStream = vi.fn();
 vi.mock("@/server/core", () => ({
   coreStream: (...args: unknown[]) => coreStream(...args),
   errorResponse: () => Response.json({ error: "upstream" }, { status: 502 }),
+  readJson: (request: Request) => request.json(),
 }));
 
 import { POST } from "./route";

@@ -1,5 +1,6 @@
 import { AuthError, signInWithPassword } from "@/server/supabase";
 import { writeSession } from "@/server/session";
+import { errorResponse, readJson } from "@/server/core";
 
 /**
  * Password sign-in. The token set is exchanged server-side and written into
@@ -7,7 +8,15 @@ import { writeSession } from "@/server/session";
  * browser never holds one). The client gets `{ ok: true }` and nothing else.
  */
 export async function POST(request: Request) {
-  const { email, password } = (await request.json()) as { email?: string; password?: string };
+  // its own try: the catch below speaks GoTrue's taxonomy, and an unreadable
+  // body is core's 400 `bad_body` — never a 500, never "wrong credentials"
+  let body: { email?: string; password?: string };
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return errorResponse(error);
+  }
+  const { email, password } = body;
   if (!email || !password) {
     return Response.json({ error: "email and password are required", kind: "invalid" }, { status: 400 });
   }

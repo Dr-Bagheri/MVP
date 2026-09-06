@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 
 export async function GET(_r: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   try {
     return Response.json(await coreFetch(`/v1/meetings/${encodeURIComponent(id)}/items`, {
-      method: "POST", body: await request.json(),
+      method: "POST", body: await readJson(request),
     }));
   } catch (error) {
     return errorResponse(error);

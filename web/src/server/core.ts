@@ -246,6 +246,27 @@ async function safeDetail(response: Response): Promise<string> {
 }
 
 /** One place that turns a CoreError into the JSON the client layer expects. */
+/**
+ * THE BODY, READ ONCE AND HONESTLY. `request.json()` on an empty or malformed
+ * body THROWS, and a throw inside a route lands in `errorResponse`'s
+ * catch-all as `500 unexpected` — the status that pages somebody, for a
+ * caller who sent nothing (found on `/api/tasks/:id/schedule` 2026-09-04 and
+ * fixed there alone; the check-up of 2026-09-06 counted ~85 siblings). Here it
+ * is a 400 with a code, the same refusal from every route.
+ *
+ * It also runs BEFORE the session check in most routes, so a signed-out
+ * caller sending nonsense used to get 500 rather than 401 — the wrong second
+ * fact about the first. A CoreError keeps the order honest: the route's
+ * catch turns it into the 400 it is.
+ */
+export async function readJson<T = unknown>(request: Request): Promise<T> {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    throw new CoreError("invalid", 400, "request body must be JSON", "bad_body");
+  }
+}
+
 export function errorResponse(error: unknown): Response {
   if (error instanceof CoreError) {
     return Response.json(

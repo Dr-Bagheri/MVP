@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { CallNote } from "@/api/types";
 
 /**
@@ -27,7 +27,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const body = (await request.json()) as {
+    const body = (await readJson(request)) as {
       kind?: string; at_ms?: number | null; body?: string;
     };
     const note = await coreFetch<CallNote>(

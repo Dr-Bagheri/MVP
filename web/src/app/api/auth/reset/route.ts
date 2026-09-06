@@ -1,4 +1,5 @@
 import { AuthError, changePassword, verifyRecoveryToken } from "@/server/supabase";
+import { errorResponse, readJson } from "@/server/core";
 
 /**
  * Consume a recovery link and set the new password — the half that did not
@@ -24,11 +25,16 @@ import { AuthError, changePassword, verifyRecoveryToken } from "@/server/supabas
  * page says so and offers a fresh email, rather than a retry that cannot work.
  */
 export async function POST(request: Request) {
-  const { token_hash, new_password, type } = (await request.json()) as {
-    token_hash?: string;
-    new_password?: string;
-    type?: string;
-  };
+  // its own try: every catch below names a specific failure (a rejected link,
+  // a refused password), and an unreadable body is none of them — it is
+  // core's 400 `bad_body`, never a 500
+  let body: { token_hash?: string; new_password?: string; type?: string };
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return errorResponse(error);
+  }
+  const { token_hash, new_password, type } = body;
   if (!token_hash || !new_password) {
     return Response.json(
       { error: "token_hash and new_password are required", kind: "invalid" },

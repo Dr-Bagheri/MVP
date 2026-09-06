@@ -1,10 +1,10 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { PlatformPage, PlatformOrganization } from "@echo/core/wire";
 
 /** Organizations are born HERE (db/0082): root-walled create, with reason. */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
+    const body = (await readJson(request)) as {
       name?: string; locale?: string; reason?: string;
     };
     const created = await coreFetch<{ id: string | null }>(

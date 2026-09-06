@@ -16,11 +16,18 @@ import type { AssistantSession } from "@/api/types";
  * an authorization decision taken by the component that holds no authority.
  */
 export async function GET(request: Request) {
-  const archived = new URL(request.url).searchParams.get("archived") === "true";
+  const incoming = new URL(request.url).searchParams;
+  const query = new URLSearchParams({ archived: String(incoming.get("archived") === "true") });
+  /* `limit` and `before` are the bounded list's door out of its first page
+     (core pages by keyset) — forwarded when present, interpreted by core alone */
+  for (const key of ["limit", "before"]) {
+    const value = incoming.get(key);
+    if (value) query.set(key, value);
+  }
   try {
     return Response.json(
       await coreFetch<{ sessions: AssistantSession[] }>(
-        `/v1/assistant/sessions?archived=${archived}`,
+        `/v1/assistant/sessions?${query}`,
       ),
     );
   } catch (error) {

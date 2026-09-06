@@ -1,6 +1,6 @@
 import { AuthError, changePassword, signInWithPassword } from "@/server/supabase";
 import { readSession, writeSession } from "@/server/session";
-import { coreFetch } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { User } from "@/api/types";
 
 /**
@@ -28,10 +28,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "no session", kind: "unauthenticated" }, { status: 401 });
   }
 
-  const { current_password, new_password } = (await request.json()) as {
-    current_password?: string;
-    new_password?: string;
-  };
+  // its own try: the catch below speaks GoTrue's taxonomy, and an unreadable
+  // body is core's 400 `bad_body` — never a 500
+  let body: { current_password?: string; new_password?: string };
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return errorResponse(error);
+  }
+  const { current_password, new_password } = body;
   if (!current_password || !new_password) {
     return Response.json(
       { error: "current_password and new_password are required", kind: "invalid" },

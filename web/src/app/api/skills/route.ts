@@ -1,4 +1,4 @@
-import { coreFetch, errorResponse } from "@/server/core";
+import { coreFetch, errorResponse, readJson } from "@/server/core";
 import type { Skill } from "@/api/types";
 
 /**
@@ -23,8 +23,8 @@ export async function GET() {
 
 /** Create a skill (M29). Level org needs an admin; core states the refusal. */
 export async function POST(request: Request) {
-  const body = (await request.json()) as Record<string, unknown>;
   try {
+    const body = (await readJson(request)) as Record<string, unknown>;
     return Response.json(await coreFetch("/v1/skills", { method: "POST", body }), { status: 201 });
   } catch (error) {
     return errorResponse(error);
