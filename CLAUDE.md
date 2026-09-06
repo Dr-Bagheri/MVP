@@ -4411,3 +4411,31 @@ sessions) for the cross-session narrative.
   Still owed: the user's decision on the five lost tasks (restore or
   recreate) and the README screenshots.
   db 193 migrations · core 1364 tests · web 1134 tests + gate + sweep.
+- 2026-09-06 (later — THE FIVE LOST TASKS, NAMED FROM THE TRACES; and the
+  README screenshots are no longer owed, on the user's word): the user asked
+  what the five were. `agent_run.steps` keeps a tool's ARGS and only the
+  byte-length of its result, so the board readings are gone with the rows —
+  but the creates, the assigns, Roya's move brief (five ids) and the thread
+  together name them. Deleted 23:07–23:10 UTC on 2026-09-05 by a browser
+  session, after Roya had moved all five into a stray folder: (1) «هزار ساعت
+  جدید صوتی» — created 16:32 by Echo on the user's ask, for Sina Sepasi, due
+  2026-10-02 17:00 +03:30 (۱۰ مهر); (2) «جمع‌آوری صدای خام», (3) «دسته‌بندی
+  داده‌ها», (4) «پیاده‌سازی و تطبیق دقیق متن با صوت (Transcription)» — created
+  23:03 by Echo in «بک‌لاگ» for Shahla Hosseini, then Behnaaz Behjati, Samaneh
+  Ghanii and Sina Sepasi added at 23:05 (the run that made them never closed,
+  so its third create is not in the steps; the three assign targets and
+  Echo's own sentence name all three); (5) «جمع آوری و لیبل فایل های صوتی
+  فارسی» — made by hand on the board, بحرانی with a deadline, Behnaaz +3 per
+  the probe's reading before the incident; its deadline and description were
+  never written anywhere this side can read. None carried a description in
+  its create. Found on the way: the board holds TWO folders named «دیتابیس
+  صوتی» — the project's own and a plain one Roya created at 23:06:44 when the
+  user said «یه پروژه داریم به نام دیتابیس صوتی، همه رو بذار همون‌جا» — the
+  folder-vs-project confusion as a row, plus a plain «آزمایش دست‌ها» folder the
+  deleted test project left behind (0191's rule) and six test folders («1»,
+  «2», «3», «first» ×2, «second»). The team is on the board again: «ارائه
+  کتاب مدیریت زمان», made by Sina at 05:38 UTC today, done by Behnaaz at
+  07:07. Recreating the five (in the project's own folder, with the people
+  and Sina's deadline) and removing the stray folders are writes on the live
+  board and wait for the user's word. The README screenshots leave the owed
+  list: the user said they are not needed any more.
