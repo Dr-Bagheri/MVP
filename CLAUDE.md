@@ -4579,3 +4579,100 @@ sessions) for the cross-session narrative.
   assertions red before the surfaces changed, the echo case red before the
   hook learned it.
   db 194 migrations · core 1384 tests · web 1143 tests + gate + sweep.
+- 2026-09-06 (afternoon — THE FULL CHECK-UP: forensics on production, six
+  review lenses, four commits; 8ce33de, 3a1a5cb, c719a81, 165e677; db
+  0195–0198): user directive, "go for checking everything now, do a full
+  check-up, troubleshooting and search for bugs in any part, tell me if it
+  needs my attention, if not just fix it."
+  **The forensics found one incident.** From 2026-09-05 22:00 to 09-06
+  08:00 UTC the live-transcription relay's provider socket failed every
+  handshake and the voice loop reopened a session every ~400 ms: 120k
+  session starts, 671k audio posts, 77k "write after end" lines in the api
+  log, the api process at 1.18 GB. Fixed on both ends — the relay logs
+  `live_stt_session_ended {reason, code, lifetime_ms}` and drops pushes after
+  close; the web has `relayGate` (1.5 s→60 s backoff, a breaker after six
+  short ends, a five-minute pause announced once) and a voice loop deaf while
+  the tab is hidden. The database probe: 55 calls stuck in `recording` (54
+  soft-deleted), one `processing` since 08-21, one `agent_run` `running`
+  since the incident, ten pending mail drafts, every echo table RLS FORCED,
+  and four composite set-null FKs of the 0188 class — 0195 fixed them and
+  test 109 asserts the class against a staged offender.
+  **Core and db (8ce33de, 0195–0198):** a run id that is not a uuid is a 400
+  `bad_id` (22P02 mapped), regenerate checks the ask capability, a reply's
+  parent must be in the same room, a message body is edited by its author
+  only (0196's trigger, 42501), an answered invitation is not a wall (0197's
+  partial unique), withdrawing stays with the sender (0198 — a first cut had
+  widened it to admins, who cannot see the row by 0189's design; reverted
+  with the test that says so), withdraw 404s on nothing, a deleted meeting
+  attachment loses its object too, the worker logs `error_type` only, Graph
+  calendars skip all-day entries and read UTC, the router folds ي/ك/ة and
+  ZWNJ before matching a name, delegation and the main run share one
+  proposal sender, task completion decides renewal from the row it wrote,
+  a project-owned folder cannot be re-topicked. **BFF (3a1a5cb):** four
+  routes stopped double-encoding their body, 93 routes read theirs through
+  one `readJson` (an empty body is a 400 with a code, never a 500),
+  approving a proposal reaches the server (the client had faked it), dead
+  routes deleted, sessions and workflow runs forward `limit`/`before`.
+  **Web D1 (c719a81):** three store guards (a stale refetch cannot replace
+  the live thread; a consent card cannot hold the stream past the run's
+  abort; a superseded run's teardown leaves its successor alone), the card
+  declined only when its SURFACE goes — an unmount-only effect, never the
+  registration cleanup that re-runs on every navigation — the room's stream
+  reconnects with a FRESH ticket after a jittered backoff (it retried the
+  spent one into a 401 and polled for the rest of the page's life),
+  dictation survives a re-press, the meeting panel reads `done` and
+  `agent_message`, the composer compares words. **Web D2:** the meeting EDIT
+  dialog prefilled in the browser's zone and saved in the platform's — a save
+  that changed nothing moved the meeting by the offset; «مهلت امروز», the
+  greeting and «جلسات این ماه» read the platform's day, hour and CALENDAR
+  month (`monthKeyOf`); the room prints times in the resolved zone and draws
+  one divider per day; a refused project or room keeps its dialog and says
+  so inside it; DetailPanel stands on Overlay (Escape, focus trap, scroll
+  lock — R18's guard follows the frame's new signature); Management·Users
+  lists pending members again (a filter contradicted the page's own note);
+  the audit log names the admin's nine actions (`ADMIN_ACTIONS` moved to
+  core's vocabulary, coverage asked of both catalogues, an unknown code still
+  renders as itself); a /settings slug nothing serves goes home instead of
+  drawing General under its address; the record chip opens /calls/:id; five
+  loading ellipses became skeletons; two raw counts read in the page's
+  digits; the eight colour names are one common list; the last webhook
+  sentences left the gateway and legal copy (legal version 2026-09-06).
+  **D3 (165e677):** the consent card names the OBJECT per tool
+  (`update_project` named its new name, `rename_record` the title it was
+  about to write, `send_member_message` never the words); a name resolves
+  EXACTLY or not at all — a lone prefix match made «ali» the only Alireza
+  while the card named the handle the model passed, so the yes covered
+  somebody else; `open_meeting` refuses several partials by name;
+  `list_task_columns` reads an unseeded board (`seed=0` end to end — a read
+  tool must not write); history offers «گفت‌وگوهای قدیمی‌تر» past core's
+  fifty; a chat stream ends after ten minutes so the reader proves membership
+  again; the transcript is read whole in 2000-segment pages; a provider's
+  refusal keeps its kind through the BFF; the runner no longer re-runs a
+  finished step because its receipt failed, and a throwing recovery path no
+  longer strands the other queues.
+  **Minted, from my own instruments:** a test that only looked at `aborted`
+  at its loop's top passed against a consumer that never resumed — a
+  generator must check after the yield, and a counter that sees the
+  resumption is what made the belt test discriminate; keys.test resolves a
+  file's `t()` calls to ONE namespace, so a rebound `t` in a second component
+  sent fifteen keys looking in the wrong one (`tCommon`, never a second
+  `t`); the shell's cwd resets after every tool call, and a vitest run that
+  printed nothing was a run that did not happen; the surface guard, the
+  vocabulary-coverage guard and the dialog-sections guard each fired once on
+  this batch, every time for a true reason (a stale count, a newly published
+  list, a frame that became a pop-up).
+  **Needs the user:** (1) which tool classes the per-session yes may cover
+  (today all but `delete_*`; candidates to exclude: `send_*`, `invite_*`,
+  `set_role_permission`, `set_member_status`, `set_record_scope`,
+  `approve_minutes`, `share_conversation`, `revoke_*`, `set_model_allowed`);
+  (2) keep or retire proposals now that every write has a consent card;
+  (3) whether a bare agent name that is also a word, or a human colleague's
+  name, may take the floor; (4) a look at Soniox usage for 5–6 Sep; (5) the
+  server has no swap and ~1 GB free; (6) the 55 abandoned `recording` calls
+  and the one `processing` call — a named operation, never a sweeper.
+  Not done: the live per-page console sweep in the user's Chrome.
+  Deployed: 0195–0198 on production; core 165e677 on the server (both units
+  active, health 200); web on Vercel. Verified: core 1385 tests, web 1206,
+  both typechecks, the build gate, the encoding sweep; every new test run
+  red against the stashed old sources first.
+  db 198 migrations · core 1385 tests · web 1206 tests + gate + sweep.
