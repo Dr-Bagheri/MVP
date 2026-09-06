@@ -435,38 +435,6 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
         });
 
       try {
-        /**
-         * A write tool proposed a change (M4) — the approval card. Streamed
-         * as it happens rather than at the end, because the run continues:
-         * the model may propose, explain, and keep talking, and the card
-         * should appear beside the sentence that motivated it. ONE sender
-         * for the main run and for every colleague who answers after it
-         * (2026-09-06): a second floor-holder's proposal used to be
-         * recorded in her steps and shown to nobody.
-         */
-        const sendProposal = (proposal: Parameters<NonNullable<Parameters<typeof runtime.run>[0]["onProposal"]>>[0]) =>
-          stream.send({
-            type: "proposal",
-            id: proposal.id,
-            kind: proposal.kind,
-            summary: proposal.summary,
-            /**
-             * before AND after. I first emitted only `before`, which made the
-             * card's whole reason for existing unreachable: a change shown
-             * from one side asks for consent while looking like it asks for
-             * judgement. The frontend found it by noticing their fixture
-             * could never take that branch.
-             *
-             * Both are DISPLAY values and may be excerpted — the authoritative
-             * payload stays server-side and is re-read at confirm, so nothing
-             * here can be applied even if a client edited it.
-             */
-            payload: {
-              call_id: proposal.call_id,
-              ...(proposal.before === undefined ? {} : { before: proposal.before }),
-              ...(proposal.after === undefined ? {} : { after: proposal.after }),
-            },
-          });
         const result = await runtime.run({
           identity: request.identity,
           kind: "assistant",
@@ -498,13 +466,6 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
             toolCalls.push({ id, name: tool });
             stream.send({ type: "tool_call", id, name: tool, label, state: "started" });
           },
-          /**
-           * A write tool proposed a change (M4) — the approval card. Streamed
-           * as it happens rather than at the end, because the run continues:
-           * the model may propose, explain, and keep talking, and the card
-           * should appear beside the sentence that motivated it.
-           */
-          onProposal: (proposal) => sendProposal(proposal),
         });
 
         // Terminal tool_call events, in the order the steps were recorded.
@@ -618,7 +579,6 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
               signal: request.signal,
               apiKey: config.apiKey,
               onText: (delta) => { text += delta; },
-              onProposal: sendProposal,
             });
             runId = own.runId;
             failed = own.failed;

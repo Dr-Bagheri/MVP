@@ -32,7 +32,7 @@ import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { handleClientToolCall, type ConsentAnswer } from "@/lib/clientToolRunner";
 import { useThreadFollow } from "@/lib/threadFollow";
 import {
-  consentGrantServer, consentGrantedForSession, revokeSessionConsent, subscribeConsentGrant,
+  consentGrantServer, consentGrantedForSession, revokeSessionConsent, sessionGrantEligible, subscribeConsentGrant,
 } from "@/lib/consentGrant";
 import {
   subscribeAssistantOpen,
@@ -388,7 +388,7 @@ export function AssistantSidebar() {
   const streaming = live.streaming;
   const [consent, setConsent] = useState<
     | null
-    | { label: string; detail: string | null; resolve: (answer: ConsentAnswer) => void }
+    | { label: string; detail: string | null; tool: string; resolve: (answer: ConsentAnswer) => void }
   >(null);
   /* the standing yes, drawn while it is on so it can be taken back from where
      it is seen (lib/consentGrant.ts) */
@@ -876,10 +876,10 @@ export function AssistantSidebar() {
   /* the pending card's answer, held so an unmount, a hidden panel or a fresh
      conversation can answer «نه» for a person who is no longer looking at it */
   const consentRef = useRef<((answer: ConsentAnswer) => void) | null>(null);
-  const askConsent = useCallback((label: string, detail: string | null): Promise<ConsentAnswer> => {
+  const askConsent = useCallback((label: string, detail: string | null, tool: string): Promise<ConsentAnswer> => {
     return new Promise<ConsentAnswer>((resolve) => {
       consentRef.current = resolve;
-      setConsent({ label, detail, resolve });
+      setConsent({ label, detail, tool, resolve });
     });
   }, []);
 
@@ -1046,8 +1046,8 @@ export function AssistantSidebar() {
        * time. Toasts remain for everything ELSE on the platform.
        */
       handleClientToolCall(event, {
-        askConsent: async (label, detail) => {
-          const answer = await askConsent(label, detail);
+        askConsent: async (label, detail, tool) => {
+          const answer = await askConsent(label, detail, tool);
           consentRef.current = null;
           setConsent(null);
           return answer;
@@ -1294,15 +1294,19 @@ export function AssistantSidebar() {
                       >
                         {t("allow")}
                       </button>
-                      {/* the yes for the whole session (2026-09-06) — the
-                          button itself says what it never covers */}
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => consent.resolve("session")}
-                      >
-                        {t("allowSession")}
-                      </button>
+                      {/* the yes for the whole session (2026-09-06) — offered
+                          only where it would stand: a delete, a message, an
+                          invitation, a role or a scope never gets the button,
+                          so the card cannot collect a yes that covers nothing */}
+                      {sessionGrantEligible(consent.tool) ? (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => consent.resolve("session")}
+                        >
+                          {t("allowSession")}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="btn-secondary btn-sm"

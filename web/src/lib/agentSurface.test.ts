@@ -27,6 +27,8 @@ const createTask = vi.fn();
 const orgPeople = vi.fn();
 const meetings = vi.fn();
 const sendMemberMessage = vi.fn();
+const editSegment = vi.fn();
+const editSummary = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     createTask: (...args: unknown[]) => createTask(...args),
@@ -49,6 +51,8 @@ vi.mock("@/api/client", () => ({
     setLocale: (...args: unknown[]) => setLocale(...args),
     taskBoard: (...args: unknown[]) => taskBoard(...args),
     updateTask: (...args: unknown[]) => updateTask(...args),
+    editSegment: (...args: unknown[]) => editSegment(...args),
+    editSummary: (...args: unknown[]) => editSummary(...args),
   },
 }));
 
@@ -517,5 +521,54 @@ describe("a name resolves exactly or not at all (2026-09-06, the check-up)", () 
     const result = await executeClientTool("list_task_columns", {}, ctx);
     expect(result.ok).toBe(true);
     expect(taskBoard).toHaveBeenCalledWith({ seed: false });
+  });
+});
+
+/**
+ * THE RECORD EDITS THAT REPLACED THE PROPOSALS (2026-09-06). `correct_transcript`
+ * and `edit_summary` were server-side write tools whose result was a card in
+ * the thread and a confirm route; they are hands now — the person's own
+ * segment edit and summary version, on their own session, behind the consent
+ * card like every other write. The assertions are the seam: the right api
+ * method with the resolved record, and a refusal that performs nothing.
+ */
+describe("correct_transcript and edit_summary — the person's own record edits", () => {
+  beforeEach(() => {
+    listCalls.mockReset();
+    editSegment.mockReset();
+    editSummary.mockReset();
+    listCalls.mockResolvedValue([{ id: "c-1", title: "call 3" }]);
+  });
+
+  it("correct_transcript resolves the record and edits ONE segment through the person's route", async () => {
+    const { ctx } = surface();
+    editSegment.mockResolvedValue(undefined);
+    const result = await executeClientTool("correct_transcript", { record: "call 3", segment_id: "s-9", text: "پروژهٔ نورای" }, ctx);
+    expect(result.ok).toBe(true);
+    expect(editSegment).toHaveBeenCalledWith("c-1", "s-9", "پروژهٔ نورای");
+  });
+
+  it("an empty correction edits nothing — a blank line is a deletion wearing an edit", async () => {
+    const { ctx } = surface();
+    const result = await executeClientTool("correct_transcript", { record: "call 3", segment_id: "s-9", text: "   " }, ctx);
+    expect(result.ok).toBe(false);
+    expect(editSegment).not.toHaveBeenCalled();
+  });
+
+  it("edit_summary writes a new version and says which", async () => {
+    const { ctx } = surface();
+    editSummary.mockResolvedValue({ version: 4 });
+    const result = await executeClientTool("edit_summary", { record: "call 3", body: "خلاصهٔ تازه" }, ctx);
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain("4");
+    expect(editSummary).toHaveBeenCalledWith("c-1", "خلاصهٔ تازه");
+  });
+
+  it("a record the person cannot see refuses before any edit", async () => {
+    const { ctx } = surface();
+    listCalls.mockResolvedValue([]);
+    const result = await executeClientTool("edit_summary", { record: "call 3", body: "x" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(editSummary).not.toHaveBeenCalled();
   });
 });

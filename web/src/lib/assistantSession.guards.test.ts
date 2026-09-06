@@ -60,7 +60,7 @@ vi.mock("@/api/client", () => ({
 const store = await import("./assistantSession");
 
 const row = (id: string, role: "user" | "assistant", content: string) =>
-  ({ id, role, content, tool_calls: [], proposal: null }) as never;
+  ({ id, role, content, tool_calls: [] }) as never;
 
 describe("the store's guards", () => {
   beforeEach(() => {

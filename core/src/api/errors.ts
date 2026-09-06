@@ -12,7 +12,6 @@
  * the same not-probeable posture the tool wall uses. Existence is itself
  * information.
  */
-import { AlreadyDecidedError } from "../agent/proposals.ts";
 import { InvalidTimingError } from "../worker/transcript-mapping.ts";
 import { MissingIdentityError } from "../db/identity.ts";
 
@@ -248,13 +247,6 @@ export function mapError(error: unknown): MappedError {
       },
       ours: false,
     };
-  }
-  if (error instanceof AlreadyDecidedError) {
-    // db/0029's primary key did the refusing. A second decision on one
-    // proposal is a conflict, not a fault: the first decision stands, and
-    // saying 409 is what stops a double-click writing a second summary
-    // version.
-    return { status: 409, body: { error: error.message, kind: "conflict" }, ours: false };
   }
   if (error instanceof ConflictError) {
     return {

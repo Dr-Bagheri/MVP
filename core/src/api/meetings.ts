@@ -470,8 +470,8 @@ export function createMeetingsRepo(db: Db) {
    * ROLE: echo_app may only ever write 'user'. That is the wall which makes
    * the sparkle badge a fact rather than a claim, so the api CANNOT write an
    * ai-badged row on the caller's own connection, and it must not be able to.
-   * This borrows the agent role for exactly the insert, which is the same
-   * shape a confirmed proposal's write takes (M4).
+   * This borrows the agent role for exactly the insert — the shape the M4
+   * confirmed-proposal write had until the proposals retired (2026-09-06).
    *
    * IT ADDS, IT NEVER REPLACES. A person's own decisions are in this table
    * too, and a re-run that cleared the list first would silently delete work

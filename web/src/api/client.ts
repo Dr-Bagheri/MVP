@@ -2492,49 +2492,6 @@ export const api = {
     return api.gatewayKeys();
   },
   /**
-   * Approve or refuse an inferred write.
-   *
-   * The body carries **only** `run_id` — core/ re-reads the proposal from the
-   * `agent_run.steps` row the agent wrote. Sending the payload back would make
-   * "what was proposed" and "what was approved" two independent claims, and
-   * `after` is a possibly-excerpted DISPLAY value, so writing it would
-   * silently truncate the change to whatever the card had room for.
-   *
-   * Returns "stale" for core/'s 404 — the segment was deleted or the call
-   * changed hands between propose and confirm. That is an outcome, not a
-   * fault, and the caller must not offer a retry for it.
-   */
-  async decideProposal(
-    proposalId: string,
-    runId: string,
-    decision: "confirm" | "reject",
-  ): Promise<"ok" | "stale"> {
-    /*
-     * LIVE since 2026-09-06 — and the record of what stood here matters: this
-     * was the Phase-A mock ("the mock always succeeds") for three weeks
-     * AFTER the route and core's confirm were live, so approving a proposed
-     * transcript correction showed «applied» while the server never heard
-     * of it and the line stayed wrong after a reload. A route with no caller
-     * and a caller that called nothing: 13½ from both ends at once.
-     *
-     * "stale" is core's 404 (the segment is gone, the call changed hands) AND
-     * its 409 (already decided — the replay refusal): both are outcomes, not
-     * faults, and neither gets a retry.
-     */
-    try {
-      await bff(`/api/assistant/proposals/${encodeURIComponent(proposalId)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ run_id: runId, decision }),
-      });
-      return "ok";
-    } catch (error) {
-      if (error instanceof BffError && (error.status === 404 || error.status === 409)) return "stale";
-      throw error;
-    }
-  },
-
-  /**
    * Persisted conversations, newest first.
    *
    * These were empty, on the reasoning that a populated list makes the UI
@@ -2607,7 +2564,6 @@ export const api = {
         label: c.name ?? "tool",
         state: "ok" as const,
       })),
-      proposal: null,
       run_id: m.agent_run_id ?? undefined,
       truncated: m.truncated,
       author: m.author ?? null,

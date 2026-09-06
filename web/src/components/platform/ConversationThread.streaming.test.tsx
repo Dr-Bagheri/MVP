@@ -34,7 +34,7 @@ vi.mock("@/lib/answerBlocks", async (importOriginal) => {
 const { ConversationThread } = await import("./ConversationThread");
 
 const assistant = (id: string, content: string): AgentMessage => ({
-  id, role: "assistant", content, tool_calls: [], proposal: null,
+  id, role: "assistant", content, tool_calls: [],
 });
 
 /**

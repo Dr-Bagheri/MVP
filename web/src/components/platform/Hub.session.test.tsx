@@ -96,7 +96,7 @@ vi.mock("@/api/client", () => ({
     }),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
     agentThread: async () =>
-      ({ messages: persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })), floor: [] }),
+      ({ messages: persisted.map((m) => ({ ...m, tool_calls: [] })), floor: [] }),
     // the Part-1 surface the hub now touches on mount / after done — empty
     // answers keep the pickers unrendered and the subject of THIS file
     // (session continuity) unchanged

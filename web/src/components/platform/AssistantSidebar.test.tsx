@@ -453,6 +453,9 @@ describe("the panel's thread follows what lands in it", () => {
       });
       const decline = await screen.findByRole("button", { name: "نه" });
       expect(screen.getByText(/بایگانی تسک/).textContent).toContain("دکتر");
+      /* an archive is a write the standing yes may cover, so the card offers it
+         (the control for the next case, where the button must be absent) */
+      expect(screen.getByRole("button", { name: "برای این نشست" })).toBeTruthy();
 
       const inside = ro.observed().filter((node) => node !== box && box.contains(node));
       expect(inside.length, "one content wrapper is observed").toBe(1);
@@ -475,5 +478,36 @@ describe("the panel's thread follows what lands in it", () => {
     } finally {
       ro.uninstall();
     }
+  });
+});
+
+/**
+ * THE CARD OFFERS THE STANDING YES ONLY WHERE IT WOULD STAND (user ruling,
+ * 2026-09-06 afternoon: "yes, exclude them"). For a message to a colleague
+ * the yes would cover nothing (lib/consentGrant.ts NEVER_COVERED), so the
+ * button is not drawn — a person offered «برای این نشست» on a card the grant
+ * ignores has been asked a question whose answer changes nothing. The archive
+ * case above is the control: there the button IS drawn.
+ */
+describe("the card offers the standing yes only where it would stand", () => {
+  it("a message to a colleague gets «اجازه می‌دهم» and «نه», and no session button", async () => {
+    pathname.mockReturnValue("/fa/meetings");
+    claims.length = 0;
+    await mount();
+    await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
+    await waitFor(() => expect(claims.length).toBeGreaterThan(0));
+    const surface = claims[claims.length - 1] as { handleClientTool: (event: unknown) => Promise<void> };
+    let answered: Promise<void> | null = null;
+    act(() => {
+      answered = surface.handleClientTool({
+        type: "client_tool_call", id: "ct-s-2", tool: "send_member_message", label: "پیام به همکار",
+        args: { member: "sina", message: "سلام" }, effect: "write", requires_consent: true,
+      });
+    });
+    const decline = await screen.findByRole("button", { name: "نه" });
+    expect(screen.getByRole("button", { name: "اجازه می‌دهم" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "برای این نشست" }), "a session button on a card the grant never covers").toBeNull();
+    await userEvent.click(decline);
+    await expect(answered!).resolves.toBeUndefined();
   });
 });

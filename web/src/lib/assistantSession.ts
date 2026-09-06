@@ -254,9 +254,9 @@ export async function askAssistant(input: AskInput): Promise<void> {
     streaming: true,
     messages: [
       ...state.messages,
-      { id: `u-${stamp}`, role: "user", content: input.question, tool_calls: [], proposal: null },
+      { id: `u-${stamp}`, role: "user", content: input.question, tool_calls: [] },
       {
-        id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null,
+        id: replyId, role: "assistant", content: "", tool_calls: [],
         streaming: true,
         ...(input.created ? { created: input.created } : {}),
       },
@@ -311,7 +311,7 @@ export async function regenerateAssistant(
     streaming: true,
     messages: [
       ...state.messages,
-      { id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null, streaming: true },
+      { id: replyId, role: "assistant", content: "", tool_calls: [], streaming: true },
     ],
   });
   const outcome = await runStream(replyId, (signal) => api.regenerate(session, { ...opts, signal }));
@@ -499,7 +499,6 @@ async function consume(
           role: "assistant",
           content: event.text,
           tool_calls: [],
-          proposal: null,
           author: event.author,
           ...(event.failed ? { failed: true } : {}),
         };
@@ -523,10 +522,10 @@ async function consume(
         }));
         break;
       /*
-       * NO `proposal` CASE, deliberately. Neither surface had one: a proposal
-       * reaches the screen on the persisted thread, which `onSettled` refetches
-       * — so adding one here would be inventing a second path to the same card
-       * while porting, which is how the two spellings start.
+       * No `proposal` case — and since 2026-09-06 no `proposal` event either:
+       * the server-side write proposals retired in favour of client tools
+       * behind the consent card (`client_tool_call` above), so the card the
+       * old event announced no longer exists.
        */
       case "done": {
         progress.sawDone = true;

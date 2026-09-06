@@ -275,7 +275,16 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
   ];
 }
 
-/** The names db/0015's system skill declares. Kept as one list so a rename fails loudly. */
+/**
+ * Every tool this file registers, by name — the list `availableTools()`
+ * publishes as the agent vocabulary and the coverage checks (platform-map,
+ * tool-registry, delegation's guard 2) read as "the domain tools". It is
+ * asserted EQUAL to `createDomainTools()` by domain-tools.test: it sat at the
+ * four names db/0015's skill declares while `list_members` (0167) had been
+ * registered for days, so a tool the runtime offered was one no agent could
+ * declare and no coverage check had looked at (found 2026-09-06). A rename
+ * or a new tool fails loudly here, in both directions.
+ */
 export const DOMAIN_TOOL_NAMES = [
-  "search_transcripts", "read_window", "get_call", "list_related_calls",
+  "search_transcripts", "read_window", "get_call", "list_related_calls", "list_members",
 ] as const;

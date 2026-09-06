@@ -16,10 +16,10 @@ import { ConversationThread } from "./ConversationThread";
  * future edit "improves" the empty state.
  */
 const user = (id: string, content: string): AgentMessage => ({
-  id, role: "user", content, tool_calls: [], proposal: null,
+  id, role: "user", content, tool_calls: [],
 });
 const assistant = (id: string, content: string, extra: Partial<AgentMessage> = {}): AgentMessage => ({
-  id, role: "assistant", content, tool_calls: [], proposal: null, ...extra,
+  id, role: "assistant", content, tool_calls: [], ...extra,
 });
 
 describe("ConversationThread", () => {

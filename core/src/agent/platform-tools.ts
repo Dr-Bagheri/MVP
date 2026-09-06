@@ -41,12 +41,13 @@
  *
  * ── WHAT IS NOT HERE ───────────────────────────────────────────────────────
  *
- * Nothing that writes. Writes reach the product two ways and neither is a
- * server-side tool: a PROPOSAL the person confirms (write-tools.ts), or a
- * CLIENT tool the browser performs under their own session with a consent card
- * (client-tools.ts). Both keep "the agent borrows the caller's authority and
- * never more" true by construction, and a delegate inherits neither by
- * accident — see `blastRadius` in delegation.ts.
+ * Nothing that writes. A write reaches the product ONE way and it is not a
+ * server-side tool: a CLIENT tool the browser performs under the person's own
+ * session with a consent card (client-tools.ts). That keeps "the agent borrows
+ * the caller's authority and never more" true by construction, and a delegate
+ * holds it only when the surface offers it — see delegation.ts. (The second
+ * way, a PROPOSAL the person confirmed from a card in the thread, retired on
+ * 2026-09-06: the consent card is the same promise at one wall.)
  */
 import { Type } from "./pi.ts";
 import { ToolDenied, type DomainTool } from "./tools.ts";

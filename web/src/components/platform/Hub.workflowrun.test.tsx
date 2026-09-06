@@ -95,7 +95,7 @@ vi.mock("@/api/client", () => ({
       model_id: null, created_at: new Date().toISOString(),
     }),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
-    agentMessages: async () => persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })),
+    agentMessages: async () => persisted.map((m) => ({ ...m, tool_calls: [] })),
     /*
        A REAL model, because a hub with none cannot run anything: the
        auto-run waits for the catalogue (a run that starts itself has to be

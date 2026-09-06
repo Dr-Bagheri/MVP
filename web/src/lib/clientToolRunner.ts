@@ -37,7 +37,7 @@ import { grantConsentForSession, sessionGrantCovers } from "./consentGrant";
  */
 /**
  * What the person answered on the card: this once, for the rest of the
- * browser session (deletes excepted — see lib/consentGrant.ts), or no.
+ * browser session (the classes lib/consentGrant.ts names excepted), or no.
  */
 export type ConsentAnswer = "once" | "session" | "no";
 
@@ -46,7 +46,9 @@ export interface ClientToolSurface {
       title, a project's name) so the yes is informed — a card that says
       only the verb was approved seven times in a row on 2026-09-06.
       `undefined` means this surface CANNOT ask, and the runner refuses. */
-  askConsent?: ((label: string, detail: string | null) => Promise<ConsentAnswer>) | undefined;
+  /** the third argument is the TOOL: the card decides from it whether a
+   *  standing yes is even on offer (lib/consentGrant.ts `sessionGrantEligible`) */
+  askConsent?: ((label: string, detail: string | null, tool: string) => Promise<ConsentAnswer>) | undefined;
   push(path: string): void;
   switchLocale(next: string): void;
   /** starting or resuming a recording silences the spoken reply, where there is one */
@@ -95,6 +97,8 @@ const NAMING: Readonly<Record<string, Naming>> = {
   restore_record: { subject: ["record"] },
   rename_speaker: { subject: ["label"], with: ["record"] },
   link_speaker: { subject: ["person"], with: ["record"] },
+  correct_transcript: { subject: ["record"], excerpt: "text" },
+  edit_summary: { subject: ["record"], excerpt: "body" },
   delete_conversation: { subject: ["conversation"] },
   archive_conversation: { subject: ["conversation"], flag: "archived" },
   share_conversation: { subject: ["conversation"], flag: "shared" },
@@ -193,7 +197,7 @@ export async function handleClientToolCall(
         await answer(false, "this surface cannot ask for consent — the assistant strip can, or set the assistant to act on its own");
         return;
       }
-      const reply = await surface.askConsent(event.label, consentDetail(event.tool, event.args));
+      const reply = await surface.askConsent(event.label, consentDetail(event.tool, event.args), event.tool);
       if (reply === "no") {
         await answer(false, "the user declined");
         return;

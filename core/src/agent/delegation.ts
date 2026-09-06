@@ -44,19 +44,21 @@
  *    that is worth the tokens it costs.
  *
  * 2. BLAST RADIUS — REVISED 2026-09-05. A delegate gets READS, plus the
- *    SURFACE'S OWN CLIENT TOOLS when the session offers them, and never a
- *    proposal (write) tool. The first cut gave them reads only, on M43's
- *    rule that what an output can REACH decides what its author may hold.
- *    The user then ruled that the colleagues must DO the work Echo hands
- *    them ("if the number of tasks goes past three, or the person asks for
- *    the agents, Echo must call them and ask them to do the job … give all
- *    of them full control over the updates"). The reach argument still
- *    holds, because a client tool's reach is bounded by the CONSENT CARD:
- *    below Act every write it makes is shown to the person and waits for a
- *    yes, on the person's own session, under the person's own grant — the
- *    same wall Echo's hands meet. Proposals stay Echo's: a proposal is a
- *    record edit inside the conversation the person is having WITH ECHO,
- *    and a colleague's proposal would arrive with no sentence around it.
+ *    SURFACE'S OWN CLIENT TOOLS when the session offers them, and no
+ *    server-side write of any kind. The first cut gave them reads only, on
+ *    M43's rule that what an output can REACH decides what its author may
+ *    hold. The user then ruled that the colleagues must DO the work Echo
+ *    hands them ("if the number of tasks goes past three, or the person
+ *    asks for the agents, Echo must call them and ask them to do the job …
+ *    give all of them full control over the updates"). The reach argument
+ *    still holds, because a client tool's reach is bounded by the CONSENT
+ *    CARD: below Act every write it makes is shown to the person and waits
+ *    for a yes, on the person's own session, under the person's own grant
+ *    — the same wall Echo's hands meet. (Until 2026-09-06 this guard also
+ *    kept the PROPOSAL tools — record edits confirmed from a card in the
+ *    thread — Echo's alone; they retired that day in favour of client tools
+ *    behind the same card, so there is no server-side write left for this
+ *    guard to withhold.)
  *
  * 3. A CEILING PER TURN. `MAX_DELEGATIONS` bounds how many nested runs one
  *    question can spend. Without it a model that finds delegation useful will
@@ -130,14 +132,14 @@ export interface DelegationOptions {
  * ability to talk to echo and ask things from echo as well").
  *
  * An agent's turn gets ONE tool, `ask_echo`, and it is deliberately not the
- * mirror of `ask_roya`. Echo, asked by a person, holds client tools, write
- * tools and its colleagues. Echo asked by an AGENT holds none of those:
+ * mirror of `ask_roya`. Echo, asked by a person, holds client tools and
+ * its colleagues. Echo asked by an AGENT holds none of those:
  *
  *   · no client tools — the browser performs those, and nothing a delegate
  *     produces should be able to navigate the person's screen;
- *   · no write tools — a proposal exists so a HUMAN can approve it, and a
- *     proposal raised inside a nested run has no conversation to be approved
- *     in (the ruling that killed the pending-proposals inbox);
+ *   · no writes of any kind — there is no server-side write tool left
+ *     (the proposals retired 2026-09-06), and the client tools that replaced
+ *     them are the surface's, never a nested run's;
  *   · no delegation of its own — otherwise Roya asks Echo, who asks Ava, who
  *     asks Echo, and the ceiling is the only thing standing between that and
  *     a bill. Guard 1 in the other direction.

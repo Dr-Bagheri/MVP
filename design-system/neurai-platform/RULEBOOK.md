@@ -530,6 +530,28 @@ loosened rule — and the user's "except this part" is what puts one there.
   IS important goes in the control's own slot (`Field hint=`), which the
   guard does not read.
 
+### R22 · The integrations shelf: same-size app tiles, four to a row — APPROVED (user directive 2026-09-06)
+
+- **Rule.** The available integrations are an app store: one `.card-row`
+  tile per integration, four to a row from `md` up (two below), every tile
+  the same shape — the provider's OWN mark (inline SVG in
+  `platform/brandMarks.tsx`; no remote brand asset under the CSP), the name
+  on one line, and its status in THIS platform as a `StatusDot` — and
+  nothing else: no description, no provider line, no button inside the
+  tile. The tile IS the control: not connected → the connect briefing;
+  expired or revoked → the reconnect briefing; a scope upgrade (Drive, or
+  drafting) → the re-consent directly; connected → the integration's own
+  page; not configured on the server → not a control at all, and the chip
+  says so. The accessible name is the action WITH the integration's name
+  («اتصال جی‌میل»), never the provider's.
+- **Measured.** Built 2026-09-06 in place of two-per-row cards that carried
+  a description and a button. Re-measure on production after deploy: four
+  tiles across at 1240, equal heights, the mark at 40.
+- **Solid =** `Integrations.test.tsx` pins the grid classes, the four
+  accessible names, the chip per state, each tile's own `data-brand` mark,
+  one class string for all four, and the ABSENCE of the description in the
+  shelf; a tile that grows a sentence also fails R21's `copy.guard`.
+
 ## Bugs found while measuring (not rules — fixes)
 
 1. `/fa/settings/<unknown-slug>` renders the GENERAL pane under a breadcrumb

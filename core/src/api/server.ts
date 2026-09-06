@@ -67,8 +67,6 @@ import { rememberFloor, rememberIncumbent, routeTurn } from "./routing.ts";
 import { floorInstruction } from "../agent/platform-map.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
-import { findProposal, recordDecision } from "../agent/proposals.ts";
-import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
@@ -291,15 +289,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const domainTools = options.tools === undefined
     ? ([
       ...createDomainTools(),
-      ...createWriteTools(),
       ...toolsFor(),
     ] as unknown as DomainTool<TDeps, never>[])
     : options.tools;
   // agentToolsDb, not the raw db: every DB call a tool makes runs on
   // echo_agent (M3's "the agent borrows the caller's authority and never
-  // more" as a grant set, not a code-review promise). The write tools only
-  // propose here — the confirmed write path picks the agent role explicitly
-  // on its own connection (proposals.ts).
+  // more" as a grant set, not a code-review promise). Nothing here writes:
+  // since the proposals retired (2026-09-06) a write reaches the product as a
+  // CLIENT tool on the person's own session (client-tools.ts), never as a
+  // server-side tool.
   const domainDeps = options.tools === undefined
     ? ({ db: agentToolsDb(options.db) } as unknown as TDeps)
     : options.toolDeps;
@@ -4234,68 +4232,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }));
   });
 
-  // ---- proposed writes: confirm / reject (M4) -----------------------------
+  // ---- proposed writes (M4) — RETIRED 2026-09-06 --------------------------
   //
-  // An agent write is proposed, never performed. These two routes are where a
-  // human's decision becomes a mutation, and they are deliberately the only
-  // place in the api that applies one.
-  //
-  // The body carries `{run_id}` and nothing else — the proposal is re-read
-  // from `agent_run.steps`, never accepted from the client. See
-  // agent/proposals.ts: if the approved payload arrived from the caller,
-  // "what was proposed" and "what was approved" would be two unrelated
-  // claims, and the audit exists precisely to say they are one object.
-
-  app.post("/v1/assistant/proposals/:id/confirm", async (request, reply) => {
-    const identity = await auth.requireActive(request);
-    const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { run_id?: unknown };
-    if (typeof body.run_id !== "string") throw new ValidationError("run_id is required");
-
-    const proposal = await findProposal(options.db, identity, body.run_id, id);
-    /**
-     * DECISION FIRST, then the write — and they are two transactions because
-     * db/0029 makes them two ROLES: `proposal_decision` is insertable by
-     * echo_app only ("the agent proposes; it does not decide"), while the
-     * product write runs on echo_agent so the column grants stay the floor
-     * for agent-inferred content. Both constraints are right and jointly
-     * forbid the single transaction that was directed.
-     *
-     * So the ORDER carries the guarantee. The decision row's primary key is
-     * the replay refusal: a second confirm raises 23505 before anything is
-     * applied, which is what makes a double-click safe — a replayed
-     * `replace_summary` would otherwise write a second version of a person's
-     * summary. `AlreadyDecidedError` → 409.
-     *
-     * The residual risk inverts deliberately: a decision can be recorded for
-     * a write that then fails. That is visible — the caller gets the error
-     * and the row plainly disagrees with the decision — and it duplicates
-     * nothing. An audit line to reconcile beats a user's summary silently
-     * doubled.
-     */
-    await recordDecision(options.db, identity, {
-      runId: body.run_id, proposal, decision: "confirmed",
-    });
-    const applied = await applyProposal(options.db, identity, proposal, body.run_id);
-    return reply.send({ ...applied, proposal_id: proposal.id });
-  });
-
-  app.post("/v1/assistant/proposals/:id/reject", async (request, reply) => {
-    const identity = await auth.requireActive(request);
-    const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { run_id?: unknown };
-    if (typeof body.run_id !== "string") throw new ValidationError("run_id is required");
-
-    const proposal = await findProposal(options.db, identity, body.run_id, id);
-    // A rejection is a decision worth the same record as an approval — "the
-    // agent proposed this and a person said no" is exactly the history this
-    // flow exists to keep — and it takes the same primary key, so a proposal
-    // cannot be rejected and then approved.
-    await recordDecision(options.db, identity, {
-      runId: body.run_id, proposal, decision: "rejected",
-    });
-    return reply.send({ rejected: true, proposal_id: proposal.id });
-  });
+  // `POST /v1/assistant/proposals/:id/confirm|reject` stood here. A record
+  // edit the assistant infers is a CLIENT tool now (`correct_transcript`,
+  // `edit_summary`, `rename_speaker`), performed in the person's browser
+  // through the route the screen's own button uses, behind the consent card:
+  // the same yes, given beside the sentence that motivated it, and one wall
+  // instead of two. The workflow engine's proposals (M41, writing
+  // `echo.proposal_decision`) are a separate machine and stay.
 
   // ---- gateway administration (M17) --------------------------------------
   //

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { AREAS, PLATFORM_MAP, REACH_RULE, areaOf, floorInstruction } from "../src/agent/platform-map.ts";
 import { CLIENT_TOOL_NAMES } from "../src/agent/client-tools.ts";
 import { DOMAIN_TOOL_NAMES } from "../src/agent/domain-tools.ts";
-import { createWriteTools } from "../src/agent/write-tools.ts";
 import { toolsFor } from "../src/agent/platform-tools.ts";
 
 /**
@@ -19,7 +18,6 @@ import { toolsFor } from "../src/agent/platform-tools.ts";
 const registered = [
   ...CLIENT_TOOL_NAMES,
   ...DOMAIN_TOOL_NAMES,
-  ...createWriteTools().map((t) => t.name),
   ...toolsFor().map((t) => t.name),
 ];
 

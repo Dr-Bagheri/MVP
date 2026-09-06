@@ -20,7 +20,6 @@ import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { DOMAIN_TOOL_NAMES } from "../agent/domain-tools.ts";
 import { CLIENT_TOOL_NAMES } from "../agent/client-tools.ts";
-import { createWriteTools } from "../agent/write-tools.ts";
 import { toolsFor } from "../agent/platform-tools.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -30,10 +29,11 @@ import type { Identity } from "../agent/types.ts";
  * write tool added next milestone must become author-attachable without
  * anyone remembering this file exists.
  *
- * LAZY, not module-level: `createWriteTools()` builds TypeBox schemas, and
- * running that at import time crashed every suite that stubs the model
- * runtime — collection died before a single test ran. Deferring to first
- * use keeps the derivation and loses the load-time dependency.
+ * LAZY, not module-level: `toolsFor()` builds TypeBox schemas (as the write
+ * tools did before they retired on 2026-09-06), and running that at import
+ * time crashed every suite that stubs the model runtime — collection died
+ * before a single test ran. Deferring to first use keeps the derivation and
+ * loses the load-time dependency.
  */
 let cachedTools: readonly string[] | undefined;
 export function availableTools(): readonly string[] {
@@ -75,7 +75,6 @@ export function availableTools(): readonly string[] {
      */
     cachedTools = [
       ...DOMAIN_TOOL_NAMES,
-      ...createWriteTools().map((t) => t.name),
       ...toolsFor().map((t) => t.name),
       ...CLIENT_TOOL_NAMES,
     ];

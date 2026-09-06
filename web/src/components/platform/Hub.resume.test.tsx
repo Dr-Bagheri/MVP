@@ -40,7 +40,7 @@ vi.mock("next/navigation", () => ({
  * flag belongs to the live stream, where the client watched it happen.
  */
 const failedThread: AgentMessage[] = [
-  { id: "m1", role: "user", content: "این تماس را خلاصه کن.", tool_calls: [], proposal: null },
+  { id: "m1", role: "user", content: "این تماس را خلاصه کن.", tool_calls: [] },
 ];
 
 const askCalls: (string | undefined)[] = [];

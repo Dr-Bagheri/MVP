@@ -47,7 +47,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "list_records", "get_summary", "list_summary_versions", "list_speakers",
       "list_record_notes", "list_voices",
       "resummarize_record", "translate_record", "retry_record",
-      "rename_speaker", "link_speaker",
+      "rename_speaker", "link_speaker", "correct_transcript", "edit_summary",
     ],
   },
   {
@@ -129,7 +129,6 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     key: "changes",
     icon: "pencil",
     tools: [
-      "correct_transcript", "edit_speaker_roster", "replace_summary",
       "rename_record", "set_record_scope", "tag_record", "add_record_note",
       "archive_record", "unarchive_record", "delete_record", "restore_record",
       "delete_conversation", "rename_conversation", "run_workflow",

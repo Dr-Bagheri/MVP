@@ -14,6 +14,7 @@ import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { Icon, IconRetry, IconTrash } from "@/components/icons";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
 import { foldSearch, integrationBySlug, useIntegrationCopy } from "./integrationsCatalogue";
+import { BrandMark } from "./brandMarks";
 
 /**
  * ONE integration: what it reads, and where it stands (user directive,
@@ -194,17 +195,19 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                   is structure and structure does not wait for the network;
                   only what the wire decides waits, below. */}
               <header className="flex flex-wrap items-start gap-4">
-                <span
-                  /* audit finding, 2026-09-02: a 64px hero tile beside a 20px
-                     title was a title BLOCK; the identity row is the
-                     Integrations tile's own recipe now — 40px tile, 18px
-                     glyph — so the card you clicked and the page it opens
-                     read as the same object */
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted"
-                  aria-hidden
-                >
-                  <Icon name={entry.icon} size="lg" />
-                </span>
+                {/* the provider's own mark, the same one the tile on the shelf
+                    wears (brandMarks.tsx) — so the card you clicked and the
+                    page it opens read as the same object; the house icon only
+                    where a provider has no mark of its own */}
+                <BrandMark
+                  slug={entry.slug}
+                  className="h-10 w-10"
+                  fallback={(
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
+                      <Icon name={entry.icon} size="lg" />
+                    </span>
+                  )}
+                />
                 <div className="min-w-0 flex-1">
                   {/* audit finding, 2026-09-02: this was `text-2xl` — a 20px
                       heading restating the name useCrumbTitle already put in

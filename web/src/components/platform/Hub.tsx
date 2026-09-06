@@ -29,7 +29,7 @@ import { liveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { handleClientToolCall, type ConsentAnswer } from "@/lib/clientToolRunner";
 import {
-  consentGrantServer, consentGrantedForSession, revokeSessionConsent, subscribeConsentGrant,
+  consentGrantServer, consentGrantedForSession, revokeSessionConsent, sessionGrantEligible, subscribeConsentGrant,
 } from "@/lib/consentGrant";
 import { Icon } from "@/components/icons";
 import {
@@ -95,7 +95,7 @@ export function Hub() {
      silent yes — the runner refuses that now, and this is how the page asks) */
   const [consent, setConsent] = useState<
     | null
-    | { label: string; detail: string | null; resolve: (answer: ConsentAnswer) => void }
+    | { label: string; detail: string | null; tool: string; resolve: (answer: ConsentAnswer) => void }
   >(null);
   /* the standing yes, drawn while it is on so it can be taken back from where
      it is seen (lib/consentGrant.ts) */
@@ -747,10 +747,10 @@ export function Hub() {
       /* the card below answers this; a surface that cannot ask is refused by
          the runner (it used to fall through — the comment that stood here
          claimed the opposite of what the code did) */
-      askConsent: async (label, detail) => {
+      askConsent: async (label, detail, tool) => {
         const answer = await new Promise<ConsentAnswer>((resolve) => {
           consentRef.current = resolve;
-          setConsent({ label, detail, resolve });
+          setConsent({ label, detail, tool, resolve });
         });
         consentRef.current = null;
         setConsent(null);
@@ -1204,11 +1204,15 @@ export function Hub() {
                   <button type="button" className="btn-primary btn-sm" onClick={() => consent.resolve("once")}>
                     {tPresence("allow")}
                   </button>
-                  {/* the yes for the whole session (2026-09-06) — the button
-                      itself says what it never covers */}
-                  <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("session")}>
-                    {tPresence("allowSession")}
-                  </button>
+                  {/* the yes for the whole session (2026-09-06) — offered only
+                      where it would stand: a delete, a message, an invitation,
+                      a role or a scope never gets the button, so the card
+                      cannot collect a yes that covers nothing */}
+                  {sessionGrantEligible(consent.tool) ? (
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("session")}>
+                      {tPresence("allowSession")}
+                    </button>
+                  ) : null}
                   <button type="button" className="btn-secondary btn-sm" onClick={() => consent.resolve("no")}>
                     {tPresence("decline")}
                   </button>

@@ -47,7 +47,7 @@ describe("consent is asked, or the call is refused — never performed on a sile
   it("a surface that asks is told the VERB and the OBJECT, and a yes performs", async () => {
     const askConsent = vi.fn(async () => "once" as const);
     await handleClientToolCall(call(), { ...surface, askConsent });
-    expect(askConsent).toHaveBeenCalledWith("حذف تسک", "جمع‌آوری صدای خام");
+    expect(askConsent, "the card is told the verb, the object AND the tool").toHaveBeenCalledWith("حذف تسک", "جمع‌آوری صدای خام", "delete_task");
     expect(executeClientTool).toHaveBeenCalledWith("delete_task", { task_id: "t-1", title: "جمع‌آوری صدای خام" }, expect.anything());
     expect(deliverToolResult).toHaveBeenCalledWith("c-1", true, "done");
   });
@@ -68,7 +68,10 @@ describe("consent is asked, or the call is refused — never performed on a sile
  * THE STANDING YES (user, 2026-09-06: "add this option to give permission for
  * the whole session so they don't ask one after the other"). Asked once,
  * answered «برای این نشست», the next writes run without a card — and a
- * DELETE still asks, because that is the verb the board was lost to.
+ * DELETE still asks, because that is the verb the board was lost to; since
+ * the afternoon's ruling ("yes, exclude them") so does every write whose
+ * effect leaves the person's screen — a message, an invitation, a role, a
+ * scope (lib/consentGrant.ts NEVER_COVERED; the class list has its own test).
  */
 describe("a yes for the session", () => {
   beforeEach(() => {
@@ -97,6 +100,19 @@ describe("a yes for the session", () => {
     expect(askConsent, "a delete ran on the session grant").toHaveBeenCalledTimes(1);
     expect(executeClientTool).toHaveBeenCalledTimes(1);
     expect(deliverToolResult).toHaveBeenLastCalledWith("c-1", false, "the user declined");
+  });
+
+  it("a message to a colleague and a role change still ask inside a granted session (2026-09-06 ruling)", async () => {
+    await handleClientToolCall(call({ tool: "create_task", args: { title: "الف" } }), { ...surface, askConsent: async () => "session" as const });
+    const askConsent = vi.fn(async () => "no" as const);
+    await handleClientToolCall(call({ tool: "send_member_message", label: "پیام به همکار", args: { member: "sina", message: "سلام" } }), { ...surface, askConsent });
+    await handleClientToolCall(call({ tool: "set_member_status", label: "تغییر وضعیت عضو", args: { member: "sina", status: "disabled" } }), { ...surface, askConsent });
+    expect(askConsent, "a message or a status change ran on the session grant").toHaveBeenCalledTimes(2);
+    expect(executeClientTool, "only the create performed").toHaveBeenCalledTimes(1);
+    /* THE CONTROL in the same granted session: an edit is covered and asks nobody */
+    await handleClientToolCall(call({ tool: "update_task", label: "ویرایش تسک", args: { task_id: "t", title: "الف" } }), { ...surface, askConsent });
+    expect(askConsent).toHaveBeenCalledTimes(2);
+    expect(executeClientTool).toHaveBeenCalledTimes(2);
   });
 
   it("revoking asks again, and a surface with no card is refused again", async () => {
@@ -143,6 +159,10 @@ describe("what the card names", () => {
     expect(consentDetail("invite_member", { email: "a@b.ir", role: "member" })).toBe("a@b.ir → member");
     expect(consentDetail("delete_record", { record: "جلسهٔ هفتگی" })).toBe("جلسهٔ هفتگی");
     expect(consentDetail("share_conversation", { conversation: "بودجه", shared: false })).toBe("بودجه ✗");
+  });
+  it("a record edit names the record and quotes the words about to replace its text (2026-09-06)", () => {
+    expect(consentDetail("correct_transcript", { record: "call 3", segment_id: "s-1", text: "پروژهٔ نورای" })).toBe("call 3: «پروژهٔ نورای»");
+    expect(consentDetail("edit_summary", { record: "call 3", body: "خلاصهٔ تازه" })).toBe("call 3: «خلاصهٔ تازه»");
   });
   it("quotes the words a person is about to send in their own name, cut at sixty", () => {
     expect(consentDetail("send_member_message", { member: "sina", message: "سلام، جلسه ساعت ده" })).toBe("sina: «سلام، جلسه ساعت ده»");

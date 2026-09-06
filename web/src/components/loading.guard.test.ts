@@ -141,8 +141,10 @@ const REMAINING: Record<string, number> = {
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,
   // name and description come from the catalogue; the header renders at once
-  // now and the body holds two Cards of SkeletonLines while the wire answers
-  "components/platform/Integrations.tsx": 2,
+  // now and the body holds two Cards of SkeletonLines while the wire answers.
+  // 2026-09-06: Integrations.tsx LEFT it too — the shelf's two slots (the
+  // tile's action and its control) became four placeholder tiles the real
+  // tile's size while the wire answers (entry deleted, not zeroed)
   // 2026-09-03: NotificationsSettings.tsx LEFT this list — its one entry was
   // the switch cell, which rendered EMPTY until me() answered and so looked
   // identical to the two states that legitimately have no switch ("absent",

@@ -178,8 +178,12 @@ summary. Limits enforced by the **system**, not by prompts:
   under has no delete permission on calls, transcripts, or summaries.
 - A summary edit adds a version. A corrected line keeps its identifier. A
   roster edit is a change-list, not a wholesale replacement.
-- The agent **proposes before writing** anything it inferred rather than was
-  told. Once a write lands, the viewed page refreshes itself.
+- The agent **asks before writing** anything it inferred rather than was
+  told: every write is shown on a consent card in the person's own browser
+  and performed on their session only after their yes. [2026-09-06: the
+  earlier form — a server-side proposal confirmed from a card in the thread —
+  is retired; the consent card is the same promise at one wall.] Once a
+  write lands, the viewed page refreshes itself.
 
 ## Future (designed-for, not built in v1)
 

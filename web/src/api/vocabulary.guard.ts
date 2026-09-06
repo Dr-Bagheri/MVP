@@ -23,7 +23,6 @@
  * guard does not need it and should not acquire it.
  */
 import type {
-  AgentProposal,
   Call,
   CallStatus,
   PartStatus,
@@ -38,7 +37,6 @@ import {
   CALL_STATUSES,
   MEMBER_ROLES,
   PART_STATUSES,
-  PROPOSAL_KINDS,
   TRANSCRIPT_TIMINGS,
   USER_STATUSES,
   WORKFLOW_RUN_STATUSES,
@@ -89,17 +87,6 @@ export const WORKFLOW_RUN_STATUS_MATCHES: Exact<
 > = true;
 export const WORKFLOW_STEP_STATUS_MATCHES: Exact<
   WorkflowStepRunRecord["status"], (typeof WORKFLOW_STEP_STATUSES)[number]
-> = true;
-
-/**
- * The last closed vocabulary this codebase held a hand-written copy of. It
- * said `edit_speakers`; core/ says `edit_speaker_roster` — the fourth
- * invented vocabulary in a week, and the fourth that nothing could contradict
- * until it was published as a value.
- */
-export const PROPOSAL_KIND_MATCHES: Exact<
-  AgentProposal["kind"],
-  (typeof PROPOSAL_KINDS)[number]
 > = true;
 
 /**

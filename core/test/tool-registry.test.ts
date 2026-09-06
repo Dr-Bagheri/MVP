@@ -70,7 +70,6 @@ describe("every tool the platform implements is offered by the platform", () => 
     expect(start, "the default-toolset branch has moved — this check is stale").toBeGreaterThan(0);
     const branch = code.slice(start, start + 400);
     expect(branch).toContain("createDomainTools()");
-    expect(branch).toContain("createWriteTools()");
     expect(branch, "the platform reads are not in the default toolset").toContain("toolsFor(");
   });
 
@@ -110,14 +109,12 @@ describe("every tool the platform implements is offered by the platform", () => 
      */
     const { availableTools } = await import("../src/api/skills.ts");
     const { DOMAIN_TOOL_NAMES } = await import("../src/agent/domain-tools.ts");
-    const { createWriteTools } = await import("../src/agent/write-tools.ts");
     const { toolsFor } = await import("../src/agent/platform-tools.ts");
     const { CLIENT_TOOL_NAMES } = await import("../src/agent/client-tools.ts");
 
     const vocabulary = new Set(availableTools());
     const registered = [
       ...DOMAIN_TOOL_NAMES,
-      ...createWriteTools().map((t) => t.name),
       ...toolsFor().map((t) => t.name),
       ...CLIENT_TOOL_NAMES,
     ];

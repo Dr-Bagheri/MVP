@@ -75,8 +75,6 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/workflows/starters", "2026-08-28 user directive - the library: every shipped starter readable by any member, so /workflows can list what an admin may install"],
   ["GET", "/v1/workflows/auto-apply", "M41 W13 — members may KNOW what auto-applies"],
   ["PUT", "/v1/workflows/auto-apply", "M41 W13/W17 — the standing human decision, admin-only"],
-  ["POST", "/v1/assistant/proposals/:id/confirm", "M4 — an inferred write is proposed, then approved"],
-  ["POST", "/v1/assistant/proposals/:id/reject", "M4 — a refusal is recorded, not discarded"],
   ["GET", "/v1/assistant/sessions", "M4/db-0018 — conversations persist; the hub needs a list to resume from"],
   ["GET", "/v1/assistant/sessions/:id/messages", "M4 — resume is a read of what was said, never a replay"],
   ["POST", "/v1/assistant/sessions/:id/archive", "Q5 — conversations are archived, never deleted"],

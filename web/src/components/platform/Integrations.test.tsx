@@ -224,7 +224,7 @@ describe("the integrations page", () => {
     expect(within(table).getByText("جی‌میل")).toBeTruthy();
   });
 
-  it("renders an unconfigured provider as a sentence, and a configured one as a briefing door", async () => {
+  it("renders an unconfigured provider as a status and nothing to press, and a configured one as a door", async () => {
     /*
      * The vehicle is GOOGLE now, not Microsoft: the distinction under test is
      * "the operator gave this deployment no OAuth credentials" versus "they
@@ -243,10 +243,10 @@ describe("the integrations page", () => {
     }];
     await act(async () => { render(<Integrations />); });
 
-    const notConfigured = "گوگل روی سرور پیکربندی نشده است";
-    // all four Google tiles say it, and none offers anything to press
+    const notConfigured = "روی سرور پیکربندی نشده";
+    // all four Google tiles wear the status, and none is a control
     expect(screen.getAllByText(notConfigured).length).toBe(4);
-    expect(screen.queryByRole("button", { name: "اتصال گوگل" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^اتصال / })).toBeNull();
 
     /*
      * The control. Same provider, same page, one field different: with OAuth
@@ -268,7 +268,12 @@ describe("the integrations page", () => {
     await act(async () => { render(<Integrations />); });
 
     expect(screen.queryByText(notConfigured)).toBeNull();
-    expect(screen.getAllByRole("button", { name: "اتصال گوگل" }).length).toBe(4);
+    /* the TILE is the control, named for what it connects — four tiles, four
+       names, so a screen reader is not offered «اتصال گوگل» four times */
+    for (const name of ["جی‌میل", "تقویم گوگل", "گوگل درایو", "گوگل میت"]) {
+      expect(screen.getByRole("button", { name: `اتصال ${name}` })).toBeTruthy();
+    }
+    expect(screen.getAllByText("وصل نشده").length).toBe(4);
   });
 
   /**
@@ -295,7 +300,7 @@ describe("the integrations page", () => {
     }];
     await act(async () => { render(<Integrations />); });
 
-    fireEvent.click(screen.getAllByRole("button", { name: "اتصال گوگل" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "اتصال جی‌میل" }));
 
     const dialog = await screen.findByRole("alertdialog");
     // what the person is agreeing to, before the provider asks them again
@@ -320,9 +325,15 @@ describe("the integrations page", () => {
     CONNECTORS = [{ ...GOOGLE, can_drive: false }];
     await act(async () => { render(<Integrations />); });
 
-    /* the offer is on the Drive TILE, which lives in the Available half — the
-       page's opening tab, so nothing is switched to see it */
-    expect(screen.getByRole("button", { name: "برای دسترسی به درایو دوباره وصل شوید" })).toBeTruthy();
+    /* the offer is the Drive TILE itself, in the Available half — the page's
+       opening tab, so nothing is switched to see it: its chip names what is
+       missing and its one press is the re-consent */
+    const drive = screen.getByRole("button", { name: "اتصال دوبارهٔ گوگل درایو برای دسترسی به درایو" });
+    expect(within(drive).getByText("بدون دسترسی به درایو")).toBeTruthy();
+    /* no briefing in between: the account is already connected and briefed,
+       so the press goes straight to the provider */
+    await act(async () => { fireEvent.click(drive); });
+    expect(connectorAuthorization).toHaveBeenCalledWith("google", "fa");
     /* and no Drive ROW in the connected half: a grant that never covered Drive
        has no Drive connection to report on — not a broken one, an unasked one */
     await showConnected();
@@ -333,9 +344,55 @@ describe("the integrations page", () => {
     cleanup();
     CONNECTORS = [GOOGLE];
     await act(async () => { render(<Integrations />); });
-    expect(screen.queryByText("برای دسترسی به درایو دوباره وصل شوید")).toBeNull();
+    expect(screen.queryByText("بدون دسترسی به درایو")).toBeNull();
+    expect(screen.queryByRole("button", { name: /برای دسترسی به درایو$/ })).toBeNull();
+    /* and the Drive tile is the ordinary connected door */
+    expect(screen.getByRole("button", { name: "بازکردن جزئیات گوگل درایو" })).toBeTruthy();
     await showConnected();
     expect(within(screen.getByRole("table")).getByText("گوگل درایو")).toBeTruthy();
+  });
+
+  /**
+   * THE SHELF (user directive, 2026-09-06: "like an app store … smaller
+   * buttons same size each row 4 of them with their own logos and just the
+   * name and their status"). Asserted as the four things the directive names
+   * and as one ABSENCE: the description, which the previous cards carried and
+   * which is the sentence R21 forbids — a shelf that grew it back would look
+   * finished and be wrong.
+   */
+  it("is an app-store shelf: four to a row, each tile the provider's own mark, the name and its status here — nothing else", async () => {
+    await act(async () => { render(<Integrations />); });
+    const gmail = await screen.findByRole("button", { name: "بازکردن جزئیات جی‌میل" });
+
+    // the grid: four columns from md up, two below
+    const grid = gmail.parentElement!;
+    expect(grid.className).toContain("md:grid-cols-4");
+    expect(grid.className).toContain("grid-cols-2");
+    expect(grid.children.length).toBe(4);
+
+    // every tile: THIS provider's mark (inline — no remote brand asset), the name, the status
+    const tiles = [
+      ["gmail", "جی‌میل"], ["google-calendar", "تقویم گوگل"],
+      ["google-drive", "گوگل درایو"], ["google-meet", "گوگل میت"],
+    ] as const;
+    for (const [slug, name] of tiles) {
+      const tile = screen.getByRole("button", { name: `بازکردن جزئیات ${name}` });
+      expect(tile.parentElement, `${slug} sits in the grid`).toBe(grid);
+      expect(tile.querySelector(`svg[data-brand="${slug}"]`), `${slug}'s own mark`).not.toBeNull();
+      expect(within(tile).getByText(name)).toBeTruthy();
+      expect(within(tile).getByText("متصل است")).toBeTruthy();
+      /* one shape for all four: the same class string, whatever the state,
+         is what keeps a row of tiles one height */
+      expect(tile.className).toBe(gmail.className);
+    }
+
+    // and nothing else: no description, no provider line
+    expect(within(grid).queryByText(fa.integrations.gmailDesc)).toBeNull();
+    expect(within(grid).queryByText("گوگل")).toBeNull();
+
+    // a connected tile opens its own page
+    fireEvent.click(gmail);
+    expect(push).toHaveBeenCalledWith("/integrations/gmail");
   });
 
   it("offers nothing Microsoft, anywhere on the page", async () => {

@@ -717,52 +717,6 @@ export interface AgentToolCall {
 }
 
 /**
- * A write the agent inferred: proposed, never applied silently (SPEC/M4).
- *
- * **Nothing has happened when this arrives.** The tool result the model sees
- * says `awaiting_confirmation`, so the assistant cannot claim it corrected
- * anything — and neither may the UI. Wording like "corrected" before a
- * confirm would be a lie the model itself isn't telling.
- */
-export interface AgentProposal {
-  id: string;
-  /** closed set of three; an unknown kind renders as data, never a crash */
-  kind: "correct_transcript" | "edit_speaker_roster" | "replace_summary";
-  /** a Persian sentence written for a human — the card's headline */
-  summary: string;
-  payload: AgentProposalPayload;
-}
-
-/**
- * `before`/`after` are a MATCHED PAIR with identical keys per kind —
- * `{text}` for `correct_transcript`, `{label}` for `edit_speaker_roster`,
- * `{version, body}` for `replace_summary`. Same shape on both sides is
- * deliberate: a difference in shape is one the reader has to reconcile
- * before they can compare the values.
- *
- * **These are DISPLAY values and may be excerpted.** The authoritative
- * payload stays server-side and is re-read at confirm, so a 600-character
- * correction shows truncated in the card and applies in full. Never send
- * `after` back as the thing to write — that would silently truncate the
- * change to whatever the card had room for.
- */
-export interface AgentProposalPayload {
-  call_id: string;
-  /**
-   * The CURRENT value. Absent only for a first-ever summary, which has
-   * nothing to replace. A card rendered without it is asking for consent,
-   * not a decision.
-   */
-  before?: unknown;
-  /**
-   * The proposed value. **Never absent** — an absent `after` would mean "no
-   * change proposed", which is not a state a proposal can be in.
-   */
-  after: unknown;
-  [key: string]: unknown;
-}
-
-/**
  * The SSE vocabulary core/ emits, verbatim. The assistant reduces these into
  * message state, so swapping the mock generator for the real EventSource
  * changes transport only — not a line of rendering.
@@ -848,13 +802,6 @@ export type AgentEvent =
    */
   | { type: "client_tool_call"; id: string; tool: string; label: string;
       args: unknown; effect: "ui" | "write"; requires_consent: boolean }
-  | {
-      type: "proposal";
-      id: string;
-      kind: AgentProposal["kind"];
-      summary: string;
-      payload: AgentProposalPayload;
-    }
   /**
    * Sent FIRST, before any delta. Additive to the vocabulary, and safe
    * because the contract is unknown-types-ignorable — an older client that
@@ -920,12 +867,11 @@ export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
   tool_calls: AgentToolCall[];
-  proposal: AgentProposal | null;
   /**
-   * The `runId` from this message's `done` event. Confirming or rejecting a
-   * proposal REQUIRES it, so the reducer must keep it with the message — it
-   * is the only state the card carries beyond the proposal itself, and the
-   * proposal arrives mid-stream, before the id exists.
+   * The `runId` from this message's `done` event. It opens the run's trace
+   * («جزئیات اجرا», ConversationThread), so the reducer keeps it with the
+   * message; it arrives last, at `done`. (Until 2026-09-06 it also keyed the
+   * proposal card's confirm — the proposals retired that day.)
    */
   run_id?: string;
   /** the conversation this turn belongs to, from the `session` event */

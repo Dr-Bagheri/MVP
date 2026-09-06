@@ -93,6 +93,8 @@ export const SURFACE_TOOLS: readonly string[] = [
   "retry_record",
   "rename_speaker",
   "link_speaker",
+  "correct_transcript",
+  "edit_summary",
   "create_person",
   "rename_member",
   "list_allowed_models",
@@ -1300,6 +1302,46 @@ export async function executeClientTool(
         return { ok: true, detail: `now ${res.status}` };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the record could not be retried") };
+      }
+    }
+
+    case "correct_transcript": {
+      /* the person's own segment edit (PATCH /v1/calls/:id/segments/:sid) on
+         their own session — what the M4 proposal card used to confirm from
+         the thread; since 2026-09-06 a hand behind the consent card */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const segmentId = String(a.segment_id ?? "").trim();
+      const text = String(a.text ?? "").trim();
+      if (!segmentId || !text) return { ok: false, detail: "a segment and its corrected text are required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.editSegment(who.id, segmentId, text);
+        announceChange("calls");
+        return { ok: true, detail: "segment corrected" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the segment could not be corrected") };
+      }
+    }
+
+    case "edit_summary": {
+      /* a new VERSION in the person's name (POST /v1/calls/:id/summaries/edit);
+         the earlier versions stay */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const body = String(a.body ?? "").trim();
+      if (!body) return { ok: false, detail: "the new summary body is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const { version } = await api.editSummary(who.id, body);
+        announceChange("calls");
+        return { ok: true, detail: `summary version ${version} written` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the summary could not be edited") };
       }
     }
 

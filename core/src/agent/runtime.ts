@@ -17,7 +17,6 @@
  *  5. Content enters the prompt quoted, never as instructions (M4 injection
  *     posture); the caller supplies already-quoted material.
  */
-import type { WriteProposal } from "./proposals.ts";
 import { createPolicy, DEFAULT_MAX_TOOL_CALLS, filterDeclaredTools } from "./policy.ts";
 import { runPi, type PiModelRef } from "./pi.ts";
 import { modelForRun } from "./skills.ts";
@@ -78,8 +77,6 @@ export interface RunRequest<TDeps> {
   adminOnlyTools?: ReadonlySet<string> | undefined;
   /** Overrides the skill's pin and the default (rarely needed). */
   maxToolCalls?: number | undefined;
-  /** Streamed to the client as an SSE `proposal` when a write is proposed. */
-  onProposal?: ((proposal: WriteProposal) => void) | undefined;
   maxBlockedAttempts?: number | undefined;
   signal?: AbortSignal | undefined;
   onText?: ((delta: string) => void) | undefined;
@@ -230,7 +227,6 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         const tools = wrapTools(offered, {
           identity, deps: request.deps, onStep,
           onStart: request.onToolStart,
-          onProposal: request.onProposal,
         });
         const beforeToolCall = createPolicy({
           identity,

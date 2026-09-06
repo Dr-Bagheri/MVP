@@ -91,7 +91,7 @@ vi.mock("@/api/client", () => ({
     }),
     ask: (_q: string, _c: unknown, _s: unknown, opts?: { signal?: AbortSignal }) =>
       handDriven(opts?.signal),
-    agentThread: async () => ({ messages: persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })), floor: floorOnServer }),
+    agentThread: async () => ({ messages: persisted.map((m) => ({ ...m, tool_calls: [] })), floor: floorOnServer }),
     setAssistantFloor: (sessionId: string, agents: string[]) => setFloor(sessionId, agents),
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [], agents: async () => [], workflows: async () => [],

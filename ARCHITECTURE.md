@@ -165,6 +165,23 @@ removed, caller-less client fixtures deleted, drafts swept at sign-out.
   an earlier version of this entry recorded approvals inside
   agent_run.steps — revoked when it collided with 0011's closed-run
   invariant; the invariant won.]
+- **[RETIRED 2026-09-06 — user ruling: "retire proposal"]** The assistant's
+  server-side write proposals are GONE: the three tools
+  (`correct_transcript`, `edit_speaker_roster`, `replace_summary`), the
+  `proposal` SSE event, `POST /v1/assistant/proposals/:id/confirm|reject`,
+  `agent/write-tools.ts`, `agent/proposals.ts`, `PROPOSAL_KINDS`, and the
+  web `ProposalCard` (which by then had no consumer). Every write the
+  assistant infers is a CLIENT tool (M33): performed in the person's browser
+  through the route the screen's own button uses, behind the consent card —
+  the same yes, given beside the sentence that motivated it, and ONE wall
+  instead of two. The capabilities survive as hands: `correct_transcript`
+  and `edit_summary` are new client tools on the person's segment-edit and
+  summary-version routes; `rename_speaker` already was one. Everything
+  above about "proposals live and die in their conversation" is kept as the
+  reasoning the consent card inherits. `echo.proposal_decision` (db/0029)
+  and its policies STAY untouched: the workflow engine's proposals (M41) are
+  a separate machine that writes there, and the assistant's own rows in it
+  were zero on the day of the retirement.
 
 **M4 amendment — persisted conversations [ruled 2026-08-13, from B1's
 table-granularity instrument]:** `agent_session`/`agent_message` were
@@ -1483,9 +1500,10 @@ here is what a person can press and, where it destroys, only after a
 consent card). (2) Delegation's guard 2 is revised: a colleague Echo
 calls (`ask_roya` / `ask_ava`) receives the SESSION's client tools beside
 its reads — a client tool's reach is bounded by the consent card on the
-person's own screen, which is the reach M43 asks about — and still no
-proposal tool, since a proposal belongs inside the conversation the person
-is having with Echo. The hand-off rule itself (more than three separate
+person's own screen, which is the reach M43 asks about — and no
+server-side write of any kind [the proposal tools this sentence once
+withheld retired on 2026-09-06; see the M4 retirement note]. The hand-off
+rule itself (more than three separate
 tasks, or the person asking for the agents → Echo splits the work and
 calls the colleagues) is a judgement about the request and lives in
 Echo's standing orders, pinned by `core/test/assistant-prompt.test.ts`;
@@ -1554,9 +1572,10 @@ Per-user `watch | assist | act` (db/0073), org-cappable
 fresh per ask). Watch: no client tools at all — a property of the code.
 Assist (default): ui-effect surface actions run; write-effect take
 consent. Act: write-effect surface actions run without the card — and
-governs CLIENT tools ONLY: server-side proposals keep propose→approve at
-every setting; auto-applying those is a separate future decision with
-its own allow-list, deliberately not folded in. The dial widens policy;
+governs CLIENT tools ONLY [and since 2026-09-06 that is every write the
+assistant can make: the server-side proposals, which kept propose→approve
+at every setting, retired that day — see the M4 retirement note]. The dial
+widens policy;
 the grant never moves. Schema features arriving after a code deploy are
 CAPABILITY-DETECTED at boot with a loud log line and a safe default —
 code and migrations deploy in either order here, and a silent default is

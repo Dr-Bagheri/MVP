@@ -13,6 +13,7 @@ vi.mock("../src/agent/pi.ts", async () => ({
 const { createDelegationTools, createEchoTool, MAX_DELEGATIONS } =
   await import("../src/agent/delegation.ts");
 const { toolsFor, createPlatformTools } = await import("../src/agent/platform-tools.ts");
+const { DOMAIN_TOOL_NAMES } = await import("../src/agent/domain-tools.ts");
 import { ToolDenied } from "../src/agent/tools.ts";
 import type { Identity } from "../src/agent/types.ts";
 
@@ -113,24 +114,24 @@ describe("Echo's colleagues, as tools", () => {
     expect(names.filter((n) => n.startsWith("ask_"))).toEqual([]);
   });
 
-  it("GUARD 2 (revised 2026-09-05): reads, the surface's own hands, and never a proposal", async () => {
+  it("GUARD 2 (revised 2026-09-05; proposals retired 2026-09-06): reads, the surface's own hands, nothing else", async () => {
     /*
      * The blast-radius rule (M43): what an output can REACH decides what its
      * author may hold. The user ruled the colleagues must DO the work Echo
      * hands them, so they get the SURFACE's client tools — whose reach is a
-     * consent card on the person's own screen — and still no proposal tool,
-     * because a proposal belongs inside the conversation the person is
-     * having with Echo. The check is on the SET that was handed over,
-     * because a promise in a comment is not a wall.
+     * consent card on the person's own screen. Every SERVER-side tool a
+     * delegate holds is a read: this used to be asserted as the absence of
+     * the three proposal tools, and when those retired that loop would have
+     * stayed green over an empty list — so it is the positive property now,
+     * against the two read registries. A promise in a comment is not a wall.
      */
     const hand = { name: "create_project", label: "x", description: "x", parameters: {}, run: async () => ({}) };
     const { tools, nested } = await build({ clientTools: [hand] });
     await run(tools.find((t) => t.name === "ask_roya")!, { question: "وضعیت تخته؟" });
     const names = nested[0]!.tools.map((t) => t.name);
     expect(names.length).toBeGreaterThan(3);           // it got a real read set
-    for (const proposal of ["correct_transcript", "replace_summary", "edit_speaker_roster"]) {
-      expect(names, proposal).not.toContain(proposal);
-    }
+    const reads = new Set([...DOMAIN_TOOL_NAMES, ...toolsFor().map((t) => t.name)]);
+    expect(names.filter((n) => !reads.has(n)), "a server-side tool a delegate holds that is not a read").toEqual([]);
     expect(names.filter((n) => n.startsWith("ask_"))).toEqual([]);
     /* the hands are the SESSION's, passed through untouched */
     expect(nested[0]!.clientTools.map((t) => t.name)).toEqual(["create_project"]);

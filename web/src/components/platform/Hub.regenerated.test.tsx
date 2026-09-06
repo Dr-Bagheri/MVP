@@ -26,9 +26,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 const REGENERATED: AgentMessage[] = [
-  { id: "m0", role: "user", content: "hi", tool_calls: [], proposal: null },
-  { id: "m1", role: "assistant", content: "سلام! چطور می‌توانم کمکتان کنم؟", tool_calls: [], proposal: null },
-  { id: "m2", role: "assistant", content: "سلام! من دستیار اکو هستم و می‌توانم دربارهٔ تماس‌ها و رونوشت‌هایتان کمک کنم.", tool_calls: [], proposal: null },
+  { id: "m0", role: "user", content: "hi", tool_calls: [] },
+  { id: "m1", role: "assistant", content: "سلام! چطور می‌توانم کمکتان کنم؟", tool_calls: [] },
+  { id: "m2", role: "assistant", content: "سلام! من دستیار اکو هستم و می‌توانم دربارهٔ تماس‌ها و رونوشت‌هایتان کمک کنم.", tool_calls: [] },
 ];
 
 vi.mock("@/api/client", () => ({

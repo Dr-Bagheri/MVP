@@ -1057,6 +1057,42 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     }, ["record", "speaker_id"]),
     effect: "write",
   },
+  /*
+   * THE RECORD EDITS (2026-09-06). Until this day `correct_transcript` and
+   * `replace_summary` were SERVER-side write tools: the model proposed, a
+   * card in the thread asked, a confirm route applied. They are hands now —
+   * the person's own segment edit and summary version, performed in their
+   * browser through the routes the screen's buttons use, behind the consent
+   * card like every other write — so there is one wall, and the yes is given
+   * where the sentence that motivated it is on screen.
+   */
+  {
+    name: "correct_transcript",
+    label: { fa: "اصلاح رونوشت", en: "Correcting a transcript line" },
+    description:
+      "Replace the text of ONE transcript segment of a record with what was "
+      + "actually said — a misheard name, a wrong number. The segment keeps "
+      + "its id and timing; the summary is not rebuilt. Read the line first "
+      + "(read_window) so the correction quotes the person, never a guess.",
+    parameters: obj({
+      record: str("The record's id or enough of its title to find it."),
+      segment_id: str("The segment's id, from read_window or search_transcripts."),
+      text: str("The corrected text of that one segment."),
+    }, ["record", "segment_id", "text"]),
+    effect: "write",
+  },
+  {
+    name: "edit_summary",
+    label: { fa: "ویرایش خلاصه", en: "Editing a summary" },
+    description:
+      "Write a new VERSION of a record's summary in the person's own name — "
+      + "the earlier versions stay. Pass the whole body as it should read.",
+    parameters: obj({
+      record: str("The record's id or enough of its title to find it."),
+      body: str("The full new summary text."),
+    }, ["record", "body"]),
+    effect: "write",
+  },
   {
     name: "create_person",
     label: { fa: "افزودن به دفترچه", en: "Adding a person to the directory" },

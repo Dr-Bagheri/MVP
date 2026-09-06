@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
 import { Select } from "@/components/Select";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { PageContainer } from "@/components/scaffold";
+import { PageContainer, Skeleton } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Icon, type IconName } from "@/components/icons";
 import { SECTION_ROW_GAP, SectionTabs } from "./sectionTabs";
+import { BrandMark } from "./brandMarks";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
 import {
   INTEGRATIONS,
@@ -67,11 +68,11 @@ interface SourceRow {
   messagesSeen: number | null;
 }
 
-/** What a tile offers, decided in ONE place so the card and its button agree. */
+/** What a tile IS, decided in ONE place so its chip and its press agree. */
 type TileAction =
   | { kind: "sentence" }
   | { kind: "connect" }
-  | { kind: "reconnect" }
+  | { kind: "reconnect"; status: "expired" | "revoked" }
   | { kind: "enableDrafts" }
   | { kind: "reconnectDrive" }
   | { kind: "connected" };
@@ -88,8 +89,31 @@ function tileAction(entry: IntegrationEntry, state: ConnectorStatus | undefined)
     if (entry.source === "mail" && state.can_draft === false) return { kind: "enableDrafts" };
     return { kind: "connected" };
   }
-  return state.status === "not_connected" ? { kind: "connect" } : { kind: "reconnect" };
+  if (state.status === "not_connected") return { kind: "connect" };
+  return { kind: "reconnect", status: state.status === "expired" ? "expired" : "revoked" };
 }
+
+/**
+ * What a tile SHOWS and DOES: its status chip and, when it is a control, the
+ * one press it answers. `control: null` is the not-configured tile — a claim
+ * about the product, so nothing to press and nothing that reads as disabled.
+ */
+interface TileFace {
+  status: string;
+  tone: "success" | "muted" | "warning" | "danger";
+  control: { label: string; press: () => void } | null;
+}
+
+/**
+ * THE ONE TILE SHAPE (RULEBOOK R22; user directive, 2026-09-06: "like an app
+ * store … smaller buttons same size each row 4 of them with their own logos
+ * and just the name and their status"). A list card (`.card-row`) with a
+ * floor of eight rem so a short name and a long status land on one height;
+ * the mark, the name on one line, the chip — and nothing else: no
+ * description, no provider line, no button inside the tile. The tile IS the
+ * button, so the whole face is the hit area.
+ */
+const TILE = "card-row flex min-h-32 w-full flex-col items-center justify-center gap-1 text-center";
 
 export function Integrations() {
   const t = useTranslations("integrations");
@@ -131,6 +155,51 @@ export function Integrations() {
 
   const providerName = (provider: ConnectorProvider) =>
     provider === "google" ? tw("google") : tw("microsoft");
+
+  /**
+   * The chip and the press for one tile, from the state decided above — one
+   * function, so what a tile says and what it does cannot disagree. The
+   * accessible name is the ACTION with the integration's name in it («اتصال
+   * جی‌میل»), never the provider's: four Google tiles are four different
+   * doors, and a screen reader offered «اتصال گوگل» four times cannot tell
+   * them apart.
+   */
+  function present(action: TileAction, entry: IntegrationEntry, name: string): TileFace {
+    switch (action.kind) {
+      case "sentence":
+        return { status: t("statusNotConfigured"), tone: "muted", control: null };
+      case "connect":
+        return {
+          status: t("statusNotConnected"), tone: "muted",
+          control: { label: t("connectName", { name }), press: () => setBriefing({ entry, reconnect: false }) },
+        };
+      case "reconnect":
+        return {
+          status: action.status === "expired" ? t("statusExpired") : t("statusRevoked"),
+          tone: action.status === "expired" ? "warning" : "danger",
+          control: { label: t("reconnectName", { name }), press: () => setBriefing({ entry, reconnect: true }) },
+        };
+      /* scope upgrades skip the briefing: the account is already connected
+         and briefed — the press is a re-consent, not a first meeting. The
+         connected TABLE still lists the mailbox, so its detail page is one
+         tab away; the tile's one press is the upgrade the chip names. */
+      case "enableDrafts":
+        return {
+          status: t("statusDraftsOff"), tone: "warning",
+          control: { label: t("enableDraftsTile", { name }), press: () => void connect(entry.provider) },
+        };
+      case "reconnectDrive":
+        return {
+          status: t("statusDriveOff"), tone: "warning",
+          control: { label: t("reconnectDriveTile", { name }), press: () => void connect(entry.provider) },
+        };
+      case "connected":
+        return {
+          status: t("connected"), tone: "success",
+          control: { label: t("openDetails", { name }), press: () => router.push(`/integrations/${entry.slug}`) },
+        };
+    }
+  }
 
   /*
    * A row per SOURCE of every provider the person has actually CONNECTED —
@@ -190,14 +259,18 @@ export function Integrations() {
       header: t("colName"),
       cell: (row) => (
         <span className="flex items-center gap-3">
-          {/* the SOURCE's mark, not the provider's: two rows of one grant
-              differ by what they read. No remote brand assets (CSP) */}
-          <span
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg-muted"
-            aria-hidden
-          >
-            <Icon name={row.icon} size="md" />
-          </span>
+          {/* the SOURCE's own mark (brandMarks.tsx — inline, no remote brand
+              asset under the CSP): two rows of one grant differ by what they
+              read, and the row wears the same logo as its tile on the shelf */}
+          <BrandMark
+            slug={row.slug}
+            className="h-8 w-8"
+            fallback={(
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg-muted" aria-hidden>
+                <Icon name={row.icon} size="md" />
+              </span>
+            )}
+          />
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium text-fg">{row.name}</span>
             {row.accountLabel ? (
@@ -403,115 +476,38 @@ export function Integrations() {
           </div>
 
           <div hidden={tab !== "available"}>
-            {/* audit finding, 2026-09-02: the same step down as the block
-                above — two headings on one screen must not answer the
-                "how big is a block title" question twice */}
-            {/* one row of four from xl up (the offer IS four Google sources) —
-                compact, Sana-shaped (user directive, 2026-08-28) */}
-            {/* TWO PER ROW, not four (user directive, 2026-09-02: "change the
-                style of the integration to a small page as well, make the big
-                buttons smaller so it fits"): the section is the small column
-                now, and four 44-high cards across 1040px were each too narrow
-                for their own sentence */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              {INTEGRATIONS.map((entry) => {
-                const state = connectors?.find((row) => row.provider === entry.provider);
-                const action = connectors === null ? null : tileAction(entry, state);
-                /* what a CLICK on the card does — decided from the same
-                   action the button renders, so the two can never disagree:
-                   a connected tile opens its detail page, an unconnected one
-                   opens the connect briefing, an unconfigured one is not a
-                   control at all */
-                const open =
-                  action === null || action.kind === "sentence"
-                    ? null
-                    : action.kind === "connect" || action.kind === "reconnect"
-                      ? () => setBriefing({ entry, reconnect: action.kind === "reconnect" })
-                      : () => router.push(`/integrations/${entry.slug}`);
-                return (
-                  <div
-                    key={entry.slug}
-                    /* the WORKFLOW card's FAMILY — same corner, same border,
-                       same glowing round tile recipe — at COMPACT scale
-                       (user directive, 2026-08-28, second round: all four in
-                       one row, closer together, per the Sana reference). The
-                       first round's "look like the workflow big buttons"
-                       verbatim copy is deliberately superseded: kinship now
-                       lives in the recipe, not the measurements.
-                       audit finding, 2026-09-02: the recipe is `.card` — this
-                       spelled out its corner, border, ground and padding by
-                       hand and left out the one part that is not a
-                       measurement, the ambient shadow, so four cards sat flat
-                       under shadowed table rows. Wearing the class means the
-                       next change to what a card is reaches these too. */
-                    className={`card group flex flex-col ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
-                    {...(open
-                      ? {
-                          role: "button",
-                          tabIndex: 0,
-                          "aria-label": t("openDetails", { name: copy[entry.key].name }),
-                          onClick: open,
-                          onKeyDown: (event: KeyboardEvent) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              open();
-                            }
-                          },
-                        }
-                      : {})}
-                  >
-                    {/* the tile keeps the workflow tile's colour recipe at
-                        card scale — Gmail wears the coral family (its own
-                        mark is red; beside the mail workflow's coral plane
-                        it reads as kin), everything else the accent, the
-                        platform's only two on-color pairs */}
-                    <span
-                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
-                        entry.slug === "gmail" || entry.slug === "outlook-mail"
-                          ? "bg-danger text-on-danger shadow-[0_18px_44px_-14px_rgb(var(--danger)/0.75)]"
-                          : "bg-accent text-on-accent shadow-[0_18px_44px_-14px_rgb(var(--accent)/0.75)]"
-                      }`}
-                      aria-hidden
-                    >
-                      <Icon name={entry.icon} size="lg" />
-                    </span>
-                    <h2 className="mt-3 text-pane-title font-semibold text-fg group-hover:text-accent">
-                      {copy[entry.key].name}
-                    </h2>
-                    <p className="text-xs text-fg-muted">
-                      {providerName(entry.provider)}
-                    </p>
-                    <p className="mt-1.5 flex-1 text-sm leading-6 text-fg-muted">
-                      {copy[entry.key].description}
-                    </p>
-                    {/* the action row stops the click: a button here answers
-                        its own question, never also the card's */}
-                    <div className="mt-4" onClick={(event) => event.stopPropagation()}>
-                      {action === null ? null : (
-                        <TileControl
-                          action={action}
-                          labels={{
-                            connect: tw("connect", { provider: providerName(entry.provider) }),
-                            reconnect: tw("reconnect", { provider: providerName(entry.provider) }),
-                            notConfigured: tw("notConfigured", {
-                              provider: providerName(entry.provider),
-                            }),
-                            enableDrafts: tw("enableDrafts"),
-                            reconnectDrive: t("reconnectDrive"),
-                            connected: t("connected"),
-                          }}
-                          onBrief={() =>
-                            setBriefing({ entry, reconnect: action.kind === "reconnect" })}
-                          /* scope upgrades skip the briefing: the account is
-                             already connected and briefed — the press is a
-                             re-consent, not a first meeting */
-                          onConnect={() => void connect(entry.provider)}
-                        />
-                      )}
+            {/* THE SHELF (user directive, 2026-09-06: "the integration page
+                to look like an app store with multiple options that you can
+                choose to connect and smaller buttons same size each row 4 of
+                them with their own logos and just the name and their status").
+                Four to a row from md, two below; every tile the same shape;
+                the tile IS the control — see `present()` for what each state
+                shows and does. While the wire answers, four placeholders the
+                tile's own size hold the row (a shelf that appears whole after
+                the network makes everything under it jump, and an empty shelf
+                reads as "nothing to connect"). */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {connectors === null
+                ? INTEGRATIONS.map((entry) => (
+                    <div key={entry.slug} className={TILE} aria-hidden>
+                      <Skeleton className="h-10 w-10 rounded-xl" />
+                      <Skeleton className="mt-2 h-3.5 w-24" />
+                      <Skeleton className="mt-2 h-3 w-16" />
                     </div>
-                  </div>
-                );
-              })}
+                  ))
+                : INTEGRATIONS.map((entry) => {
+                    const state = connectors.find((row) => row.provider === entry.provider);
+                    const name = copy[entry.key].name;
+                    return (
+                      <AppTile
+                        key={entry.slug}
+                        slug={entry.slug}
+                        icon={entry.icon}
+                        name={name}
+                        face={present(tileAction(entry, state), entry, name)}
+                      />
+                    );
+                  })}
             </div>
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
           </div>
@@ -571,56 +567,48 @@ export function Integrations() {
 }
 
 /**
- * What a tile OFFERS, given the action decided above.
- *
- * `sentence` is a claim about the PRODUCT — the operator holds no OAuth
- * credentials for this provider — so it renders as a sentence and never as a
- * button, because a button here could not work for any person on any
- * account. Everything else genuinely does something: opens the briefing,
- * starts a re-consent, or (connected) states the fact while the card itself
- * carries the navigation.
+ * One tile of the shelf. The same face whatever the state — mark, name,
+ * chip — so the four in a row are the same size; only whether it is a
+ * BUTTON changes. A control gets the family's pointer and hover; the
+ * not-configured tile is a plain box, because a claim about the product must
+ * not look like something to press (and must not look disabled either: it is
+ * not a control that is off, it is not a control).
  */
-function TileControl({
-  action,
-  labels,
-  onBrief,
-  onConnect,
+function AppTile({
+  slug,
+  icon,
+  name,
+  face,
 }: {
-  action: TileAction;
-  labels: {
-    connect: string;
-    reconnect: string;
-    notConfigured: string;
-    enableDrafts: string;
-    reconnectDrive: string;
-    connected: string;
-  };
-  onBrief: () => void;
-  onConnect: () => void;
+  slug: string;
+  icon: IconName;
+  name: string;
+  face: TileFace;
 }) {
-  if (action.kind === "sentence") {
-    return (
-      /* audit finding, 2026-09-02: this wore a 36px bordered rounded-full
-         pill in the tile's button slot — sized to the buttons on the
-         neighbouring tiles, which is exactly the shape the comment above says
-         it must never take; on screen it read as a disabled control. A claim
-         about the product is a sentence, and a sentence is set as copy: no
-         height, no corner, nothing to mistake for something to press. (It
-         was also this file's one entry in control.guard's worklist.) */
-      <p className="text-xs text-fg-subtle">{labels.notConfigured}</p>
-    );
-  }
-  if (action.kind === "connected") return <StatusDot label={labels.connected} />;
-  if (action.kind === "enableDrafts" || action.kind === "reconnectDrive") {
-    return (
-      <button type="button" className="btn btn-sm border border-border font-medium text-fg" onClick={onConnect}>
-        {action.kind === "enableDrafts" ? labels.enableDrafts : labels.reconnectDrive}
-      </button>
-    );
-  }
+  const body = (
+    <>
+      <BrandMark
+        slug={slug}
+        className="h-10 w-10"
+        fallback={(
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
+            <Icon name={icon} size="lg" />
+          </span>
+        )}
+      />
+      <span className="mt-1 block w-full truncate text-sm font-semibold text-fg">{name}</span>
+      <StatusDot label={face.status} tone={face.tone} />
+    </>
+  );
+  if (face.control === null) return <div className={TILE}>{body}</div>;
   return (
-    <button type="button" className="btn btn-sm border border-border font-medium text-fg" onClick={onBrief}>
-      {action.kind === "connect" ? labels.connect : labels.reconnect}
+    <button
+      type="button"
+      className={`${TILE} cursor-pointer hover:bg-surface-2`}
+      aria-label={face.control.label}
+      onClick={face.control.press}
+    >
+      {body}
     </button>
   );
 }

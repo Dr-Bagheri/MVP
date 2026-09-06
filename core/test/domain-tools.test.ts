@@ -83,6 +83,20 @@ describe("the tools exist and are the ones the system skill declares", () => {
     expect(tools.map((t) => t.name)).toContain("list_members");
   });
 
+  it("and the published name list IS the registry — every implemented tool is in DOMAIN_TOOL_NAMES", () => {
+    /*
+     * The other direction (2026-09-06, found by delegation's guard-2 test on
+     * the day the proposals retired). DOMAIN_TOOL_NAMES is what
+     * availableTools() publishes as the agent vocabulary and what the
+     * platform-map and tool-registry checks read as "the domain tools" — and
+     * it had been hand-written at four names while createDomainTools()
+     * registered five, so `list_members` was a tool the runtime offered that
+     * no agent could declare and no coverage check had ever looked at. A
+     * guard's coverage list is itself a seam; this keeps the two one list.
+     */
+    expect([...tools.map((t) => t.name)].sort()).toEqual([...DOMAIN_TOOL_NAMES].sort());
+  });
+
   it("declares parameters pi can serialise", () => {
     for (const t of tools) {
       expect(t.parameters, t.name).toBeTruthy();

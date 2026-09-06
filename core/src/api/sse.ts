@@ -7,7 +7,6 @@
  *   session     {id, created}      — FIRST event when the turn has a thread
  *   text_delta  {delta}
  *   tool_call   {id, name, label, state: started|ok|denied|blocked|error, ms?}
- *   proposal    {id, kind, summary, payload}
  *   done        {runId, failed, error?}
  *
  * `session` was ADDED, not changed — an unknown event type is ignorable, so a
@@ -67,7 +66,6 @@ export type SseEvent =
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string;
       state: "started" | "ok" | "denied" | "blocked" | "error"; ms?: number }
-  | { type: "proposal"; id: string; kind: string; summary: string; payload: unknown }
   /**
    * M33: the runtime asks the SURFACE to perform an action (client-executed
    * tool). The browser performs it under the user's own session — via the

@@ -94,7 +94,7 @@ vi.mock("@/api/client", () => ({
     }),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
     agentThread: async () =>
-      ({ messages: persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })), floor: [] }),
+      ({ messages: persisted.map((m) => ({ ...m, tool_calls: [] })), floor: [] }),
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [],
     agents: async () => [],
