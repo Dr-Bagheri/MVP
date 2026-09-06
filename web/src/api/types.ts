@@ -453,6 +453,14 @@ export interface TranscriptSegment {
   words: TranscriptWord[];
   /** a corrected line keeps its identity and is marked */
   edited: boolean;
+  /**
+   * The language the line was spoken in, as the transcriber identified it
+   * (db/0200, 2026-09-06): the majority of its words. `null` on rows written
+   * before it was kept and on lanes that identify none — the screen sets a
+   * line's `dir` from it (lib/textDirection.ts) and leaves it to the document
+   * when it is null.
+   */
+  language: string | null;
 }
 
 export interface TranscriptResponse {

@@ -139,7 +139,9 @@ export async function main(): Promise<void> {
   const runner = createRunner({
     queue,
     handlers: [
-      createPartStep({ db, ml, queue, lifecycle, storage }),
+      // the configured ml timeout is the FLOOR; the wait follows each part's
+      // length from there (2026-09-06, the long-file lane)
+      createPartStep({ db, ml, queue, lifecycle, storage, mlTimeoutMs: config.mlTimeoutMs }),
       // ml + storage arm M39 voice matching; without them the step is
       // exactly the pre-M39 step (matching is best-effort either way)
       createLinkSpeakersStep({ db, queue, lifecycle, ml, storage }),

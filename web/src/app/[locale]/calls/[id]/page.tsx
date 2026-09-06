@@ -7,6 +7,7 @@ import type { Call, CallNote, CallStatus, Me, Person, Speaker, SummaryVersion, T
 import { ToolbarShell } from "@/components/platform/ToolbarShell";
 import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
+import { dirFor, languageMix } from "@/lib/textDirection";
 import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
@@ -806,6 +807,15 @@ export default function CallDetailPage({
 
   /** #10 talk-time shares (only meaningful with >1 speaker) */
   const shares = useMemo(() => talkTimes(rows), [rows]);
+  /* C2 (2026-09-06): how much of the transcript is in each language, by the
+     lines that named one — a chip row above a MIXED transcript, nothing
+     above a transcript in one language */
+  const languageShares = useMemo(() => languageMix(rows), [rows]);
+  const languageName = (code: string): string =>
+    code === "fa" ? t("languageName_fa")
+      : code === "en" ? t("languageName_en")
+        : code === "ar" ? t("languageName_ar")
+          : t("languageName_other", { code });
 
   /** #16 related by SHARED TAGS — the only overlap this page can compute
       honestly from what it holds */
@@ -1921,6 +1931,15 @@ export default function CallDetailPage({
                     </button>
                   ) : null}
                 </div>
+                {languageShares.length > 1 ? (
+                  <div className="flex flex-wrap items-center gap-1.5" aria-label={t("languagesLabel")}>
+                    {languageShares.map((share) => (
+                      <span key={share.code} className="chip bg-surface-2 text-fg-muted">
+                        {languageName(share.code)} {digits(Math.round(share.share * 100), locale)}٪
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="flex h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-surface-2" aria-hidden>
                   {shares.map((share) => (
                     <span
@@ -2256,7 +2275,10 @@ export default function CallDetailPage({
                       </span>
                     </span>
                   ) : row.words.length > 0 ? (
-                    <p className="text-sm leading-7 text-fg">
+                    /* the line's own direction (2026-09-06): from the language
+                       the transcriber identified for it; unset — the page's —
+                       when it identified none */
+                    <p className="text-sm leading-7 text-fg" dir={dirFor(row.language)} lang={row.language ?? undefined}>
                       {(cleanRead
                         ? row.words.filter((word) => !isFillerWord(word.w))
                         : row.words
@@ -2280,7 +2302,7 @@ export default function CallDetailPage({
                       ))}
                     </p>
                   ) : (
-                    <p className="text-sm leading-7 text-fg">
+                    <p className="text-sm leading-7 text-fg" dir={dirFor(row.language)} lang={row.language ?? undefined}>
                       {faDisplay(cleanRead ? stripFillers(row.text) : row.text)}
                     </p>
                   )}

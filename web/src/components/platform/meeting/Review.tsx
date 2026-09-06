@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Call, Speaker, TranscriptSegment } from "@/api/types";
+import { dirFor } from "@/lib/textDirection";
 import { IconCheck, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
 import { digits, formatClock } from "@/lib/format";
 import { SkeletonLines } from "@/components/scaffold";
@@ -464,7 +465,11 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
                     {formatClock(Math.floor(seg.start_ms / 1000), locale)}
                   </button>
                 </div>
-                <p className="mt-0.5 text-sm leading-6 text-fg">{seg.text}</p>
+                {/* each line in its own direction (2026-09-06): an English
+                    sentence inside a Persian meeting reads left-to-right,
+                    and a line whose language was not identified follows the
+                    page as before */}
+                <p className="mt-0.5 text-sm leading-6 text-fg" dir={dirFor(seg.language)} lang={seg.language ?? undefined}>{seg.text}</p>
               </div>
             </li>
           );

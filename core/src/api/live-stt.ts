@@ -27,6 +27,12 @@ export interface LiveToken {
   text: string;
   is_final: boolean;
   /**
+   * The language the provider identified for this token (2026-09-06, C2) —
+   * present when identification is on and the provider said; absent means
+   * "not said", never a default. A caption line sets its direction from it.
+   */
+  language?: string;
+  /**
    * The provider's speaker label for this token — present only on the
    * RECORDING lane, which asks for diarization (2026-08-26). Absent means
    * "this lane does not diarize", never "one speaker": a consumer that
@@ -195,7 +201,13 @@ export function createLiveStt(options: LiveSttOptions = {}) {
   return {
     available: () => Boolean(apiKey),
 
-    start(userId: string, format?: "pcm16k"): { session_id: string; ticket: string } {
+    start(
+      userId: string,
+      format?: "pcm16k",
+      /** recognition context (2026-09-06): the org's names and jargon, read
+          by the route under the person's identity; absent = none sent */
+      context?: { terms: string[]; text?: string; general?: { key: string; value: string }[] },
+    ): { session_id: string; ticket: string } {
       if (!apiKey) throw new Error("live stt unavailable — no provider key");
       const mine = [...sessions.values()].filter((s) => s.userId === userId);
       if (mine.length >= maxPerUser) {
@@ -265,12 +277,25 @@ export function createLiveStt(options: LiveSttOptions = {}) {
            */
           language_hints_strict: true,
           enable_language_identification: true,
+          /*
+           * The same structured context the async lane sends (C1): names
+           * and jargon the live captions should spell right the first time.
+           * Only when there is one — an empty context is a claim we did not
+           * make.
+           */
+          ...(context && (context.terms.length > 0 || context.text || context.general?.length)
+            ? { context: {
+                ...(context.terms.length > 0 ? { terms: context.terms } : {}),
+                ...(context.text ? { text: context.text } : {}),
+                ...(context.general?.length ? { general: context.general } : {}),
+              } }
+            : {}),
         }));
       }) as never);
       ws.addEventListener("message", ((event: { data: unknown }) => {
         try {
           const body = JSON.parse(String(event.data)) as {
-            tokens?: { text?: string; is_final?: boolean; speaker?: number | string }[];
+            tokens?: { text?: string; is_final?: boolean; speaker?: number | string; language?: string }[];
             error_code?: number | string;
           };
           if (body.error_code !== undefined) {
@@ -290,6 +315,9 @@ export function createLiveStt(options: LiveSttOptions = {}) {
                 ...(token.speaker === undefined || token.speaker === null
                   ? {}
                   : { speaker: String(token.speaker) }),
+                ...(typeof token.language === "string" && token.language !== ""
+                  ? { language: token.language }
+                  : {}),
               })),
             });
           }

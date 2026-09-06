@@ -240,10 +240,31 @@ export function createRunner({ queue, handlers, config, sink, log }: RunnerOptio
   ): Promise<void> {
     const base = { step: handler.name, msg_id: message.msgId, attempt: message.readCt };
     let failure: unknown = null;
+    /*
+     * THE VISIBILITY HEARTBEAT (2026-09-06, the long-file lane). A claimed
+     * message is invisible for `visibilityTimeoutSec`; a step that outruns it
+     * is redelivered to a second worker slot while the first is still
+     * transcribing — the same part paid for twice, and two writers racing
+     * the UNIQUE wall. With the ceiling at five hours a step can legitimately
+     * run for an hour, so the claim is renewed every third of the window for
+     * as long as the handler runs. A renewal that fails is logged and the
+     * step continues: the old behaviour (redelivery at the window's end) is
+     * exactly what a lost heartbeat falls back to.
+     */
+    const vtSec = config.visibilityTimeoutSec;
+    const beatMs = Math.max(5, Math.floor(vtSec / 3)) * 1000;
+    const beat = setInterval(() => {
+      void queue.delay(handler.queue, message.msgId, vtSec).catch((error) => {
+        log.warn({ ...base, error_type: "heartbeat_failed", ...debugMessage(error) },
+          "visibility keep-alive failed; the message may redeliver while the step still runs");
+      });
+    }, beatMs);
     try {
       await handler.handle(message.body, { attempt: message.readCt, log });
     } catch (error) {
       failure = error;
+    } finally {
+      clearInterval(beat);
     }
     if (failure === null) {
       /*

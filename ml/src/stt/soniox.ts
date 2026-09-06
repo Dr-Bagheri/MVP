@@ -2,26 +2,14 @@
 // speaker diarization with full-file context.
 //
 // Flow: POST /v1/files → POST /v1/transcriptions → poll → GET …/transcript,
-// then DELETE both. The delete is not politeness: audio and transcript are the
-// customer's record, and ml/ leaves no copy anywhere it does not control.
+// then DELETE both — all through SonioxApi, which the translator shares.
 
-import { openAsBlob } from "node:fs";
 import { config } from "../config.js";
 import { MlError } from "../errors.js";
-import { logger } from "../log.js";
+import { SonioxApi, pollDeadlineMs, sonioxContext, type SonioxToken } from "./soniox-api.js";
 import type { SttInput, SttLane, SttResult, SttWord } from "./types.js";
 
-const BASE = "https://api.soniox.com/v1";
 const MODEL = "stt-async-v5";
-
-interface SonioxToken {
-  text: string;
-  start_ms?: number;
-  end_ms?: number;
-  confidence?: number;
-  speaker?: number | string;
-  language?: string;
-}
 
 export class SonioxLane implements SttLane {
   readonly name = "soniox";
@@ -30,114 +18,61 @@ export class SonioxLane implements SttLane {
     return Boolean(config().SONIOX_API_KEY);
   }
 
-  async transcribe(input: SttInput): Promise<SttResult> {
-    const key = config().SONIOX_API_KEY;
-    if (!key) throw new MlError("stt_unavailable", "soniox lane has no key");
+  /**
+   * Five hours by default (ML_SONIOX_MAX_DURATION_MS) — the async model's own
+   * documented ceiling. The pipeline's old single cap sat at 35 minutes for
+   * every lane, which turned a 40-minute recorded part into `media_too_long`
+   * on a provider that would have carried it (2026-09-06, C3).
+   */
+  maxDurationMs(): number {
+    return config().ML_SONIOX_MAX_DURATION_MS;
+  }
 
+  async transcribe(input: SttInput): Promise<SttResult> {
+    const cfg = config();
+    const key = cfg.SONIOX_API_KEY;
+    if (!key) throw new MlError("stt_unavailable", "soniox lane has no key");
+    if (input.durationMs > this.maxDurationMs()) {
+      throw new MlError("media_too_long", "audio exceeds the soniox lane's ceiling");
+    }
+
+    const api = new SonioxApi(key);
     let fileId: string | undefined;
     let transcriptionId: string | undefined;
     try {
-      fileId = await this.upload(input.file, key);
-      transcriptionId = await this.create(fileId, input, key);
-      await this.poll(transcriptionId, key);
-      const tokens = await this.transcript(transcriptionId, key);
+      fileId = await api.uploadFile(input.file);
+      transcriptionId = await api.createTranscription(createBody(fileId, input));
+      await api.waitUntilDone(transcriptionId, {
+        deadlineMs: pollDeadlineMs(input.durationMs, cfg.ML_STT_TIMEOUT_MS),
+        baseIntervalMs: cfg.ML_STT_POLL_MS,
+      });
+      const tokens = await api.transcript(transcriptionId);
       return toResult(tokens, input.diarize);
     } finally {
-      // Best effort, and never allowed to mask a real failure.
-      if (transcriptionId) await this.del(`/transcriptions/${transcriptionId}`, key);
-      if (fileId) await this.del(`/files/${fileId}`, key);
-    }
-  }
-
-  private headers(key: string): Record<string, string> {
-    return { authorization: `Bearer ${key}` };
-  }
-
-  private async upload(file: string, key: string): Promise<string> {
-    const form = new FormData();
-    form.append("file", await openAsBlob(file), "audio.wav");
-
-    const res = await fetch(`${BASE}/files`, { method: "POST", headers: this.headers(key), body: form });
-    const body = await readJson(res, "soniox file upload");
-    const id = body?.id;
-    if (!id) throw new MlError("stt_failed", "soniox upload returned no file id");
-    return String(id);
-  }
-
-  private async create(fileId: string, input: SttInput, key: string): Promise<string> {
-    const res = await fetch(`${BASE}/transcriptions`, {
-      method: "POST",
-      headers: { ...this.headers(key), "content-type": "application/json" },
-      body: JSON.stringify({
-        file_id: fileId,
-        model: MODEL,
-        language_hints: input.languageHints,
-        enable_language_identification: true,
-        enable_speaker_diarization: input.diarize,
-        // the org glossary as recognition context (2026-08-23): a bounded,
-        // comma-joined string of names/terms — absent entirely when empty,
-        // because an empty context field is a claim we didn't make
-        ...(input.context && input.context.length > 0
-          ? { context: input.context.join("، ").slice(0, 2_000) }
-          : {}),
-      }),
-    });
-    const body = await readJson(res, "soniox create transcription");
-    const id = body?.id;
-    if (!id) throw new MlError("stt_failed", "soniox create returned no transcription id");
-    return String(id);
-  }
-
-  private async poll(id: string, key: string): Promise<void> {
-    const cfg = config();
-    const deadline = Date.now() + cfg.ML_STT_TIMEOUT_MS;
-
-    while (Date.now() < deadline) {
-      const res = await fetch(`${BASE}/transcriptions/${id}`, { headers: this.headers(key) });
-      const body = await readJson(res, "soniox poll");
-      const status = String(body?.status ?? "");
-
-      if (status === "completed") return;
-      if (status === "error") {
-        throw new MlError("stt_failed", `soniox transcription failed: ${String(body?.error_message ?? "unknown")}`);
-      }
-      await sleep(cfg.ML_STT_POLL_MS);
-    }
-    throw new MlError("stt_failed", "soniox transcription timed out");
-  }
-
-  private async transcript(id: string, key: string): Promise<SonioxToken[]> {
-    const res = await fetch(`${BASE}/transcriptions/${id}/transcript`, { headers: this.headers(key) });
-    const body = await readJson(res, "soniox transcript");
-    const tokens = body?.tokens;
-    if (!Array.isArray(tokens)) throw new MlError("stt_failed", "soniox transcript had no tokens array");
-    return tokens as SonioxToken[];
-  }
-
-  private async del(path: string, key: string): Promise<void> {
-    try {
-      await fetch(`${BASE}${path}`, { method: "DELETE", headers: this.headers(key) });
-    } catch (e) {
-      // Nothing the caller can do about it; do not fail a good transcript.
-      logger.warn({ step: "soniox_cleanup", err: (e as Error).message }, "soniox cleanup failed");
+      if (transcriptionId) await api.delete(`/transcriptions/${transcriptionId}`);
+      if (fileId) await api.delete(`/files/${fileId}`);
     }
   }
 }
 
-async function readJson(res: Response, what: string): Promise<any> {
-  const text = await res.text();
-  if (!res.ok) {
-    // The body may echo request content, so it never reaches the message.
-    throw new MlError("stt_failed", `${what} returned HTTP ${res.status}`);
-  }
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    throw new MlError("stt_failed", `${what} returned a non-JSON body`, { cause: e });
-  }
+/**
+ * The transcription request — exported so the test asserts the BODY the
+ * provider receives rather than a paraphrase of it (rule 10). Language
+ * identification is always on: a mixed Persian/English recording comes back
+ * with every token's own language, which is what lets the product set each
+ * line's direction (C2).
+ */
+export function createBody(fileId: string, input: SttInput): Record<string, unknown> {
+  const context = sonioxContext(input.context);
+  return {
+    file_id: fileId,
+    model: MODEL,
+    language_hints: input.languageHints,
+    enable_language_identification: true,
+    enable_speaker_diarization: input.diarize,
+    ...(context ? { context } : {}),
+  };
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Soniox emits tokens, which are words OR sub-words, with leading whitespace

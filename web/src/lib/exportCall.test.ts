@@ -17,7 +17,7 @@ import type { TranscriptSegment } from "@/api/types";
 
 const row = (over: Partial<TranscriptSegment>): TranscriptSegment => ({
   id: "s-1", seq: 1, part_id: null, start_ms: 1500, end_ms: 4200,
-  speaker_id: "sp-1", channel: null, edited: false, text: "سلام به همه",
+  speaker_id: "sp-1", channel: null, edited: false, language: null, text: "سلام به همه",
   words: [], ...over,
 });
 const name = (id: string | null) => (id === "sp-1" ? "امیر" : "نامشخص");

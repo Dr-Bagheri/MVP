@@ -169,6 +169,9 @@ try {
       // Two speakers, alternating, so the roster join is exercised in both
       // directions rather than every segment landing on one id.
       speaker: i % 2 === 0 ? "S1" : "S2",
+      // two languages, alternating, so 0200's column is written in both
+      // spellings the provider uses and read back through the same select
+      language: i % 2 === 0 ? "fa" : "en",
       words: (row.words ?? []).map((w) => ({
         w: w.w, startMs: w.s, endMs: w.e,
         ...(w.c !== undefined ? { confidence: w.c } : {}),

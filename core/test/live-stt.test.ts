@@ -252,3 +252,43 @@ describe("the relay after the end (2026-09-06)", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * C1 on the live lane (2026-09-06): the recognition context rides the
+ * provider's config message when the route hands one over, in the
+ * provider's own shape — and is ABSENT otherwise, which is the half that
+ * keeps "context is always sent" from passing.
+ */
+describe("recognition context on the live lane", () => {
+  it("sends terms, text and general facts in the config, and nothing for an empty context", () => {
+    const stt = relay();
+    stt.start(OWNER, undefined, { terms: ["نورای", "سینا"], text: "kickoff", general: [{ key: "organization", value: "Neurai" }] });
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    const config = JSON.parse(ws.sent[0] as string) as Record<string, unknown>;
+    expect(config.context).toEqual({ terms: ["نورای", "سینا"], text: "kickoff", general: [{ key: "organization", value: "Neurai" }] });
+
+    const bare = relay();
+    bare.start(OWNER, undefined, { terms: [] });
+    const ws2 = FakeWs.instances[0]!;
+    ws2.open();
+    expect("context" in (JSON.parse(ws2.sent[0] as string) as Record<string, unknown>)).toBe(false);
+  });
+
+  it("carries a token's language to the caption and never invents one", () => {
+    const stt = relay();
+    const { session_id } = stt.start(OWNER);
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    const seen: unknown[] = [];
+    stt.subscribe(session_id, OWNER, (event) => seen.push(event));
+    ws.fire("message", { data: JSON.stringify({ tokens: [
+      { text: "سلام", is_final: true, language: "fa" },
+      { text: " ok", is_final: false },
+    ] }) });
+    expect(seen[0]).toEqual({ type: "tokens", tokens: [
+      { text: "سلام", is_final: true, language: "fa" },
+      { text: " ok", is_final: false },
+    ] });
+  });
+});

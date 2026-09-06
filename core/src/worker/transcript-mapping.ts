@@ -104,7 +104,32 @@ export interface MappedSegment {
   endMs: number;
   text: string;
   speaker: string | null;
+  /**
+   * The line's language (2026-09-06, C2): the MAJORITY language of its
+   * words, as the transcriber identified them token by token; null when the
+   * lane identified none. A mixed line («این feature رو test کردیم») keeps
+   * the language most of it is in — splitting lines on every switch would
+   * shred code-switched Persian into fragments — and the screen sets each
+   * line's direction from this.
+   */
+  language: string | null;
   words: { w: string; startMs: number; endMs: number; confidence?: number }[];
+}
+
+/** the most frequent language among the words; the earlier one on a tie */
+export function majorityLanguage(words: readonly { language?: string | null }[]): string | null {
+  const counts = new Map<string, number>();
+  for (const word of words) {
+    const code = (word.language ?? "").trim().toLowerCase();
+    if (code === "") continue;
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [code, count] of counts) {
+    if (count > bestCount) { best = code; bestCount = count; }
+  }
+  return best;
 }
 
 export interface MappedTranscript {
@@ -216,6 +241,13 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
 
   const segments: MappedSegment[] = [];
   let current: MappedSegment | undefined;
+  /* the words of the OPEN segment, language included — `current.words` is
+     empty on a degraded part by design, so the tally keeps its own list */
+  let currentWords: MlWord[] = [];
+  const close = (): void => {
+    if (current) current.language = majorityLanguage(currentWords);
+    currentWords = [];
+  };
 
   // Regions are on ml/'s 0-based part timeline, exactly like `word.start_ms`,
   // so they are compared BEFORE the offset is added. Adding it to one side
@@ -240,6 +272,7 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
     previousRegion = region;
 
     if (!current || current.speaker !== speaker || crossedSilence || tooLong) {
+      close();
       current = {
         partId: part.id,
         seq: (part.seqStart ?? 0) + segments.length,
@@ -247,6 +280,7 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
         endMs,
         text: word.text.trim(),
         speaker,
+        language: null,
         words: [],
       };
       segments.push(current);
@@ -254,6 +288,7 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
       current.text = `${current.text} ${word.text.trim()}`.trim();
       current.endMs = Math.max(current.endMs, endMs);
     }
+    currentWords.push(word);
     // Word-level rows only mean something when the lane actually produced
     // them; on a degraded part the "words" are the anchored span, and
     // storing them would fake click-a-word precision we don't have.
@@ -270,6 +305,8 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
       });
     }
   }
+
+  close();
 
   for (const segment of segments) {
     // A segment can still collapse legitimately: a lone zero-length word that

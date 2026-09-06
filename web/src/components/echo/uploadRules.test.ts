@@ -25,10 +25,12 @@ describe("what the limits line promises", () => {
   });
 
   it("refuses a file over the duration limit — the half that once did nothing", () => {
-    expect(uploadRejection(10 * MB, minutes(300))).toEqual({ reason: "tooLong" });
+    expect(uploadRejection(10 * MB, minutes(301))).toEqual({ reason: "tooLong" });
   });
 
   it("accepts a file exactly AT each limit — the boundary the numbers were chosen to allow", () => {
+    /* five hours (2026-09-06): the lane's ceiling, not the fallback's 35 minutes */
+    expect(uploadRejection(50 * MB, minutes(300))).toBeNull();
     expect(uploadRejection(50 * MB, minutes(240))).toBeNull();
   });
 

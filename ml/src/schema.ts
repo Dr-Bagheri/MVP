@@ -7,6 +7,19 @@ import { z } from "zod";
 
 // ---------------------------------------------------------------- request
 
+export const ContextSchema = z
+  .object({
+    terms: z.array(z.string().min(1).max(80)).max(500).default([]),
+    text: z.string().max(500).optional(),
+    general: z
+      .array(z.object({ key: z.string().min(1).max(40), value: z.string().min(1).max(200) }))
+      .max(10)
+      .optional(),
+  })
+  .strict();
+
+export type SttContextWire = z.infer<typeof ContextSchema>;
+
 export const OptionsSchema = z
   .object({
     language_hints: z.array(z.string().min(2).max(8)).max(8).default(["fa", "en"]),
@@ -14,9 +27,12 @@ export const OptionsSchema = z
     max_speakers: z.number().int().min(1).max(15).default(8),
     vad: z.boolean().default(true),
     lane: z.string().min(1).nullable().default(null),
-    /** Org glossary terms to bias recognition toward (2026-08-23).
-        Advisory: lanes that cannot use them ignore them. */
-    context: z.array(z.string().min(1).max(60)).max(200).default([]),
+    /** Recognition CONTEXT (2026-09-06, structured — it was a flat list of
+        glossary terms from 2026-08-23): names and jargon as `terms`, a
+        sentence about the recording as `text`, key/value facts as `general`.
+        The provider's own shape, so a lane forwards it rather than rebuilding
+        it. Advisory: lanes that cannot use it ignore it. */
+    context: ContextSchema.optional(),
   })
   .strict()
   // prefault, not default: every field has its own default, so an absent

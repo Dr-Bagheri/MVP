@@ -51,7 +51,14 @@ const Schema = z.object({
   ML_ALLOW_LOCAL_PATHS: bool(false),
   ML_URL_ALLOWLIST: csv,
 
+  // The FALLBACK lane's ceiling, and the pipeline's answer when no lane is
+  // configured at all: a 30-minute part plus slack. The primary lane carries
+  // its own, below — one number every lane was held to turned a 40-minute
+  // recorded part into `media_too_long` on a provider that carries five
+  // hours (2026-09-06, the long-file lane).
   ML_MAX_DURATION_MS: int(35 * 60 * 1000),
+  // Soniox's async model: five hours per file, the provider's own limit.
+  ML_SONIOX_MAX_DURATION_MS: int(5 * 60 * 60 * 1000),
   ML_MAX_BYTES: int(500 * 1024 * 1024),
   ML_WORK_DIR: z.string().optional().transform((v) => v || os.tmpdir()),
 

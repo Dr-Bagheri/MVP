@@ -81,6 +81,8 @@ import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
 import type { MeetingItemKind } from "./meetings.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
+import { readRecognitionContext } from "../db/recognition-context.ts";
+import { hasOrgGlossary as orgGlossaryColumnExists } from "../db/capabilities.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
 import { createMlClient } from "../worker/ml-client.ts";
 import { decideMatch } from "../worker/voice-match.ts";
@@ -1274,9 +1276,26 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       return reply.code(503).send({ error: "live_stt_unavailable" });
     }
     const body = (request.body ?? {}) as { format?: unknown };
+    /*
+     * The recognition context (2026-09-06, C1) — the same names and jargon
+     * the async lane is told, read here under the PERSON's identity so the
+     * live captions spell a colleague's name right the first time. Best
+     * effort: a failed read starts the session without it, and says so in
+     * the log rather than to the person.
+     */
+    let context: Awaited<ReturnType<typeof readRecognitionContext>> = null;
+    try {
+      const glossary = await orgGlossaryColumnExists(options.db);
+      context = await options.db.withIdentity(identity, (tx) =>
+        readRecognitionContext(tx, identity.orgId, null, { glossary }));
+    } catch (error) {
+      request.log.warn({ error_type: (error as { code?: string }).code ?? "recognition_context_failed" },
+        "live stt starts without recognition context");
+    }
     return reply.send(liveStt.start(
       identity.userId,
       body.format === "pcm16k" ? "pcm16k" : undefined,
+      context ?? undefined,
     ));
   });
 

@@ -14,7 +14,7 @@
 import { NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
+import { hasSegmentLanguage, hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface TranscriptSegment {
@@ -32,6 +32,10 @@ export interface TranscriptSegment {
   speaker_id: string | null;
   channel: number | null;
   text: string;
+  /** the language the line was spoken in, as the transcriber identified it
+   *  (db/0200, 2026-09-06); null on rows written before it was kept and on
+   *  lanes that identify none — a screen sets the line's direction from it */
+  language: string | null;
   /** [] on a degraded part — the row is still seekable, per M20's ladder. */
   words: TranscriptWord[];
   edited: boolean;
@@ -173,11 +177,15 @@ export function createTranscriptsRepo(db: Db) {
       if (fromMs !== null && !Number.isFinite(fromMs)) throw new ValidationError("from_ms must be a number");
       if (toMs !== null && !Number.isFinite(toMs)) throw new ValidationError("to_ms must be a number");
 
+      /* the column exists from 0200 on; on a schema without it the read
+         answers null for every row rather than 42703 for the whole page */
+      const withLanguage = await hasSegmentLanguage(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `select s.id, s.seq, s.part_id, s.start_ms, s.end_ms,
                   s.call_speaker_id, s.channel,
-                  s.text, s.words, (s.edited_at is not null) as edited
+                  s.text, s.words, (s.edited_at is not null) as edited,
+                  ${withLanguage ? "s.language" : "null::text as language"}
              from echo.transcript_segment s
             where s.call_id = $1
               and ($2::int is null or s.end_ms   >= $2::int)
@@ -196,6 +204,7 @@ export function createTranscriptsRepo(db: Db) {
         speaker_id: (row.call_speaker_id as string | null) ?? null,
         channel: (row.channel as number | null) ?? null,
         text: row.text as string,
+        language: (row.language as string | null) ?? null,
         words: toWords(row.words),
         edited: Boolean(row.edited),
       }));

@@ -9,9 +9,9 @@
 // session's declared input names instead of assuming.
 
 import * as ort from "onnxruntime-node";
-import type { Pcm } from "../audio/wav.js";
+import { asSource, type PcmInput } from "../audio/wav.js";
 import type { Segment, VadEngine } from "./types.js";
-import { probsToSegments } from "./types.js";
+import { probsToSegments, windows } from "./types.js";
 
 const WINDOW = 512; // samples @16k — the window size Silero was trained on
 const FRAME_MS = (WINDOW / 16000) * 1000; // 32ms
@@ -27,13 +27,17 @@ const CONTEXT: Record<"v4" | "v5", number> = { v5: 64, v4: 0 };
 export class SileroVad implements VadEngine {
   readonly name: string;
   readonly threshold: number;
+  private readonly session: ort.InferenceSession;
+  private readonly layout: "v5" | "v4";
 
   private constructor(
-    private readonly session: ort.InferenceSession,
-    private readonly layout: "v5" | "v4",
+    session: ort.InferenceSession,
+    layout: "v5" | "v4",
     threshold: number,
     version: string,
   ) {
+    this.session = session;
+    this.layout = layout;
     this.threshold = threshold;
     this.name = version;
   }
@@ -45,7 +49,14 @@ export class SileroVad implements VadEngine {
     return new SileroVad(session, layout, threshold, layout === "v5" ? "silero-vad-v5" : "silero-vad-v4");
   }
 
-  async detect(pcm: Pcm): Promise<Segment[]> {
+  /**
+   * One window at a time off the stream (2026-09-06): the recurrent state and
+   * the 64-sample context are the only things kept between windows, whether
+   * the audio arrived as one array or as thirty-second chunks — so the
+   * probabilities, and therefore the regions, are the same either way.
+   */
+  async detect(input: PcmInput): Promise<Segment[]> {
+    const source = asSource(input);
     const probs: number[] = [];
     let state = this.zeroState();
     const sr = this.srTensor();
@@ -54,8 +65,7 @@ export class SileroVad implements VadEngine {
     let context = new Float32Array(ctxLen);
     const frame = new Float32Array(ctxLen + WINDOW);
 
-    for (let off = 0; off + WINDOW <= pcm.samples.length; off += WINDOW) {
-      const chunk = pcm.samples.subarray(off, off + WINDOW);
+    for await (const chunk of windows(source.chunks(), WINDOW)) {
       frame.set(context, 0);
       frame.set(chunk, ctxLen);
 
@@ -78,7 +88,7 @@ export class SileroVad implements VadEngine {
       minSpeechMs: 250,
       minSilenceMs: 400,
       padMs: 150,
-      durationMs: pcm.durationMs,
+      durationMs: source.durationMs,
     });
   }
 

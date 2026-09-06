@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { rm } from "node:fs/promises";
 import { SileroVad } from "../src/vad/silero.js";
-import { concat, silence, tone, SR } from "./helpers.js";
+import { openWavStream } from "../src/audio/wav.js";
+import { concat, fixtureDir, silence, tone, writeWav, SR } from "./helpers.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MODEL = process.env.ML_SILERO_MODEL ?? path.join(here, "..", "models", "silero_vad.onnx");
@@ -58,6 +60,23 @@ suite("Silero VAD (ONNX)", () => {
   // Positive validation needs real speech, which we will not commit as a
   // binary, so it lives in test/smoke/persian-live.ts — the "vad found speech"
   // check. Do not add another negative test here and call the engine covered.
+  it("sees the same frames from a chunked file as from one array (2026-09-06)", async () => {
+    /* the chunk size does not divide 512, so every chunk edge splits a window
+       and the recurrent state plus the 64-sample context have to be carried;
+       a streamed pass that drifted by one frame would move every region */
+    const vad = await SileroVad.load(MODEL);
+    const samples = concat(tone(220, 700), silence(900), tone(330, 600), silence(500));
+    const dir = await fixtureDir();
+    try {
+      const file = await writeWav(path.join(dir, "chunked.wav"), samples, 1);
+      const whole = await vad.detect(pcm(samples));
+      const streamed = await vad.detect(await openWavStream(file, 7001));
+      expect(streamed).toEqual(whole);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("feeds the model the frame size its generation expects", async () => {
     const vad = await SileroVad.load(MODEL);
     // 32ms of audio must yield exactly one probability, whatever the context

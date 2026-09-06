@@ -1,4 +1,4 @@
-import type { Pcm } from "../audio/wav.js";
+import type { PcmInput } from "../audio/wav.js";
 import type { Segment } from "../schema.js";
 
 export type { Segment };
@@ -12,8 +12,13 @@ export interface VadResult {
 export interface VadEngine {
   readonly name: string;
   readonly threshold: number;
-  /** Speech regions on the timeline of the PCM handed in. */
-  detect(pcm: Pcm): Promise<Segment[]>;
+  /**
+   * Speech regions on the timeline of the audio handed in — the whole PCM,
+   * or a chunked source of it (2026-09-06: a five-hour recording is read
+   * thirty seconds at a time, so the engines carry their own state across
+   * chunk edges and never hold the file).
+   */
+  detect(input: PcmInput): Promise<Segment[]>;
 }
 
 export interface SegmentationOpts {
@@ -66,4 +71,29 @@ export function probsToSegments(
       start_ms: Math.max(0, s.start_ms - o.padMs),
       end_ms: Math.min(o.durationMs, s.end_ms + o.padMs),
     }));
+}
+
+/**
+ * Whole windows out of a chunked stream. A window that straddles two chunks
+ * is assembled from the tail of one and the head of the next; the trailing
+ * partial window is dropped, exactly as the in-memory loop dropped it — so a
+ * streamed detect and a whole-file detect see the same frames.
+ */
+export async function* windows(
+  chunks: AsyncIterable<Float32Array>,
+  size: number,
+): AsyncGenerator<Float32Array, void, undefined> {
+  let carry = new Float32Array(0);
+  for await (const chunk of chunks) {
+    let buf: Float32Array;
+    if (carry.length === 0) buf = chunk;
+    else {
+      buf = new Float32Array(carry.length + chunk.length);
+      buf.set(carry, 0);
+      buf.set(chunk, carry.length);
+    }
+    let off = 0;
+    for (; off + size <= buf.length; off += size) yield buf.subarray(off, off + size);
+    carry = buf.subarray(off).slice();
+  }
 }

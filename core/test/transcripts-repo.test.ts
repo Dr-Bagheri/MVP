@@ -73,6 +73,9 @@ describe("transcript segments", () => {
       speaker_id: null, channel: null, text: "بودجه سال آینده",
       words: [{ w: "بودجه", start_ms: 1_000, end_ms: 1_400 }],
       edited: false,
+      // db/0200: the fake row carries no language and the fake db no
+      // catalogue, so the read answers null — "not said", never a default
+      language: null,
     });
   });
 

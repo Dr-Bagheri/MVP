@@ -94,6 +94,11 @@ export async function hasCallTags(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "tags");
 }
 
+/** db/0200 (2026-09-06): a transcript line carries the language it was spoken in */
+export async function hasSegmentLanguage(db: Db): Promise<boolean> {
+  return hasColumn(db, "transcript_segment", "language");
+}
+
 async function hasFunction(db: Db, qualified: string): Promise<boolean> {
   const key = `fn:${qualified}`;
   const cached = cache.get(key);

@@ -52,8 +52,24 @@ export interface MlProcessOptions {
   maxSpeakers?: number;
   vad?: boolean;
   lane?: string | null;
-  /** Org glossary terms for recognition biasing (2026-08-23). Advisory. */
-  context?: string[];
+  /** Recognition context (2026-09-06, structured): terms, a sentence about
+   *  the recording, general facts — see db/recognition-context.ts. */
+  context?: { terms: string[]; text?: string; general?: { key: string; value: string }[] };
+}
+
+/**
+ * How long to wait for ml/ on THIS part (2026-09-06, the long-file lane).
+ * The client's default was one number — twenty minutes — for a five-minute
+ * memo and a two-hour recorded part alike; the provider needs roughly the
+ * recording's length at most, so the wait follows it: the configured floor,
+ * or one and a half times the duration plus a quarter hour, never past six
+ * and a half hours (five hours of audio, and the slack a queue's visibility
+ * heartbeat keeps alive).
+ */
+export function mlTimeoutFor(durationMs: number | null | undefined, floorMs: number): number {
+  const ceiling = 6.5 * 60 * 60 * 1000;
+  if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs <= 0) return Math.min(floorMs, ceiling);
+  return Math.min(ceiling, Math.max(floorMs, Math.round(durationMs * 1.5) + 15 * 60 * 1000));
 }
 
 export interface MlProcessRequest {
@@ -139,7 +155,7 @@ export interface MlClientOptions {
 }
 
 export interface MlClient {
-  process(request: MlProcessRequest): Promise<MlProcessResult>;
+  process(request: MlProcessRequest, options?: { timeoutMs?: number }): Promise<MlProcessResult>;
   health(): Promise<{ ok: boolean; lanes: Record<string, string> }>;
   /** One voice vector (0081): whole file, or `ranges` (ms, file-relative)
    *  picking one voice's speech out of a longer take. Bytes mode carries an
@@ -170,7 +186,8 @@ export function createMlClient({
 }: MlClientOptions): MlClient {
   const root = baseUrl.replace(/\/+$/, "");
 
-  async function post(request: MlProcessRequest): Promise<MlProcessResult> {
+  async function post(request: MlProcessRequest, perCall: { timeoutMs?: number } = {}): Promise<MlProcessResult> {
+    const waitMs = perCall.timeoutMs ?? timeoutMs;
     const body = {
       ...(request.audioUrl ? { audio_url: request.audioUrl } : {}),
       ...(request.audioPath ? { audio_path: request.audioPath } : {}),
@@ -182,12 +199,12 @@ export function createMlClient({
         max_speakers: request.options?.maxSpeakers ?? 8,
         vad: request.options?.vad ?? true,
         lane: request.options?.lane ?? null,
-        ...(request.options?.context?.length ? { context: request.options.context } : {}),
+        ...(request.options?.context ? { context: request.options.context } : {}),
       },
     };
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), waitMs);
 
     let response: Response;
     try {
@@ -203,7 +220,7 @@ export function createMlClient({
       const aborted = controller.signal.aborted;
       throw new MlRequestError(
         aborted ? "ml_timeout" : "ml_unreachable",
-        aborted ? `ml/ did not answer within ${timeoutMs}ms` : "ml/ is unreachable",
+        aborted ? `ml/ did not answer within ${waitMs}ms` : "ml/ is unreachable",
         true,
       );
     } finally {

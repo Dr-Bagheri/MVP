@@ -70,10 +70,22 @@ JSON body (`application/json`):
     "diarize": "auto",               // "auto" | "off" | "force"
     "max_speakers": 8,               // hint for clustering; ignored when 2-channel
     "vad": true,                     // trim silence before paid STT
-    "lane": null                     // null = policy order; or pin "soniox"/"openrouter"
+    "lane": null,                    // null = policy order; or pin "soniox"/"openrouter"
+    "context": {                     // OPTIONAL recognition context (2026-09-06) — the provider's own shape
+      "terms": ["نورای", "سینا سپاسی"],                            //   names and jargon to recognise verbatim (≤ 500, ≤ 80 chars each)
+      "text": "kickoff with Acme",                                //   a sentence about THIS recording (≤ 500 chars)
+      "general": [{ "key": "organization", "value": "Neurai" }]  //   key/value facts (≤ 10)
+    }
   }
 }
 ```
+
+`context` is advisory: a lane that cannot use it ignores it and it never
+gates a transcription. It replaced a flat `context: string[]` of glossary
+terms (2026-08-23); the old shape is REFUSED as `bad_request`, because a
+caller that has not moved with the contract must not be transcribed without
+the context it believes it sent. core/worker builds it from the org's
+glossary, the people, the members and the projects (db/recognition-context.ts).
 
 `diarize: "auto"` means: **2-channel audio takes speakers from the channels and
 is never diarized** (M6); mono audio is diarized by clustering. `"force"`
@@ -254,7 +266,7 @@ DAG (M7) knows retry-with-backoff from dead-letter without parsing prose.
 | `audio_source_forbidden` | 403 | false | `audio_path` without `ML_ALLOW_LOCAL_PATHS`, or `audio_url` host not allow-listed |
 | `download_failed` | 502 | true | the pre-signed URL did not yield bytes |
 | `unsupported_media` | 415 | false | ffmpeg cannot decode it — it is not audio |
-| `media_too_long` | 413 | false | over `ML_MAX_DURATION_MS` (default 35 min: a 30-min part plus slack) |
+| `media_too_long` | 413 | false | over the LANES' ceiling (2026-09-06): the largest among the configured lanes — Soniox `ML_SONIOX_MAX_DURATION_MS` (default 5 h), the fallback ASR `ML_MAX_DURATION_MS` (default 35 min). Judged once before any lane is paid; a lane that is asked past its own ceiling refuses with this type and the ladder tries the next |
 | `transcode_failed` | 500 | true | ffmpeg failed on decodable input |
 | `stt_unavailable` | 503 | true | no lane is configured |
 | `stt_failed` | 502 | true | every lane attempted and failed; `attempts` details each |
@@ -275,7 +287,8 @@ DAG (M7) knows retry-with-backoff from dead-letter without parsing prose.
 | `ML_REQUIRE_WORD_TIMESTAMPS` | `0` | §3 — degrade-and-flag, in **every** deployment profile. `1` (refuse instead) is sanctioned **only** for CI and acceptance runs, where a contract regression should fail loudly rather than degrade quietly. Never set it in a deployment |
 | `ML_ALLOW_LOCAL_PATHS` | `0` | enables `audio_path` |
 | `ML_URL_ALLOWLIST` | — | comma-separated hosts `audio_url` may be fetched from. Empty = any host **only** when `ML_ALLOW_LOCAL_PATHS=1` (dev); in production an empty allow-list rejects every URL |
-| `ML_MAX_DURATION_MS` | `2100000` | 35 minutes |
+| `ML_MAX_DURATION_MS` | `2100000` | 35 minutes — the FALLBACK lane's ceiling, and the pipeline's when no lane is configured (2026-09-06) |
+| `ML_SONIOX_MAX_DURATION_MS` | `18000000` | 5 hours — the primary lane's ceiling, the provider's own limit. The VAD reads the file as a stream (thirty seconds at a time) so a five-hour recording never sits in memory |
 | `ML_MAX_BYTES` | `524288000` | 500 MB |
 | `ML_WORK_DIR` | OS temp | per-job scratch, deleted in a `finally` |
 | `ML_HOST` | `127.0.0.1` | listen address; ml/ is an internal service |
@@ -311,7 +324,11 @@ key.
 - **No async job mode.** `/process` is synchronous by the steward's design:
   audio arrives, results return, nothing persists. If a 30-min part ever
   outruns a sane request timeout, the seam is `202 + /jobs/{id}` — a change to
-  this document, not to the steps behind it.
+  this document, not to the steps behind it. (2026-09-06: the long-file lane
+  kept this. A five-hour part is carried by the provider's async job behind a
+  request that stays open — `requestTimeout: 0` here, a wait that follows the
+  part's length on core's client, and a visibility heartbeat on the worker's
+  claim — rather than by a job table on this side.)
 - **No self-hosted STT.** Later, behind the same `SttLane` interface (M6).
 - **No speaker identification.** ml/ separates voices; naming them is the
   product's job (M11 — the directory is built from deliberate acts).

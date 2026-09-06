@@ -28,9 +28,17 @@ export class OpenRouterLane implements SttLane {
     return Boolean(config().OPENROUTER_API_KEY);
   }
 
+  /** the old single cap, now this lane's own: a 30-minute part plus slack */
+  maxDurationMs(): number {
+    return config().ML_MAX_DURATION_MS;
+  }
+
   async transcribe(input: SttInput): Promise<SttResult> {
     const key = config().OPENROUTER_API_KEY;
     if (!key) throw new MlError("stt_unavailable", "openrouter lane has no key");
+    if (input.durationMs > this.maxDurationMs()) {
+      throw new MlError("media_too_long", "audio exceeds the openrouter lane's ceiling");
+    }
 
     const form = new FormData();
     form.append("file", await openAsBlob(input.file), "audio.wav");

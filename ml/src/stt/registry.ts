@@ -45,6 +45,21 @@ export function laneStatus(): Record<string, "configured" | "unconfigured"> {
 }
 
 /**
+ * The longest recording the CONFIGURED lanes will carry — what the pipeline
+ * refuses above BEFORE any lane is paid (2026-09-06). Each lane knows its own
+ * ceiling; the job's is the largest among the lanes it may use, and a pinned
+ * lane answers for itself. With no lane configured the old single cap
+ * stands, and the ladder below says `stt_unavailable` a moment later anyway.
+ */
+export function maxDurationForLanes(pinned: string | null): number {
+  const all = lanes();
+  const order = pinned ? [pinned] : config().ML_LANE_ORDER;
+  const usable = order.map((n) => all.get(n)).filter((l): l is SttLane => Boolean(l) && l!.configured());
+  if (usable.length === 0) return config().ML_MAX_DURATION_MS;
+  return Math.max(...usable.map((lane) => lane.maxDurationMs()));
+}
+
+/**
  * Try lanes in policy order until one produces a transcript. Every attempt is
  * recorded — a fallback that silently happened is a fallback nobody fixes.
  */

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { resetConfig } from "../src/config.js";
 import { MlError } from "../src/errors.js";
 import { jobLogger } from "../src/log.js";
-import { resetLanes, setLanes, transcribe, laneStatus } from "../src/stt/registry.js";
+import { maxDurationForLanes, resetLanes, setLanes, transcribe, laneStatus } from "../src/stt/registry.js";
 import type { SttInput, SttLane, SttResult } from "../src/stt/types.js";
 
 class StubLane implements SttLane {
@@ -11,15 +11,21 @@ class StubLane implements SttLane {
   constructor(
     readonly name: string,
     private readonly behaviour: "ok" | "fail" | "unconfigured",
+    private readonly ceilingMs: number = Number.POSITIVE_INFINITY,
   ) {}
 
   configured(): boolean {
     return this.behaviour !== "unconfigured";
   }
 
-  async transcribe(_input: SttInput): Promise<SttResult> {
+  maxDurationMs(): number {
+    return this.ceilingMs;
+  }
+
+  async transcribe(input: SttInput): Promise<SttResult> {
     this.calls++;
     if (this.behaviour === "fail") throw new MlError("stt_failed", `${this.name} is down`);
+    if (input.durationMs > this.ceilingMs) throw new MlError("media_too_long", `${this.name} ceiling`);
     return {
       words: [{ text: "سلام", start_ms: 0, end_ms: 300, confidence: 1, speaker: null, language: "fa" }],
       timestamps: "word",
@@ -43,6 +49,30 @@ afterEach(() => {
   delete process.env.ML_LANE_ORDER;
   resetConfig();
   resetLanes();
+});
+
+describe("each lane's own ceiling (2026-09-06)", () => {
+  it("the job's ceiling is the largest among the usable lanes, and a pinned lane answers for itself", () => {
+    const short = new StubLane("short", "ok", 35 * 60 * 1000);
+    const long = new StubLane("long", "ok", 5 * 60 * 60 * 1000);
+    withLanes("short,long", [["short", short], ["long", long]]);
+    expect(maxDurationForLanes(null)).toBe(5 * 60 * 60 * 1000);
+    expect(maxDurationForLanes("short")).toBe(35 * 60 * 1000);
+    // an unconfigured long lane does not lend its ceiling
+    withLanes("short,long", [["short", short], ["long", new StubLane("long", "unconfigured", 5 * 60 * 60 * 1000)]]);
+    expect(maxDurationForLanes(null)).toBe(35 * 60 * 1000);
+  });
+
+  it("a lane that refuses a long file falls through to the next, and the refusal is on record", async () => {
+    const short = new StubLane("short", "ok", 1000);
+    const long = new StubLane("long", "ok");
+    withLanes("short,long", [["short", short], ["long", long]]);
+    const outcome = await transcribe({ ...input, durationMs: 5000 }, log, null);
+    expect(outcome.lane).toBe("long");
+    expect(outcome.attempts.map((a) => [a.lane, a.ok, a.error_type])).toEqual([
+      ["short", false, "media_too_long"], ["long", true, null],
+    ]);
+  });
 });
 
 describe("lane fallback", () => {

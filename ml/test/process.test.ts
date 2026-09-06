@@ -35,6 +35,10 @@ class StubLane implements SttLane {
     return true;
   }
 
+  maxDurationMs(): number {
+    return 5 * 60 * 60 * 1000;
+  }
+
   async transcribe(input: SttInput): Promise<SttResult> {
     this.lastInput = input;
     const texts = ["سلام", "حال", "شما", "چطور"];
@@ -370,6 +374,20 @@ suite("POST /process — refusals", () => {
   it("rejects a request that names none", async () => {
     configure(new StubLane());
     expect((await post({ job_ref: "x" })).statusCode).toBe(400);
+  });
+
+  it("forwards a STRUCTURED recognition context to the lane, and refuses the retired flat list (2026-09-06)", async () => {
+    const lane = new StubLane();
+    configure(lane);
+    const context = { terms: ["نورای", "سینا سپاسی"], text: "kickoff", general: [{ key: "organization", value: "Neurai" }] };
+    const ok = await post({ audio_path: monoWav, options: { context } });
+    expect(ok.statusCode).toBe(200);
+    expect(lane.lastInput?.context).toEqual(context);
+    /* the old shape — a bare array of terms — is a caller that has not moved
+       with the contract, and it is told so rather than transcribed without
+       the context it thought it sent */
+    const stale = await post({ audio_path: monoWav, options: { context: ["نورای"] } });
+    expect(stale.statusCode).toBe(400);
   });
 
   it("rejects an unknown option instead of ignoring it", async () => {

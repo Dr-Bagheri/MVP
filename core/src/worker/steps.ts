@@ -30,10 +30,11 @@
  */
 import type { Identity } from "../agent/types.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
-import { hasOrgGlossary } from "../db/capabilities.ts";
+import { hasOrgGlossary, hasSegmentLanguage } from "../db/capabilities.ts";
 import { JSONB_ARRAY_PARAM, JSONB_PARAM, toJsonb, toJsonbArray } from "../db/jsonb.ts";
+import { readRecognitionContext, type RecognitionContext } from "../db/recognition-context.ts";
 import { resolveJobIdentity } from "./job-identity.ts";
-import { unknownVocabulary, type MlClient } from "./ml-client.ts";
+import { mlTimeoutFor, unknownVocabulary, type MlClient } from "./ml-client.ts";
 import {
   mapWordsToSegments,
   seqBaseForPart,
@@ -65,6 +66,8 @@ export interface PartStepOptions {
   storage: StorageSigner;
   /** Signed-URL lifetime. Long enough for a slow part, short enough to matter. */
   signedUrlTtlSec?: number;
+  /** the ml/ wait's FLOOR; the wait itself follows the part's length (mlTimeoutFor) */
+  mlTimeoutMs?: number;
 }
 
 /**
@@ -87,6 +90,7 @@ export function createPartStep({
   lifecycle,
   storage,
   signedUrlTtlSec = 60 * 60,
+  mlTimeoutMs = 20 * 60 * 1000,
 }: PartStepOptions): StepHandler {
   return {
     name: "process_part",
@@ -142,27 +146,26 @@ export function createPartStep({
         await lifecycle.bumpAttempts(identity, part.id, tx);
 
         /*
-         * The org GLOSSARY (0088, 2026-08-23): names and terms the org
-         * recorded to bias recognition toward — Persian proper names are
-         * where the transcriber's errors concentrate. Read under the owner's
-         * identity like everything else; absent column or empty list = no
-         * context sent. Best-effort: a failed read costs the bias, never the
-         * transcription — so the failure is caught HERE rather than allowed
-         * to roll back the attempt bump it now shares a transaction with.
+         * The RECOGNITION CONTEXT (2026-09-06; the org glossary alone since
+         * 0088/2026-08-23): the org's glossary, the people in the directory,
+         * the members and the projects as terms, the recording's title as a
+         * sentence — Persian proper names are where the transcriber's errors
+         * concentrate, and every name this product knows is already here.
+         * Read under the owner's identity like everything else, so it can
+         * only name what they can see. Best-effort: a failed read costs the
+         * bias, never the transcription — so the failure is caught HERE
+         * rather than allowed to roll back the attempt bump it now shares a
+         * transaction with.
          */
-        let glossary: string[] = [];
-        if (await hasOrgGlossary(db)) {
-          try {
-            const rows = await tx.unsafe<{ glossary: string[] }>(
-              `select o.glossary from echo.org o where o.id = $1`,
-              [identity.orgId],
-            );
-            glossary = rows[0]?.glossary ?? [];
-          } catch {
-            log.warn({ part_id: part.id }, "glossary read failed; transcribing without context");
-          }
+        let context: RecognitionContext | null = null;
+        try {
+          context = await readRecognitionContext(tx, identity.orgId, part.call_id, {
+            glossary: await hasOrgGlossary(db),
+          });
+        } catch {
+          log.warn({ part_id: part.id }, "recognition context read failed; transcribing without it");
         }
-        return { verdict: "go" as const, part, glossary };
+        return { verdict: "go" as const, part, context };
       });
 
       if (preflight.verdict === "not_found") {
@@ -180,7 +183,7 @@ export function createPartStep({
       if (preflight.verdict === "no_audio") {
         throw new StepError("no_audio", "part has no stored audio", false);
       }
-      const { part, glossary } = preflight;
+      const { part, context } = preflight;
 
       const audioUrl = await storage.signDownload(
         part.storage_bucket,
@@ -199,8 +202,13 @@ export function createPartStep({
           // worker does not recognise — keeps the historical both-languages
           // hint rather than silently narrowing on unknown vocabulary.
           languageHints: languageHintsFor(part.call_language),
-          ...(glossary.length > 0 ? { context: glossary } : {}),
+          ...(context ? { context } : {}),
         },
+      }, {
+        /* the wait follows the PART: a two-hour recorded part is allowed the
+           time a two-hour transcription takes, a five-minute memo is not
+           allowed to hang for it (2026-09-06, the long-file lane) */
+        timeoutMs: mlTimeoutFor(part.duration_ms, mlTimeoutMs),
       });
 
       // A value ml/ publishes that this worker does not recognise means the
@@ -270,7 +278,9 @@ export function createPartStep({
         // now, the information is gone and link_speakers has nothing to work
         // from.
         const ids = await upsertSpeakers(tx, identity.orgId, part, mapped.segments, result);
-        await writeTranscript(tx, identity.orgId, part, mapped.segments, result, ids);
+        await writeTranscript(tx, identity.orgId, part, mapped.segments, result, ids, {
+          language: await hasSegmentLanguage(db),
+        });
         await tx.unsafe(
           `update echo.call_part
               set duration_ms = $2, status = 'transcribed', has_word_timestamps = $3
@@ -470,6 +480,9 @@ export async function writeTranscript(
   segments: readonly MappedSegment[],
   result: { provenance: unknown; degraded: boolean; words: { channel: number | null }[] },
   speakerIds: Map<string, string>,
+  /** db/0200: write each line's language where the column exists (the
+   *  capability decides — a schema without it must not 42703 the part) */
+  columns: { language: boolean } = { language: true },
 ): Promise<void> {
   if (segments.length === 0) return;
 
@@ -510,13 +523,13 @@ export async function writeTranscript(
    */
   await tx.unsafe(
     `insert into echo.transcript_segment
-       (call_id, org_id, part_id, seq, start_ms, end_ms, call_speaker_id, text, words, provenance)
+       (call_id, org_id, part_id, seq, start_ms, end_ms, call_speaker_id, text, words, provenance${columns.language ? ", language" : ""})
      select $1::uuid, $2::uuid, $3::uuid,
             t.seq, t.start_ms, t.end_ms, t.call_speaker_id, t.text,
-            t.words::jsonb, ${JSONB_PARAM(4)}
+            t.words::jsonb, ${JSONB_PARAM(4)}${columns.language ? ", t.language" : ""}
        from unnest($5::int[], $6::int[], $7::int[], $8::uuid[], $9::text[],
-                   ${JSONB_ARRAY_PARAM(10)})
-         as t(seq, start_ms, end_ms, call_speaker_id, text, words)`,
+                   ${JSONB_ARRAY_PARAM(10)}, $11::text[])
+         as t(seq, start_ms, end_ms, call_speaker_id, text, words, language)`,
     [
       part.call_id,
       orgId,
@@ -531,6 +544,10 @@ export async function writeTranscript(
         w: w.w, s: w.startMs, e: w.endMs,
         ...(w.confidence !== undefined ? { c: w.confidence } : {}),
       })))),
+      /* the eleventh array rides along even when the column is not written:
+         unnest's shape stays one statement, and a schema without 0200
+         simply never names the column on the left */
+      segments.map((s) => s.language),
     ],
   );
 }

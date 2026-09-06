@@ -6,9 +6,9 @@
 // binary asset. Its job is only to keep obvious silence out of a paid STT
 // call; when Silero is available (ML_SILERO_MODEL) it wins.
 
-import type { Pcm } from "../audio/wav.js";
+import { asSource, type PcmInput } from "../audio/wav.js";
 import type { Segment, VadEngine } from "./types.js";
-import { probsToSegments } from "./types.js";
+import { probsToSegments, windows } from "./types.js";
 
 const FRAME_MS = 30;
 
@@ -16,21 +16,26 @@ export class EnergyVad implements VadEngine {
   readonly name = "energy-rms";
   readonly threshold = 0.5;
 
-  async detect(pcm: Pcm): Promise<Segment[]> {
-    const frameLen = Math.max(1, Math.round((pcm.sampleRate * FRAME_MS) / 1000));
-    const frames = Math.floor(pcm.samples.length / frameLen);
-    if (frames === 0) return [];
+  /**
+   * Frame energies off the stream (2026-09-06); the percentiles need every
+   * frame's RMS, which is one number per 30 ms — five hours is six hundred
+   * thousand doubles, not the samples themselves.
+   */
+  async detect(input: PcmInput): Promise<Segment[]> {
+    const source = asSource(input);
+    const frameLen = Math.max(1, Math.round((source.sampleRate * FRAME_MS) / 1000));
 
-    const rms = new Float64Array(frames);
-    for (let f = 0; f < frames; f++) {
+    const energies: number[] = [];
+    for await (const frame of windows(source.chunks(), frameLen)) {
       let acc = 0;
-      const base = f * frameLen;
       for (let i = 0; i < frameLen; i++) {
-        const s = pcm.samples[base + i] ?? 0;
+        const s = frame[i] ?? 0;
         acc += s * s;
       }
-      rms[f] = Math.sqrt(acc / frameLen);
+      energies.push(Math.sqrt(acc / frameLen));
     }
+    if (energies.length === 0) return [];
+    const rms = Float64Array.from(energies);
 
     // Noise floor = 10th percentile, peak = 95th. Speech has to stand clear of
     // the floor, with an absolute minimum so digital silence never "speaks".
@@ -56,7 +61,7 @@ export class EnergyVad implements VadEngine {
       minSpeechMs: 250,
       minSilenceMs: 400,
       padMs: 150,
-      durationMs: pcm.durationMs,
+      durationMs: source.durationMs,
     });
   }
 }

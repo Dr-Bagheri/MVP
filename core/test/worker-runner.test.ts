@@ -340,3 +340,66 @@ describe("runner", () => {
     ).toThrow(/two handlers/);
   });
 });
+
+/**
+ * THE VISIBILITY HEARTBEAT (2026-09-06, the long-file lane). A step that
+ * outruns the claim window is redelivered to a second slot while the first
+ * still runs — the same part paid for twice. While a handler runs, the claim
+ * is renewed every third of the window; a fast step renews nothing (the
+ * control), and a renewal that fails does not fail the step.
+ */
+describe("the visibility heartbeat", () => {
+  it("renews the claim every third of the window while the step runs, and stops when it ends", async () => {
+    vi.useFakeTimers();
+    try {
+      const { queue, calls } = fakeQueue([{ msgId: 7, readCt: 1, body: payload }]);
+      let finish: () => void = () => {};
+      const runner = createRunner({
+        queue,
+        handlers: [handlerThat(() => new Promise<void>((resolve) => { finish = resolve; }))],
+        config: { ...config, visibilityTimeoutSec: 30 },
+        sink: { onDeadLetter: vi.fn() },
+        log: silent,
+      });
+      const polling = runner.poll();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls.delayed).toEqual([[7, 30], [7, 30]]);
+      finish();
+      await vi.advanceTimersByTimeAsync(30_000);
+      const result = await polling;
+      expect(result.done).toBe(1);
+      expect(calls.removed).toEqual([7]);
+      // no renewal after the step ended: the interval was cleared
+      expect(calls.delayed).toEqual([[7, 30], [7, 30]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a failed renewal is logged and the step still finishes — the old redelivery is the fallback", async () => {
+    vi.useFakeTimers();
+    try {
+      const { queue, calls } = fakeQueue([{ msgId: 8, readCt: 1, body: payload }]);
+      queue.delay = async () => { throw new Error("pgmq down"); };
+      const warn = vi.fn();
+      let finish: () => void = () => {};
+      const runner = createRunner({
+        queue,
+        handlers: [handlerThat(() => new Promise<void>((resolve) => { finish = resolve; }))],
+        config: { ...config, visibilityTimeoutSec: 30 },
+        sink: { onDeadLetter: vi.fn() },
+        log: { ...silent, warn },
+      });
+      const polling = runner.poll();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(warn).toHaveBeenCalledWith(expect.objectContaining({ error_type: "heartbeat_failed" }), expect.any(String));
+      finish();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect((await polling).done).toBe(1);
+      expect(calls.removed).toEqual([8]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

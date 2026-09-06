@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   callHasWordTimestamps,
   InvalidTimingError,
+  majorityLanguage,
   mapWordsToSegments,
   seqBaseForPart,
   SEQ_STRIDE,
@@ -344,5 +345,48 @@ describe("segmentation — the line boundary (M20)", () => {
     expect(hasWordTimestamps).toBe(false);
     expect(segments).toHaveLength(1);
     expect(segments[0]!.words).toEqual([]);
+  });
+});
+
+/**
+ * C2 (2026-09-06): a line knows its language — the MAJORITY of its words'
+ * languages, never a split at every switch (a code-switched Persian line
+ * stays one line, in Persian), and null when the lane identified none.
+ */
+describe("a segment's language is the majority of its words", () => {
+  it("names the majority language and keeps a mixed line whole", () => {
+    const { segments } = mapWordsToSegments(wordLane({
+      /* the FIRST word is English and the majority is Persian — a rule that
+         took the first word's language would pass a fixture whose first word
+         agrees with the majority, and did (verify-red, 2026-09-06) */
+      words: [
+        { text: "okay", start_ms: 100, end_ms: 200, speaker: "S1", language: "en" },
+        { text: "این", start_ms: 250, end_ms: 300, speaker: "S1", language: "fa" },
+        { text: "feature", start_ms: 350, end_ms: 400, speaker: "S1", language: "en" },
+        { text: "رو", start_ms: 450, end_ms: 500, speaker: "S1", language: "fa" },
+        { text: "کردیم", start_ms: 750, end_ms: 900, speaker: "S1", language: "fa" },
+        { text: "okay", start_ms: 1500, end_ms: 1700, speaker: "S2", language: "en" },
+        { text: "then", start_ms: 1750, end_ms: 1900, speaker: "S2", language: "en" },
+      ],
+    }), PART);
+    expect(segments.length).toBe(2);
+    expect(segments[0]!.text).toBe("okay این feature رو کردیم");
+    expect(segments[0]!.language).toBe("fa");
+    expect(segments[1]!.language).toBe("en");
+  });
+
+  it("is null when the lane identified no language, on word-timed and degraded parts alike", () => {
+    expect(mapWordsToSegments(wordLane(), PART).segments.every((s) => s.language === null)).toBe(true);
+    const degraded = mapWordsToSegments(wordLane({
+      words: [{ text: "متن", start_ms: 0, end_ms: 40_000 }],
+      provenance: { stt: { timestamps: "none" } },
+    }), PART);
+    expect(degraded.segments[0]!.language).toBeNull();
+  });
+
+  it("majorityLanguage picks the most frequent code, lower-cased, the earlier on a tie", () => {
+    expect(majorityLanguage([{ language: "fa" }, { language: "EN" }, { language: "en" }])).toBe("en");
+    expect(majorityLanguage([{ language: "fa" }, { language: "en" }])).toBe("fa");
+    expect(majorityLanguage([{ language: null }, {}])).toBeNull();
   });
 });

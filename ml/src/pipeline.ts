@@ -7,10 +7,10 @@ import { config } from "./config.js";
 import { MlError } from "./errors.js";
 import type { JobLog } from "./log.js";
 import { channelsAreDistinct, concatRegions, extractChannel, ffmpegVersionString, probe, toMono16k } from "./audio/ffmpeg.js";
-import { readWav } from "./audio/wav.js";
+import { openWavStream, wavDuration } from "./audio/wav.js";
 import { assignSpeakers, diarizer } from "./diarize/index.js";
 import type { Options, ProcessResponse, Segment, Speaker, Word } from "./schema.js";
-import { transcribe } from "./stt/registry.js";
+import { maxDurationForLanes, transcribe } from "./stt/registry.js";
 import type { Attempt, LaneOutcome } from "./stt/registry.js";
 import type { SttWord } from "./stt/types.js";
 import { TimelineMap } from "./timeline.js";
@@ -31,8 +31,15 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
   const cfg = config();
   const media = await probe(job.input);
 
-  if (media.duration_ms !== null && media.duration_ms > cfg.ML_MAX_DURATION_MS) {
-    throw new MlError("media_too_long", "audio exceeds ML_MAX_DURATION_MS");
+  /*
+   * The ceiling is the LANES' (2026-09-06): the largest a usable lane will
+   * carry, judged before any of them is paid. It used to be one number for
+   * every lane — 35 minutes — which refused, at this line, recordings the
+   * primary lane carries for five hours.
+   */
+  const ceilingMs = maxDurationForLanes(job.options.lane);
+  if (media.duration_ms !== null && media.duration_ms > ceilingMs) {
+    throw new MlError("media_too_long", "audio exceeds the configured lanes' ceiling");
   }
 
   // Two channels means two people on two microphones — but ONLY if the
@@ -55,8 +62,8 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
 
   const { words, segments, speechMs, durationMs, lane, diarSource, diarEngine } = outcome;
 
-  if (durationMs > cfg.ML_MAX_DURATION_MS) {
-    throw new MlError("media_too_long", "audio exceeds ML_MAX_DURATION_MS");
+  if (durationMs > ceilingMs) {
+    throw new MlError("media_too_long", "audio exceeds the configured lanes' ceiling");
   }
 
   const warnings: string[] = [];
@@ -148,10 +155,11 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
   const full = path.join(job.workDir, "full.wav");
   await toMono16k(job.input, full);
 
-  const pcm = await readWav(full);
-  const durationMs = pcm.durationMs;
+  // the header answers the duration; the samples stay on disk (a five-hour
+  // file is 1.15 GB of Float32 in memory, on a box with one to spare)
+  const durationMs = await wavDuration(full);
 
-  const { map, segments, sttFile, vad, vadFoundNothing } = await trimSilence(job, full, pcm.durationMs);
+  const { map, segments, sttFile, vad, vadFoundNothing } = await trimSilence(job, full, durationMs);
 
   const wantSpeakers = job.options.diarize !== "off";
   const lane = await transcribe(
@@ -235,10 +243,10 @@ async function perChannel(job: Job, channels: number): Promise<StreamOutcome> {
     const file = path.join(job.workDir, `ch${ch}.wav`);
     await extractChannel(job.input, file, ch);
 
-    const pcm = await readWav(file);
-    durationMs = Math.max(durationMs, pcm.durationMs);
+    const channelMs = await wavDuration(file);
+    durationMs = Math.max(durationMs, channelMs);
 
-    const trimmed = await trimSilence(job, file, pcm.durationMs);
+    const trimmed = await trimSilence(job, file, channelMs);
     vad = trimmed.vad;
     // A silent channel is ordinary — one participant simply did not speak. The
     // VAD is only suspect when it found nothing on EVERY channel.
@@ -329,8 +337,9 @@ async function trimSilence(job: Job, file: string, durationMs: number): Promise<
   }
 
   const engine = await vadEngine();
-  const pcm = await readWav(file);
-  const segments = await engine.detect(pcm);
+  // streamed, thirty seconds at a time — the engines carry their own state
+  // across chunk edges, so the regions equal a whole-file pass
+  const segments = await engine.detect(await openWavStream(file));
   const vad = { engine: engine.name, threshold: engine.threshold };
 
   if (segments.length === 0) {
