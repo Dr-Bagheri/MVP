@@ -5421,3 +5421,81 @@ sessions) for the cross-session narrative.
   restored (`expected 'false' to be 'true'`), and the deafness removed (`the
   assistant kept listening into the take`).
   db 206 migrations · ml 148 tests · core 1420 tests · web 1319 tests + gate + sweep.
+- 2026-09-07 (THE VOICES CAN BE CHOSEN, AND THE MODEL THAT COULD NOT TELL THEM
+  APART IS GONE; commit 7ad40ed; db 0207): user directive — "in overview give
+  option to choose the speakers from the attendance in case it does not detect
+  our voice, and make the enrollment more powerful, check the latest ways
+  online state of the art tech now for these". Two asks, one subject.
+  **THE PICKER.** The review tab lists the record's voices with a Select on
+  each, the meeting's own people first and marked. The ranking is the half that
+  would have rotted quietly: the chain from an account to a directory person is
+  `person.app_user_id`, and it is NULL ON EVERY ROW on this deployment — five
+  directory people, twelve members, ZERO links, read at owner altitude. A
+  picker written against it renders perfectly, offers nothing, and reads as
+  "the platform does not know these people". It falls back to the directory
+  query's own `suggested_app_user_id` (a folded-name match it already computes,
+  filled only when exactly one member matches), so there is one rule in one
+  place rather than a second opinion about who is whom. Only the call's OWNER
+  may move `person_id` (db/0093), so a colleague gets the sentence and not a
+  control the server answers with a 404 — the shape this page already takes for
+  the end button and the whiteboard. The test's discriminating case is the
+  ORDER, built on a fixture whose pairing exists only through the suggestion.
+  **THE MODEL, AND WHY NO THRESHOLD HAD EVER HELPED.** Measured on the real
+  clips — one speaker from a microphone and through the meeting room, with
+  chunks of a four-person Persian conversation as imposters, every candidate
+  scored on the same audio:
+    eres2net_base zh-cn (ours)  same-voice cross-channel 0.368–0.437 · best
+      imposter 0.364 · **gap 0.014**
+    eres2netv2 16k-common       0.571–0.638 · 0.351 · **gap 0.226**
+    campplus zh_en advanced     0.487–0.554 · 0.376 · gap 0.111
+    wespeaker resnet34_LM (en)  0.670–0.776 · 0.682 · **gap −0.011**
+  **There was no gap to put a threshold in.** Every report of "it does not
+  recognise me" was answered by moving a bar inside a 0.014 window, which is
+  why none of them worked. The last row is why the GAP is the metric and the
+  score is not: it produces the highest same-voice numbers of the four and
+  cannot tell anybody apart. ERes2NetV2 is deployed and the bar is 0.50, in the
+  middle of its gap. Acceptance through the product's own `/embed` after the
+  deploy: same voice same channel 0.8905, **same voice cross-channel 0.577 and
+  0.627** (it was 0.34), stranger 0.297 and 0.193.
+  **Two latent defects the change exposed.** The extractor SHARED its model
+  file with the diarizer, whose clustering threshold (1.0) was calibrated
+  against that file — a better voiceprint model could not be adopted without
+  silently re-tuning diarization, so it has its own knob now. And
+  `EMBEDDING_MODEL_NAME` was a CONSTANT with a comment asking whoever changed
+  the ONNX to remember to bump it: a print carries that name and is compared
+  only against prints that share it, so swapping the file and forgetting the
+  line silently scores vectors from two different spaces. The name is derived
+  from the file (basename + eight hex of its SHA-256). `/health`'s `embedder`
+  stopped being a boolean for the same reason — one line under the field whose
+  own comment explains why a boolean is not a health check.
+  **THE TAKES (0207).** 0096 averaged each clip into one running vector because
+  "speaker embeddings average well" — true within a recording condition, wrong
+  across two: the mean of a headset take and a room take is a point that is
+  NEITHER and scores worse than either alone. Takes are kept and a match scores
+  the BEST of them. Two more things went with it: the average was over RAW
+  vectors, so a louder clip pulled the print toward itself; and the live
+  matcher and the record's matcher had been using DIFFERENT bars for the same
+  decision about the same voice (0.6 and 0.55), so a person could be named
+  mid-take and refused on the record.
+  **My own instruments, twice.** `centroidOf` re-checked db/0081's
+  eight-dimension floor inside the arithmetic and silently returned nothing for
+  a legitimate pair of short vectors — its own test caught it; an invariant
+  enforced at a different altitude than it is promised. And `t.denied` accepts
+  ANY exception, which for a CHECK also accepts a typo in the statement, so the
+  harness gained `t.raises(stmt, sqlstate, label)` — verified by expecting the
+  wrong code and watching it name both what it got and what it wanted.
+  Verify-red by mutation on nine behaviours: the picker's ranking, its host
+  wall and its unlink; the centroid's direction average; max-not-mean scoring;
+  the flattening that would make every well-enrolled person ambiguous with
+  themselves; and the two db checks both ways.
+  **NOT proven on production, and said rather than implied:** the panel could
+  not be exercised live — the org has no ready record (its one recorded meeting
+  is archived with a failed call), and a write test on live data is what cost
+  the board on 2026-09-06. The deployed bundle carries it and it correctly does
+  not render on a failed record. The takes write is proven in tests and lands
+  on the next real enrolment.
+  **Needs the user:** the two enrolled prints (امیررضا باقری، سینا سپاسی) were
+  made with the retired model and match nothing now — they need re-recording,
+  ideally twice each from two different rooms, which is what the enrolment
+  panel now says.
+  db 207 migrations · ml 148 tests · core 1433 tests · web 1325 tests + gate + sweep.
