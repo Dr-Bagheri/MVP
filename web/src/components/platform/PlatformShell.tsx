@@ -8,6 +8,7 @@ import { readStoredTheme } from "@/lib/theme";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { BottomBar } from "./BottomBar";
 import { IconRail } from "./IconRail";
+import { MeetingInviteGate } from "./MeetingInviteGate";
 import { TopBar } from "./TopBar";
 
 /**
@@ -167,6 +168,10 @@ export function PlatformShell({ children }: { children: ReactNode }) {
         Only from `md`: below that the strip is not drawn at all, so there is
         nothing to leave room for.
       */}
+      {/* a meeting invitation ASKS rather than waiting behind the bell
+          (2026-09-07). Here, above every page, because "at the moment they
+          are added" and "when they log in" have to be one mechanism. */}
+      <MeetingInviteGate />
       <div className="flex h-dvh bg-bg text-fg">
         <IconRail />
         <div className="flex min-w-0 flex-1 flex-col">

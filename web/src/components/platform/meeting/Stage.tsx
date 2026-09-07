@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import type { MeetingRecord } from "@/api/types";
+import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
+import type { MeetingAttachment, MeetingRecord } from "@/api/types";
 import { Whiteboard } from "./Whiteboard";
 import { MeetingRoom } from "./Room";
 import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icons";
@@ -23,8 +25,13 @@ import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icon
  */
 type Mode = "video" | "board" | "slides";
 
-export function MeetingStage({ meeting, recordingLive }: {
+export function MeetingStage({ meeting, isHost, onMeeting, recordingLive }: {
   meeting: MeetingRecord;
+  /** the HOST drives the stage (db/0206): the board, and what is presented.
+      Everybody else watches — which is the point of the stage being shared
+      at all, and is why this is a prop rather than a read of the viewer. */
+  isHost: boolean;
+  onMeeting: (m: MeetingRecord) => void;
   recordingLive: boolean;
 }) {
   const t = useTranslations("meetings");
@@ -38,12 +45,47 @@ export function MeetingStage({ meeting, recordingLive }: {
    */
   const video = meeting.mode === "online";
   const [mode, setMode] = useState<Mode>(video ? "video" : "board");
-  const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
   const pdfInput = useRef<HTMLInputElement | null>(null);
   const shell = useRef<HTMLDivElement | null>(null);
+  /*
+   * THE PRESENTATION IS SHARED NOW (user directive, 2026-09-07: "same for the
+   * presentation").
+   *
+   * It used to be `URL.createObjectURL(file)` — the document read into ONE
+   * browser's memory, with a footer that said so honestly. A presentation
+   * nobody else can see is a slide deck held up to a mirror. The file goes to
+   * the meeting's own attachments (0159) and the host says which one is on
+   * screen (0206's `presenting_attachment_id`); every reader is handed a
+   * short-lived signed URL for the same bytes.
+   */
+  const [files, setFiles] = useState<MeetingAttachment[] | null>(null);
+  const [showing, setShowing] = useState<{ id: string; url: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const presentingId = meeting.presenting_attachment_id;
 
-  /* the object URL is a handle on memory: it goes when the file does */
-  useEffect(() => () => { if (pdf !== null) URL.revokeObjectURL(pdf.url); }, [pdf]);
+  const loadFiles = useCallback(() => {
+    void api.meetingAttachments(meeting.id)
+      .then((rows) => setFiles(rows.filter((f) => f.content_type.includes("pdf"))))
+      .catch(() => setFiles([]));
+  }, [meeting.id]);
+  useEffect(loadFiles, [loadFiles]);
+
+  /* the URL is a CREDENTIAL for those bytes, so it is minted per document and
+     never kept: when the host shows a different one, the old one goes with it */
+  useEffect(() => {
+    if (presentingId === null) { setShowing(null); return; }
+    let alive = true;
+    void api.meetingAttachmentUrl(meeting.id, presentingId)
+      .then((res) => { if (alive) setShowing({ id: presentingId, url: res.url }); })
+      .catch(() => { if (alive) setShowing(null); });
+    return () => { alive = false; };
+  }, [meeting.id, presentingId]);
+
+  const present = (attachmentId: string | null) => {
+    void api.setMeetingPresenting(meeting.id, attachmentId)
+      .then(onMeeting)
+      .catch(() => notify(t("writeFailed"), "warn"));
+  };
 
   const modeChip = (key: Mode, label: string, icon: React.ReactNode) => (
     <button
@@ -119,33 +161,78 @@ export function MeetingStage({ meeting, recordingLive }: {
       </div>
 
       {/* ── the surface ──────────────────────────────────────────────── */}
-      {mode === "board" ? <div className="min-h-0 flex-1"><Whiteboard meetingId={meeting.id} /></div> : null}
+      {mode === "board" ? (
+        <div className="min-h-0 flex-1">
+          <Whiteboard meetingId={meeting.id} canEdit={isHost} />
+        </div>
+      ) : null}
 
-      {mode === "video" && video ? (
-        /* the room lives HERE, in the box — a Google Meet link could only
-           ever open a window, because Google refuses to be framed */
-        <MeetingRoom meetingId={meeting.id} />
+      {video ? (
+        /*
+         * THE ROOM IS MOUNTED FOR THE WHOLE STAGE, AND HIDDEN WHEN ANOTHER
+         * MODE IS ON SCREEN (user report, 2026-09-07: "when you switch
+         * between whiteboard and video mid recording it gets disconnected and
+         * tries to connect again and sets everything again as well — this
+         * will end up not recording some parts of the conversation").
+         *
+         * It used to render only in its own mode, so walking to the
+         * whiteboard UNMOUNTED `LiveKitRoom`: the socket closed, every track
+         * was unpublished, the audio tap cleared, and coming back minted a
+         * fresh ticket and renegotiated from nothing. Everything said between
+         * the two was gone from the room — and the camera and microphone came
+         * back at whatever the props said rather than at what the person had
+         * chosen.
+         *
+         * `hidden` is display:none on the wrapper: the connection, the
+         * published tracks and the tap all carry on exactly as they were,
+         * and only the pixels stop. `contents` while visible so the wrapper
+         * adds no box of its own — the room's own `flex-1` still answers to
+         * the stage.
+         *
+         * The room lives HERE, in the box — a Google Meet link could only
+         * ever open a window, because Google refuses to be framed.
+         */
+        <div className={mode === "video" ? "contents" : "hidden"}>
+          <MeetingRoom meetingId={meeting.id} />
+        </div>
       ) : null}
 
       {mode === "slides" ? (
         <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-border p-2">
-            <button
-              type="button"
-              onClick={() => pdfInput.current?.click()}
-              /* 2026-09-03: a toolbar control, so `.btn btn-sm` — this one
-                 had a THIRD geometry (36px, 16px corner) inside a component
-                 already carrying two, which is the user's ten-developers
-                 complaint inside a single file. */
-              className="btn btn-sm gap-1.5 border border-border font-medium text-fg hover:bg-border"
-            >
-              <IconUpload width={12} height={12} />
-              {t("loadPdf")}
-            </button>
-            <span className="truncate text-[11px] text-fg-subtle">
-              {pdf === null ? t("slidesLocalNote") : pdf.name}
-            </span>
-          </div>
+          {/* the CONTROLS are the host's; a colleague gets the document and
+              no row of buttons that would refuse them */}
+          {isHost ? (
+            <div className="flex flex-wrap items-center gap-2 border-b border-border p-2">
+              <button
+                type="button"
+                onClick={() => pdfInput.current?.click()}
+                disabled={uploading}
+                /* 2026-09-03: a toolbar control, so `.btn btn-sm` — this one
+                   had a THIRD geometry (36px, 16px corner) inside a component
+                   already carrying two, which is the user's ten-developers
+                   complaint inside a single file. */
+                className="btn btn-sm gap-1.5 border border-border font-medium text-fg hover:bg-border"
+              >
+                <IconUpload width={12} height={12} />
+                {uploading ? t("uploading") : t("loadPdf")}
+              </button>
+              {(files ?? []).map((file) => (
+                <button
+                  key={file.id}
+                  type="button"
+                  aria-pressed={showing?.id === file.id}
+                  onClick={() => present(showing?.id === file.id ? null : file.id)}
+                  className={`btn btn-sm max-w-[16rem] font-medium ${
+                    showing?.id === file.id
+                      ? "bg-accent text-on-accent"
+                      : "border border-border text-fg-muted hover:text-fg"
+                  }`}
+                >
+                  <span className="truncate">{file.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <input
             ref={pdfInput}
             type="file"
@@ -155,16 +242,28 @@ export function MeetingStage({ meeting, recordingLive }: {
               const file = e.target.files?.[0];
               e.target.value = "";
               if (file === undefined) return;
-              if (pdf !== null) URL.revokeObjectURL(pdf.url);
-              setPdf({ url: URL.createObjectURL(file), name: file.name });
+              setUploading(true);
+              void api.uploadMeetingAttachment(meeting.id, file)
+                .then(() => api.meetingAttachments(meeting.id))
+                .then((rows) => {
+                  const pdfs = rows.filter((f) => f.content_type.includes("pdf"));
+                  setFiles(pdfs);
+                  /* uploading a deck IS asking to show it — a file that
+                     lands and then waits for a second press is a step
+                     nobody wanted in the middle of a meeting */
+                  const fresh = pdfs[pdfs.length - 1];
+                  if (fresh !== undefined) present(fresh.id);
+                })
+                .catch(() => notify(t("uploadFailed"), "warn"))
+                .finally(() => setUploading(false));
             }}
           />
-          {pdf === null ? (
+          {showing === null ? (
             <p className="grid flex-1 place-items-center p-6 text-center text-sm text-fg-muted">
-              {t("noSlides")}
+              {isHost ? t("noSlides") : t("noSlidesViewer")}
             </p>
           ) : (
-            <object data={pdf.url} type="application/pdf" className="min-h-0 flex-1">
+            <object data={showing.url} type="application/pdf" className="min-h-0 flex-1">
               <p className="p-6 text-center text-sm text-fg-muted">{t("pdfUnsupported")}</p>
             </object>
           )}

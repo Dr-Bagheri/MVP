@@ -37,6 +37,28 @@ vi.mock("next-intl", () => ({
 import { SpeakersDirectory } from "./SpeakersDirectory";
 import { ENROLLMENT_SCRIPTS, MIN_ENROLL_SECONDS } from "@/lib/enrollmentScript";
 
+/**
+ * THE MICROPHONE, FAKED AT THE ANALYSER (user report, 2026-09-07: "the
+ * enrolment voice detection part of the platform does not work — i did 2
+ * samples in it and never it realise i am talking to it").
+ *
+ * jsdom has no WebAudio, and `startMicMeter` treats its absence as "cannot
+ * measure" rather than "heard nothing" — deliberately, so the refusal never
+ * fires on a browser that simply has no analyser. That is also why the
+ * silent case is UNREACHABLE without this: the fake is what makes the two
+ * outcomes representable at all.
+ */
+let LEVEL = 24; // offset from the centre line; 0 is digital silence
+class FakeAnalyser {
+  fftSize = 1024;
+  getByteTimeDomainData(data: Uint8Array) { data.fill(128 + LEVEL); }
+}
+class FakeAudioContext {
+  createMediaStreamSource() { return { connect: () => undefined, disconnect: () => undefined }; }
+  createAnalyser() { return new FakeAnalyser(); }
+  close() { return Promise.resolve(); }
+}
+
 class FakeRecorder {
   static last: FakeRecorder | null = null;
   static isTypeSupported = () => true;
@@ -58,6 +80,15 @@ class FakeRecorder {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  LEVEL = 24;
+  (globalThis as Record<string, unknown>).AudioContext = FakeAudioContext;
+  (window as unknown as Record<string, unknown>).AudioContext = FakeAudioContext;
+  /* the meter runs on frames; under fake timers the clock is the test's, so
+     the frames are too */
+  (globalThis as Record<string, unknown>).requestAnimationFrame =
+    (cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16) as unknown as number;
+  (globalThis as Record<string, unknown>).cancelAnimationFrame =
+    (id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
   enrollVoice.mockClear();
   FakeRecorder.last = null;
   (globalThis as Record<string, unknown>).MediaRecorder = FakeRecorder;
@@ -125,6 +156,50 @@ describe("scripted voice enrollment", () => {
       fireEvent.click(finish());
       await Promise.resolve();
     });
+    expect(enrollVoice).toHaveBeenCalledWith("p-1", expect.any(Blob));
+  });
+
+  /*
+   * A TAKE NOTHING WAS HEARD IN IS NOT SENT, and the pair is the point: a
+   * panel that never sent anything would satisfy the first of these on its
+   * own. Before 2026-09-07 the silent take was uploaded, embedded into a
+   * near-constant "silence" vector and stored as that person's signature,
+   * with nothing on screen at any point saying the microphone was dead.
+   */
+  it("a silent take is refused where the person is standing, not a round trip later", async () => {
+    LEVEL = 0; // the microphone is delivering nothing
+    const start = await openPanel();
+    await act(async () => {
+      fireEvent.click(start);
+      await Promise.resolve();
+    });
+    act(() => { vi.advanceTimersByTime(12_000); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("voiceFinish"));
+      await Promise.resolve();
+    });
+
+    expect(enrollVoice, "a clip with no voice in it became a voiceprint").not.toHaveBeenCalled();
+    /* and the panel stays open at the start, because the answer is "read it
+       again", not "we are done" */
+    expect(screen.getByText("voiceStart")).toBeInTheDocument();
+  });
+
+  it("…and a take it DID hear is sent — the control", async () => {
+    LEVEL = 24;
+    const start = await openPanel();
+    await act(async () => {
+      fireEvent.click(start);
+      await Promise.resolve();
+    });
+    act(() => { vi.advanceTimersByTime(12_000); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("voiceFinish"));
+      await Promise.resolve();
+    });
+
     expect(enrollVoice).toHaveBeenCalledWith("p-1", expect.any(Blob));
   });
 

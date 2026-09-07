@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   ControlBar,
@@ -8,9 +8,11 @@ import {
   LiveKitRoom,
   ParticipantTile,
   RoomAudioRenderer,
+  useLocalParticipant,
   useTracks,
 } from "@livekit/components-react";
 import { clearRoomAudio, publishRoomAudio } from "@/lib/roomAudio";
+import { readRoomPrefs, writeRoomPrefs } from "@/lib/roomPrefs";
 import { Track } from "livekit-client";
 import "@livekit/components-styles";
 import { api, BffError } from "@/api/client";
@@ -93,9 +95,33 @@ function AudioTap() {
   return null;
 }
 
+/**
+ * REMEMBERS THE TWO SWITCHES, for as long as the tab is in this meeting.
+ *
+ * It renders nothing and lives inside `LiveKitRoom` because that is where the
+ * room context is. The person's camera and microphone are theirs to decide,
+ * and a page navigation rebuilding this tree must not decide again for them —
+ * `lib/roomPrefs.ts` carries the reasoning and the lifetime.
+ */
+function RememberDevices({ meetingId }: { meetingId: string }) {
+  const { isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
+  useEffect(() => {
+    writeRoomPrefs(meetingId, { mic: isMicrophoneEnabled, cam: isCameraEnabled });
+  }, [meetingId, isMicrophoneEnabled, isCameraEnabled]);
+  return null;
+}
+
 export function MeetingRoom({ meetingId }: { meetingId: string }) {
   const t = useTranslations("meetings");
   const [ticket, setTicket] = useState<RoomTicket | null>(null);
+  /*
+   * READ ONCE, at mount. The room's initial device state is a prop, so it is
+   * only ever consulted on the first render — and re-reading it on every
+   * render would mean the person's own switch fought a value this component
+   * had just written. The ref is what makes "what they had when they arrived"
+   * a fact rather than a race.
+   */
+  const opening = useRef(readRoomPrefs(meetingId));
   const [failed, setFailed] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -152,8 +178,11 @@ export function MeetingRoom({ meetingId }: { meetingId: string }) {
         token={ticket.token}
         serverUrl={ticket.url}
         connect
-        video
-        audio
+        /* the directive's defaults live in roomPrefs: camera OFF, microphone
+           ON — and whatever this person last chose in this meeting wins over
+           both */
+        video={opening.current.cam}
+        audio={opening.current.mic}
         /* audit finding, 2026-09-02: the product's LiveKit palette, defined
            once in globals.css. "default" is LiveKit's own — its blue, its
            Latin system font, its 8px corners. Changed here and on the guest's
@@ -163,6 +192,7 @@ export function MeetingRoom({ meetingId }: { meetingId: string }) {
       >
         <Stage />
         <AudioTap />
+        <RememberDevices meetingId={meetingId} />
         <RoomAudioRenderer />
         <ControlBar variation="minimal" />
       </LiveKitRoom>

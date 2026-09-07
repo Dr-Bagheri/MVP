@@ -4,17 +4,26 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "@/lib/useTheme";
+import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
 
 /**
  * THE WHITEBOARD (the big-milestone round, 2026-09-01) — the reference's
  * برگزاری canvas: freehand pen, highlighter, shapes, arrows, text, an
  * object eraser, undo/redo, pan and zoom.
  *
- * What it deliberately is NOT in v1: collaborative or server-persisted.
- * Strokes live in this browser (localStorage per meeting — a per-viewer
- * convenience, the platform's stated pattern for exactly this class), so a
- * reload keeps your board and a colleague's screen shows their own. The
- * honest line about that is in the toolbar's title, not hidden.
+ * SHARED, AND THE HOST'S (user directive, 2026-09-07: "only the host can play
+ * with the whiteboard and all invited to the meeting must be able to see it as
+ * well"). Until then the strokes lived in `localStorage` per browser, which
+ * this header said plainly and which was the wrong product: the host drew for
+ * themselves and every colleague looked at an empty canvas.
+ *
+ * The board is `echo.meeting.board` now (db/0206) — one array, written by the
+ * host, read by everybody who can read the meeting. The version beside it is
+ * what a viewer polls on, so a board mid-meeting crosses the wire only when
+ * there are new strokes on it. The local copy is GONE rather than kept as a
+ * cache: two stores for one board is the two-spellings defect, and the one
+ * that loses is always the one somebody else is looking at.
  *
  * Geometry: every shape is stored in WORLD coordinates; the view applies
  * pan/zoom at draw time, so zooming never rewrites a stroke.
@@ -69,11 +78,13 @@ interface Shape {
   text?: string;
 }
 
-function storageKey(meetingId: string): string {
-  return `neurai-whiteboard-${meetingId}`;
-}
-
-export function Whiteboard({ meetingId }: { meetingId: string }) {
+export function Whiteboard({ meetingId, canEdit }: {
+  meetingId: string;
+  /** the HOST draws; everybody else watches. The wall is db/0206's trigger —
+      this only decides whether the tools are offered at all, because a
+      disabled pen a person can press is a promise the server will refuse. */
+  canEdit: boolean;
+}) {
   const t = useTranslations("meetings");
   const tCommon = useTranslations("common");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -91,26 +102,90 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
     (shape: Shape) => (shape.ink === undefined ? shape.color : palette[shape.ink]),
     [palette],
   );
-  const [shapes, setShapes] = useState<Shape[]>(() => {
-    try {
-      const raw = localStorage.getItem(storageKey(meetingId));
-      return raw === null ? [] : (JSON.parse(raw) as Shape[]);
-    } catch {
-      return [];
-    }
-  });
+  const [shapes, setShapes] = useState<Shape[]>([]);
+  /** the version this browser has seen — the poll's question, and the host's
+      own receipt after a write */
+  const version = useRef(-1);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<Shape[] | null>(null);
   const [redoStack, setRedoStack] = useState<Shape[]>([]);
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
   /** the in-flight shape while the pointer is down */
   const drawing = useRef<Shape | null>(null);
   const panning = useRef<{ x: number; y: number } | null>(null);
 
+  /**
+   * THE HOST'S WRITE, coalesced.
+   *
+   * A stroke is committed on pointer-up, so a person drawing quickly commits
+   * several a second; sending each one is a request per stroke and an
+   * ordering problem the moment two are in flight. The last state within
+   * 400ms wins, which is the only one anybody needed to see anyway.
+   *
+   * A REFUSED write is not swallowed: the board is the meeting's record of
+   * what was drawn, and a stroke that silently failed to save is one the host
+   * believes is there. It is reported once, through the platform's own
+   * notifier, and the local strokes stay on screen so nothing is lost while
+   * they retry.
+   */
   const persist = useCallback((next: Shape[]) => {
-    try {
-      localStorage.setItem(storageKey(meetingId), JSON.stringify(next));
-    } catch {
-      /* storage can be absent (private window) — the board still works */
-    }
+    pending.current = next;
+    if (saveTimer.current !== null) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      const shapesNow = pending.current;
+      pending.current = null;
+      if (shapesNow === null) return;
+      void api.saveMeetingBoard(meetingId, shapesNow)
+        .then((res) => { version.current = res.version; })
+        .catch(() => notify(t("boardSaveFailed"), "warn"));
+    }, 400);
+  }, [meetingId, t]);
+
+  /* the board as it stands, once, on arrival */
+  useEffect(() => {
+    let alive = true;
+    void api.meetingBoard(meetingId)
+      .then((board) => {
+        if (!alive || board === null) return;
+        version.current = board.version;
+        setShapes(board.shapes as Shape[]);
+      })
+      .catch(() => { /* an unreadable board is an empty canvas, not an error
+                        card over a meeting that is otherwise fine */ });
+    return () => { alive = false; };
+  }, [meetingId]);
+
+  /**
+   * A VIEWER FOLLOWS THE HOST.
+   *
+   * Only for somebody who cannot draw: the host is the single writer, so
+   * polling their own board would mean fetching what they just sent and, on a
+   * slow round trip, replacing strokes they have drawn since. `since` is the
+   * version already held, and core answers 204 when nothing has moved — which
+   * is what makes three seconds an affordable interval.
+   */
+  useEffect(() => {
+    if (canEdit) return;
+    let alive = true;
+    const timer = setInterval(() => {
+      void api.meetingBoard(meetingId, version.current < 0 ? undefined : version.current)
+        .then((board) => {
+          if (!alive || board === null) return;
+          version.current = board.version;
+          setShapes(board.shapes as Shape[]);
+        })
+        .catch(() => { /* one failed poll is not an erased board */ });
+    }, 3000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [canEdit, meetingId]);
+
+  /* a stroke drawn a moment before the panel closes is still the host's work:
+     the pending write goes out rather than being dropped with the timer */
+  useEffect(() => () => {
+    if (saveTimer.current !== null) clearTimeout(saveTimer.current);
+    const last = pending.current;
+    if (last !== null) void api.saveMeetingBoard(meetingId, last).catch(() => undefined);
   }, [meetingId]);
 
   /** screen px -> world coords under the current view */
@@ -226,6 +301,11 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    /* THE ONE WALL on this component, deliberately: panning is a view, not a
+       stroke, so a viewer may still move around the board — everything that
+       CHANGES it comes through here. A second copy on each tool would read as
+       rigour and make the test for this one vacuous (0202's lesson, twice). */
+    if (!canEdit && tool !== "hand") return;
     (e.target as Element).setPointerCapture(e.pointerId);
     if (tool === "hand" || e.button === 1) {
       panning.current = { x: e.clientX - view.x, y: e.clientY - view.y };
@@ -350,10 +430,20 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
         </p>
       ) : null}
 
-      {/* ── the toolbar, floated over the canvas like the reference ──── */}
+      {/*
+        ── the toolbar, floated over the canvas like the reference ──────────
+        THE HOST'S ALONE (db/0206). A viewer gets the sentence instead: a full
+        toolbar whose every press is refused teaches, on the first press, that
+        the feature is broken — and a greyed row of eleven buttons is worse
+        again, because it is a promise the product will not keep.
+      */}
+      {!canEdit ? (
+        <p className="absolute inset-x-0 top-3 mx-auto w-fit rounded-xl border border-border bg-surface px-3 py-1.5 text-[11px] text-fg-muted shadow-card">
+          {t("boardHostOnly")}
+        </p>
+      ) : (
       <div
         className="absolute inset-x-0 top-3 mx-auto flex w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-border bg-surface p-1 shadow-card"
-        title={t("whiteboardLocalNote")}
       >
         {toolBtn("hand", "✋", t("wbHand"))}
         {toolBtn("pen", "✏️", t("wbPen"))}
@@ -384,6 +474,7 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
           </button>
         ))}
       </div>
+      )}
 
       {/* ── undo / zoom cluster, bottom corner ───────────────────────────
           2026-09-03: five more `.btn btn-icon` — this cluster had invented a
@@ -392,20 +483,30 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
           gone with them: `.btn` dims AND blocks the pointer on a disabled
           control, and one shape has to mean one disabled treatment too. */}
       <div className="absolute bottom-3 start-3 flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1 shadow-card">
-        <button type="button" aria-label={t("wbUndo")} title={t("wbUndo")} onClick={undo}
-          className="btn btn-icon text-fg-muted hover:text-fg">↶</button>
-        <button type="button" aria-label={t("wbRedo")} title={t("wbRedo")} onClick={redo}
-          disabled={redoStack.length === 0}
-          className="btn btn-icon text-fg-muted hover:text-fg">↷</button>
-        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+        {/* undo, redo and clear CHANGE the board, so they go with the tools;
+            zoom does not — a viewer may look closer at what the host drew */}
+        {canEdit ? (
+          <>
+            <button type="button" aria-label={t("wbUndo")} title={t("wbUndo")} onClick={undo}
+              className="btn btn-icon text-fg-muted hover:text-fg">↶</button>
+            <button type="button" aria-label={t("wbRedo")} title={t("wbRedo")} onClick={redo}
+              disabled={redoStack.length === 0}
+              className="btn btn-icon text-fg-muted hover:text-fg">↷</button>
+            <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+          </>
+        ) : null}
         <button type="button" aria-label={t("wbZoomOut")} title={t("wbZoomOut")} onClick={() => zoomBy(1 / 1.2)}
           className="btn btn-icon text-fg-muted hover:text-fg">−</button>
         <span className="badge-num min-w-11 text-center text-[11px] text-fg-muted">{Math.round(view.zoom * 100)}%</span>
         <button type="button" aria-label={t("wbZoomIn")} title={t("wbZoomIn")} onClick={() => zoomBy(1.2)}
           className="btn btn-icon text-fg-muted hover:text-fg">+</button>
-        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
-        <button type="button" aria-label={t("wbClear")} title={t("wbClear")} onClick={clear}
-          className="btn btn-icon text-fg-muted hover:text-danger">🗑</button>
+        {canEdit ? (
+          <>
+            <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+            <button type="button" aria-label={t("wbClear")} title={t("wbClear")} onClick={clear}
+              className="btn btn-icon text-fg-muted hover:text-danger">🗑</button>
+          </>
+        ) : null}
       </div>
       {textAt !== null ? (
         <ConfirmDialog

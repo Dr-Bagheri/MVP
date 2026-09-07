@@ -1828,6 +1828,44 @@ export const api = {
    * leaves a row pointing at bytes that never arrived, which every reader
    * afterwards has to handle.
    */
+  /**
+   * 0206 — THE SHARED BOARD.
+   *
+   * `since` is the version this browser already has: core answers 204 and the
+   * BFF relays it as `null`, which is why the return type says so. A viewer
+   * polls with it and the strokes cross the wire only when there are new
+   * ones — a board mid-meeting is not a thing to send every three seconds.
+   */
+  async meetingBoard(
+    id: string, since?: number,
+  ): Promise<{ shapes: unknown[]; version: number } | null> {
+    const q = since === undefined ? "" : `?since=${since}`;
+    return bff(`/api/meetings/${encodeURIComponent(id)}/board${q}`);
+  },
+  /** the host's write. A colleague's is refused by the database, not by this. */
+  async saveMeetingBoard(id: string, shapes: unknown[]): Promise<{ version: number }> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/board`, {
+      method: "PUT",
+      body: JSON.stringify({ shapes }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  /** 0206 — show one of the meeting's documents to everybody, or nobody. */
+  async setMeetingPresenting(id: string, attachmentId: string | null): Promise<MeetingRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/presenting`, {
+      method: "PUT",
+      body: JSON.stringify({ attachment_id: attachmentId }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  /** a short-lived signed URL for one document — minted per read, never stored */
+  async meetingAttachmentUrl(
+    id: string, attachmentId: string,
+  ): Promise<{ url: string; content_type: string }> {
+    return bff(
+      `/api/meetings/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}/url`,
+    );
+  },
   async meetingAttachments(id: string): Promise<MeetingAttachment[]> {
     return bff(`/api/meetings/${encodeURIComponent(id)}/attachments`);
   },

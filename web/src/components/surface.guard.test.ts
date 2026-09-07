@@ -41,7 +41,11 @@ const REMAINING: Record<string, number> = {
   "components/platform/chat/Composer.tsx": 1,  // the emoji panel
   "components/platform/TaskBoard.tsx": 1,      // the column-tone popover
   "components/platform/tasks/JalaliPicker.tsx": 1, // the calendar popover
-  "components/platform/meeting/Whiteboard.tsx": 2, // the two floating toolbars over the canvas
+  // the two floating toolbars, and (2026-09-07) the line a VIEWER gets in
+  // place of the tools — same floating layer, same reason: the board is
+  // the host's now (db/0206) and a colleague is told so rather than shown
+  // eleven buttons that would be refused
+  "components/platform/meeting/Whiteboard.tsx": 3,
   // ── dialog panels drawn by hand, NOT on Overlay: R8's second pass ────
   "components/platform/SetMemberPassword.tsx": 1,
   "components/platform/TourOverlay.tsx": 1,

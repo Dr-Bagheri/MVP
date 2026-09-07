@@ -5195,3 +5195,87 @@ sessions) for the cross-session narrative.
   (1 each). The landing control — a FINISHED record still opens on post —
   is what stops "always open on the live stage" passing all five.
   db 205 migrations · core 1416 tests · web 1285 tests + gate + sweep.
+- 2026-09-07 (THE MEETING ROOM: an invitation that asks, a stage everybody
+  sees, a room that stops reconnecting — and the enrolment that had never
+  heard anybody; db 0206): five items in one message.
+  **THE ENROLMENT IS THE ONE WORTH READING FIRST, because it had never
+  worked and nothing said so.** «i did 2 samples in it and never it realise i
+  am talking to it». Probed on production: ml/'s `/embed` answered ten seconds
+  of DIGITAL SILENCE with `200 {speech_ms: 10000}` and a vector — and that
+  vector agrees with a pure tone's to within a couple of percent, so the
+  extractor returns essentially ONE null print for anything with no voice in
+  it. `speech_ms` was `samples / sampleRate`: **the clip's DURATION wearing
+  the name of a measurement**, which is the `vad: true` constant of
+  2026-08-13 arriving in the one number that could have refused the clip, and
+  it made the 1500ms floor beside it a duration floor twice over. So a muted
+  microphone enrolled a signature meaning "silence", the person was told it
+  was saved, and nothing ever matched them again. `/embed` runs the VAD now,
+  reports real speech, refuses under 1.5s of it as `no_speech` (422, NOT
+  retryable — the same bytes answer the same way forever and what has to
+  change is the microphone), and the extractor is fed the SPEECH rather than
+  the pauses around it. The browser half is the same fact said where it can
+  still be acted on: a live level meter during the take, and a refusal to
+  send a take nothing was heard in. **The meter's own first draft was wrong
+  and its own test caught it** — the floor sat on the DISPLAY curve, where one
+  least-significant bit of a silent capture already reads 0.12 of a full bar;
+  the decision moved to the raw RMS and the bar draws nothing at all below it,
+  because a bar twitching over a dead microphone is the false reassurance the
+  module exists to remove.
+  **THE VIDEO ROOM STOPPED DROPPING.** «switch between whiteboard and video
+  mid recording → gets disconnected and tries to connect again … will end up
+  not recording some parts». It rendered only in its own mode, so walking to
+  the board UNMOUNTED `LiveKitRoom`: socket closed, tracks unpublished, audio
+  tap cleared, and coming back minted a fresh ticket and renegotiated. It is
+  mounted for the whole stage now and `hidden` when another mode is on screen
+  — the connection carries on and only the pixels stop. **Camera OFF and
+  microphone ON by default** (`lib/roomPrefs.ts`), and what the person chooses
+  survives navigation for as long as the tab is in that meeting: two halves,
+  and the mode switch no longer loses a choice because it no longer unmounts
+  anything.
+  **THE STAGE IS SHARED AND IT IS THE HOST'S (0206).** The whiteboard was
+  `localStorage` per browser — its own header said so, honestly, and it was
+  the wrong product: the host drew for themselves while every colleague
+  watched an empty canvas. The board is `echo.meeting.board` now, written by
+  the host, read by everybody who can read the meeting, with a `board_version`
+  the TRIGGER stamps (a client that supplied its own could hold it still while
+  the strokes moved, and every viewer would stop refreshing) and a `?since=`
+  poll that answers 204 when nothing has changed. The presentation is the same
+  shape: the PDF goes to the meeting's own attachments and the host says which
+  one is on screen, which needed the READ half 0159 never built — a signed
+  download URL, minted per read, never stored. Columns rather than a table,
+  argued in the migration: a board has one meeting and no lifetime of its own,
+  and as a table it would need policies, grants and an entry in the purge's
+  enumerated deletes — three places to get wrong for one value per meeting.
+  **AN INVITATION ASKS INSTEAD OF WAITING TO BE FOUND.** The row and the bell
+  were already right (0202 mints it in the same act that adds somebody); what
+  was missing is that a badge on an icon is a thing you FIND. `MeetingInviteGate`
+  sits in the shell so "at the moment they are added" and "when they log in"
+  are one mechanism, and it is the platform's own question box — the delete
+  dialog's shape, as asked. Two limits are the design: only MEETINGS interrupt
+  (a room is news; a meeting has a time), and «بعداً» dismisses without
+  answering, because closing a question is not answering it and the bell still
+  holds it.
+  **THE VERIFY-RED FOUND A DEFECT IN MY OWN WORK, and it is the same one this
+  file has recorded twice.** Removing the whiteboard's pointer guard left the
+  suite GREEN — because `persist` carried a SECOND copy of the same wall, so
+  either one alone did all the work and the test for the other was vacuous.
+  Collapsed to one, at the altitude where a stroke is made; the tools are
+  simply not offered to a viewer (an eleven-button toolbar that refuses every
+  press teaches, on the first press, that the product is broken), and zoom
+  stays because looking closer is not drawing. Two more of my own instruments
+  were wrong before the code was: a mount counter that counted RENDERS said a
+  room had connected five times when it had connected once, and a db
+  assertion demanded a refusal for `presenting_attachment_id = null` on a
+  meeting where it was already null — `new is distinct from old` is false
+  there, so the trigger never fires and **a no-op is not a change** (0186's
+  own sentence). A third: the purge-silence check could not be read under
+  `echo_app`, where no actor means the row is not reachable at all, so a
+  silent trigger and a policy refusing the row are the same picture — moved
+  to owner altitude, where the purge actually writes.
+  Verify-red by mutation on eight behaviours, every one red by name: the
+  room's mount, the board's wall, the meter's floor, the camera default, the
+  silent take's refusal, the gate's meeting-only rule, its dismiss-is-not-an-
+  answer rule, and ml's duration-as-speech.
+  Cost said out loud: a whiteboard drawn before today lived in one browser and
+  is not migrated — the shared board starts empty.
+  db 206 migrations · ml 148 tests · core 1420 tests · web 1306 tests + gate + sweep.

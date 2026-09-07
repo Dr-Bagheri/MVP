@@ -121,6 +121,16 @@ export interface MeetingRecord {
    * no take, a purged one, or a meeting they cannot read.
    */
   call_status: string | null;
+  /**
+   * 0206 — the attachment the host is presenting, or null.
+   *
+   * The BOARD is deliberately not here. It is one value per meeting and it
+   * can be large mid-meeting; a list of twenty meetings would carry twenty
+   * boards to draw twenty rows that show none of them. `board_version` is
+   * what a viewer polls, and `GET /v1/meetings/:id/board` is where the
+   * strokes live.
+   */
+  presenting_attachment_id: string | null;
   archived: boolean;
   created_by: string;
   /** the host's display names, resolved from `created_by` — null only when
@@ -154,6 +164,7 @@ const meetingRows = (withAttendees: boolean, withTakeStatus: boolean) => `
          m.location, m.description, m.invitees, m.agenda, m.call_id,
          c.title as call_title,
          ${withTakeStatus ? "echo.meeting_take_status(m.id)" : "null::text"} as call_status,
+         m.presenting_attachment_id,
          m.archived_at, m.created_by, m.created_at,
          /* the HOST's names, resolved the way the topic's is. created_by is
             an id, and every surface that wanted to say who ran the meeting was
@@ -222,6 +233,7 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     call_id: (row.call_id as string | null) ?? null,
     call_title: (row.call_title as string | null) ?? null,
     call_status: (row.call_status as string | null) ?? null,
+    presenting_attachment_id: (row.presenting_attachment_id as string | null) ?? null,
     archived: row.archived_at !== null && row.archived_at !== undefined,
     created_by: String(row.created_by),
     host_name: row.host_name === null || row.host_name === undefined ? null : String(row.host_name),
@@ -383,6 +395,91 @@ export function createMeetingsRepo(db: Db) {
     await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
       "select echo.set_meeting_join_code($1, $2)", [id, code],
     ));
+  }
+
+  /**
+   * 0206 — THE SHARED BOARD.
+   *
+   * Read by anybody who can read the meeting; written by the host alone, and
+   * that is the DATABASE's sentence (the 0206 trigger), not this function's.
+   * The version comes back with the strokes so a viewer can ask "has it
+   * moved?" without being sent a board every three seconds.
+   */
+  async function board(identity: Identity, meetingId: string): Promise<{
+    shapes: unknown[]; version: number;
+  } | null> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<{ board: unknown; board_version: number }>(
+        "select board, board_version from echo.meeting where id = $1", [meetingId],
+      );
+      const row = rows[0];
+      /* null is "no such meeting, or not yours to read" — the caller turns it
+         into a 404, the same nothing RLS gives every other meeting read */
+      if (row === undefined) return null;
+      return {
+        shapes: Array.isArray(row.board) ? row.board : [],
+        version: Number(row.board_version),
+      };
+    });
+  }
+
+  /**
+   * Replace the board. The whole array every time, deliberately: strokes are
+   * committed one at a time by one person, the payload is small beside a
+   * meeting's audio, and a patch protocol would need an ordering guarantee a
+   * lossy channel cannot give. The refusal for a colleague comes from the
+   * trigger as `insufficient_privilege`, which the api's mapper already
+   * turns into a 403.
+   */
+  async function setBoard(
+    identity: Identity, meetingId: string, shapes: unknown[],
+  ): Promise<{ version: number } | null> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<{ board_version: number }>(
+        /* ::text::jsonb — the cast travels with the value (db/jsonb.ts's
+           lesson: three double-encodes in one day) */
+        `update echo.meeting set board = $2::text::jsonb
+          where id = $1 returning board_version`,
+        [meetingId, JSON.stringify(shapes)],
+      );
+      const row = rows[0];
+      return row === undefined ? null : { version: Number(row.board_version) };
+    });
+  }
+
+  /** 0206 — which attachment the host is showing; null clears it. */
+  async function setPresenting(
+    identity: Identity, meetingId: string, attachmentId: string | null,
+  ): Promise<void> {
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      "update echo.meeting set presenting_attachment_id = $2 where id = $1",
+      [meetingId, attachmentId],
+    ));
+  }
+
+  /**
+   * The storage path of one attachment, so a reader can be handed a signed URL
+   * for it — the READ half 0159 never built, which is why a presentation could
+   * not leave the host's browser.
+   */
+  async function attachmentPath(
+    identity: Identity, meetingId: string, attachmentId: string,
+  ): Promise<{ bucket: string; path: string; contentType: string } | null> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select storage_bucket, storage_path, content_type
+           from echo.meeting_attachment
+          where id = $1 and meeting_id = $2`,
+        [attachmentId, meetingId],
+      );
+      const row = rows[0];
+      if (row === undefined) return null;
+      return {
+        bucket: String(row.storage_bucket),
+        path: String(row.storage_path),
+        contentType: String(row.content_type),
+      };
+    });
   }
 
   /** 0159 — the documents attached to a meeting, newest last. */
@@ -961,5 +1058,6 @@ export function createMeetingsRepo(db: Db) {
     byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
     items, addItem, updateItem, removeItem, extractItems,
     addAttendees, removeAttendee, markAttended,
+    board, setBoard, setPresenting, attachmentPath,
   };
 }

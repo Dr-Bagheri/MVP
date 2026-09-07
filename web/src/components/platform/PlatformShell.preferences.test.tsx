@@ -38,6 +38,10 @@ vi.mock("@/api/client", () => ({
 vi.mock("./IconRail", () => ({ IconRail: () => null }));
 vi.mock("./TopBar", () => ({ TopBar: () => null }));
 vi.mock("./BottomBar", () => ({ BottomBar: () => null }));
+/* the invitation gate is chrome by the same argument (2026-09-07): it asks
+   the router where to go and the api what is waiting, and neither is what a
+   test about display preferences is measuring */
+vi.mock("./MeetingInviteGate", () => ({ MeetingInviteGate: () => null }));
 
 const { PlatformShell } = await import("./PlatformShell");
 

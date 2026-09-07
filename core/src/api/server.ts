@@ -1642,6 +1642,102 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * recording routes do: `meetings.detail` refuses a meeting the caller
    * cannot see, so a path is only ever minted for a meeting they can open.
    */
+  /**
+   * 0206 — THE SHARED STAGE.
+   *
+   * Everybody who can read the meeting reads the board; only the host writes
+   * it, and the wall for that is the 0206 trigger rather than a check here —
+   * a colleague's PUT reaches the database and is refused with
+   * `insufficient_privilege`, which the error mapper answers as a 403. The
+   * screen does not offer them the tools, but a screen is not a wall.
+   *
+   * `?since=` is what makes a live board affordable: a viewer polls with the
+   * version it already has and gets 204 when nothing has moved, so the
+   * strokes cross the wire only when there are new ones.
+   */
+  app.get("/v1/meetings/:id/board", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const { since } = request.query as { since?: string };
+    const found = await meetings.board(identity, id);
+    if (found === null) throw new NotFoundError("meeting not found");
+    if (since !== undefined && Number(since) === found.version) {
+      /* 204, not an empty board: "nothing has changed" and "the host wiped
+         it" are different facts and a viewer acts differently on each */
+      return reply.code(204).send();
+    }
+    return reply.send(found);
+  });
+
+  app.put("/v1/meetings/:id/board", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { shapes?: unknown };
+    if (!Array.isArray(body.shapes)) {
+      throw new ValidationError("shapes must be an array", { code: "shapes_required" });
+    }
+    if (body.shapes.length > 5000) {
+      /* a board is a meeting's worth of strokes, not a document store — the
+         ceiling is here so a runaway client cannot make a row nobody can
+         read back */
+      throw new ValidationError("that is more strokes than a board holds",
+        { code: "board_too_large" });
+    }
+    const written = await meetings.setBoard(identity, id, body.shapes);
+    if (written === null) throw new NotFoundError("meeting not found");
+    return reply.send(written);
+  });
+
+  /** 0206 — the document the host is showing; `null` clears it. */
+  app.put("/v1/meetings/:id/presenting", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { attachment_id?: unknown };
+    const attachmentId = body.attachment_id === null || body.attachment_id === undefined
+      ? null
+      : String(body.attachment_id);
+    if (attachmentId !== null) {
+      /* it has to be THIS meeting's document: the FK would take any
+         attachment in the database, and pointing a meeting at another one's
+         file is exactly the read a signed URL would then hand out */
+      const file = await meetings.attachmentPath(identity, id, attachmentId);
+      if (file === null) throw new NotFoundError("attachment not found");
+    }
+    await meetings.setPresenting(identity, id, attachmentId);
+    return reply.send(await meetings.detail(identity, id));
+  });
+
+  /**
+   * A signed URL for one of the meeting's documents — the read half 0159
+   * never built, and the reason a presentation could not leave the host's
+   * browser.
+   *
+   * Short-lived by design: the URL is a CREDENTIAL for those bytes, and one
+   * that outlives the meeting is one that outlives the reason it was minted.
+   */
+  app.get("/v1/meetings/:id/attachments/:attachmentId/url", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    if (options.storageUrl === undefined || options.storageServiceKey === undefined) {
+      throw new ValidationError("file storage is not configured on this platform",
+        { code: "storage_not_configured" });
+    }
+    const { id, attachmentId } = request.params as { id: string; attachmentId: string };
+    await meetings.detail(identity, id);
+    const file = await meetings.attachmentPath(identity, id, attachmentId);
+    if (file === null) throw new NotFoundError("attachment not found");
+    const signer = createStorageSigner({
+      url: options.storageUrl, serviceKey: options.storageServiceKey,
+    });
+    return reply.send({
+      url: await signer.signDownload(file.bucket, file.path, 3600),
+      content_type: file.contentType,
+    });
+  });
+
   app.get("/v1/meetings/:id/attachments", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

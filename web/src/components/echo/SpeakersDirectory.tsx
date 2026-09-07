@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
@@ -24,6 +24,7 @@ import {
   MIN_ENROLL_SECONDS,
   type EnrollmentLang,
 } from "@/lib/enrollmentScript";
+import { HEARD_MS_FLOOR, startMicMeter, wasHeard } from "@/lib/micMeter";
 
 /**
  * The people directory as an Echo section (user directive, 2026-08-17):
@@ -135,6 +136,20 @@ export function SpeakersDirectory() {
   const enrollControls = useState<{ finish: (() => void) | null; cancel: (() => void) | null }>(
     { finish: null, cancel: null },
   )[0];
+  /*
+   * THE METER (user report, 2026-09-07: "i did 2 samples in it and never it
+   * realise i am talking to it").
+   *
+   * The bar is written to the DOM rather than to state on purpose: it moves
+   * twelve times a second, and putting that through `setEnroll` would
+   * re-render the whole directory — a table of every colleague — at the same
+   * rate, to animate one div. `heard` DOES go through state, because it
+   * changes at most once per take and the sentence beside the bar depends on
+   * it.
+   */
+  const meterBar = useRef<HTMLDivElement | null>(null);
+  const heardMs = useRef(0);
+  const [heard, setHeard] = useState(false);
   const voiceReady =
     people !== null && people.length > 0 && people[0] !== undefined
     && "voice_enrolled_at" in people[0];
@@ -150,6 +165,8 @@ export function SpeakersDirectory() {
 
   function openEnroll(person: Person): void {
     if (enroll) return;
+    heardMs.current = 0;
+    setHeard(false);
     setEnroll({
       personId: person.id,
       lang: locale === "fa" ? "fa" : "en",
@@ -197,6 +214,18 @@ export function SpeakersDirectory() {
         .catch(() => notify(t("voiceFailed"), "warn"))
         .finally(() => setEnroll(null));
     };
+    /* the same stream the recorder has: one microphone, one graph, so the
+       bar cannot disagree with what is being written to the clip */
+    heardMs.current = 0;
+    setHeard(false);
+    const stopMeter = startMicMeter(stream, (m) => {
+      heardMs.current = m.heardMs;
+      if (meterBar.current !== null) {
+        meterBar.current.style.width = `${Math.round(m.level * 100)}%`;
+      }
+      if (m.heardMs >= HEARD_MS_FLOOR) setHeard(true);
+    });
+
     rec.start();
     setEnroll((prev) =>
       prev?.personId === person.id ? { ...prev, phase: "recording", seconds: 0 } : prev);
@@ -210,12 +239,29 @@ export function SpeakersDirectory() {
     }, 1000);
     enrollControls.finish = () => {
       clearInterval(tick);
+      stopMeter();
       enrollControls.finish = null;
       enrollControls.cancel = null;
+      /*
+       * A TAKE NOTHING WAS HEARD IN IS NOT SENT.
+       *
+       * ml/ refuses a silent clip by name now, so this is not the wall — it
+       * is the sentence said where the person can still act on it, with the
+       * microphone in front of them and the panel still open. Uploading it to
+       * be refused a network round trip later would tell them the same thing
+       * in a worse place, and before 2026-09-07 it told them nothing at all:
+       * the clip was accepted and became a signature that never matched.
+       */
+      if (!wasHeard(heardMs.current)) {
+        discard = true;
+        notify(t("voiceNothingHeard"), "warn");
+        setEnroll((prev) => (prev?.personId === person.id ? { ...prev, phase: "ready", seconds: 0 } : prev));
+      }
       if (rec.state !== "inactive") rec.stop();
     };
     enrollControls.cancel = () => {
       clearInterval(tick);
+      stopMeter();
       discard = true;
       enrollControls.finish = null;
       enrollControls.cancel = null;
@@ -452,6 +498,31 @@ export function SpeakersDirectory() {
         >
           {ENROLLMENT_SCRIPTS[enroll.lang]}
         </p>
+        {/*
+          WHAT THE MICROPHONE IS HEARING, while there is still time to fix it.
+          Rendered only during the take: a bar sitting at zero on a panel
+          nobody has started is a broken meter, which is the very reading this
+          exists to make trustworthy.
+        */}
+        {enroll.phase === "recording" ? (
+          <div className="space-y-1">
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-surface-2"
+              role="meter"
+              aria-label={t("voiceLevel")}
+            >
+              <div
+                ref={meterBar}
+                className={`h-full w-0 rounded-full transition-[width] duration-100 ${
+                  heard ? "bg-accent" : "bg-fg-subtle"
+                }`}
+              />
+            </div>
+            <p className={`text-[11px] ${heard ? "text-fg-muted" : "text-warning"}`}>
+              {heard ? t("voiceHearing") : t("voiceNoSound")}
+            </p>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {enroll.phase === "ready" ? (
             <>

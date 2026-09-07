@@ -44,6 +44,11 @@ vi.mock("@livekit/components-react", () => ({
   ControlBar: () => <div />,
   RoomAudioRenderer: () => null,
   useTracks: () => [],
+  /* 2026-09-07: the room REMEMBERS the two switches now, and it asks the
+     room context for them — a mock without this throws inside a render and
+     arrives as "the stepper is missing", which is the shape that sends
+     somebody to fix the wrong file */
+  useLocalParticipant: () => ({ isMicrophoneEnabled: true, isCameraEnabled: false }),
 }));
 
 const startSpy = vi.fn(async (_opts: unknown) => undefined);
@@ -139,6 +144,12 @@ vi.mock("@/api/client", async () => ({
       return { ...MEETING, ...body };
     },
     getCall: async () => CALL,
+    /* db/0206 — the shared stage: the board the host draws and the document
+       everybody is shown */
+    meetingBoard: async () => ({ shapes: [], version: 0 }),
+    saveMeetingBoard: async () => ({ version: 1 }),
+    setMeetingPresenting: async () => MEETING,
+    meetingAttachmentUrl: async () => ({ url: "blob:x", content_type: "application/pdf" }),
     /* the orphaned-take finish (2026-09-07). It MUTATES the fixture the way
        the server does — recording -> processing on both the call and the
        meeting's published status — so a test cannot pass by the page

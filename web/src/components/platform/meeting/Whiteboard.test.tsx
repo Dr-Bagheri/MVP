@@ -1,10 +1,24 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { storeTheme } from "@/lib/theme";
 import { installFakeResizeObserver } from "@/test/resizeObserver";
 
 vi.mock("next-intl", () => ({ useTranslations: () => (k: string) => k }));
+vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));
+
+/* the board is the SERVER's now (db/0206) — the store this suite used to read
+   is gone, and with it the only place a colleague's screen could disagree */
+const saved: unknown[][] = [];
+vi.mock("@/api/client", () => ({
+  api: {
+    meetingBoard: async () => ({ shapes: [], version: 0 }),
+    saveMeetingBoard: async (_id: string, shapes: unknown[]) => {
+      saved.push(shapes);
+      return { version: saved.length };
+    },
+  },
+}));
 
 const { Whiteboard } = await import("./Whiteboard");
 
@@ -24,24 +38,36 @@ const { Whiteboard } = await import("./Whiteboard");
  * to a test and to a person, and the stored shape is read back from the store
  * the component actually writes.
  */
-const KEY = "neurai-whiteboard-m-1";
 const swatches = () => screen.getAllByRole("button", { name: "wbColor" });
 const groundOf = (el: Element) => (el.querySelector("span") as HTMLElement).style.backgroundColor;
 
 beforeEach(() => {
   /* jsdom has none, and the canvas fits itself to its box through one */
   installFakeResizeObserver();
-  localStorage.clear();
+  saved.length = 0;
+  /* the board's write is debounced, so the clock is the test's */
+  vi.useFakeTimers({ shouldAdvanceTime: true });
 });
 afterEach(() => {
   cleanup();
   storeTheme("dark");
+  vi.useRealTimers();
 });
+
+/** one stroke, through the real pointer path */
+function draw() {
+  const canvas = document.querySelector("canvas")!;
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 300 }) as DOMRect;
+  (Element.prototype as { setPointerCapture?: unknown }).setPointerCapture = () => undefined;
+  fireEvent.pointerDown(canvas, { clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 40, clientY: 40, pointerId: 1 });
+  fireEvent.pointerUp(canvas, { pointerId: 1 });
+}
 
 describe("the whiteboard's palette follows the theme", () => {
   it("offers bright ink on the dark canvas — the first swatch is near-WHITE, and no black or brown", () => {
     storeTheme("dark");
-    render(<Whiteboard meetingId="m-1" />);
+    render(<Whiteboard meetingId="m-1" canEdit />);
     const grounds = swatches().map(groundOf);
     expect(grounds).toHaveLength(5);
     /* the default pen: what every board starts on, and what used to draw
@@ -56,7 +82,7 @@ describe("the whiteboard's palette follows the theme", () => {
 
   it("offers dark ink on the light canvas — the first swatch is near-BLACK, and nothing white", () => {
     storeTheme("light");
-    render(<Whiteboard meetingId="m-1" />);
+    render(<Whiteboard meetingId="m-1" canEdit />);
     const grounds = swatches().map(groundOf);
     expect(grounds[0]).toBe("rgb(20, 17, 12)");
     for (const rgb of grounds) {
@@ -65,7 +91,7 @@ describe("the whiteboard's palette follows the theme", () => {
     }
   });
 
-  it("stores the ROLE, so one board reads in both themes", () => {
+  it("sends the ROLE to the shared board, so one board reads in both themes", async () => {
     /*
      * The discriminating case. A palette that only changed the swatches would
      * pass both tests above and still store a literal — and a board drawn in
@@ -73,20 +99,39 @@ describe("the whiteboard's palette follows the theme", () => {
      * failure the directive is about, pointed the other way.
      */
     storeTheme("dark");
-    render(<Whiteboard meetingId="m-1" />);
-    const canvas = document.querySelector("canvas")!;
-    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 300 }) as DOMRect;
-    (Element.prototype as { setPointerCapture?: unknown }).setPointerCapture = () => undefined;
+    render(<Whiteboard meetingId="m-1" canEdit />);
+    draw();
 
-    fireEvent.pointerDown(canvas, { clientX: 10, clientY: 10, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 40, clientY: 40, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { pointerId: 1 });
+    /* the write is coalesced: several strokes a second must not be several
+       requests a second */
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
 
-    const stored = JSON.parse(localStorage.getItem(KEY) ?? "[]") as { ink?: string; color: string }[];
-    expect(stored).toHaveLength(1);
-    expect(stored[0]!.ink, "the stroke remembers WHICH ink, not the hex it was drawn in").toBe("ink");
+    expect(saved).toHaveLength(1);
+    const stroke = saved[0]![0] as { ink?: string; color: string };
+    expect(stroke.ink, "the stroke remembers WHICH ink, not the hex it was drawn in").toBe("ink");
     /* the literal rides along for a build older than the roles, and it is the
        theme's own — never a value from the other palette */
-    expect(stored[0]!.color).toBe("#f2efe9");
+    expect(stroke.color).toBe("#f2efe9");
+  });
+
+  /*
+   * THE HOST DRAWS, EVERYBODY ELSE WATCHES (user directive, 2026-09-07; the
+   * wall itself is db/0206's trigger — this is the screen agreeing with it).
+   *
+   * The pair is the point: a component that simply never drew would pass the
+   * refusal on its own.
+   */
+  it("a colleague's pointer changes nothing, and the host's does", async () => {
+    storeTheme("dark");
+    const { unmount } = render(<Whiteboard meetingId="m-1" canEdit={false} />);
+    draw();
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(saved, "a viewer drew on the host's board").toHaveLength(0);
+    unmount();
+
+    render(<Whiteboard meetingId="m-1" canEdit />);
+    draw();
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(saved).toHaveLength(1);
   });
 });

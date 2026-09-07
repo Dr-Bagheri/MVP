@@ -775,6 +775,8 @@ export function MeetingPage({ id }: { id: string }) {
         <HoldStage
           meeting={meeting}
           locale={locale}
+          isHost={isHost}
+          onMeeting={setMeeting}
           recordingLive={recordingLive}
         />
       ) : null}
@@ -1315,9 +1317,12 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, locale, recordingLive }: {
+function HoldStage({ meeting, locale, isHost, onMeeting, recordingLive }: {
   meeting: MeetingRecord;
   locale: string;
+  /** db/0206: the stage — the board and what is presented — is the host's */
+  isHost: boolean;
+  onMeeting: (m: MeetingRecord) => void;
   recordingLive: boolean;
   /* `meId` is gone with the invite dialog it was threaded down for (0202,
      2026-09-06): people are added on the PLAN now, in the one act that also
@@ -1370,6 +1375,8 @@ function HoldStage({ meeting, locale, recordingLive }: {
       {/* the stage — the reference puts the media on the START side */}
       <MeetingStage
         meeting={meeting}
+        isHost={isHost}
+        onMeeting={onMeeting}
         recordingLive={recordingLive}
       />
 

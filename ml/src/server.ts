@@ -214,17 +214,61 @@ export async function buildServer() {
       await toMono16k(input, wav);
       const pcm = await readWav(wav);
       const sliced = sliceRanges(pcm.samples, pcm.sampleRate, ranges);
-      const speechMs = Math.round((sliced.length / pcm.sampleRate) * 1000);
-      if (speechMs < 1500) {
+      const clipMs = Math.round((sliced.length / pcm.sampleRate) * 1000);
+      if (clipMs < 1500) {
         // a vector from under ~1.5s of audio matches everyone a little and
         // nobody well — refusing beats storing a signature that lies
-        throw new MlError("bad_request", `too little audio for a voice signature (${speechMs}ms < 1500ms)`);
+        throw new MlError("bad_request", `too little audio for a voice signature (${clipMs}ms < 1500ms)`);
+      }
+
+      /*
+       * IS THERE A VOICE IN IT? (user report, 2026-09-07: "the enrolment
+       * voice detection part of the platform does not work — i did 2 samples
+       * and never it realise i am talking to it".)
+       *
+       * `speech_ms` used to be `sliced.length / sampleRate` — the clip's
+       * DURATION wearing the name of a measurement, so it could not be less
+       * than the clip and the floor above was a duration floor twice over.
+       * Ten seconds of digital silence answered `speech_ms: 10000` and a
+       * vector, and that vector is within a couple of percent of the one a
+       * pure tone gives (measured on production, 2026-09-07): the extractor
+       * returns essentially ONE null print for anything with no voice in it.
+       * So a person whose microphone was muted, or whose browser picked a
+       * different input, enrolled a signature that means "silence", was told
+       * it was saved, and was never matched again — with nothing anywhere
+       * saying why. Exactly the `vad: true` constant of 2026-08-13, in the
+       * one number that could have refused the clip.
+       *
+       * The VAD is already here and the pipeline already trusts it. A clip
+       * that carries less than a second and a half of SPEECH is refused by
+       * name, because a print made from silence is worse than no print: no
+       * print is a state the product can show, and a null print is a promise
+       * that quietly never comes true.
+       */
+      const vad = await vadEngine();
+      const speech = await vad.detect({
+        samples: sliced,
+        sampleRate: pcm.sampleRate,
+        channels: 1,
+        durationMs: clipMs,
+      });
+      const speechMs = speech.reduce((sum, s) => sum + (s.end_ms - s.start_ms), 0);
+      if (speechMs < 1500) {
+        throw new MlError(
+          "no_speech",
+          `no voice in the clip (${speechMs}ms of speech in ${clipMs}ms of audio)`,
+        );
       }
       // cap what feeds the model — a signature saturates long before this
       const MAX_EMBED_S = 120;
-      const capped = sliced.length > pcm.sampleRate * MAX_EMBED_S
-        ? sliced.subarray(0, pcm.sampleRate * MAX_EMBED_S)
-        : sliced;
+      /* the SPEECH feeds the model, not the pauses around it: a signature
+         taken over a clip that is half silence is a signature diluted by
+         half — and `sliceRanges` is exactly the tool for it, which is what
+         it was written for on the ranges path */
+      const voiced = sliceRanges(sliced, pcm.sampleRate, speech);
+      const capped = voiced.length > pcm.sampleRate * MAX_EMBED_S
+        ? voiced.subarray(0, pcm.sampleRate * MAX_EMBED_S)
+        : voiced;
       const started = Date.now();
       const embedding = await embedSamples(capped, pcm.sampleRate);
       log.info({ ms: Date.now() - started, dim: embedding.dim, speech_ms: speechMs }, "embedding done");
