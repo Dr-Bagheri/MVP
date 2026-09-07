@@ -5499,3 +5499,64 @@ sessions) for the cross-session narrative.
   ideally twice each from two different rooms, which is what the enrolment
   panel now says.
   db 207 migrations · ml 148 tests · core 1433 tests · web 1325 tests + gate + sweep.
+- 2026-09-07 (THE VOICE IS NAMED WHERE IT IS READ — and the roster did not
+  reach the directory; commit a7e5d5f): user directive, "the speaker name must
+  come at the transcription and only from people that have been in the meeting,
+  not all of them — remove this one and add it to meeting transcription so you
+  can open the speaker one and choose one of the people that attended in case
+  the enrolment is fail."
+  **THE MEASUREMENT CAME FIRST AND IT CHANGED THE DESIGN.** Read at owner
+  altitude before a line was written: five directory people, fourteen accounts,
+  **zero `app_user_id` links AND zero folded-name suggestions**. The suggestion
+  is an exact `fa_fold` match and the directory is spelled in Persian
+  («سینا سپاسی») while the accounts are Latin ("Sina Sepasi"), so it
+  cannot cross a transliteration and never fires here. Yesterday's ranking —
+  the meeting's people first, everybody else after — therefore resolved to
+  NOBODY: every candidate fell into "everybody else", which is exactly the list
+  this directive is asking to be rid of, and the panel shipped looking correct.
+  Worse for the literal reading: `meeting_attendee` holds **0 rows across all
+  eight meetings**, so a picker scoped to the roster alone would have offered
+  an empty menu on every record in the org.
+  **So the candidate list is the meeting's people and the HOST is always one of
+  them** — they own the record and they pressed start, which is the one
+  attendance fact that needs no stamp; without them every solo recording, which
+  is every recording on this deployment, would be a picker with no answer in
+  it. A candidate is labelled by the DIRECTORY name, not the account name,
+  because the label is a promise about what the press does: picking "Sina
+  Sepasi" and rendering «سینا سپاسی» on the line reads as the product
+  choosing somebody else.
+  **AND AN UNRESOLVED COLLEAGUE IS STILL OFFERED.** Choosing them asks ONE
+  question — which directory person is this? — and the answer is REMEMBERED on
+  the person row (`app_user_id`, the field the directory's own identify box
+  writes), so it is asked once per colleague ever and the voiceprint suggestion
+  that reads the same column starts working too. The remembering is
+  best-effort and SAID when it fails (M21): writing that column is admin work
+  on the directory surface, so a member host still gets the link they asked for
+  and is asked again next time — a silent swallow would read as the platform
+  forgetting on purpose.
+  **The panel is gone and the name is the control.** `SelectMenu` gained an
+  `inline` face — the label IS the button, no box and no height, because a
+  38px control between an avatar and a timestamp would push every turn of the
+  conversation apart — and a `triggerLabel`, which is the half a second
+  implementation would have got wrong: every dropdown here reads its label off
+  the chosen option, and for an unlinked voice that option is «نامشخص» while
+  the page says «گویندهٔ ۱» — a trigger without it renames a line of the
+  transcript by rendering a picker over it. `speakerInMeeting` and
+  `speakersHostOnly` left both catalogues with the panel: the whole list is the
+  meeting now, and a colleague sees names rather than a control, so there is
+  nothing left to explain (R21).
+  Two dead-copy finds in the same pass, both from db/0206's shared board:
+  `whiteboardLocalNote` and `slidesLocalNote` had no consumer at all, and the
+  hint that IS rendered still promised «برد روی همین دستگاه می‌ماند» two
+  days after the board became shared and host-written — a false claim about
+  where a meeting's drawing goes.
+  Verify-red by MUTATION on fourteen behaviours, every one red by name: the
+  host dropped, the account name as the label, unresolved candidates filtered
+  out, the folded guess outranking the admin's link, the host listed twice, the
+  attendance order, the trigger reading its option, an unlink sending "" rather
+  than null, the answer never remembered, a refused pairing costing the link,
+  the host given plain text, a colleague given the picker, the voices not
+  re-read after a link (the assertion that one press renames EVERY turn that
+  voice took), and a colleague's page asking for a directory it does not
+  render.
+  db 207 migrations · ml 148 tests · core 1433 tests · web 1340 tests + gate + sweep.
