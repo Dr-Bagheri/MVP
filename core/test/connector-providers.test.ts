@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   CONNECTOR_PROVIDERS, connectorCredentialsFromEnv, connectorKind, dropboxEntries, githubIssues, githubRepos,
   isPrivateAddress, jiraIssues, jiraProjects, mcpCallResult, mcpReplyFromSse, mcpTools, notionResults, notionTitle,
-  onedriveItems, providerDef, REGISTRY_PROVIDERS, slackChannels, slackMentions, telegramUpdates, whatsappTemplates,
+  providerDef, REGISTRY_PROVIDERS, slackChannels, slackMentions, telegramUpdates, whatsappTemplates,
   zoomMeetings, zoomRecordings,
 } from "../src/api/connector-providers.ts";
 import { connectorSources } from "../src/api/connectors.ts";
@@ -24,11 +24,21 @@ import { OFFERED_CONNECTOR_PROVIDERS } from "../src/api/vocabulary.ts";
  * a private address hiding behind a hostname).
  */
 describe("the registry is one list everywhere", () => {
-  it("db/0199's provider check names exactly the code's providers", () => {
-    const sql = readFileSync(join(process.cwd(), "..", "db", "migrations", "0199_a_connection_names_its_provider_freely.sql"), "utf8");
+  it("the db provider check names exactly the code's providers", () => {
+    /* the OWNING migration is derived, not named: 0199 wrote this check and
+       0203 narrowed it, and a test pinned to the file that happened to write
+       it first reports the CURRENT wall wrong the moment the wall moves */
+    const dir = join(process.cwd(), "..", "db", "migrations");
+    const owner = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql") && readFileSync(join(dir, f), "utf8").includes("connector_connection_provider_check"))
+      .sort().pop();
+    expect(owner, "no migration defines the provider check").toBeDefined();
+    const sql = readFileSync(join(dir, owner!), "utf8");
     const check = /provider in \(([\s\S]*?)\)\)/.exec(sql)?.[1] ?? "";
     const names = [...check.matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort();
     expect(names).toEqual([...CONNECTOR_PROVIDERS].sort());
+    /* the control: a provider the product no longer speaks is not permitted */
+    expect(names).not.toContain("onedrive");
   });
 
   it("every OFFERED provider is one the code can speak, and every registry provider is offered", () => {
@@ -58,14 +68,19 @@ describe("the registry is one list everywhere", () => {
     expect(connectorKind("google")).toBe("oauth");
   });
 
-  it("reads the OAuth apps from the environment by the registry's names, with OneDrive borrowing Microsoft's", () => {
+  it("reads the OAuth apps from the environment by each provider's OWN name, and only its own", () => {
     const env = {
       echo_platform_zoom_oauth_client_id: "z-id", echo_platform_zoom_oauth_client_secret: "z-secret",
       echo_platform_microsoft_oauth_client_id: "m-id", echo_platform_microsoft_oauth_client_secret: "m-secret",
     };
     const creds = connectorCredentialsFromEnv(env);
     expect(creds.zoom).toEqual({ clientId: "z-id", clientSecret: "z-secret" });
-    expect(creds.onedrive, "no app of its own → Microsoft's").toEqual({ clientId: "m-id", clientSecret: "m-secret" });
+    /* nobody borrows: the one borrowing arrangement (OneDrive ← Microsoft)
+       left with OneDrive on 2026-09-07, and a pair sitting under ANOTHER
+       provider's name must not configure this one — which is the assertion a
+       re-introduced fallback would fail */
+    expect(creds.microsoft).toEqual({ clientId: "m-id", clientSecret: "m-secret" });
+    expect(creds.slack).toEqual({ clientId: undefined, clientSecret: undefined });
     expect(creds.slack?.clientId).toBeUndefined();
     /* token kinds have no app at all */
     expect(creds.telegram).toBeUndefined();
@@ -119,7 +134,7 @@ describe("the mappers: a provider's list becomes items and nothing more", () => 
     expect(githubRepos({ items: [{ full_name: "o/r", description: "d", updated_at: "2026-09-03T00:00:00Z" }] })[0]).toMatchObject({ id: "o/r", title: "o/r" });
   });
 
-  it("whatsapp templates, dropbox entries newest first, onedrive files", () => {
+  it("whatsapp templates, dropbox entries newest first", () => {
     expect(whatsappTemplates({ data: [{ id: "t1", name: "hello_world", status: "APPROVED", category: "UTILITY", language: "fa" }] }))
       .toEqual([{ id: "t1", title: "hello_world", subtitle: "APPROVED · UTILITY · fa", occurred_at: null }]);
     const entries = dropboxEntries({ entries: [
@@ -128,8 +143,6 @@ describe("the mappers: a provider's list becomes items and nothing more", () => 
       { ".tag": "folder", id: "id:c", name: "Docs", path_display: "/Docs" },
     ] });
     expect(entries.map((e) => e.title)).toEqual(["new.pdf", "old.pdf", "Docs"]);
-    expect(onedriveItems({ value: [{ id: "1", name: "deck.pptx", lastModifiedDateTime: "2026-09-02T00:00:00Z", file: { mimeType: "application/vnd.ms-powerpoint" } }] })[0])
-      .toMatchObject({ title: "deck.pptx", subtitle: "application/vnd.ms-powerpoint" });
   });
 
   it("mcp — tools become items; a call's text is bounded and flagged when the server says error", () => {

@@ -94,8 +94,6 @@ export interface ProviderDef {
   kind: "oauth" | "token";
   oauth?: OAuthSpec;
   token?: TokenSpec;
-  /** env names for the OAuth app; `fallback` borrows another provider's app (OneDrive ← Microsoft) */
-  credentials?: { fallback?: ConnectorProvider };
   sources: readonly string[];
   actions: readonly string[];
   /** the account's own name at the provider (email, handle, workspace) */
@@ -818,43 +816,6 @@ export function dropboxEntries(data: Record<string, unknown>): ConnectorItem[] {
     .slice(0, LIST_LIMIT);
 }
 
-// ─── OneDrive (Microsoft Graph, files only) ─────────────────────────────────
-
-const onedrive: ProviderDef = {
-  provider: "onedrive", brand: "OneDrive", kind: "oauth",
-  oauth: {
-    authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    scopes: ["openid", "profile", "email", "offline_access", "User.Read", "Files.Read"],
-    pkce: true, tokenAuth: "body", tokenBody: "form", scopeInTokenBody: true, refreshable: true,
-  },
-  /* the same Azure app as the Outlook connector — one registration, two
-     consents with different scopes; a separate app is one more secret to
-     rotate for the same tenant */
-  credentials: { fallback: "microsoft" },
-  sources: ["files"],
-  actions: [],
-  async accountLabel(ctx) {
-    const me = await fetchJson("https://graph.microsoft.com/v1.0/me?$select=displayName,userPrincipalName", { headers: bearerJson(ctx), what: "graph me" });
-    return text(me.userPrincipalName) || text(me.displayName) || "Microsoft account";
-  },
-  async items(ctx, source) {
-    if (source !== "files") throw unknownSource(source);
-    const data = await fetchJson(`https://graph.microsoft.com/v1.0/me/drive/recent?$top=${LIST_LIMIT}`, { headers: bearerJson(ctx), what: "graph recent" });
-    return onedriveItems(data);
-  },
-  async act(_ctx, action) { throw unknownAction(action); },
-};
-
-export function onedriveItems(data: Record<string, unknown>): ConnectorItem[] {
-  return list(data.value).flatMap((item) => text(item.id) ? [{
-    id: text(item.id),
-    title: text(item.name) || "Untitled",
-    subtitle: item.folder ? "folder" : text((item.file as Record<string, unknown> | undefined)?.mimeType) || text(item.webUrl),
-    occurred_at: isoOrNull(item.lastModifiedDateTime),
-  }] : []).slice(0, LIST_LIMIT);
-}
-
 // ─── MCP (Model Context Protocol, streamable HTTP) ──────────────────────────
 
 const MCP_PROTOCOL = "2025-06-18";
@@ -988,7 +949,7 @@ export function mcpCallResult(result: Record<string, unknown>): Record<string, u
 // ─── the registry ────────────────────────────────────────────────────────────
 
 const REGISTRY: Partial<Record<ConnectorProvider, ProviderDef>> = {
-  zoom, slack, telegram, jira, notion, github, whatsapp, dropbox, onedrive, mcp,
+  zoom, slack, telegram, jira, notion, github, whatsapp, dropbox, mcp,
 };
 
 /** the definition, or undefined for the two providers connectors.ts speaks to directly */
@@ -1015,20 +976,18 @@ function unknownAction(action: string): ValidationError {
  * The OAuth app for each provider, from the process environment — one place
  * for the names, read by the api and the worker alike (they used to spell the
  * same six names twice). The Echo-platform secret namespace, never a generic
- * one (rule 3). A provider with a `fallback` borrows that app when it has none
- * of its own.
+ * one (rule 3). Every provider reads its OWN pair: the one borrowing
+ * arrangement (OneDrive ← Microsoft) left with OneDrive on 2026-09-07, and a
+ * borrowing rule with nobody to apply it to is a rule nothing can prove.
  */
 export function connectorCredentialsFromEnv(env: Record<string, string | undefined>): Partial<Record<ConnectorProvider, { clientId?: string | undefined; clientSecret?: string | undefined }>> {
-  const read = (provider: ConnectorProvider) => ({
-    clientId: env[`echo_platform_${provider}_oauth_client_id`],
-    clientSecret: env[`echo_platform_${provider}_oauth_client_secret`],
-  });
   const out: Partial<Record<ConnectorProvider, { clientId?: string | undefined; clientSecret?: string | undefined }>> = {};
   for (const provider of CONNECTOR_PROVIDERS) {
     if (connectorKind(provider) !== "oauth") continue;
-    const own = read(provider);
-    const fallback = REGISTRY[provider]?.credentials?.fallback;
-    out[provider] = own.clientId && own.clientSecret ? own : fallback ? read(fallback) : own;
+    out[provider] = {
+      clientId: env[`echo_platform_${provider}_oauth_client_id`],
+      clientSecret: env[`echo_platform_${provider}_oauth_client_secret`],
+    };
   }
   return out;
 }

@@ -402,17 +402,19 @@ export const FETCH_SOURCE_KINDS = ["calendar_event", "mail_message"] as const;
  */
 export const CONNECTOR_PROVIDERS = [
   "google", "microsoft",
-  "zoom", "slack", "telegram", "jira", "notion", "github", "whatsapp", "dropbox", "onedrive", "mcp",
+  "zoom", "slack", "telegram", "jira", "notion", "github", "whatsapp", "dropbox", "mcp",
 ] as const;
 export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number];
 
 export const OFFERED_CONNECTOR_PROVIDERS = [
   "google",
-  /* 2026-09-06 (user directive, "built these"): the registry's nine. Microsoft
-     stays OFF the offer ("we just go with the google" for mail and calendar);
-     OneDrive is its own provider on the same Azure app, so the files come
-     without the Outlook tiles. */
-  "zoom", "slack", "telegram", "jira", "notion", "github", "whatsapp", "dropbox", "onedrive", "mcp",
+  /* 2026-09-06 (user directive, "built these"): the registry's nine, minus
+     OneDrive, which left on 2026-09-07 ("remove one drive . i dont want
+     microsoft apps") — it was the one offered connector that needed an Azure
+     app registration. Microsoft's own mail/calendar adapter stays OFF the
+     offer for the same reason it always was ("we just go with the google"),
+     so no shelf tile now asks anyone to register an app with Microsoft. */
+  "zoom", "slack", "telegram", "jira", "notion", "github", "whatsapp", "dropbox", "mcp",
 ] as const;
 
 /**

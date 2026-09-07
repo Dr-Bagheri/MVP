@@ -5059,3 +5059,71 @@ sessions) for the cross-session narrative.
   operator's word rather than being fired to tick a box.
   Still the operator's: Notion, GitHub, Dropbox and OneDrive — four pairs, the
   deploy script naming each absent one by name on every run.
+- 2026-09-07 (THREE MORE PAIRS, ALL THREE SECRETS PROVEN — AND ONEDRIVE LEAVES
+  THE PRODUCT; db 0203): the operator sent GitHub, Notion and Dropbox and
+  ruled: "remove one drive . i dont want microsoft apps".
+  **The three.** Stored in-process and read back identical, no BOM, no stray
+  whitespace (20/40, 36/50, 15/15 characters); shipped to `/etc/neurai/core.env`
+  (26 entries); api restarted, health 200; all three `configured: true`. **And
+  all three token-endpoint triples DISCRIMINATED**, each in its provider's own
+  request shape — GitHub `bad_verification_code` / `incorrect_client_credentials`
+  / `404`, Notion `400 "Auth code must be a valid UUID"` / `401 invalid_client`
+  ×2, Dropbox `invalid_grant "code doesn't exist"` / `invalid_client` ×2. Three
+  distinct answers each, so in every case the credentials were ACCEPTED and only
+  the fake code refused: the half of the pair most likely to be mistyped is
+  proven for all three without anyone connecting. The recipe's table in
+  docs/CONNECTORS.md now carries the four measured spellings side by side,
+  because "expect `invalid_client`" was a Zoom-shaped generalisation and two of
+  these three do not say those words.
+  **One observation, deliberately not dressed as a measurement:** GitHub's
+  client id has the `Ov23li…` shape of a **GitHub App**, not an OAuth App, and
+  no probe can tell those apart — the token endpoint is shared and the authorize
+  URL 302s to `/login` either way. It matters because a GitHub App IGNORES the
+  `scope` parameter we send and grants only the permissions configured on the
+  app, on the repositories where it is INSTALLED: the connection would succeed
+  and then list nothing, which reads as an empty account. Recorded in the doc as
+  the operator's thing to check, with what to do in either case.
+  **ONEDRIVE IS GONE, whole.** It was the one connector on the shelf that
+  required an Azure app registration. Removed from the registry, the
+  vocabulary, the web catalogue, the brand marks, both locale catalogues, the
+  agents' platform map and the `list_connector_items` tool DESCRIPTION — that
+  last one being the half that matters most, since a provider named in a tool
+  description is one a model will try. Microsoft went with it wherever it was
+  reachable-in-name-only: its pair left the shipping script (a name warned
+  about on every run that nobody will ever mint is a warning people learn to
+  read past) and it left the tool's list of accounts a person can have
+  CONNECTED, which it never could be. The Outlook adapter itself stays in
+  `connectors.ts`, unoffered as it has been since 2026-08-28 — named here so it
+  is a known absence rather than a surprise.
+  **`credentials.fallback` went with it, and that is the point.** The field
+  existed for exactly one arrangement (OneDrive borrowing Microsoft's app);
+  with OneDrive gone it is a producer with no consumer, so
+  `connectorCredentialsFromEnv` reads each provider's own pair and nothing
+  else. The test that covered the borrowing now asserts the OPPOSITE property
+  with the same fixture — a Microsoft pair present in the environment must not
+  configure any other provider — which is the assertion a re-introduced
+  fallback would fail.
+  **0203 narrows the db CHECK, and the reason it is worth a migration is the
+  test.** db/0199's check "names the same names" as core's CONNECTOR_PROVIDERS
+  and core/test asserts that equality by READING the migration — so the two
+  cannot drift quietly, only go red. The test was pointed at 0199 by name;
+  **the owning migration is DERIVED now** (the highest-numbered migration whose
+  text defines the constraint), because a test pinned to the file that happened
+  to write a wall first reports the current wall wrong the moment the wall
+  moves. Verified red by hiding 0203: exactly one test failed, comparing nine
+  permitted names against the code's eight. The migration's own self-checks
+  are the same shape — a loop over every provider that must be permitted, then
+  **the discriminating half** (onedrive must NOT appear, without which the loop
+  passes against the very check this migration exists to narrow), then an
+  actual INSERT that must be refused with 23514, every column named explicitly
+  so the only thing the row can be refused FOR is its provider.
+  Safe to narrow because it was read at OWNER altitude first: the table held
+  google×2, slack×1, zoom×1 and has never held an onedrive row.
+  **Cost, said out loud:** OneDrive files are no longer readable by the
+  assistant, and no deployment can offer them again without re-adding the
+  ProviderDef.
+  Still the operator's: nothing. All seven OAuth providers the product offers
+  are configured (google, zoom, slack, jira, notion, github, dropbox); Jira's
+  secret is the only one unproven, and only because its probes cannot
+  discriminate.
+  db 203 migrations · core 1416 tests · web 1280 tests + gate + sweep.

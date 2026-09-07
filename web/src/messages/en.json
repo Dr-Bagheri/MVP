@@ -1259,8 +1259,6 @@
     "notion": "Notion",
     "notionDesc": "Reads the Notion pages and databases you shared with the connection, and can create pages under them.",
     "oneGoogleGrant": "One Google sign-in covers Gmail, Calendar, Meet and Drive.",
-    "onedrive": "OneDrive",
-    "onedriveDesc": "Reads your recent OneDrive files so the assistant can refer to them; it never changes anything.",
     "openDetails": "Open {name} details",
     "optional": "optional",
     "outlookCalendar": "Outlook Calendar",

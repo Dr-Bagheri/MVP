@@ -354,13 +354,13 @@ export function createPlatformTools(): PlatformTool[] {
         + "(channels, mentions), telegram (updates — messages sent to their "
         + "bot), jira (issues, projects), notion (pages, databases), github "
         + "(issues, pulls, repos), whatsapp (profile, templates), dropbox "
-        + "(files), onedrive (files), mcp (tools, resources — an MCP server "
-        + "they added), google (mail, calendar, drive, meet), microsoft "
-        + "(mail, calendar). Metadata only: id, title, subtitle, when. Use "
+        + "(files), mcp (tools, resources — an MCP server "
+        + "they added), google (mail, calendar, drive, meet). "
+        + "Metadata only: id, title, subtitle, when. Use "
         + "list_connectors first to see what is connected; an account that is "
         + "not connected refuses — say so and offer /integrations.",
       parameters: Type.Object({
-        provider: Type.String({ description: "one of: google, microsoft, zoom, slack, telegram, jira, notion, github, whatsapp, dropbox, onedrive, mcp" }),
+        provider: Type.String({ description: "one of: google, zoom, slack, telegram, jira, notion, github, whatsapp, dropbox, mcp" }),
         source: Type.String({ description: "that provider's source, e.g. meetings, channels, issues, pages, files, tools" }),
       }),
       async run({ identity, deps }, args) {

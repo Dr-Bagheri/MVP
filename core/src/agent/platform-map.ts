@@ -37,7 +37,7 @@ export const AREAS: readonly Area[] = [
   { key: "rooms", heading: "ROOMS", stems: [/chat_room/, /^send_member_message$/, /conversation/] },
   { key: "people", heading: "PEOPLE", stems: [/member/, /colleague/, /invit/, /^rename_member$/, /^member_stats$/, /audit/, /person/, /role_permission/] },
   /* before AGENTS, which used to claim `connector` for the one list tool */
-  { key: "connectors", heading: "CONNECTORS", stems: [/connector/, /slack/, /telegram/, /whatsapp/, /jira/, /github/, /notion/, /zoom/, /mcp/, /dropbox/, /onedrive/] },
+  { key: "connectors", heading: "CONNECTORS", stems: [/connector/, /slack/, /telegram/, /whatsapp/, /jira/, /github/, /notion/, /zoom/, /mcp/, /dropbox/] },
   { key: "agents", heading: "AGENTS", stems: [/^ask_/, /agent/, /skill/, /workflow/, /^list_models$/] },
 ];
 
@@ -80,7 +80,7 @@ export const PLATFORM_MAP = [
   "  audit log of every administrative change.",
   "· CONNECTORS: the person's OWN connected accounts (the integrations page):",
   "  Gmail/Google Calendar/Drive/Meet, Zoom, Slack, Telegram (a bot), Jira,",
-  "  Notion, GitHub, WhatsApp Business, Dropbox, OneDrive, and any MCP server",
+  "  Notion, GitHub, WhatsApp Business, Dropbox, and any MCP server",
   "  they added. list_connectors says what is connected; list_connector_items",
   "  reads a source (meetings, channels, issues, pages, files, tools…); the",
   "  hands post a Slack/Telegram/WhatsApp message, create a Jira/GitHub issue,",

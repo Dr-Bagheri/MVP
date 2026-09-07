@@ -38,7 +38,7 @@ export interface IntegrationEntry {
   slug: string;
   /** message-key base in the `integrations` namespace (name + `${key}Desc`) */
   key: "gmail" | "googleCalendar" | "googleDrive" | "googleMeet" | "outlookMail" | "outlookCalendar"
-    | "zoom" | "slack" | "telegram" | "jira" | "notion" | "github" | "whatsapp" | "dropbox" | "onedrive" | "mcp";
+    | "zoom" | "slack" | "telegram" | "jira" | "notion" | "github" | "whatsapp" | "dropbox" | "mcp";
   provider: ConnectorProvider;
   /** the primary source — the detail page opens on it */
   source: IntegrationSource;
@@ -75,7 +75,6 @@ export const ALL_INTEGRATIONS = [
   { slug: "whatsapp", key: "whatsapp", provider: "whatsapp", source: "profile", sources: ["profile", "templates"], icon: "send", kind: "token",
     tokenFields: [{ name: "secret", required: true }, { name: "phone_number_id", required: true }, { name: "waba_id", required: false }] },
   { slug: "dropbox", key: "dropbox", provider: "dropbox", source: "files", sources: ["files"], icon: "folder", ...oauth },
-  { slug: "onedrive", key: "onedrive", provider: "onedrive", source: "files", sources: ["files"], icon: "folder", ...oauth },
   { slug: "mcp", key: "mcp", provider: "mcp", source: "tools", sources: ["tools", "resources"], icon: "chip", kind: "token",
     tokenFields: [{ name: "url", required: true }, { name: "secret", required: false }] },
 ] as const satisfies readonly IntegrationEntry[];
@@ -119,7 +118,6 @@ export function useIntegrationCopy(): Record<
     github: { name: t("github"), description: t("githubDesc") },
     whatsapp: { name: t("whatsapp"), description: t("whatsappDesc") },
     dropbox: { name: t("dropbox"), description: t("dropboxDesc") },
-    onedrive: { name: t("onedrive"), description: t("onedriveDesc") },
     mcp: { name: t("mcp"), description: t("mcpDesc") },
   };
 }

@@ -65,7 +65,7 @@ $optionalConnectors = [ordered]@{
   echo_platform_connector_encryption_key   = "echo_platform_connector_encryption_key"
   # the registry's OAuth apps (2026-09-06) — each pair optional; an absent
   # pair leaves THAT provider "not configured" on the shelf and nothing else.
-  # OneDrive borrows the Microsoft pair when it has none of its own.
+  # Each provider reads its OWN pair; nobody borrows another's.
   echo_platform_zoom_oauth_client_id        = "echo_platform_zoom_oauth_client_id"
   echo_platform_zoom_oauth_client_secret    = "echo_platform_zoom_oauth_client_secret"
   echo_platform_slack_oauth_client_id       = "echo_platform_slack_oauth_client_id"
@@ -78,17 +78,11 @@ $optionalConnectors = [ordered]@{
   echo_platform_github_oauth_client_secret  = "echo_platform_github_oauth_client_secret"
   echo_platform_dropbox_oauth_client_id     = "echo_platform_dropbox_oauth_client_id"
   echo_platform_dropbox_oauth_client_secret = "echo_platform_dropbox_oauth_client_secret"
-  echo_platform_microsoft_oauth_client_id     = "echo_platform_microsoft_oauth_client_id"
-  echo_platform_microsoft_oauth_client_secret = "echo_platform_microsoft_oauth_client_secret"
-  # OneDrive's OWN pair. This slot held a SECOND copy of the two microsoft
-  # lines (2026-09-06) — a duplicate key in an [ordered] literal, which is a
-  # PARSER error, so the script could not run at all from the day the
-  # connectors shipped. It is core's own fallback that hides the mistake in
-  # reading: connectorCredentialsFromEnv reads onedrive's pair first and
-  # borrows microsoft's only when onedrive has none, so BOTH names must be
-  # shippable and only one was.
-  echo_platform_onedrive_oauth_client_id      = "echo_platform_onedrive_oauth_client_id"
-  echo_platform_onedrive_oauth_client_secret  = "echo_platform_onedrive_oauth_client_secret"
+  # No Microsoft names here (2026-09-07, "i dont want microsoft apps").
+  # OneDrive is gone from the product; the Outlook adapter still sits in core
+  # but has never been OFFERED, so a pair for it could not reach a connection
+  # even if it were shipped — and a name warned about on every run that nobody
+  # will ever mint is a warning people learn to read past.
 }
 
 # NOT a secret, and not in the store: the address the OAuth redirect comes

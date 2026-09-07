@@ -15,8 +15,8 @@ import { providerLabelFor, useIntegrationCopy, type IntegrationEntry, type Token
  *
  * Two kinds of connection, one dialog:
  *
- *  · an OAUTH provider (Google, Zoom, Slack, Jira, Notion, GitHub, Dropbox,
- *    OneDrive) — the briefing the user asked for on 2026-08-28: what the
+ *  · an OAUTH provider (Google, Zoom, Slack, Jira, Notion, GitHub,
+ *    Dropbox) — the briefing the user asked for on 2026-08-28: what the
  *    integration enables, that the connection is private to this person
  *    (D29), and for Google that one sign-in covers four sources; then the
  *    hand-off to the provider's own consent screen;

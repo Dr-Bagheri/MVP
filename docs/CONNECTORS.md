@@ -28,7 +28,7 @@ person's reach and never more.**
 
 | Kind | Who does what | Providers |
 |---|---|---|
-| **OAuth** | The operator registers ONE app per provider (once per deployment) and stores its client id + secret; each person then presses «اتصال» on the shelf and consents on the provider's own screen. | Google, Zoom, Slack, Jira, Notion, GitHub, Dropbox, OneDrive |
+| **OAuth** | The operator registers ONE app per provider (once per deployment) and stores its client id + secret; each person then presses «اتصال» on the shelf and consents on the provider's own screen. | Google, Zoom, Slack, Jira, Notion, GitHub, Dropbox |
 | **Token** | No operator step. The person pastes a credential of their own into the connect dialog; core asks the provider to vouch for it BEFORE storing it (`getMe`, the business profile, an MCP `initialize`). | Telegram, WhatsApp Business, MCP server |
 
 A provider whose OAuth pair is absent shows «روی سرور پیکربندی نشده» on the
@@ -57,13 +57,13 @@ The same four steps for every one; only the console differs.
 2. **Register the redirect URI** exactly:
    `https://app.neurai.pt/api/connectors/<provider>/callback`
    (`<provider>` is the lower-case name in the table: `zoom`, `slack`, `jira`,
-   `notion`, `github`, `dropbox`, `onedrive`). The BFF builds it from the
+   `notion`, `github`, `dropbox`). The BFF builds it from the
    page's own origin, so a staging host registers its own.
 3. **Store the pair** in the DPAPI store on the operator machine under the
    names `echo_platform_<provider>_oauth_client_id` and
    `echo_platform_<provider>_oauth_client_secret` (the `echo_platform_`
-   prefix is the rule of the store; see CLAUDE.md rule 3). OneDrive borrows
-   `echo_platform_microsoft_oauth_client_*` when it has no pair of its own.
+   prefix is the rule of the store; see CLAUDE.md rule 3). Every provider
+   reads its OWN pair — nobody borrows another's.
 4. **Ship and restart**: `scripts/deploy-secrets-to-server.ps1` writes every
    present pair into `/etc/neurai/core.env` and warns, by name, about the
    absent ones; then restart `neurai-api.service`. No code change, no deploy.
@@ -93,9 +93,20 @@ accepts anything:
 
 | Case | Expected |
 |---|---|
-| real id + real secret | `invalid_grant` — the credentials were ACCEPTED and only the fake code refused |
-| real id + wrong secret | `invalid_client` |
-| wrong id + real secret | `invalid_client` |
+| real id + real secret | an error about the CODE — the credentials were accepted and only the fake code refused |
+| real id + wrong secret | an error about the CLIENT |
+| wrong id + real secret | an error about the CLIENT |
+
+Each provider spells that its own way, and the request has to be shaped the
+way its `ProviderDef` shapes it (basic auth vs a body pair, form vs JSON).
+Measured 2026-09-07, all three cases each:
+
+| Provider | Request | real pair | wrong secret | wrong id |
+|---|---|---|---|---|
+| **Zoom** | basic auth, form | `invalid_grant` | `invalid_client` | `invalid_client` |
+| **GitHub** | body pair, form, `Accept: application/json` | `bad_verification_code` | `incorrect_client_credentials` | `404 Not Found` |
+| **Notion** | basic auth, JSON | `400 invalid_request` "Auth code must be a valid UUID" | `401 invalid_client` | `401 invalid_client` |
+| **Dropbox** | body pair, form, PKCE verifier | `invalid_grant` "code doesn't exist" | `invalid_client` | `invalid_client` |
 
 **Some providers cannot be probed at all** — Slack and Jira are both of that
 class, each measured on 2026-09-07 with both probes and three readings each:
@@ -133,9 +144,8 @@ reporting a configured tile as a working credential.
 | **Notion** | notion.so/my-integrations → **New integration** → type **Public** | Capabilities: read content, insert content, read user information without email. The person chooses which pages the integration may see on Notion's consent screen; the sources list only those. Token exchange uses HTTP basic auth with a JSON body (Notion's own shape). | (capabilities on the integration; `owner=user`) |
 | **GitHub** | github.com/settings/developers → **OAuth Apps** → New (or the org's settings for an org-owned app) | Homepage `https://app.neurai.pt`. GitHub answers the token exchange in a form body unless asked for JSON — core asks. | `repo read:user user:email` |
 | **Dropbox** | dropbox.com/developers/apps → **Create app** → Scoped access → Full Dropbox or App folder | Permissions: `files.metadata.read`, `account_info.read`. `token_access_type=offline` is sent so a refresh token is issued; PKCE on. | (permissions on the app) |
-| **OneDrive** | portal.azure.com → Microsoft Entra → **App registrations** → New (multitenant + personal accounts) | Web platform redirect; a client secret under Certificates & secrets; API permissions Microsoft Graph delegated `User.Read`, `Files.Read`, `offline_access`. If a Microsoft pair already exists (Outlook), OneDrive reuses it. | `openid profile email offline_access User.Read Files.Read` |
 | **Google** (Gmail, Calendar, Drive, Meet — one grant) | console.cloud.google.com → OAuth client `Web client` (done 2026-08-27) | Already live. | as recorded in ARCHITECTURE M43 |
-| **Microsoft** (Outlook mail + calendar; not on the shelf) | portal.azure.com → Microsoft Entra → App registrations | The adapter exists and is not OFFERED (user, 2026-08-28: "we just go with the google"). Its pair `echo_platform_microsoft_oauth_client_*`, if ever stored, also serves OneDrive. | `openid profile email offline_access User.Read Calendars.Read Mail.Read` |
+| **Microsoft** (Outlook mail + calendar) | — | **Nothing to create, and nothing on the shelf.** The adapter is still in `core/src/api/connectors.ts` and has never been OFFERED (user, 2026-08-28: "we just go with the google"), so no connection to it can be made; its pair left `deploy-secrets-to-server.ps1` on 2026-09-07 with OneDrive ("i dont want microsoft apps"). Listed here so nobody goes looking for a row that is missing. | — |
 
 ## The person's steps for a token provider
 
@@ -157,7 +167,6 @@ reporting a configured tile as a working credential.
 | GitHub | `issues`, `pulls`, `repos` | `create_github_issue {repository, title, body?}` |
 | WhatsApp Business | `profile`, `templates` | `send_whatsapp_message {to, text? \| template?, language?}` |
 | Dropbox | `files` (the root folder) | — (read only) |
-| OneDrive | `files` (recent) | — (read only) |
 | MCP server | `tools`, `resources` | `call_mcp_tool {tool, arguments_json?}` |
 
 Every hand names its object on the consent card (the channel and the words,
@@ -189,6 +198,9 @@ this side can name in advance, so it is asked about every time.
 |---|---|---|
 | **Zoom** | 2026-09-07 | **Proven end to end, including the secret.** Pair stored (21 and 32 characters, BOM-free on both sides of the wire), shipped, api restarted. Token-endpoint triple discriminated: real pair → `invalid_grant`, wrong secret → `invalid_client`, wrong id → `invalid_client`. Then the operator CONNECTED: `status: connected`, `account_label: neurai.git.acc@gmail.com` — that label is Zoom's own `/users/me` answering our bearer token, so the code-for-token exchange (which is where the secret is used) and an authenticated API call both succeeded. `meetings` and `recordings` answer 200 with an empty list, the account having neither. Still unrun: `create_zoom_meeting`, the hand. |
 | **Slack** | 2026-09-07 | **Proven end to end, including the secret and the scopes — by the first connect, because no probe could.** Pair stored (29 and 32 characters, BOM-free both sides), shipped, api restarted; both probes were run and both are structurally incapable (see the recipe above). Then the operator pressed «اتصال»: `status: connected`, `account_label: neurai.git.acc @ neurai`, and `channels` answers 200 with three real channels — `#social`, `#new-channel`, `#all-neurai`. That last reading is the one that settles the open question: **the seven scopes went under User, not Bot** — a bot-token grant would have connected and then listed none. `mentions` answers 200 with an empty list (`search:read` reached the endpoint; the account has no mentions). |
+| **GitHub** | 2026-09-07 | **Secret proven at the token endpoint; the app TYPE wants a look.** Pair stored (20 and 40 characters, BOM-free both sides), shipped, api restarted, `configured: true`. The triple discriminated three distinct ways (above), so the pair is real. **But the client id has the `Ov23li…` shape of a GITHUB APP, not an OAuth App** — the probe cannot tell those apart (both use the same endpoint, and the authorize URL 302s to `/login` either way), so this is an observation about the id's format, not a measurement. It matters: a GitHub App IGNORES the `scope` parameter we send (`repo read:user user:email`) and grants only the permissions configured on the app, only on repositories where it is INSTALLED — so `issues`/`pulls`/`repos` can come back empty from a connection that succeeded. If the console shows it under **GitHub Apps**, either install it on the repositories that should be visible, or create an OAuth App instead. |
+| **Notion** | 2026-09-07 | **Secret proven at the token endpoint.** Pair stored (36 and 50 characters, BOM-free both sides), shipped, api restarted, `configured: true`. The triple discriminated: the real pair got past authentication and was refused for the CODE alone ("Auth code must be a valid UUID" — Notion's codes are UUIDs, ours was not), while both wrong credentials answered `401 invalid_client`. Not yet connected; the pages and databases a connection sees are the ones the person shares with the integration on Notion's own consent screen. |
+| **Dropbox** | 2026-09-07 | **Secret proven at the token endpoint.** Pair stored (15 and 15 characters, BOM-free both sides), shipped, api restarted, `configured: true`. The triple discriminated: real pair → `invalid_grant` "code doesn't exist or has expired", both wrong credentials → `invalid_client`. Not yet connected. |
 | **Jira** | 2026-09-07 | **Deployment half only — the secret is UNPROVEN and cannot be probed.** Pair stored (32 and 76 characters, BOM-free on both sides of the wire), shipped to `/etc/neurai/core.env` (20 entries), api restarted, health 200. `GET /api/connectors` reports `configured: true, status: not_connected`; on the shelf «جیرا» is a `<button>` reading «وصل نشده» while «نوشن», unconfigured, is a plain `<div>` reading «روی سرور پیکربندی نشده» — the discriminating pair in one reading. Both probes were run and both are structurally incapable, the authorize one not even refusing a wrong redirect. The first «اتصال» is the first real test — of the secret, of the redirect URL, and of whether the five permissions were granted on the app. |
 
 ## Live proof still owed
@@ -201,7 +213,9 @@ operator's to mint) or a real bot token / WhatsApp number / MCP server.
 Record each run here when it happens: provider, date, what was listed, what
 the hand created.
 
-Where it stands: Google, Zoom and Slack have real grants and have LISTED.
+Where it stands: Google, Zoom and Slack have real grants and have LISTED;
+Jira, GitHub, Notion and Dropbox are configured and unconnected, and of those
+four only Jira's secret is unproven (its probes cannot discriminate).
 **No hand has been run on any connector yet** — `create_zoom_meeting` and
 `send_slack_message` are the two that could be run today, and each writes
 something a person will see, so each waits for the operator's word rather
