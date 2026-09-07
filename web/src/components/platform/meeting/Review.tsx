@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { speakerNaming } from "@/lib/speakerNaming";
 import { api } from "@/api/client";
-import type { Call, Speaker, TranscriptSegment } from "@/api/types";
+import type { Call, MeetingRecord, Person, Speaker, TranscriptSegment } from "@/api/types";
+import { meetingVoiceCandidates } from "@/lib/voiceCandidates";
+import { VoicePicker } from "./VoicePicker";
 import { dirFor } from "@/lib/textDirection";
 import { IconCheck, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
 import { digits, formatClock } from "@/lib/format";
@@ -379,25 +381,52 @@ const SPEAKER_TONES = [
   "bg-danger/10 text-danger",
 ];
 
-export function TranscriptPanel({ callId, onSeek, locale }: {
+export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
   callId: string;
+  /** whose people the voices may be named from (db/0202's roster + the host) */
+  meeting: MeetingRecord;
+  /** db/0093: only the call's OWNER may move a voice's directory link, and
+      the record of a meeting belongs to its host (0202) */
+  isHost: boolean;
   onSeek: (ms: number) => void;
   locale: string;
 }) {
   const t = useTranslations("meetings");
   const [segments, setSegments] = useState<TranscriptSegment[] | null | "failed">(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  /* re-read the voices after a link: one name changes EVERY turn that voice
+     took, which is the whole reason the picker sits on the name rather than
+     in a panel above it */
+  const [linked, setLinked] = useState(0);
 
   useEffect(() => {
     let alive = true;
     void api.getTranscript(callId)
       .then((rows) => { if (alive) setSegments(rows); })
       .catch(() => { if (alive) setSegments("failed"); });
+    return () => { alive = false; };
+  }, [callId]);
+
+  useEffect(() => {
+    let alive = true;
     void api.getSpeakers(callId)
       .then((rows) => { if (alive) setSpeakers(rows); })
       .catch(() => undefined);
     return () => { alive = false; };
-  }, [callId]);
+  }, [callId, linked]);
+
+  useEffect(() => {
+    /* the directory is read for the PICKER — a colleague who cannot name a
+       voice has no use for it, and asking for it anyway would be a request
+       per transcript for a list nothing renders */
+    if (!isHost) return undefined;
+    let alive = true;
+    void api.directory()
+      .then((rows) => { if (alive) setPeople(rows); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [callId, isHost, linked]);
 
   if (segments === null) return <div className="p-4"><SkeletonLines lines={5} /></div>;
   if (segments === "failed") return <p className="p-4 text-sm text-fg-muted">{t("readFailed")}</p>;
@@ -422,6 +451,15 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
     toneOf.set(sp.id, SPEAKER_TONES[toneOf.size % SPEAKER_TONES.length]!);
   }
 
+  /*
+   * WHO THIS VOICE COULD BE — the meeting's own people and nobody else (user
+   * directive, 2026-09-07: "only from people that have been in the meeting,
+   * not all of them"). The rule is in lib/voiceCandidates.ts, where it can be
+   * tested: it crosses two tables (a roster of ACCOUNTS, a directory of
+   * PEOPLE) and none of that crossing is visible from this DOM.
+   */
+  const candidates = meetingVoiceCandidates(meeting, people, locale);
+
   return (
     <section aria-label={t("transcriptTitle")} className="tile flex min-h-0 flex-col p-4">
       <header className="mb-3 flex items-baseline justify-between">
@@ -440,6 +478,7 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
           const name = naming.kind === "person" ? naming.name
             : naming.kind === "ordinal" ? t("speakerNamed", { n: digits(naming.n, locale) })
               : null;
+          const speaker = speakers.find((s) => s.id === seg.speaker_id);
           const tone = seg.speaker_id !== null ? toneOf.get(seg.speaker_id) ?? SPEAKER_TONES[0]! : "bg-surface-2 text-fg-muted";
           return (
             <li key={seg.id} className="flex items-start gap-2.5">
@@ -456,7 +495,21 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-semibold text-fg">{name ?? t("unattributed")}</span>
+                  {/* THE NAME IS THE CONTROL (user directive, 2026-09-07).
+                      A voice with no id at all is not a voice this record
+                      holds — there is nothing to link — so it stays text. */}
+                  {isHost && seg.speaker_id !== null && speaker !== undefined ? (
+                    <VoicePicker
+                      callId={callId}
+                      speaker={speaker}
+                      name={name ?? t("unattributed")}
+                      candidates={candidates}
+                      people={people}
+                      onLinked={() => setLinked((n) => n + 1)}
+                    />
+                  ) : (
+                    <span className="text-xs font-semibold text-fg">{name ?? t("unattributed")}</span>
+                  )}
                   <button
                     type="button"
                     onClick={() => onSeek(seg.start_ms)}

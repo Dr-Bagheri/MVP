@@ -412,6 +412,7 @@ export function SelectMenu({
   icon,
   panelFooter,
   panelHeading,
+  triggerLabel,
   variant = "input",
 }: {
   value: string;
@@ -436,14 +437,27 @@ export function SelectMenu({
       call-bar reference: «Microphone» over the device list) */
   panelHeading?: string;
   /**
-   * "input" (default) = the form-field face. "tile" = the CALL-BAR face:
+   * WHAT THE TRIGGER SAYS, when the chosen option's label is not it.
+   *
+   * Every face here reads its own value off the option list, which is right
+   * for a form field and wrong for the transcript's voice: an unlinked voice
+   * is «گویندهٔ ۱» on the page and its chosen option is «نامشخص», and a
+   * trigger that swapped one for the other would rename a line of the
+   * transcript by rendering the picker over it.
+   */
+  triggerLabel?: string;
+  /**
+   * "input" (default) = the form-field face. "inline" = a NAME IN A
+   * SENTENCE: the label itself is the button, no box and no height of its
+   * own, for a control that has to sit inside running text (the
+   * transcript's speaker). "tile" = the CALL-BAR face:
    * a big rounded button holding only the glyph, the chosen value
    * captioned underneath. "round" = the TRANSPORT face (2026-08-26): a
    * circular icon button that sits in a row of circular controls, its
    * value spoken only by the accessible name and the panel's own check.
    * The panel is the same kebab-family menu in every case.
    */
-  variant?: "input" | "tile" | "round";
+  variant?: "input" | "inline" | "tile" | "round";
 }) {
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value);
@@ -455,7 +469,11 @@ export function SelectMenu({
      than one interpolated, because Tailwind reads source text. */
   const panelWidth = variant === "input"
     ? "min-w-[max(var(--radix-popover-trigger-width),10rem)]"
-    : "min-w-[max(var(--radix-popover-trigger-width),15rem)]";
+    : variant === "inline"
+      /* a name is as wide as the name, so the trigger's width is not a floor
+         worth having here — the panel gets its own */
+      ? "min-w-[12rem]"
+      : "min-w-[max(var(--radix-popover-trigger-width),15rem)]";
 
   /**
    * HOVER-OPEN, tile face only (user directive, 2026-08-26: "come out
@@ -465,7 +483,10 @@ export function SelectMenu({
    * panel's edge) never closes it. The input face keeps click-only —
    * a form select that opens under a passing pointer is hostile.
    */
-  const hoverable = variant !== "input";
+  /* the two transport faces open under a passing pointer; a form field and
+     a name inside a paragraph do not — a menu that opens because the eye
+     crossed the word is hostile in running text */
+  const hoverable = variant === "tile" || variant === "round";
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverOpenedAt = useRef(0);
   const panelHeld = useRef(false);
@@ -657,6 +678,31 @@ export function SelectMenu({
             {current?.label ?? ""}
           </span>
         </div>
+      ) : variant === "inline" ? (
+        /* THE NAME IS THE BUTTON (user directive, 2026-09-07: "open the
+           speaker one and choose one of the people that attended").
+           No height and no box: this sits on the transcript's own name line
+           between an avatar and a timestamp, and a 38px control there would
+           push every turn of the conversation apart. What says it is
+           pressable is the hover ground and the chevron — and the chevron is
+           the same one every other face here draws, so an inline picker and
+           a form field are recognisably the same control. */
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            disabled={disabled}
+            onClick={(e) => e.stopPropagation()}
+            className={`-mx-1 inline-flex max-w-full items-center gap-1 rounded px-1 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              open ? "bg-surface-2 text-accent" : "hover:bg-surface-2 hover:text-accent"
+            } ${className}`}
+          >
+            <span className="min-w-0 truncate">{triggerLabel ?? current?.label ?? ""}</span>
+            {chevron(11)}
+          </button>
+        </PopoverTrigger>
       ) : (
         <PopoverTrigger asChild>
           <button
@@ -678,7 +724,7 @@ export function SelectMenu({
             } ${className}`}
           >
             {icon ? <span className="shrink-0 text-fg-muted">{icon}</span> : null}
-            <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
+            <span className="min-w-0 flex-1 truncate">{triggerLabel ?? current?.label ?? ""}</span>
             {chevron(14)}
           </button>
         </PopoverTrigger>

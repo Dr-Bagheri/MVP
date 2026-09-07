@@ -22,7 +22,6 @@ import { ItemsPanel } from "./meeting/ItemsPanel";
 import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
-import { MeetingSpeakers } from "./meeting/Speakers";
 import {
   IconCheck, IconCopy, IconFileText, IconMic, IconPlus, IconRows, IconTrash,
   IconUsers, IconUpload } from "@/components/icons";
@@ -1697,26 +1696,17 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
         write down a decision before anyone has spoken.
       */}
       {tab === "review" ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          {/*
-            THE VOICES, ABOVE THE READING (user directive, 2026-09-07: "in
-            overview give option to choose the speakers from the attendance in
-            case it does not detect our voice").
+        <>
+        {/*
+          THE VOICES ARE NAMED IN THE TRANSCRIPT (user directive, 2026-09-07:
+          "remove this one and add it to meeting transcription so you can open
+          the speaker one and choose one of the people that attended").
 
-            Full width rather than a third column: it is a fact about the whole
-            record, it is three rows long, and the transcript underneath is
-            what it changes — a name chosen here re-renders every turn below.
-            Only once the record is READY, because before that there are no
-            voices to name and an empty panel is a promise of a control.
-          */}
-          {ready ? (
-            <MeetingSpeakers
-              callId={meeting.call_id}
-              meeting={meeting}
-              isHost={me !== null && meeting.created_by === me.id}
-              locale={locale}
-            />
-          ) : null}
+          A panel of voices stood here for a day — the same three rows the
+          turns below already carry, in a card above them. The name in the
+          transcript is the control now: it is where a reader notices the
+          wrong name, and one press changes every turn that voice took.
+        */}
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
           <div className="flex min-h-0 flex-col">
             {/* the panel's frame while the call is read (audit finding,
@@ -1741,12 +1731,18 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
                 ) : call.status !== "ready" ? (
                   <ProcessingCard call={call} title={meeting.title} locale={locale} />
                 ) : (
-                  <TranscriptPanel callId={meeting.call_id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
+                  <TranscriptPanel
+                    callId={meeting.call_id}
+                    meeting={meeting}
+                    isHost={me !== null && meeting.created_by === me.id}
+                    onSeek={(ms) => setSeekReq({ ms })}
+                    locale={locale}
+                  />
                 )}
           </div>
           <ItemsPanel meetingId={meeting.id} callId={meeting.call_id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
         </div>
-        </div>
+        </>
       ) : null}
       {tab === "tasks" ? (
         <MeetingTasksBoard callId={meeting.call_id}
