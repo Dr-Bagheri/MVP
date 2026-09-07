@@ -110,6 +110,8 @@ let CALL: Call | null = null;
 let DETAIL_GATE: Promise<MeetingRecord> | null = null;
 /** every PATCH body the page sent */
 const patched: Record<string, unknown>[] = [];
+/** every call id handed to finishCall */
+const finished: string[] = [];
 
 /* the REAL BffError: the screen branches on `instanceof` and on its `code`,
    and a hand-written stand-in makes every instanceof answer false while the
@@ -137,6 +139,16 @@ vi.mock("@/api/client", async () => ({
       return { ...MEETING, ...body };
     },
     getCall: async () => CALL,
+    /* the orphaned-take finish (2026-09-07). It MUTATES the fixture the way
+       the server does — recording -> processing on both the call and the
+       meeting's published status — so a test cannot pass by the page
+       merely deciding to move on. */
+    finishCall: async (callId: string) => {
+      finished.push(callId);
+      MEETING = { ...MEETING, call_status: "processing" };
+      CALL = call({ status: "processing" });
+      return { id: callId, status: "processing" };
+    },
     me: async () => ({ id: "u-me", display_name: "سینا", display_name_en: null }),
     taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
     callNotes: async () => [],
@@ -187,6 +199,7 @@ beforeEach(() => {
   CALL = null;
   DETAIL_GATE = null;
   patched.length = 0;
+  finished.length = 0;
   startSpy.mockClear();
   ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0 };
   tokenSpy.mockClear();
@@ -423,7 +436,10 @@ describe("MeetingPage", () => {
   });
 
   it("a recorded meeting opens on the post stage", async () => {
-    MEETING = meeting({ call_id: "c-1" });
+    /* `call_status` is what makes this the CONTROL for the reload tests
+       below: a page that simply always opened on the live stage would pass
+       every one of them and fail this. */
+    MEETING = meeting({ call_id: "c-1", call_status: "ready" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() =>
@@ -557,8 +573,24 @@ describe("the recording belongs to the host (db/0202)", () => {
       await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
       await screen.findByText("شروع و پایان ضبط با میزبان است.");
 
-      /* the host finishes, somewhere else */
-      MEETING = meeting({ call_id: "c-1", mode: "in_person", created_by: "u-host" });
+      /*
+       * THE HOST PRESSES START, somewhere else. The record appears on the
+       * meeting THIS INSTANT — the recorder links it the moment the call
+       * exists — and until 2026-09-07 that alone moved this page to the
+       * artifacts, one second into a meeting the colleague was sitting in.
+       */
+      MEETING = meeting({
+        call_id: "c-1", call_status: "recording", mode: "in_person", created_by: "u-host",
+      });
+      CALL = call({ status: "recording" });
+      await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+      expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
+      expect(screen.getByText("شروع و پایان ضبط با میزبان است.")).toBeInTheDocument();
+
+      /* and NOW the host finishes */
+      MEETING = meeting({
+        call_id: "c-1", call_status: "linking", mode: "in_person", created_by: "u-host",
+      });
       CALL = call({ status: "linking" });
       await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
 
@@ -566,6 +598,90 @@ describe("the recording belongs to the host (db/0202)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/*
+ * A RELOAD IS NOT A FINISH (user report, 2026-09-07: "when the meeting is
+ * recording and you are the host if you refresh the page it closes the
+ * recording and send it to the after meeting stage — it should do that only
+ * after you press finish").
+ *
+ * `call_id` says a take was STARTED, not that it ended; `call_status ===
+ * "recording"` is the take still being made (db/0204's door publishes it to
+ * every attendee). The control for all of it is the landing test above: a
+ * FINISHED record still opens on the post stage.
+ */
+describe("a reload is not a finish (2026-09-07)", () => {
+  it("the host reloading mid-take lands back in the live stage, not on the artifacts", async () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    CALL = call({ status: "recording" });
+    render(<MeetingPage id="m-1" />);
+
+    /* the canvas is what an in-person live stage opens on — a positive
+       marker, so this cannot pass on an error page or an empty frame */
+    await screen.findByTestId("whiteboard-stub");
+    expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
+  });
+
+  it("a take still running leaves the earlier steps as doors; a finished one seals them", async () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    CALL = call({ status: "recording" });
+    const { unmount } = render(<MeetingPage id="m-1" />);
+    await screen.findByTestId("whiteboard-stub");
+    /* a host who reloaded must not be locked out of their own plan */
+    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
+    expect(await screen.findByText("مشخصات")).toBeInTheDocument();
+    unmount();
+
+    /* and the seal still holds once the record is real — the pair is what
+       makes either half mean anything */
+    MEETING = meeting({ call_id: "c-1", call_status: "ready", mode: "in_person" });
+    CALL = call({ status: "ready" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() =>
+      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
+    expect(screen.queryByText("مشخصات")).toBeNull();
+  });
+
+  it("the take that outlived its engine is finished from the page, and THAT is what moves it on", async () => {
+    /* the engine is idle: a reload destroyed it, and the call is sitting at
+       `recording` because nothing has finished it */
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "online" });
+    CALL = call({ status: "recording" });
+    render(<MeetingPage id="m-1" />);
+
+    /* what will happen is said before it is pressed */
+    await screen.findByText(/این ضبط با بسته شدن یا تازه‌سازی صفحه قطع شد/);
+    expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "پایان و پردازش" }));
+    await waitFor(() => expect(finished).toEqual(["c-1"]));
+    await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
+  });
+
+  it("a colleague is offered no such button — finishing is the host's, however the take was orphaned", async () => {
+    MEETING = meeting({
+      call_id: "c-1", call_status: "recording", mode: "online", created_by: "u-host",
+    });
+    CALL = call({ status: "recording" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /حین جلسه/ })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
+    expect(screen.queryByText(/این ضبط با بسته شدن یا تازه‌سازی صفحه قطع شد/)).toBeNull();
+  });
+
+  it("a record whose status cannot be read still opens on the post stage", async () => {
+    /* the third nothing: a purged call, or a database without db/0204. It is
+       NOT "still recording", and reading it as such would strand the page in
+       a live stage for a meeting that ended weeks ago. */
+    MEETING = meeting({ call_id: "c-1", call_status: null, mode: "in_person" });
+    CALL = call({ status: "ready" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() =>
+      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
+    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
   });
 });
 

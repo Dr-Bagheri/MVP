@@ -5127,3 +5127,71 @@ sessions) for the cross-session narrative.
   secret is the only one unproven, and only because its probes cannot
   discriminate.
   db 203 migrations · core 1416 tests · web 1280 tests + gate + sweep.
+- 2026-09-07 (A RELOAD IS NOT A FINISH — one wrong idea in three places, and
+  the worst of the three was not the reported one; db 0204, 0205): user report,
+  "when the meeting is recording and you are the host if you refresh the page
+  it closes the recording and send it to the after meeting stage, it should do
+  that only after you press finish".
+  **The wrong idea: `meeting.call_id` was being read as "this meeting is
+  over".** It is not, and 0145's own comment says why it is not — the recorder
+  links the id THE MOMENT the call exists, deliberately, so a dying tab still
+  leaves the meeting pointing at its partial record. So a meeting has a
+  `call_id` from the first second of its recording, and three screens read
+  that as finished:
+  (1) the arrival stage — the reported bug: a host who reloads lands on «پس از
+  جلسه», with «حین جلسه» SEALED behind them, looking at the artifacts of a
+  meeting that is still happening;
+  (2) `sealed`, which is why they could not walk back;
+  (3) **the colleague poll — the worse one.** It moved every other attendee to
+  the record as soon as `call_id` appeared, which is when the host presses
+  START. So the directive it was built for on 2026-09-06 ("after it finishes
+  the session should be close for all") had been doing the exact opposite
+  since the day it shipped: everyone was ejected from the meeting one second
+  into it. Nobody had reported it, because it looks like the product deciding
+  something rather than like a fault.
+  The word that means finished is the CALL leaving `recording`, which only
+  `finishCall` writes.
+  **Why it needed a door and not a join (0204).** core's meeting query already
+  carries `left join echo.call c` and publishes `c.title`, so the status looked
+  like a one-word addition to an existing join. Under RLS that join answers the
+  HOST and nobody else — a call is `private` by default (0004) and call_read
+  admits the owner, an org-scoped call, or an admin — and "the session closes
+  for all" is a promise to everybody in the room. `echo.meeting_take_status` is
+  the narrow door: one word from `echo.call_status`, about a call whose id the
+  meeting already publishes to the same readers, for a meeting they could
+  already read. It cannot return a title, an owner, a duration, or the
+  existence of any other call — **a security surface that is a SHAPE cannot be
+  widened by forgetting a filter** (0158's sentence, applied again).
+  **Two instruments fired on my own work, and both were right.**
+  0204's own self-check refused the correct function on its first run: Postgres
+  stores the empty path as `search_path=""`, quoted, and the check demanded the
+  bare form — a check whose only red was its own. And then **`db/test/30_agent_
+  wall.sql` caught the missing revoke**: 0204 granted EXECUTE to echo_app and
+  echo_agent and stopped, which reads as a complete grant list and is not one,
+  because **Postgres grants EXECUTE on a new function to PUBLIC by default —
+  so a null ACL does not mean "no grants", it means "the defaults", and the
+  default is everyone.** Nothing about the function's behaviour was wrong and
+  no test of what it RETURNS could have found it; the assertion that caught it
+  is phrased as structure for exactly that reason. 0205 revokes it, as its own
+  migration because 0204 is checksummed — and the mistake stays visible so the
+  next definer door gets its revoke written the first time.
+  **The reload's other half, which the fix would have been incomplete
+  without.** A refresh destroys the JavaScript realm and with it the
+  MediaRecorder, so after landing back in the live stage the host had a take
+  the engine no longer owns: `beginTake` rightly refuses a meeting that already
+  has a record, and the end button hangs off an engine that is gone. That is a
+  dead end, so the page offers the finish WITHOUT one — `finishCall` is
+  idempotent and takes no part count, so pressing it processes exactly what was
+  captured before the page went away, and a `well` line says so BEFORE it is
+  pressed (a CONSEQUENCE, R21's allowed kind, said while the person still has
+  the choice).
+  **A test found a gap the fix opened.** «شروع و پایان ضبط با میزبان است.» was
+  gated on `!held`, so the sentence vanished the instant the host pressed start
+  — invisible while the colleague was being ejected in the same instant, and
+  newly visible as a hole once they stayed. The page changed, not the
+  assertion.
+  Verify-red by MUTATION, five behaviours put back one at a time: the arrival
+  rule (3 red), the seal, the poll, the orphan button, the host-only sentence
+  (1 each). The landing control — a FINISHED record still opens on post —
+  is what stops "always open on the live stage" passing all five.
+  db 205 migrations · core 1416 tests · web 1285 tests + gate + sweep.

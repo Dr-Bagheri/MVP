@@ -18,7 +18,7 @@
  *     say what it produced without a second fetch.
  */
 import { NotFoundError, ValidationError, ConflictError } from "./errors.ts";
-import { hasMeetingAttendees } from "../db/capabilities.ts";
+import { hasMeetingAttendees, hasMeetingTakeStatus } from "../db/capabilities.ts";
 import { iso } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -105,6 +105,22 @@ export interface MeetingRecord {
       and null again if the call was purged (SET NULL) */
   call_id: string | null;
   call_title: string | null;
+  /**
+   * The linked call's position on the pipeline (`CALL_STATUSES`), or null.
+   *
+   * `call_id` is NOT this fact: the recorder links the id the moment the
+   * call exists, so a meeting has a `call_id` from the first second of its
+   * recording. `"recording"` is the take still being MADE; anything else is
+   * a take that was finished. Read through `echo.meeting_take_status`
+   * (db/0204) rather than the `c.` join beside it, because a call is private
+   * by default and the join answers only its owner — and the screens that
+   * need this word are the ones every attendee is looking at.
+   *
+   * Typed `string | null` like `Call.status`, so a later status cannot crash
+   * a client. Null has three readings the caller separates with `call_id`:
+   * no take, a purged one, or a meeting they cannot read.
+   */
+  call_status: string | null;
   archived: boolean;
   created_by: string;
   /** the host's display names, resolved from `created_by` — null only when
@@ -122,16 +138,23 @@ export interface MeetingRecord {
 }
 
 /**
- * The meeting rows. `withAttendees` is the db/0202 capability: on a schema
- * without the table the subquery is a 42703 that would take out every
- * meetings list, so the read answers an empty roster instead — the shape of
- * the wire does not depend on when the migration landed.
+ * The meeting rows. `withAttendees` is the db/0202 capability and
+ * `withTakeStatus` db/0204's: on a schema without them the subquery is a
+ * 42703 and the call a 42883, either of which would take out every meetings
+ * list — so the read answers an empty roster and a null status instead. The
+ * shape of the wire does not depend on when a migration landed.
+ *
+ * A null `call_status` from the un-migrated branch reads as "no take", which
+ * is the OLD behaviour rather than a new wrong one: a screen deciding on it
+ * lands exactly where it landed before 0204.
  */
-const meetingRows = (withAttendees: boolean) => `
+const meetingRows = (withAttendees: boolean, withTakeStatus: boolean) => `
   select m.id, m.title, m.scheduled_at, m.duration_minutes, m.mode,
          m.topic_id, mt.name as topic,
          m.location, m.description, m.invitees, m.agenda, m.call_id,
-         c.title as call_title, m.archived_at, m.created_by, m.created_at,
+         c.title as call_title,
+         ${withTakeStatus ? "echo.meeting_take_status(m.id)" : "null::text"} as call_status,
+         m.archived_at, m.created_by, m.created_at,
          /* the HOST's names, resolved the way the topic's is. created_by is
             an id, and every surface that wanted to say who ran the meeting was
             resolving it separately or, worse, showing the VIEWER: the minutes
@@ -198,6 +221,7 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     })),
     call_id: (row.call_id as string | null) ?? null,
     call_title: (row.call_title as string | null) ?? null,
+    call_status: (row.call_status as string | null) ?? null,
     archived: row.archived_at !== null && row.archived_at !== undefined,
     created_by: String(row.created_by),
     host_name: row.host_name === null || row.host_name === undefined ? null : String(row.host_name),
@@ -320,7 +344,10 @@ export function sliceSummary(text: string): Array<{ kind: MeetingItemKind; body:
 
 export function createMeetingsRepo(db: Db) {
   /** the select, with or without db/0202's roster (the capability is cached) */
-  const rowsSql = async () => meetingRows(await hasMeetingAttendees(db));
+  const rowsSql = async () => meetingRows(
+    await hasMeetingAttendees(db),
+    await hasMeetingTakeStatus(db),
+  );
 
   async function list(identity: Identity, opts: { archived?: boolean } = {}): Promise<MeetingRecord[]> {
     const select = await rowsSql();

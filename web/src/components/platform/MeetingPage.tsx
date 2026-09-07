@@ -58,6 +58,31 @@ import { digits, formatClock, formatDate, formatDuration, formatTime, personName
 type Stage = "pre" | "hold" | "post";
 
 /**
+ * IS THE TAKE STILL BEING MADE?
+ *
+ * `call_id` is NOT this fact and never was. The recorder links the id the
+ * MOMENT the call exists — deliberately, so a dying tab still leaves the
+ * meeting pointing at its partial record — so a meeting has a `call_id` from
+ * the first second of its recording. Three screens read it as "this meeting
+ * is over", and each was wrong for the whole length of every take: the host
+ * reloading landed on «پس از جلسه» with the live stage sealed behind them, a
+ * colleague was moved to the record the instant the host pressed start, and
+ * the earlier steps sealed while the meeting was still being held.
+ *
+ * The word that means finished is the CALL leaving `recording`, which only
+ * `finishCall` writes. It reaches every attendee through db/0204's door,
+ * because a call is private by default and the join that used to carry it
+ * answers its owner alone.
+ *
+ * An UNKNOWN status (null on a call_id, from a database without 0204 or a
+ * record that has been purged) reads as "not running" — the pre-0204
+ * behaviour, so the un-migrated branch lands exactly where it used to.
+ */
+export function takeIsRunning(m: MeetingRecord): boolean {
+  return m.call_id !== null && m.call_status === "recording";
+}
+
+/**
  * The meeting's two columns — TWO ratios, because the two stages are not the
  * same screen, and the reference product uses two as well.
  *
@@ -117,8 +142,17 @@ export function MeetingPage({ id }: { id: string }) {
            reference lands on /pre after creation, and a meeting created
            for "now" is already a second in the past by the time this page
            loads, which used to drop the person straight into the live
-           stage they had not asked for */
-        setStage((cur) => cur ?? (m.call_id !== null ? "post" : "pre"));
+           stage they had not asked for.
+
+           A meeting whose take is STILL RUNNING opens on the stage it is
+           being held in. This is the reload case (user report, 2026-09-07:
+           "if you refresh the page it closes the recording and send it to
+           the after meeting stage — it should do that only after you press
+           finish"): the record exists from the first second, so the old
+           `call_id !== null ? "post"` sent the host to the artifacts of a
+           meeting that was still happening. */
+        setStage((cur) => cur
+          ?? (m.call_id === null ? "pre" : takeIsRunning(m) ? "hold" : "post"));
       })
       .catch((e: unknown) => {
         const status = (e as { status?: number }).status;
@@ -344,22 +378,24 @@ export function MeetingPage({ id }: { id: string }) {
    * close for all").
    *
    * The engine is in the HOST's browser; every other page has nothing local
-   * to watch, so it asks. What it waits for is the RECORD — the same fact
-   * the host's own `end()` waits for — which is why this cannot report a
-   * meeting as finished that the pipeline never received.
+   * to watch, so it asks. What it waits for is the take ENDING — not the
+   * record appearing, which is what it used to wait for and which happens
+   * when the host presses START. Every colleague was being sent to the
+   * artifacts one second into the meeting, which is the exact opposite of
+   * the directive this poll was built for.
    */
   useEffect(() => {
-    if (stage !== "hold" || isHost || callId !== null) return;
+    if (stage !== "hold" || isHost) return;
     let alive = true;
     const timer = setInterval(() => {
       void api.meetingDetail(id).then((m) => {
         if (!alive) return;
         setMeeting(m);
-        if (m.call_id !== null) setStage("post");
+        if (m.call_id !== null && !takeIsRunning(m)) setStage("post");
       }).catch(() => { /* a failed poll is not an ended meeting */ });
     }, 5000);
     return () => { alive = false; clearInterval(timer); };
-  }, [stage, isHost, callId, id]);
+  }, [stage, isHost, id]);
 
   /**
    * I AM HERE (db/0202).
@@ -424,16 +460,37 @@ export function MeetingPage({ id }: { id: string }) {
 
   const active: Stage = stage ?? "pre";
   const held = meeting.call_id !== null;
-  /** a linked record seals the meeting's earlier stages — see stepTab */
-  const sealed = held;
+  const running = takeIsRunning(meeting);
+  /** a FINISHED record seals the meeting's earlier stages — see stepTab.
+      While the take is still running they stay doors, or a host who
+      reloaded would be locked out of the stage they are standing in. */
+  const sealed = held && !running;
   const timePast = new Date(meeting.scheduled_at).getTime() <= Date.now();
   /* live when WE started it this mount, OR when the engine's take IS this
      meeting's linked call — a reload mid-recording must not hide the timer
      and the end button of a take that plainly belongs here */
   const engineOwnsThisMeeting = engine.callId !== null && meeting.call_id === engine.callId;
-  const recordingLive = (startedHere.current || engineOwnsThisMeeting)
+  const engineOnThisTake = startedHere.current || engineOwnsThisMeeting;
+  const recordingLive = engineOnThisTake
     && (engine.phase === "recording" || engine.phase === "paused");
-  const engineFailed = (startedHere.current || engineOwnsThisMeeting) && engine.phase === "failed";
+  const engineFailed = engineOnThisTake && engine.phase === "failed";
+  /*
+   * THE TAKE THAT OUTLIVED ITS ENGINE.
+   *
+   * A reload destroys the JavaScript realm, and with it the MediaRecorder,
+   * the stream and the uploader — but the call is real, its parts are on the
+   * server, and it sits at `recording` because nothing has finished it. The
+   * host lands back in the live stage (above) and would otherwise find no
+   * way out of it: `beginTake` rightly refuses a meeting that already has a
+   * record, and the end button hangs off an engine that is gone.
+   *
+   * So the finish is offered without one. `finishCall` is idempotent and
+   * takes no part count — it flips recording→processing for a call the
+   * caller may update — so pressing it processes exactly what was captured
+   * before the page went away. `startedHere` keeps a take that is merely
+   * STARTING from reading as abandoned.
+   */
+  const takeOrphaned = isHost && running && !engineOnThisTake;
 
   const patch = (body: Record<string, unknown>) => {
     void api.updateMeeting(meeting.id, body)
@@ -459,6 +516,14 @@ export function MeetingPage({ id }: { id: string }) {
         .then((m) => { setMeeting(m); setStage("post"); })
         .catch(() => setError(t("linkFailedRetrying")));
     }).catch(() => { setUploading(false); setError(t("uploadFailed")); });
+  };
+
+  /** finish a take whose engine is gone — the reload case, above */
+  const finishOrphanedTake = () => {
+    if (meeting.call_id === null) return;
+    void api.finishCall(meeting.call_id)
+      .then(() => { setError(null); loadMeeting(); setStage("post"); })
+      .catch(() => setError(t("finishFailed")));
   };
 
   const end = () => {
@@ -586,12 +651,24 @@ export function MeetingPage({ id }: { id: string }) {
             the trigger the button was merely hidden, and without this the
             product offered an act the server refuses.
           */}
-          {!isHost && active === "hold" && !held ? (
+          {/* `!held` used to gate this, which meant the sentence vanished the
+              instant the host pressed start — the one moment it is most in
+              force. It went with the colleague's ejection to the post stage
+              (2026-09-07): while they stayed in the live stage there was
+              nothing left in the slot to tell them whose the recording is. */}
+          {!isHost && active === "hold" ? (
             <span className="rounded-xl bg-surface-2 px-2.5 py-1.5 text-[11px] font-medium text-fg-muted">
               {t("hostOnlyRecord")}
             </span>
           ) : null}
-          {isHost && recordingLive ? (
+          {takeOrphaned ? (
+            /* the same act and therefore the same words — what changed is
+               only which side finishes it */
+            <button type="button" onClick={finishOrphanedTake}
+              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
+              {t("endAndProcess")}
+            </button>
+          ) : isHost && recordingLive ? (
             <button type="button" onClick={end}
               className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {t("endAndProcess")}
@@ -656,6 +733,14 @@ export function MeetingPage({ id }: { id: string }) {
         <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
           {error}
         </p>
+      ) : null}
+      {/* what pressing the button will actually produce — a CONSEQUENCE, not
+          an explanation (R21): the recording stopped when the page did, and
+          finishing now processes what was captured up to that moment rather
+          than the whole meeting. Saying it after the fact would be telling
+          somebody about a choice they no longer have. */}
+      {takeOrphaned && active === "hold" ? (
+        <p className="well text-xs text-fg-muted">{t("takeInterrupted")}</p>
       ) : null}
       {/* the one thing the picker gets wrong, said BEFORE it opens: a share
           with the audio box unticked carries no sound, and the engine

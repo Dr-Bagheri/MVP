@@ -99,6 +99,11 @@ export async function hasMeetingAttendees(db: Db): Promise<boolean> {
   return hasColumn(db, "meeting_attendee", "user_id");
 }
 
+/** db/0204 (2026-09-07): the door that says whether a meeting's take is still running */
+export async function hasMeetingTakeStatus(db: Db): Promise<boolean> {
+  return hasFunction(db, "echo.meeting_take_status");
+}
+
 /** db/0200 (2026-09-06): a transcript line carries the language it was spoken in */
 export async function hasSegmentLanguage(db: Db): Promise<boolean> {
   return hasColumn(db, "transcript_segment", "language");

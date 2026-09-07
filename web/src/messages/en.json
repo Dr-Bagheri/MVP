@@ -1745,6 +1745,7 @@
     "attendedMark": "In the room",
     "guestMember": "Guest",
     "hostOnlyRecord": "The host starts and ends the recording.",
+    "takeInterrupted": "This recording stopped when the page was closed or reloaded. Ending it now processes the part that was captured up to that moment.",
     "memberHost": "Host",
     "membersTitle": "Meeting members",
     "minuteLabel": "Minute",
