@@ -4982,3 +4982,80 @@ sessions) for the cross-session narrative.
   — until then their tiles say so and refuse to be pressed. The three token
   connectors need nothing from the server and can be connected now.
   db 202 migrations · core 1416 tests · web 1280 tests + gate + sweep.
+- 2026-09-07 (ZOOM AND SLACK CONFIGURED — and the script that configures them
+  could not run; commits be3d911, 39087c0, e9ae4b0): the operator minted the
+  first two OAuth apps and sent their pairs. Each was stored in the DPAPI store
+  in-process (never piped — PS 5.1 prepends a BOM, which is how a BOM landed
+  INSIDE a stored secret on 2026-08-27), read back, asserted identical with no
+  U+FEFF and no stray whitespace, and the script deleted.
+  **THE SHIPPING SCRIPT HAD BEEN UNRUNNABLE SINCE THE CONNECTORS SHIPPED.**
+  `scripts/deploy-secrets-to-server.ps1`'s OneDrive slot held a SECOND COPY of
+  the two microsoft lines, and a duplicate key in a PowerShell `[ordered]`
+  literal is a PARSER error — the file could not be loaded at all, so the one
+  tool for getting a credential onto the server was dead from the day the
+  connectors landed, and nothing had asked it to run in between. Verified
+  empirically with `Parser::ParseFile` rather than by reading, because a
+  duplicate key reads as a copy-paste that works.
+  **The probe recipe changed, and the reason is worth keeping.** The trio that
+  proved the Google pair — authorize URL: real → sign-in page, invented id →
+  `invalid_client`, wrong redirect → `redirect_uri_mismatch` — DOES NOT
+  TRANSFER. Zoom answers all three with a 302 to its own sign-in page, so every
+  case reads identically and the probe distinguishes nothing; worse, the
+  authorize URL never sees the SECRET, so it cannot test the half most likely
+  to be mistyped. The TOKEN endpoint does both: post a deliberately invalid
+  code and read which error comes back. Zoom's triple discriminated — real pair
+  → `invalid_grant` (the credentials were accepted and only the fake code
+  refused), wrong secret → `invalid_client`, wrong id → `invalid_client` — and
+  then the operator connected, so Zoom is proven end to end INCLUDING the
+  secret: `account_label` is what Zoom's own `/users/me` answered our bearer
+  token, which is the one call the secret is used for.
+  **Slack could not be probed at all** — recorded as a structural fact, not a
+  failure to try: its token endpoint checks the code before the credentials
+  (`invalid_code` to every triple member) and its authorize endpoint returns a
+  JavaScript shell that echoes the input and bounces to `workspace-signin`. The
+  byte-count differences that looked promising at first were the echoed inputs.
+  Also fixed: **the doc's Slack scope list had six of the seven the code
+  sends** — `groups:history` was missing, which would have silently cost every
+  private channel's history on an app built from the doc.
+  db 202 migrations · core 1416 tests · web 1280 tests + gate + sweep.
+- 2026-09-07 (JIRA CONFIGURED — the second unprobeable provider; and SLACK
+  PROVED ITSELF by being connected): the operator sent the Atlassian 3LO pair
+  and, in the same round, pressed «اتصال» on Slack — so this record closes one
+  question and opens the same one for Jira.
+  **Jira.** Pair stored (32 and 76 characters, read back identical, no BOM, no
+  stray whitespace), shipped to `/etc/neurai/core.env` (20 entries, BOM-free),
+  `neurai-api` restarted, health 200. `GET /api/connectors` reports
+  `configured: true, status: not_connected`, and on the shelf «جیرا» is a
+  `<button>` reading «وصل نشده» while «نوشن» — unconfigured — is a plain `<div>`
+  reading «روی سرور پیکربندی نشده»: the discriminating pair in one reading,
+  which is what makes the tile evidence rather than a screenshot.
+  **BOTH PROBES ARE STRUCTURALLY INCAPABLE, and that is the finding.** Atlassian's
+  token endpoint validates the CODE first — the real pair, a wrong secret and a
+  wrong id all answer `400 invalid_request` / "authorization_code is invalid",
+  byte for byte. Its authorize endpoint 302s to `id.atlassian.com/login` with
+  the whole request echoed in `continue=`, identically for a real id, an
+  invented id AND A WRONG REDIRECT — so it cannot even stand in for the
+  redirect check, which is the half the Google recipe leaned on. Jira is
+  therefore the SECOND provider of the Slack class, and the class is now worth
+  naming: **a probe that answers the same thing to a right and a wrong
+  credential has told you nothing, and the danger is that its answer is a
+  perfectly ordinary error message.** Recorded in docs/CONNECTORS.md as a table
+  of measured incapability rather than as a sentence about one provider.
+  **Slack, meanwhile, is proven end to end — by the connect, because no probe
+  could.** `status: connected`, `account_label: neurai.git.acc @ neurai`, and
+  `channels` answers 200 with three real channels (`#social`, `#new-channel`,
+  `#all-neurai`). That last reading settles the question the doc had left open
+  at the top of the hour: **the seven scopes went under User, not Bot** — a
+  bot-token grant connects perfectly and then lists nothing, which would have
+  read as an empty workspace rather than as a misconfigured app. So the row I
+  had written an hour earlier («the secret is UNPROVEN and cannot be probed»)
+  was correct when written and out of date within the hour, and the correction
+  is the point: an unprobeable credential is not permanently unproven, it is
+  proven by the first person who uses it — which is exactly what the recipe
+  says to wait for.
+  Also recorded: **no hand has been run on any connector yet.**
+  `create_zoom_meeting` and `send_slack_message` are the two that could run
+  today, and each writes something a person will see, so each waits for the
+  operator's word rather than being fired to tick a box.
+  Still the operator's: Notion, GitHub, Dropbox and OneDrive — four pairs, the
+  deploy script naming each absent one by name on every run.

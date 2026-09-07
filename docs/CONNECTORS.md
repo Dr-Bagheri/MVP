@@ -97,13 +97,18 @@ accepts anything:
 | real id + wrong secret | `invalid_client` |
 | wrong id + real secret | `invalid_client` |
 
-**Some providers cannot be probed at all, and Slack is one of them**
-(measured 2026-09-07). Its token endpoint validates the CODE first, so a real
-pair, a wrong secret and a wrong id all answer `invalid_code`; its authorize
-endpoint returns a JavaScript shell that echoes the input and then bounces to
-`workspace-signin`, validating the client only after a person signs in. Three
-identical readings from each — two probes that cannot fail, which is worth
-knowing before somebody reports one of them as proof.
+**Some providers cannot be probed at all** — Slack and Jira are both of that
+class, each measured on 2026-09-07 with both probes and three readings each:
+
+| Provider | Token endpoint | Authorize endpoint |
+|---|---|---|
+| **Slack** | validates the CODE first — real pair, wrong secret and wrong id all answer `invalid_code` | a JavaScript shell that echoes the input and bounces to `workspace-signin`; the client is checked only after a person signs in |
+| **Jira** (Atlassian) | same shape — all three answer `400 invalid_request` / "authorization_code is invalid" | 302 to `id.atlassian.com/login` with the request echoed in `continue=`, identical for a real id, an invented id and a wrong redirect |
+
+Four probes that cannot fail, which is worth knowing before somebody reports
+one of them as proof. Note what the Jira reading also rules out: the
+authorize endpoint does not even refuse a WRONG REDIRECT, so it cannot stand
+in for the redirect check either.
 
 Where no probe discriminates, these two are what remain, and they are enough
 for the deployment half:
@@ -183,7 +188,8 @@ this side can name in advance, so it is asked about every time.
 | Provider | Date | What was proven |
 |---|---|---|
 | **Zoom** | 2026-09-07 | **Proven end to end, including the secret.** Pair stored (21 and 32 characters, BOM-free on both sides of the wire), shipped, api restarted. Token-endpoint triple discriminated: real pair → `invalid_grant`, wrong secret → `invalid_client`, wrong id → `invalid_client`. Then the operator CONNECTED: `status: connected`, `account_label: neurai.git.acc@gmail.com` — that label is Zoom's own `/users/me` answering our bearer token, so the code-for-token exchange (which is where the secret is used) and an authenticated API call both succeeded. `meetings` and `recordings` answer 200 with an empty list, the account having neither. Still unrun: `create_zoom_meeting`, the hand. |
-| **Slack** | 2026-09-07 | **Deployment half only — the secret is UNPROVEN and cannot be probed.** Pair stored (29 and 32 characters, BOM-free both sides), shipped, api restarted; `GET /api/connectors` reports `configured: true, status: not_connected` and the tile is a «وصل نشده» button. Both probes were run and both are structurally incapable (see the recipe above): the token endpoint answers `invalid_code` to every triple member, the authorize endpoint bounces all three to `workspace-signin`. The first «اتصال» is the first real test — of the secret, of the redirect URL, and of whether the seven scopes went under User rather than Bot. |
+| **Slack** | 2026-09-07 | **Proven end to end, including the secret and the scopes — by the first connect, because no probe could.** Pair stored (29 and 32 characters, BOM-free both sides), shipped, api restarted; both probes were run and both are structurally incapable (see the recipe above). Then the operator pressed «اتصال»: `status: connected`, `account_label: neurai.git.acc @ neurai`, and `channels` answers 200 with three real channels — `#social`, `#new-channel`, `#all-neurai`. That last reading is the one that settles the open question: **the seven scopes went under User, not Bot** — a bot-token grant would have connected and then listed none. `mentions` answers 200 with an empty list (`search:read` reached the endpoint; the account has no mentions). |
+| **Jira** | 2026-09-07 | **Deployment half only — the secret is UNPROVEN and cannot be probed.** Pair stored (32 and 76 characters, BOM-free on both sides of the wire), shipped to `/etc/neurai/core.env` (20 entries), api restarted, health 200. `GET /api/connectors` reports `configured: true, status: not_connected`; on the shelf «جیرا» is a `<button>` reading «وصل نشده» while «نوشن», unconfigured, is a plain `<div>` reading «روی سرور پیکربندی نشده» — the discriminating pair in one reading. Both probes were run and both are structurally incapable, the authorize one not even refusing a wrong redirect. The first «اتصال» is the first real test — of the secret, of the redirect URL, and of whether the five permissions were granted on the app. |
 
 ## Live proof still owed
 
@@ -194,3 +200,9 @@ the OAuth apps above to be created by the operator (the credentials are the
 operator's to mint) or a real bot token / WhatsApp number / MCP server.
 Record each run here when it happens: provider, date, what was listed, what
 the hand created.
+
+Where it stands: Google, Zoom and Slack have real grants and have LISTED.
+**No hand has been run on any connector yet** — `create_zoom_meeting` and
+`send_slack_message` are the two that could be run today, and each writes
+something a person will see, so each waits for the operator's word rather
+than being fired to tick a box.
