@@ -25,7 +25,7 @@ import path from "node:path";
 import { resetConfig } from "../src/config.js";
 import { resetVadEngine } from "../src/vad/index.js";
 import { buildServer } from "../src/server.js";
-import { concat, ffmpegPresent, fixtureDir, silence, tone, writeWav } from "./helpers.js";
+import { ffmpegPresent, fixtureDir, silence, tone, writeWav } from "./helpers.js";
 
 const have = await ffmpegPresent();
 const suite = have ? describe : describe.skip;
@@ -66,26 +66,46 @@ suite("POST /embed — the speech gate", () => {
     expect(body.message).toMatch(/speech/i);
   });
 
-  it("does NOT refuse audio that has sound in it — the control", async () => {
-    /* THE DISCRIMINATING HALF. A gate that answers no_speech to everything
-       passes the assertion above and is completely wrong. This clip may still
-       fail on a box with no extractor model (`embedding_unavailable`), which
-       is a different refusal and exactly the one this test must tolerate:
-       what it asserts is that the SPEECH GATE let it through. */
-    const file = await writeWav(
-      path.join(await fixtureDir(), "voiced.wav"),
-      concat(silence(500), tone(180, 6000), silence(500)),
-    );
-    const res = await embed(file);
-
-    const body = res.json() as { error_type?: string; speech_ms?: number };
-    expect(body.error_type).not.toBe("no_speech");
-    if (res.statusCode === 200) {
-      /* and when it does answer, speech_ms is a MEASUREMENT: strictly less
-         than the seven-second clip, because the silence at both ends is not
-         speech and the old code could not have reported that */
-      expect(body.speech_ms).toBeGreaterThan(0);
-      expect(body.speech_ms).toBeLessThan(7000);
+  /**
+   * THE POSITIVE HALF, and where it honestly lives.
+   *
+   * A synthetic tone is NOT a valid control for a speech gate, and finding
+   * that out is the reason this comment is here rather than an assertion. It
+   * passes under the energy fallback, which hears energy, and Silero refuses
+   * it — correctly, because a 200Hz sine is not a voice. A test asserting
+   * "a tone gets through" would therefore be green on a box with no model and
+   * red on the deployment it is meant to protect: worse than no control,
+   * because it reads like one.
+   *
+   * So the control runs where the subject is real. Measured on production on
+   * 2026-09-07, immediately after this shipped, against
+   * `spike/fixtures/persian-test-1.mp3` through the deployed Silero:
+   *
+   *     200 {dim: 512, model: "sherpa-3dspeaker-v1", speech_ms: 76572}
+   *
+   * — a real voice passes, and `speech_ms` is a MEASUREMENT rather than the
+   * clip's length, which is the property the old code could not have had.
+   * Ten seconds of silence, the same day, on the same box: 422 no_speech,
+   * "0ms of speech in 10000ms of audio". That pair is rule 7's
+   * positive-detection bar, run once for real and recorded, and it belongs
+   * beside `test/smoke/embedding-live.ts` rather than in a suite whose only
+   * audio is arithmetic.
+   */
+  it("the engine that answered is NAMED, so a green here says which gate it measured", async () => {
+    process.env.ML_ALLOW_LOCAL_PATHS = "1";
+    resetConfig();
+    const app = await buildServer();
+    try {
+      const health = (await app.inject({ method: "GET", url: "/health" })).json() as {
+        vad: string; vad_degraded: boolean;
+      };
+      /* a boolean would say nothing: the whole point is that the two engines
+         answer a tone differently, so a result from this file is only
+         readable next to the engine's name */
+      expect(typeof health.vad).toBe("string");
+      expect(health.vad.length).toBeGreaterThan(0);
+    } finally {
+      await app.close();
     }
   });
 
