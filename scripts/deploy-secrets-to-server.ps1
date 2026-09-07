@@ -80,8 +80,15 @@ $optionalConnectors = [ordered]@{
   echo_platform_dropbox_oauth_client_secret = "echo_platform_dropbox_oauth_client_secret"
   echo_platform_microsoft_oauth_client_id     = "echo_platform_microsoft_oauth_client_id"
   echo_platform_microsoft_oauth_client_secret = "echo_platform_microsoft_oauth_client_secret"
-  echo_platform_microsoft_oauth_client_id     = "echo_platform_microsoft_oauth_client_id"
-  echo_platform_microsoft_oauth_client_secret = "echo_platform_microsoft_oauth_client_secret"
+  # OneDrive's OWN pair. This slot held a SECOND copy of the two microsoft
+  # lines (2026-09-06) — a duplicate key in an [ordered] literal, which is a
+  # PARSER error, so the script could not run at all from the day the
+  # connectors shipped. It is core's own fallback that hides the mistake in
+  # reading: connectorCredentialsFromEnv reads onedrive's pair first and
+  # borrows microsoft's only when onedrive has none, so BOTH names must be
+  # shippable and only one was.
+  echo_platform_onedrive_oauth_client_id      = "echo_platform_onedrive_oauth_client_id"
+  echo_platform_onedrive_oauth_client_secret  = "echo_platform_onedrive_oauth_client_secret"
 }
 
 # NOT a secret, and not in the store: the address the OAuth redirect comes

@@ -68,10 +68,38 @@ The same four steps for every one; only the console differs.
    present pair into `/etc/neurai/core.env` and warns, by name, about the
    absent ones; then restart `neurai-api.service`. No code change, no deploy.
 
-Proof that a pair is live, from the server (the trio the Google pair was
-proven with): the authorize URL for a real pair lands on the provider's
-sign-in page, an invented client id is refused as `invalid_client`, and a
-wrong redirect is refused as `redirect_uri_mismatch`.
+### Proving a pair is live
+
+**Ask the TOKEN endpoint, not the authorize URL.** The authorize-URL trio
+that proved the Google pair (real → sign-in page, invented id →
+`invalid_client`, wrong redirect → `redirect_uri_mismatch`) DOES NOT TRANSFER:
+Zoom answers all three with a 302 to its own sign-in page and validates the
+client only after the person has signed in, so every case reads identically
+and the probe distinguishes nothing (measured 2026-09-07). The authorize URL
+also never sees the secret, so it cannot prove the half most likely to be
+mistyped.
+
+Post a deliberately invalid code to the token endpoint instead, from the
+server, with the pair read out of `core.env`:
+
+```
+curl -s -u "$ID:$SECRET" -X POST <tokenUrl> \
+  -d "grant_type=authorization_code&code=deadbeefnotarealcode&redirect_uri=<callback>"
+```
+
+The discriminating triple, and all three must be run — a probe that only
+tries the real pair cannot tell a working credential from an endpoint that
+accepts anything:
+
+| Case | Expected |
+|---|---|
+| real id + real secret | `invalid_grant` — the credentials were ACCEPTED and only the fake code refused |
+| real id + wrong secret | `invalid_client` |
+| wrong id + real secret | `invalid_client` |
+
+Then check the SHELF: the provider's tile changes from «روی سرور پیکربندی
+نشده» (a plain box) to «وصل نشده» (a button). That is the deployment half
+proven end to end; the person's own grant is still a separate act.
 
 | Provider | Console | App type / notes | Scopes requested |
 |---|---|---|---|
@@ -130,6 +158,12 @@ this side can name in advance, so it is asked about every time.
   providers (db/0199) and the connection's `settings` column holds only
   PUBLIC facts (a site URL, a workspace, a bot username, a phone number);
   the secret never lands there. Test `db/test/112` walks it.
+
+## Live proof — what has been run
+
+| Provider | Date | What was proven |
+|---|---|---|
+| **Zoom** | 2026-09-07 | Pair minted by the operator, stored in the DPAPI store (21 and 32 characters, BOM-free on both sides of the wire), shipped to `/etc/neurai/core.env`, api restarted. Token-endpoint triple: real pair → `invalid_grant` ("Invalid authorization code"), wrong secret → `invalid_client`, wrong id → `invalid_client`. The shelf tile turned from a plain «روی سرور پیکربندی نشده» box into a «وصل نشده» button. NOT yet proven: a real grant, a listed meeting, a created meeting — Zoom's app review gates who may connect, so the first connection is the operator's own account. |
 
 ## Live proof still owed
 
