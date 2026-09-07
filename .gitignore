@@ -10,6 +10,19 @@ secrets/
 *.jks
 *.keystore
 keystore.properties
+# private keys had no pattern at all until 2026-09-08 — only keystores did,
+# while the rule this file exists for says "keys AND keystores never reach the
+# repo". No tracked file matches any of these shapes (checked before adding).
+*.pem
+*.p12
+*.pfx
+*.ppk
+id_rsa
+id_rsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
 
 # Local-only documents
 *.docx
@@ -46,7 +59,10 @@ Thumbs.db
 .DS_Store
 .idea/
 .vercel
-.env*
+# (a stray `.env*` sat here under "editor noise" and silently defeated the two
+#  `!.env.example` negations sixteen lines above it — a later pattern wins, so
+#  the negation had stopped negating. `.env` and `.env.*` at the top of this
+#  file already cover every env file in the tree; verified with check-ignore.)
 
 # machine-move staging must never live in the tree (a private key sat here 2026-08-25)
 /ssh/
@@ -64,3 +80,16 @@ Thumbs.db
 docs/build/deck-render/
 __pycache__/
 *.pyc
+
+# same rule for the 2026-09-08 architecture document and demo deck: the
+# builders under docs/build/arch0908/ are source; the render previews and the
+# redrawn figures are output that `python diagrams.py` recreates byte for byte
+docs/build/*/preview.pdf
+docs/build/*/deck.pdf
+docs/build/arch0908/figures/
+
+# production screenshots for those two deliverables: this repository is
+# PUBLIC, and these show colleagues' real names, a real meeting's summary and
+# real audit rows. Held out pending the user's decision — if they choose to
+# publish them, delete these two lines rather than adding an exception
+docs/screens-2026-09-08/
