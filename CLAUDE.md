@@ -5279,3 +5279,57 @@ sessions) for the cross-session narrative.
   Cost said out loud: a whiteboard drawn before today lived in one browser and
   is not migrated — the shared board starts empty.
   db 206 migrations · ml 148 tests · core 1420 tests · web 1306 tests + gate + sweep.
+- 2026-09-07 (later — THE ONLINE TAKE CARRIES THE ROOM, AND THE MINUTES READ
+  THE ROSTER THEY WERE GIVEN FIVE DAYS AGO): the user held a real online
+  meeting with a colleague, and reported three things. The database answered
+  two of them before a line was written, which is why this entry has numbers
+  in it.
+  **WHAT THE PROBE SAID.** Two calls, 17:53 and 17:57: one PART, one SPEAKER,
+  zero named, in a conversation two people were having. The worker's own log
+  gave the matcher's verdict for both — `below_threshold, best 0.4618` and
+  `best 0.4469` against a 0.55 bar — and a third call ten minutes earlier had
+  matched fine. And the meeting rows: **Sina Sepasi was on both rosters with
+  `attended_at` stamped**, at 17:53:12 and 17:57:19. So the invitation, the
+  roster and the attendance were all correct, and two different surfaces were
+  reporting otherwise.
+  **THE MINUTES WERE READING A FIELD THAT MOVED.** «حاضران» was built from
+  `host_name` + `meeting.invitees` — and db/0202 moved a colleague to
+  `meeting.attendees` (an ACCOUNT, with the attendance stamp), leaving
+  `invitees` for the one case it was written for: somebody with no account
+  here. So from 2026-09-06 the document listed the host and anybody without an
+  account, and every actual member of every meeting was missing from the
+  minutes of the meeting they had been in. **13½ in a document rather than a
+  route**: the producer changed, the consumer did not, and both halves read
+  perfectly on their own.
+  **THE ONLINE LANE RECORDED WHATEVER TAB WAS PICKED.** A colleague in the
+  platform's own room is a live `MediaStreamTrack` in the page — that is how
+  you hear them — and the take mixed the microphone with the SHARED SURFACE
+  and nothing else. So whether the other half of a conversation reached the
+  recording depended on which tab somebody chose in a browser dialog and
+  whether they ticked a box: **their voice was one click away from being lost,
+  and it was.** The room's tracks are mixed now, subscribed rather than
+  sampled so a late joiner is on the recording too, and the tab is still mixed
+  because a meeting held in software we do not host is the case this lane was
+  reversed back to on 2026-09-04 — **unless the shared surface is our own
+  meeting tab**, where it would be a second, worse copy of those same tracks:
+  a loudspeaker re-recorded through an encoder, a few milliseconds late. Two
+  copies of one voice out of phase sound like a bad room and split into two
+  speakers. The meeting page publishes a CAPTURE HANDLE so the engine can tell
+  which it is; a browser without the API answers "not ours" and keeps today's
+  behaviour, because being wrong that way costs an echo and being wrong the
+  other way costs the silence this exists to end.
+  **THE THIRD ITEM IS NOT FIXED AND SAYING SO IS THE POINT.** The voice
+  matcher did run, and scored the speaker at 0.45. That number is the
+  consequence of the first defect rather than a second one: with one speaker
+  holding two people, the embedding is a BLEND, and a blend is not anybody's
+  voice — no threshold makes it one. The clean sources should lift it, and the
+  honest next step is to MEASURE the next meeting rather than lower a bar that
+  exists because a wrong name on a transcript is worse than no name. Recorded
+  with the readings so the comparison is possible: 0.4618 and 0.4469, bar
+  0.55, and the same person matching on a mic-only call the same afternoon.
+  Verify-red by mutation on all three: the room dropped from the mix (4 red),
+  our own tab mixed on top of it (1), and the minutes forgetting the roster
+  (1). The engine test needed a `MediaStream` stub before the online lane
+  could run at all in jsdom — without it the lane threw before connecting
+  anything, which reads exactly like "the track never arrived".
+  db 206 migrations · ml 148 tests · core 1420 tests · web 1311 tests + gate + sweep.

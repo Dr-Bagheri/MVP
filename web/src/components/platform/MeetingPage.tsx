@@ -6,6 +6,7 @@ import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { Skeleton, SkeletonLines } from "@/components/scaffold";
 import { notify } from "@/lib/notify";
+import { publishCaptureHandle } from "@/lib/captureHandle";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttachment } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -161,6 +162,12 @@ export function MeetingPage({ id }: { id: string }) {
   }, [id]);
   useEffect(loadMeeting, [loadMeeting]);
   useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
+
+  /* THIS TAB NAMES ITSELF while the meeting is open, so that if the person
+     shares it in the recorder's picker the engine can tell — and drop the
+     tab's audio in favour of the room's own tracks, which are the same
+     voices without a loudspeaker and an encoder in between. */
+  useEffect(publishCaptureHandle, []);
 
   /**
    * THE HOST IS THE MEETING'S AUTHOR — and the database says so too.

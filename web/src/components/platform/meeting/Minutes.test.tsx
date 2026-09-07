@@ -31,7 +31,17 @@ const { MinutesTab } = await import("./Minutes");
  * through the BLOB it actually writes.
  */
 const MEETING = meetingFixture({
-  title: "جلسهٔ هفتگی", host_name: "رؤیا", invitees: ["آوا"], call_id: "c1",
+  title: "جلسهٔ هفتگی", host_name: "رؤیا", call_id: "c1",
+  /* db/0202's roster — a colleague with an ACCOUNT. The document read
+     `invitees` alone until 2026-09-07, so every member of every meeting was
+     missing from its own minutes while the host stood there by themselves. */
+  attendees: [{
+    user_id: "u2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi",
+    username: "sina", attended: true,
+  }],
+  /* and `invitees` still holds the one case it was written for: somebody
+     with no account here */
+  invitees: ["آوا"],
 });
 
 /** the last version is the current one — the ladder appends, never rewrites */
@@ -78,6 +88,26 @@ describe("the minutes carry the summary", () => {
     expect(screen.getByText("بند دوم.")).toBeTruthy();
     /* the CURRENT version, not the first one the wire happened to list */
     expect(screen.queryByText("نسخهٔ کهنه")).toBeNull();
+  });
+
+  /*
+   * WHO WAS THERE, from the roster the platform actually keeps (db/0202).
+   * The pair is the point: a document that listed only the host passed every
+   * other assertion in this file, and the ACCOUNT half is the one that was
+   * missing for five days.
+   */
+  it("names the host, the members and anybody without an account — on screen and in the file", async () => {
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    /* the member, resolved through personName from the wire — not a string
+       somebody typed into invitees */
+    expect(screen.getByText("سینا سپاسی")).toBeInTheDocument();
+    expect(screen.getByText("آوا")).toBeInTheDocument();
+
+    const html = await savedDocument();
+    expect(html).toContain("سینا سپاسی");
+    expect(html).toContain("آوا");
+    expect(html).toContain("رؤیا");
   });
 
   it("writes the summary into the saved document", async () => {

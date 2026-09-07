@@ -106,8 +106,27 @@ export function MinutesTab({ meeting, callId, myName, myId, onChanged }: {
     { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
     locale,
   );
+  /*
+   * THE ROSTER MOVED AND THIS DID NOT FOLLOW IT (user report, 2026-09-07:
+   * "for minutes for attendees it did not even include him there too").
+   *
+   * db/0202 made a colleague on a meeting an ACCOUNT — `meeting.attendees`,
+   * keyed by user id, with the attendance stamp — and left `invitees` for the
+   * one case it was written for: somebody with no account here. So from that
+   * day the minutes listed the host and whoever had no account, and every
+   * actual member of the meeting was missing. Read against the database
+   * afterwards: Sina Sepasi was on both meetings' rosters with `attended_at`
+   * stamped, and the document said the host had been there alone.
+   *
+   * A stale consumer of a field that moved, and the producer's owner could
+   * not see it — 13½, in a document rather than a route.
+   */
   const attendees = [
     ...(meeting.host_name !== null ? [hostName] : []),
+    ...meeting.attendees
+      .map((a) => personName(a, locale))
+      .filter((n) => n !== hostName),
+    /* people with no account here — the only thing `invitees` still holds */
     ...meeting.invitees.filter((n) => n !== hostName),
   ];
 

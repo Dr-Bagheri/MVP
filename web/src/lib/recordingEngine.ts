@@ -35,6 +35,7 @@ import { bufferChunk, clearPart, clearTake, markPart } from "@/lib/takeBuffer";
 import { SAFETY_PART_BYTES } from "@/components/echo/uploadRules";
 import { recorderControls } from "@/components/echo/recorderControls";
 import { onRoomAudio, roomAudioTracks } from "./roomAudio";
+import { CAPTURE_HANDLE } from "./captureHandle";
 
 export type RecorderPhase =
   | "idle" | "starting" | "recording" | "paused" | "finishing" | "done" | "failed";
@@ -651,6 +652,16 @@ export async function startRecording(opts: StartOptions): Promise<void> {
       patch({ error: "shareDenied" });
       return;
     }
+    /*
+     * IS THE SHARED SURFACE OUR OWN MEETING TAB?
+     *
+     * Read BEFORE the video track is stopped, because the handle rides the
+     * video track and a stopped track answers nothing. `setCaptureHandle` is
+     * set by the meeting page (lib/captureHandle.ts); Chrome hands it back
+     * here only for a tab that opted in, which is exactly the question:
+     * "did they share the room they are sitting in?"
+     */
+    const ownTab = sharedSurfaceIsOurs(display);
     display.getVideoTracks().forEach((track) => track.stop());
     const shareAudio = display.getAudioTracks();
     if (shareAudio.length === 0) {
@@ -674,8 +685,46 @@ export async function startRecording(opts: StartOptions): Promise<void> {
     } else {
       micNode.connect(dest);
     }
-    // the shared audio is NOT boosted: it arrives at the sender's own level
-    ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
+    /*
+     * THE ROOM'S OWN VOICES GO IN TOO (user report, 2026-09-07: "his voice
+     * was completely not added to the transcription, the voice didnt go
+     * through at all").
+     *
+     * A colleague who joins the platform's own room is a live
+     * `MediaStreamTrack` in this page — that is how you hear them. Until now
+     * the online lane recorded the mic plus WHATEVER TAB was shared, so
+     * whether the other half of the conversation reached the recording
+     * depended on which surface the person picked in a browser dialog, and
+     * on a checkbox. Their voice was one click away from being lost, and it
+     * was: a two-person meeting came back with one speaker.
+     *
+     * Mixing the room's tracks makes it not a guess. It also gives the
+     * transcriber a CLEANER signal than the tab could: the track is the
+     * sender's own audio, not a loudspeaker re-recorded through an encoder,
+     * which is the same reason the voice matcher scored the far end at 0.45
+     * against a 0.55 bar on the two calls this report came from.
+     *
+     * The tab is still mixed, because a meeting held in software we do not
+     * host is the case this lane was reversed BACK to on 2026-09-04 — unless
+     * the shared surface is our own meeting tab, where it would be a second,
+     * worse copy of the very tracks above, arriving a few milliseconds late.
+     * Two copies of one voice slightly out of phase sound like a bad room and
+     * split into two speakers.
+     */
+    if (!ownTab) {
+      // the shared audio is NOT boosted: it arrives at the sender's own level
+      ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
+    }
+    const connectedShare = new Set<MediaStreamTrack>();
+    const connectRoom = (tracks: MediaStreamTrack[]) => {
+      for (const track of tracks) {
+        if (connectedShare.has(track) || track.readyState !== "live") continue;
+        connectedShare.add(track);
+        ctx.createMediaStreamSource(new MediaStream([track])).connect(dest);
+      }
+    };
+    connectRoom(roomAudioTracks());
+    unsubscribeRoom = onRoomAudio(connectRoom);
     stream = dest.stream;
   } else if (opts.boost) {
     /* mic-only WITH the enhance stage: one node between the device and the
@@ -793,6 +842,27 @@ export function resume(): void {
       setPhase("recording");
     }
   })();
+}
+
+/**
+ * Did the person share THIS product's meeting tab?
+ *
+ * Chrome answers through the capture handle the captured document published
+ * (lib/captureHandle.ts). A browser without the API, or a surface that never
+ * opted in, answers nothing — and "nothing" is read as "not ours", which is
+ * the safe direction: the tab is mixed as it always was, so an external
+ * meeting still records. The cost of being wrong that way is an echo; the
+ * cost of the other way is silence, and this whole change is about a silence.
+ */
+function sharedSurfaceIsOurs(display: MediaStream): boolean {
+  const track = display.getVideoTracks()[0] as (MediaStreamTrack & {
+    getCaptureHandle?: () => { handle?: string } | null;
+  }) | undefined;
+  try {
+    return track?.getCaptureHandle?.()?.handle === CAPTURE_HANDLE;
+  } catch {
+    return false;
+  }
 }
 
 export function addChapterMark(atMs: number): void {

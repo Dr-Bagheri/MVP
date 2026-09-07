@@ -41,12 +41,14 @@ vi.mock("@/lib/takeBuffer", () => ({
 }));
 
 const { startRecording, resume, discardRecording } = await import("./recordingEngine");
+const { publishRoomAudio } = await import("./roomAudio");
 type StartOptions = import("./recordingEngine").StartOptions;
 
 /** a track whose cable the test can pull */
-function fakeTrack() {
+function fakeTrack(id = "mic") {
   const handlers = new Map<string, (() => void)[]>();
   return {
+    id,
     kind: "audio",
     readyState: "live" as "live" | "ended",
     stop() {
@@ -104,10 +106,14 @@ class FakeMediaRecorder {
 }
 
 /** connect() returns its argument so `proc.connect(mute).connect(dest)` chains */
+/** every track that reached the mix, in order — the online lane's subject */
+const mixed: string[] = [];
+
 class FakeAudioContext {
   sampleRate = 48_000;
   destination = {};
-  createMediaStreamSource() {
+  createMediaStreamSource(stream: { getTracks?: () => Array<{ id?: string }> }) {
+    for (const t of stream.getTracks?.() ?? []) mixed.push(t.id ?? "?");
     return { connect: <T>(x: T) => x };
   }
   createAnalyser() {
@@ -150,10 +156,21 @@ function audioConstraintsOfCall(n: number): Record<string, unknown> {
 }
 
 beforeEach(() => {
+  mixed.length = 0;
+  publishRoomAudio([]);
   getUserMedia.mockReset();
   getUserMedia.mockImplementation(async () => fakeStream([fakeTrack()]));
   vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
   vi.stubGlobal("AudioContext", FakeAudioContext);
+  /* jsdom has no MediaStream, and the engine wraps each room track in one to
+     hand it to the mix — without this the online lane throws before it has
+     connected anything, which reads as "the track never arrived" */
+  vi.stubGlobal("MediaStream", class {
+    #tracks: Array<{ id?: string }>;
+    constructor(tracks: Array<{ id?: string }> = []) { this.#tracks = tracks; }
+    getTracks() { return this.#tracks; }
+    getAudioTracks() { return this.#tracks; }
+  });
   // never let the meter loop: one frame is scheduled, none run
   vi.stubGlobal("requestAnimationFrame", () => 0);
   vi.stubGlobal("cancelAnimationFrame", () => undefined);
@@ -196,5 +213,93 @@ describe("the take's noise-suppression choice reaches the browser", () => {
     await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
 
     expect(audioConstraintsOfCall(1).noiseSuppression).toBe(false);
+  });
+});
+
+
+/**
+ * THE ONLINE LANE CARRIES THE ROOM (user report, 2026-09-07: "his voice was
+ * completely not added to the transcription, the voice didnt go through at
+ * all").
+ *
+ * The lane recorded the microphone plus WHATEVER SURFACE was shared, so
+ * whether the other half of a conversation reached the recording depended on
+ * which tab the person picked in a browser dialog. Read against the database
+ * afterwards: a two-person meeting came back with ONE speaker, and the voice
+ * matcher scored it 0.45 against a 0.55 bar — a blend of two people is not
+ * anybody's voice.
+ *
+ * A colleague in the platform's own room is a live track in this page. What
+ * is asserted here is that those tracks reach the mix, and that the tab is
+ * dropped exactly when it would be a second, worse copy of them.
+ */
+describe("the online take carries the room's own voices", () => {
+  function shareStream(handle: string | null) {
+    const video = {
+      kind: "video", id: "share-video", readyState: "live",
+      stop() { this.readyState = "ended"; },
+      addEventListener() { /* the engine listens for `ended` on audio */ },
+      getCaptureHandle: () => (handle === null ? null : { handle }),
+    };
+    const audio = fakeTrack("share-audio");
+    return {
+      getTracks: () => [video, audio],
+      getVideoTracks: () => [video],
+      getAudioTracks: () => [audio],
+    };
+  }
+
+  function shareWith(handle: string | null) {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia, getDisplayMedia: async () => shareStream(handle) },
+    });
+  }
+
+  it("a colleague's track reaches the recording, wherever the share came from", async () => {
+    shareWith(null);
+    publishRoomAudio([{ id: "sina", readyState: "live" } as unknown as MediaStreamTrack]);
+
+    await startRecording(opts({ source: "system" }));
+
+    expect(mixed, "the far end never reached the take").toContain("sina");
+  });
+
+  it("sharing OUR OWN meeting tab drops the tab audio — it would be a second copy", async () => {
+    shareWith("neurai-meeting");
+    publishRoomAudio([{ id: "sina", readyState: "live" } as unknown as MediaStreamTrack]);
+
+    await startRecording(opts({ source: "system" }));
+
+    expect(mixed).toContain("sina");
+    /* two copies of one voice, a few milliseconds apart, sound like a bad
+       room and split into two speakers */
+    expect(mixed, "the room was recorded twice").not.toContain("share-audio");
+  });
+
+  it("…and any OTHER surface is still mixed — the control", async () => {
+    /*
+     * THE DISCRIMINATING HALF. A lane that simply stopped mixing the share
+     * would pass the test above and would lose every meeting held in software
+     * we do not host, which is the case this lane exists for.
+     */
+    shareWith(null);
+    publishRoomAudio([{ id: "sina", readyState: "live" } as unknown as MediaStreamTrack]);
+
+    await startRecording(opts({ source: "system" }));
+
+    expect(mixed).toContain("share-audio");
+    expect(mixed).toContain("sina");
+  });
+
+  it("somebody who joins LATE is on the recording too", async () => {
+    shareWith(null);
+    await startRecording(opts({ source: "system" }));
+    expect(mixed).not.toContain("late");
+
+    /* subscribed, not sampled: a room read once at the start records an
+       outdated cast */
+    publishRoomAudio([{ id: "late", readyState: "live" } as unknown as MediaStreamTrack]);
+    expect(mixed).toContain("late");
   });
 });
