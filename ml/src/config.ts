@@ -73,6 +73,20 @@ const Schema = z.object({
     .transform((v) => (v || "auto") as "auto" | "sherpa" | "off"),
   ML_SEGMENTATION_MODEL: z.string().optional().transform((v) => v || undefined),
   ML_EMBEDDING_MODEL: z.string().optional().transform((v) => v || undefined),
+  /*
+   * THE VOICEPRINT MODEL IS NOT THE DIARIZER'S (2026-09-07).
+   *
+   * One path used to serve both: the clusterer that decides "these turns are
+   * the same voice" inside one recording, and the extractor that decides "this
+   * voice is that enrolled person" across recordings. They are different jobs
+   * with different calibrations — the diarizer's threshold is 1.0, from the
+   * 2026-08-13 sweep against THIS file — so a better voiceprint model could
+   * not be adopted without silently re-tuning diarization at the same time.
+   *
+   * Falls back to ML_EMBEDDING_MODEL, so a deployment that sets neither and a
+   * deployment that sets only the old one both behave exactly as before.
+   */
+  ML_VOICEPRINT_MODEL: z.string().optional().transform((v) => v || undefined),
 
   // Measured in the Phase-0 spike, not guessed: 4 threads beat 8 (0.332 vs
   // 0.453 RTF — oversubscription), so this is NOT auto-set from core count.

@@ -84,6 +84,11 @@ export async function hasVoiceprints(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "voiceprint");
 }
 
+/** db/0207: the individual enrolment takes behind a print. */
+export async function hasVoiceprintTakes(db: Db): Promise<boolean> {
+  return hasColumn(db, "person", "voiceprint_takes");
+}
+
 /** db/0085: the deletion ledger (reasoned product deletions). */
 export async function hasDeletionLedger(db: Db): Promise<boolean> {
   return hasTable(db, "deletion_record");

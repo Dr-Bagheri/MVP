@@ -38,6 +38,36 @@ takes speakers from the channels:
 
 (The `recongition` typo is upstream's, not ours.)
 
+**Voice enrolment uses its own model** (`ML_VOICEPRINT_MODEL`, ~68 MB), and it
+is a different job from the one above: the diarizer decides "these turns are
+one voice inside this recording", the extractor decides "this voice is that
+enrolled person across recordings". They shared a file until 2026-09-07, which
+meant a better voiceprint model could not be adopted without silently
+re-tuning the diarizer's clustering threshold (1.0, from the 2026-08-13
+sweep against `embedding.onnx`).
+
+- [`3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx`](https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx) → `models/voiceprint.onnx`
+
+Measured 2026-09-07 on real Persian recordings — one speaker from a microphone
+and through the meeting room, with chunks of a four-person conversation as
+imposters. The number that matters is the GAP between the worst same-voice
+cross-channel score and the best imposter, because that is the room a single
+threshold has to live in:
+
+| model | same voice, cross-channel | best imposter | gap |
+|---|---|---|---|
+| `eres2net_base` zh-cn (until 2026-09-07) | 0.368 – 0.437 | 0.364 | **0.014** |
+| `eres2netv2` 16k-common | 0.571 – 0.638 | 0.351 | **0.226** |
+| `campplus` zh_en advanced | 0.487 – 0.554 | 0.376 | 0.111 |
+| `wespeaker` resnet34_LM (en) | 0.670 – 0.776 | 0.682 | **−0.011** |
+
+The last row is why the gap is the metric and the score is not: it produces the
+highest same-voice numbers of the four and cannot tell anybody apart.
+
+The name a print is stored under is derived from the FILE (basename + the
+first eight hex of its SHA-256), so replacing the ONNX retires the prints made
+with its predecessor instead of silently comparing across model spaces.
+
 ## Test it
 
 ```bash

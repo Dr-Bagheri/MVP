@@ -147,6 +147,30 @@ suite("GET /health", () => {
       await app.close();
     }
   });
+
+  it("…and NAMES the embedder for the same reason (2026-09-07)", async () => {
+    /*
+     * `embedder` was a boolean, one line under the field whose comment
+     * explains why a boolean is not a health check. It stopped being merely
+     * inconsistent when a voiceprint began carrying its extractor's name and
+     * being compared only against prints from the same one: `true` cannot
+     * distinguish a deployment that is about to invalidate every stored print
+     * from one that is not.
+     *
+     * This box has no voiceprint model configured, so the honest answer is
+     * "unavailable" — a NAME, and one a person reading /health can act on.
+     * The type is the assertion: a boolean would not satisfy it.
+     */
+    configure(new StubLane());
+    const app = await buildServer();
+    try {
+      const body = HealthSchema.parse((await app.inject({ method: "GET", url: "/health" })).json());
+      expect(typeof body.embedder).toBe("string");
+      expect(body.embedder).toBe("unavailable");
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 suite("POST /process — mono", () => {

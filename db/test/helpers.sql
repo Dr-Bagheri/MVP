@@ -42,6 +42,43 @@ end;
 $$;
 
 /*
+ * `raises` means "refused for THIS reason" — the same statement, with the
+ * SQLSTATE named.
+ *
+ * `denied` above accepts any exception as proof, which is right for a wall
+ * (a caller has no business knowing which of several refusals stopped them)
+ * and too loose for a CHECK: a typo in the statement, a column that no longer
+ * exists, a fixture whose id is wrong — all raise, and all would be recorded
+ * as the constraint doing its job. That is the wrong-kind-of-nothing trap
+ * inside a test helper, which this file already carries one lesson about.
+ *
+ * So a constraint test names its code. The message rides the notice, because
+ * two constraints on one table share a SQLSTATE and the message is what says
+ * which one fired.
+ */
+create or replace function t.raises(stmt text, want text, label text) returns void
+  language plpgsql as $$
+declare
+  got  text;
+  why  text;
+begin
+  begin
+    execute stmt;
+  exception when others then
+    got := sqlstate;
+    why := sqlerrm;
+  end;
+  if got is null then
+    raise exception 'FAIL: % — the statement was allowed and must not be', label;
+  end if;
+  if got <> want then
+    raise exception 'FAIL: % — refused with % (%), wanted %', label, got, why, want;
+  end if;
+  raise notice 'ok  % [% %]', label, got, why;
+end;
+$$;
+
+/*
  * `writes_nothing` means "the POLICY refuses this caller". It used to accept
  * any exception as proof, and that made it blind to the one nothing it must
  * never accept.

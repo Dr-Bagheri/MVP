@@ -17,7 +17,7 @@ import {
   createAssistant, languageInstruction, personalAssistantInstructions, timeInstructions,
 } from "./assistant.ts";
 import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tools.ts";
-import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabilities.ts";
+import { actorAutonomy, hasAutonomyColumn, hasSignalTables, hasVoiceprintTakes } from "../db/capabilities.ts";
 import { iso, TIMEZONE_AUTO } from "./vocabulary.ts";
 import { assertUuid } from "../db/identity.ts";
 
@@ -86,7 +86,7 @@ import { readRecognitionContext } from "../db/recognition-context.ts";
 import { hasOrgGlossary as orgGlossaryColumnExists } from "../db/capabilities.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
 import { createMlClient } from "../worker/ml-client.ts";
-import { decideMatch } from "../worker/voice-match.ts";
+import { MATCH_MARGIN, MATCH_THRESHOLD, decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import { createWorkflowRunsRepo } from "./workflow-runs.ts";
@@ -2348,18 +2348,32 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       throw new ValidationError(err.message ?? "the voice service did not answer",
         { code: err.errorType ?? "embedding_failed" });
     }
+    /* the same takes the worker scores (db/0207) — a live match that read the
+       centroid while the record's match read the takes would answer two
+       different things about one voice in one meeting */
+    const withTakes = await hasVoiceprintTakes(options.db);
     const prints = await options.db.withIdentity(identity, (tx: SqlTx) =>
-      tx.unsafe<{ id: string; display_name: string; voiceprint: number[] }>(
-        `select id, display_name, voiceprint from echo.person
+      tx.unsafe<{ id: string; display_name: string; voiceprint: number[]; voiceprint_takes: number[][] | null }>(
+        `select id, display_name, voiceprint${
+          withTakes ? ", voiceprint_takes" : ", null::float8[] as voiceprint_takes"}
+           from echo.person
           where merged_into is null and voiceprint is not null
             and voiceprint_model = $1`,
         [embedded.model],
       ));
     const verdict = decideMatch(
       embedded.embedding,
-      prints.map((row) => ({ person_id: row.id, vector: row.voiceprint })),
-      Number(process.env.VOICE_MATCH_THRESHOLD ?? 0.6),
-      Number(process.env.VOICE_MATCH_MARGIN ?? 0.1),
+      prints.map((row) => ({
+        person_id: row.id,
+        vectors: row.voiceprint_takes !== null && row.voiceprint_takes.length > 0
+          ? row.voiceprint_takes
+          : [row.voiceprint],
+      })),
+      /* the WORKER's bar, not a second one: this route and the record's
+         matcher answer the same question about the same voice, and they
+         disagreed by 0.05 for two weeks (0.6 here, 0.55 there) */
+      Number(process.env.VOICE_MATCH_THRESHOLD ?? MATCH_THRESHOLD),
+      Number(process.env.VOICE_MATCH_MARGIN ?? MATCH_MARGIN),
     );
     if (verdict.person_id === null) {
       /* the WHY travels: the recorder shows nothing either way, but an

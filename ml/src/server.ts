@@ -13,7 +13,7 @@ import { hostOnly, jobLogger, logger } from "./log.js";
 import { ffmpegAvailable, ffmpegVersionString } from "./audio/ffmpeg.js";
 import { assertLocalPathAllowed, fetchToFile, makeWorkspace } from "./audio/source.js";
 import { diarizerName } from "./diarize/index.js";
-import { embedSamples, embedderAvailable, sliceRanges } from "./embed/extractor.js";
+import { embedSamples, embedderName, sliceRanges } from "./embed/extractor.js";
 import { toMono16k } from "./audio/ffmpeg.js";
 import { readWav, wavDuration } from "./audio/wav.js";
 import { ML_VERSION, runJob } from "./pipeline.js";
@@ -65,8 +65,10 @@ export async function buildServer() {
       // reported rather than refused (M21: what is forfeited is said out loud).
       vad_degraded: vad === "energy-rms",
       // resolves the SPECIFIC callable /embed depends on (rule 7): the model
-      // file AND the binding class, not "the module imported"
-      embedder: await embedderAvailable(),
+      // file AND the binding class, not "the module imported" — and NAMES it,
+      // because a voiceprint is only ever compared against prints from the
+      // extractor that made it
+      embedder: await embedderName(),
     });
   });
 

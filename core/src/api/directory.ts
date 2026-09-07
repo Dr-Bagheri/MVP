@@ -13,7 +13,8 @@
  */
 import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasPersonTeams, hasVoiceprints } from "../db/capabilities.ts";
+import { hasPersonTeams, hasVoiceprints, hasVoiceprintTakes } from "../db/capabilities.ts";
+import { centroidOf, withTake } from "./voiceprint.ts";
 import type { Identity } from "../agent/types.ts";
 
 /** Mirror of 0062's constraint. Codes — the UI localizes. */
@@ -203,30 +204,56 @@ export function createDirectoryRepo(db: Db) {
         throw new ValidationError("degenerate embedding vector");
       }
       /*
-       * IMPROVE, don't replace (db/0096): a second clip from the same
-       * person under the SAME extractor is averaged into the stored
-       * vector — a centroid is the standard multi-sample representation of
-       * a voice, and each sample narrows it. A DIFFERENT model replaces
-       * outright: vectors from two extractors live in different spaces and
-       * averaging them yields confident nonsense (0081's own rule).
+       * IMPROVE, don't replace (db/0096) — and since db/0207, KEEP THE TAKES.
+       *
+       * 0096's running centroid was right that a second clip should sharpen a
+       * print rather than discard the first, and wrong about how: averaging is
+       * the correct aggregation within one recording condition and the wrong
+       * one across two, where the mean sits between the clusters and matches
+       * neither. The takes are stored and the matcher scores the BEST of them;
+       * `voiceprint` is their centroid, derived here so one writer owns both.
+       *
+       * A DIFFERENT model still replaces outright: vectors from two extractors
+       * live in different spaces, and a list mixing them would average to
+       * nothing (0081's rule, now enforced by `withTake` rather than trusted).
        */
       const withSamples = await hasPersonTeams(db);
+      const withTakes = await hasVoiceprintTakes(db);
       let vector = input.vector;
+      let takes: number[][] | null = withTakes ? [[...input.vector]] : null;
       let samples = 1;
       if (withSamples) {
         const [prior] = await db.withIdentity(identity, (tx: SqlTx) =>
-          tx.unsafe<{ voiceprint: number[] | null; voiceprint_model: string | null; voiceprint_samples: number | null }>(
-            `select voiceprint, voiceprint_model, voiceprint_samples
+          tx.unsafe<{
+            voiceprint: number[] | null;
+            voiceprint_model: string | null;
+            voiceprint_samples: number | null;
+            voiceprint_takes: number[][] | null;
+          }>(
+            `select voiceprint, voiceprint_model, voiceprint_samples${
+              withTakes ? ", voiceprint_takes" : ", null::float8[] as voiceprint_takes"}
                from echo.person where id = $1 and merged_into is null`,
             [id],
           ),
         );
-        if (prior?.voiceprint
+        const sameModel = prior?.voiceprint
           && prior.voiceprint_model === input.model
-          && prior.voiceprint.length === input.vector.length) {
-          const n = prior.voiceprint_samples ?? 1;
+          && prior.voiceprint.length === input.vector.length;
+        if (sameModel && withTakes) {
+          /* a pre-0207 print is its own first take: the person recorded it,
+             and dropping it on their next enrolment would throw away a
+             condition they had already given us */
+          const prior_takes = prior!.voiceprint_takes !== null && prior!.voiceprint_takes.length > 0
+            ? prior!.voiceprint_takes
+            : [prior!.voiceprint!];
+          takes = withTake(prior_takes, input.vector);
+          vector = centroidOf(takes);
+          samples = takes.length;
+        } else if (sameModel) {
+          /* pre-0207 deployment: 0096's running mean, unchanged */
+          const n = prior!.voiceprint_samples ?? 1;
           samples = Math.min(50, n + 1);
-          vector = input.vector.map((v, i) => ((prior.voiceprint![i]! * n) + v) / (n + 1));
+          vector = input.vector.map((v, i) => ((prior!.voiceprint![i]! * n) + v) / (n + 1));
         }
       }
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
@@ -235,12 +262,15 @@ export function createDirectoryRepo(db: Db) {
               set voiceprint = $2::float8[],
                   voiceprint_model = $3,
                   voiceprint_at = now(),
-                  voiceprint_by = $4${withSamples ? ", voiceprint_samples = $5" : ""}
+                  voiceprint_by = $4${withSamples ? ", voiceprint_samples = $5" : ""}${
+                    withTakes ? ", voiceprint_takes = $6::float8[][]" : ""}
             where id = $1 and merged_into is null
             returning id`,
-          withSamples
-            ? [id, vector, input.model, identity.userId, samples]
-            : [id, vector, input.model, identity.userId],
+          withTakes
+            ? [id, vector, input.model, identity.userId, samples, takes]
+            : withSamples
+              ? [id, vector, input.model, identity.userId, samples]
+              : [id, vector, input.model, identity.userId],
         ),
       );
       if (!rows[0]) throw new NotFoundError("no such person");
@@ -253,12 +283,17 @@ export function createDirectoryRepo(db: Db) {
          without one, so clearing must clear both (capability-gated — a
          pre-0096 deployment has no such column to null) */
       const withSamples = await hasPersonTeams(db);
+      /* 0207's own check refuses takes without a print, so withdrawing a
+         voice must clear both — otherwise the delete raises and a person
+         cannot take their consent back */
+      const withTakesToo = await hasVoiceprintTakes(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
           `update echo.person
               set voiceprint = null, voiceprint_model = null,
                   voiceprint_at = null, voiceprint_by = null${
-                    withSamples ? ", voiceprint_samples = null" : ""}
+                    withSamples ? ", voiceprint_samples = null" : ""}${
+                    withTakesToo ? ", voiceprint_takes = null" : ""}
             where id = $1
             returning id`,
           [id],

@@ -195,8 +195,18 @@ export const HealthSchema = z
     vad: z.string(),
     /** True when the energy fallback is running instead of Silero. */
     vad_degraded: z.boolean(),
-    /** Can /embed answer here — the model is per-deployment (0081 lane). */
-    embedder: z.boolean(),
+    /**
+     * WHICH extractor /embed answers with, or "unavailable" — the same rule
+     * as `vad` one line up, and it took until 2026-09-07 to apply here.
+     *
+     * A boolean was enough while there was one model forever. It stopped
+     * being enough the moment a voiceprint carried its extractor's NAME and
+     * was compared only against prints from the same one: `true` cannot tell
+     * a deployment that is about to invalidate every stored print from one
+     * that is not, and that is precisely the question somebody debugging
+     * "nobody is recognised any more" needs answered.
+     */
+    embedder: z.string(),
   })
   .strict();
 

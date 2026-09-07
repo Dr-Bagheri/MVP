@@ -499,6 +499,24 @@ export function SpeakersDirectory() {
           {ENROLLMENT_SCRIPTS[enroll.lang]}
         </p>
         {/*
+          WHAT A SECOND SAMPLE IS FOR (db/0207) — a CONSTRAINT, said at the
+          moment it becomes actionable and not before.
+          
+          A print is now a list of takes and a match scores the best of them,
+          so a second reading of this script at the same desk with the same
+          headset adds a near-duplicate and changes no verdict. A take from
+          the room they actually sit in, or the laptop they actually dial in
+          on, is what makes the voice recognisable there — this is the whole
+          difference between "more samples" and a better print, and the
+          person holding the microphone is the only one who can supply it.
+          Shown only to somebody who already has a print: on a first
+          enrolment it would be advice about a decision not yet in front of
+          them.
+        */}
+        {person.voice_enrolled_at ? (
+          <p className="text-[11px] leading-5 text-fg-muted">{t("voiceAnotherRoom")}</p>
+        ) : null}
+        {/*
           WHAT THE MICROPHONE IS HEARING, while there is still time to fix it.
           Rendered only during the take: a bar sitting at zero on a panel
           nobody has started is a broken meter, which is the very reading this

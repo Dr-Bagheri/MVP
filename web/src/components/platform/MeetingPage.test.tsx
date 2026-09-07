@@ -136,6 +136,13 @@ vi.mock("@/api/client", async () => ({
     /* the plan reads its documents on mount (0159); a mock without it makes
        every meeting test fail on a render error rather than on its subject */
     meetingAttachments: async () => [],
+    /* the review tab's voices panel (2026-09-07) reads the DIRECTORY too, and
+       it proved this comment's own point on arrival: without the stub the
+       panel threw and four tests failed naming the transcript, the stepper
+       and the stage, none of which had changed. `getSpeakers` was already
+       here — typecheck caught the duplicate key that vitest was happy to
+       resolve by last-one-wins. */
+    directory: async () => [],
     uploadMeetingAttachment: async () => undefined,
     deleteMeetingAttachment: async () => undefined,
     /* and its ITEMS (0160) — decisions and action items are rows now, and
