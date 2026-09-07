@@ -684,21 +684,33 @@ export function AssistantSidebar() {
   }, [visible, open]);
 
   /**
-   * The RECORDING rule (user, 2026-08-21): a rolling take owns the room. The
-   * instant it starts the assistant goes deaf (wake recognizer AND relay
-   * capture down), quiet (speech cut) and closed. Pause/finish brings the ears
-   * back.
+   * The RECORDING rule (user, 2026-08-21): a rolling take owns the room's
+   * AUDIO. The instant it starts the assistant goes deaf (wake recognizer AND
+   * relay capture down) and quiet (speech cut), because both were transcribing
+   * the same room and anything spoken here would land inside the recording.
+   * Pause/finish brings the ears back.
    *
-   * `setOpen(false)` WITHOUT persisting: this is a shutter, not the person's
-   * choice, and writing it to storage would tell them next week that they had
-   * collapsed a sidebar a recording collapsed for them.
+   * IT NO LONGER CLOSES THE COLUMN (user directive, 2026-09-07: "when i start
+   * the meeting online and enter the room the ai assistant side bar get
+   * close, it should always be at this side of the page should anyone needs
+   * it"). The rule's own words were "the orb get close", and the orb was a
+   * floating layer that covered the page it was opened over — a take starting
+   * underneath one was a good reason to shut it. On 2026-09-03 that orb became
+   * a DOCKED column that never covers anything and is a permanent fixture of
+   * the shell, so the closing half had already lost its reason and only the
+   * habit was left.
+   *
+   * What made it visible today is the meeting: an online take now begins the
+   * moment somebody walks into the live stage, so the shutter fired on
+   * ARRIVAL, every time, and the assistant vanished from the one screen where
+   * a colleague is most likely to want to ask it something. The quiet and the
+   * deafness are what the recording actually needs, and they stay.
    */
   useEffect(() => {
     return subscribeRecordingLive((live) => {
       if (live) {
         stopSpeaking();
         suspendLoop();
-        setOpen(false);
       } else {
         beginLoopRef.current();
       }

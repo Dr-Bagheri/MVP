@@ -58,12 +58,22 @@ vi.mock("@/lib/agentSurface", () => ({
   executeClientTool: async () => ({ ok: true }),
 }));
 /* a quiet voice loop: supported and started, so mounting produces no
-   "microphone denied" toast that later assertions would have to step around */
+   "microphone denied" toast that later assertions would have to step around.
+   Its start and its stop are SPIES because the recording rule is about the
+   ears — a test that could not see them could only assert the half that must
+   NOT happen, and "nothing happened" passes against a component that ignores
+   the recording altogether. */
+const loopStarted = vi.hoisted(() => vi.fn());
+const loopStopped = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/voiceLoop", () => ({
   voiceLoopSupported: () => true,
-  startVoiceLoop: async () => ({
-    stop() {}, endSession() {}, setSpeaking() {}, setMuted() {}, openSession() {},
-  }),
+  startVoiceLoop: async () => {
+    loopStarted();
+    return {
+      stop() { loopStopped(); },
+      endSession() {}, setSpeaking() {}, setMuted() {}, openSession() {},
+    };
+  },
 }));
 
 /*
@@ -94,6 +104,7 @@ vi.mock("@/lib/voice", () => ({
 
 import { AssistantSidebar } from "./AssistantSidebar";
 import { SCAFFOLD } from "@/components/scaffold/constants";
+import { announceRecordingLive } from "@/lib/assistantBus";
 
 /**
  * **The failure this platform has already shipped once.**
@@ -509,5 +520,40 @@ describe("the card offers the standing yes only where it would stand", () => {
     expect(screen.queryByRole("button", { name: "برای این نشست" }), "a session button on a card the grant never covers").toBeNull();
     await userEvent.click(decline);
     await expect(answered!).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * A ROLLING TAKE TAKES THE EARS, NOT THE COLUMN (user directive, 2026-09-07:
+ * "when i start the meeting online and enter the room the ai assistant side
+ * bar get close, it should always be at this side of the page should anyone
+ * needs it").
+ *
+ * The 2026-08-21 rule shut the assistant when a recording started, and its own
+ * words were "the orb get close" — an orb being a layer that covered the page.
+ * The docked column covers nothing, and an online meeting now starts its take
+ * on ARRIVAL, so the shutter fired every time somebody walked into a room.
+ *
+ * The pair is the test. "It stays open" alone is satisfied by a component that
+ * never hears the recording at all, which would put the assistant's microphone
+ * and its voice inside the take — the two things the rule is actually for.
+ */
+describe("a recording takes the ears and leaves the column (2026-09-07)", () => {
+  it("keeps the panel open while a take is live, and still goes deaf", async () => {
+    localStorage.setItem("neurai-assistant-sidebar", "1");
+    const { container } = await mount();
+    await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
+    /* the ears must be UP before the take, or "they went down" is a fact about
+       a loop that never started */
+    await waitFor(() => expect(loopStarted).toHaveBeenCalled());
+    loopStopped.mockClear();
+
+    await act(async () => { announceRecordingLive(true); });
+
+    const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
+    expect(aside.dataset.open, "the take closed the column").toBe("true");
+    expect(container.querySelector("textarea")).not.toBeNull();
+    /* and the half that must go with the recording */
+    expect(loopStopped, "the assistant kept listening into the take").toHaveBeenCalled();
   });
 });

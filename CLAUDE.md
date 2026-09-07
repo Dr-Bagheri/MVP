@@ -5390,3 +5390,34 @@ sessions) for the cross-session narrative.
   measurement that settles it, and the readings above are here so it can be
   compared rather than re-argued.
   db 206 migrations · ml 148 tests · core 1420 tests · web 1318 tests + gate + sweep.
+- 2026-09-07 (A TAKE OWNS THE ROOM'S AUDIO, NOT THE COLUMN): user report,
+  "when i start the meeting online and enter the room the ai assistant side
+  bar get close, it should always be at this side of the page should anyone
+  needs it".
+  One line, and it had been correct when it was written. The 2026-08-21 rule
+  says a rolling take makes the assistant deaf, quiet AND closed — and its own
+  words in `assistantBus` are «the orb get close», because the assistant was
+  then an ORB: a floating layer that covered whatever page it was opened over,
+  where shutting it while a recording started was plainly right. On 2026-09-03
+  the user turned that orb into a DOCKED column and ruled it a permanent
+  fixture — "closed means a place, not an absence ... in a fixed position in
+  the platform everywhere" — so the closing half lost its reason that day and
+  only the habit stayed.
+  **What made it visible is this morning's own change.** An online meeting now
+  starts its take the moment somebody walks into the live stage, so the shutter
+  fired on ARRIVAL, every time, and the assistant vanished from the one screen
+  where a colleague is most likely to want to ask it something. Before today
+  the online lane waited for a button, so the shutter fired on a press — the
+  same defect, on a path somebody had chosen.
+  `setOpen(false)` is gone; `stopSpeaking()` and `suspendLoop()` stay, because
+  those are what the recording actually needs — the assistant's microphone and
+  its voice would otherwise both land inside the take.
+  The test is the PAIR, and the pair is the point: "the panel stays open" alone
+  is satisfied by a component that never hears the recording at all, which is
+  the version that would put the assistant's own voice in the recording. So it
+  asserts the column AND the ears, with the voice loop's start and stop as
+  spies — and the ears are asserted UP before the take, or "they went down" is
+  a fact about a loop that never started. Verified red both ways: the shutter
+  restored (`expected 'false' to be 'true'`), and the deafness removed (`the
+  assistant kept listening into the take`).
+  db 206 migrations · ml 148 tests · core 1420 tests · web 1319 tests + gate + sweep.
