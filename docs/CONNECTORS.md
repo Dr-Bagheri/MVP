@@ -97,9 +97,28 @@ accepts anything:
 | real id + wrong secret | `invalid_client` |
 | wrong id + real secret | `invalid_client` |
 
-Then check the SHELF: the provider's tile changes from «روی سرور پیکربندی
-نشده» (a plain box) to «وصل نشده» (a button). That is the deployment half
-proven end to end; the person's own grant is still a separate act.
+**Some providers cannot be probed at all, and Slack is one of them**
+(measured 2026-09-07). Its token endpoint validates the CODE first, so a real
+pair, a wrong secret and a wrong id all answer `invalid_code`; its authorize
+endpoint returns a JavaScript shell that echoes the input and then bounces to
+`workspace-signin`, validating the client only after a person signs in. Three
+identical readings from each — two probes that cannot fail, which is worth
+knowing before somebody reports one of them as proof.
+
+Where no probe discriminates, these two are what remain, and they are enough
+for the deployment half:
+
+- **`GET /api/connectors` reports `configured: true`** for that provider. The
+  product's own read of its environment — core found BOTH names — which is a
+  better witness than any external probe, because it is the same read the
+  connect button makes.
+- **The SHELF tile** changes from «روی سرور پیکربندی نشده» (a plain box) to
+  «وصل نشده» (a button).
+
+Neither says the SECRET is right. For a provider whose token endpoint refuses
+to discriminate, the first real connect is the first test of the secret, and
+until somebody presses «اتصال» that is simply unproven — say so rather than
+reporting a configured tile as a working credential.
 
 | Provider | Console | App type / notes | Scopes requested |
 |---|---|---|---|
@@ -163,7 +182,8 @@ this side can name in advance, so it is asked about every time.
 
 | Provider | Date | What was proven |
 |---|---|---|
-| **Zoom** | 2026-09-07 | Pair minted by the operator, stored in the DPAPI store (21 and 32 characters, BOM-free on both sides of the wire), shipped to `/etc/neurai/core.env`, api restarted. Token-endpoint triple: real pair → `invalid_grant` ("Invalid authorization code"), wrong secret → `invalid_client`, wrong id → `invalid_client`. The shelf tile turned from a plain «روی سرور پیکربندی نشده» box into a «وصل نشده» button. NOT yet proven: a real grant, a listed meeting, a created meeting — Zoom's app review gates who may connect, so the first connection is the operator's own account. |
+| **Zoom** | 2026-09-07 | **Proven end to end, including the secret.** Pair stored (21 and 32 characters, BOM-free on both sides of the wire), shipped, api restarted. Token-endpoint triple discriminated: real pair → `invalid_grant`, wrong secret → `invalid_client`, wrong id → `invalid_client`. Then the operator CONNECTED: `status: connected`, `account_label: neurai.git.acc@gmail.com` — that label is Zoom's own `/users/me` answering our bearer token, so the code-for-token exchange (which is where the secret is used) and an authenticated API call both succeeded. `meetings` and `recordings` answer 200 with an empty list, the account having neither. Still unrun: `create_zoom_meeting`, the hand. |
+| **Slack** | 2026-09-07 | **Deployment half only — the secret is UNPROVEN and cannot be probed.** Pair stored (29 and 32 characters, BOM-free both sides), shipped, api restarted; `GET /api/connectors` reports `configured: true, status: not_connected` and the tile is a «وصل نشده» button. Both probes were run and both are structurally incapable (see the recipe above): the token endpoint answers `invalid_code` to every triple member, the authorize endpoint bounces all three to `workspace-signin`. The first «اتصال» is the first real test — of the secret, of the redirect URL, and of whether the seven scopes went under User rather than Bot. |
 
 ## Live proof still owed
 
