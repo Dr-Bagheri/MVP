@@ -5560,3 +5560,66 @@ sessions) for the cross-session narrative.
   voice took), and a colleague's page asking for a directory it does not
   render.
   db 207 migrations · ml 148 tests · core 1433 tests · web 1340 tests + gate + sweep.
+- 2026-09-08 (THE ARCHITECTURE DOCUMENT AND THE DEMO DECK — and the negated
+  control had stopped negating; commit e598b46): user directive, "base on all
+  doc files that we have until now and most important base on what we have on
+  the platform right now ... make docx file of the system architecture and add
+  for each component why we choose them and 3 other competitors as well,
+  explain each of the components, explain each part of the platform, explain
+  the agents, explain how AI agentic platform helps, add diagrams, add fresh
+  screen shots, make a 15 slide ppt as well for the demo of production with
+  highlight of our strength."
+  Both built from ONE content model: `docs/build/arch0908/` holds the chapters
+  as typed blocks, a ledger of ~32 components (layer, role, why this one, three
+  alternatives with the trade-off each imposes), six figures DRAWN on an
+  explicit grid, and the two builders. The document is 36 pages / 9,111 words;
+  the deck is 15 slides with speaker notes on every one. Eighteen fresh
+  screenshots were taken on production, signed in as the owner.
+  **EVERY DEFECT CAME FROM READING THE RENDER.** Both DIAGRAM SLIDES WERE
+  CROPPED: a 3x3 grid is 0.59 as tall as it is wide, and 11.9in of it at y=1.85
+  ends 1.4in past the bottom of a 16:9 slide — the third row of boxes and the
+  figure's own footnote were simply gone on slides 5 and 10, and the slide
+  title printed the same sentence the figure already carried. Diagram slides
+  now hand the whole slide to the figure. The screenshot blocks were too tall
+  to PACK: at full column width two of them plus a heading stranded the third,
+  so the surfaces chapter had pages that were three inches of white under one
+  picture; 5.3in, and the document went 38 pages to 36 with the white gone.
+  Both are invisible in the source, which reads as correct in each case.
+  **Four claims were wrong and all four were countable.** "2,921 tests across
+  four packages" is THREE (web 1,340 · core 1,433 · ml 148; db/ has its own SQL
+  harness, 65 files — which the next tile counts, so the document was
+  double-counting its own packages). "179 BFF routes" is 179 route FILES
+  carrying 238 handlers. The connector claims disagreed with the shelf in the
+  screenshot on the facing page: 13 tiles, 6 connected, 7 waiting — of which
+  only 4 have an OAuth app configured, the other three taking a pasted token
+  and needing nothing on the server. And the limits chapter said "two connector
+  secrets ... rather than implying all ten are proven", a sentence with two
+  wrong numbers in it; it now names the four unproven secrets and says why
+  Jira's cannot even be probed. Every count in the document was re-measured
+  from the repository rather than carried forward — 309 test files, 244 API
+  routes, 65 db SQL files, 207 migrations.
+  **THEN THE GITIGNORE'S OWN CONTROL FAILED.** Adding the ignore entries for
+  this batch, the standard check ran with its negated control — and
+  `.env.example` came back IGNORED. A stray `.env*` under "OS / editor noise"
+  sat sixteen lines BELOW `!.env.example` and `!*/.env.example`, and a later
+  pattern wins, so the file re-ignored exactly what those two lines exist to
+  keep; the 2026-08-13 verification's own control had silently stopped
+  negating some time after it was written. Removed (`.env` and `.env.*` at the
+  top already cover every env file in the tree). Beside it, a second gap the
+  same check exposed: **private keys had NO pattern at all** — only keystores
+  did, while the rule the file exists for says "keys AND keystores never reach
+  the repo"; `*.pem`, `*.p12`, `*.pfx`, `*.ppk` and the `id_*` family added
+  after checking no tracked file matches any of the shapes. Minted, as the
+  reason the control is run every time rather than trusted once: **a negation
+  is only negating until somebody appends a broader line below it, and nothing
+  about the file's appearance changes on the day it stops.**
+  The outputs are gitignored (`*.docx`, `*.pptx`), as are the render previews
+  and the redrawn figures — source in, output out, the repo's own rule for
+  deliverables. **The eighteen screenshots are HELD OUT with their reason
+  written at the entry**: this repository is PUBLIC and they show colleagues'
+  real names, a real meeting's Persian summary and real audit rows. Publishing
+  them is the user's call and is asked, not assumed.
+  Verified: both artifacts rendered to PDF and read page by page; the encoding
+  sweep over 1,288 tracked text files; git check-ignore in both directions on
+  secrets, keys, the negated controls and this batch's own paths.
+  db 207 migrations · ml 148 tests · core 1433 tests · web 1340 tests + gate + sweep.
