@@ -5333,3 +5333,60 @@ sessions) for the cross-session narrative.
   could run at all in jsdom — without it the lane threw before connecting
   anything, which reads exactly like "the track never arrived".
   db 206 migrations · ml 148 tests · core 1420 tests · web 1311 tests + gate + sweep.
+- 2026-09-07 (THE ONLINE LANE STOPS SHARING A TAB — the measurement, and the
+  share becomes an addition): third report on one meeting — "still i go alone
+  in the online meeting and the detection can not detect my voice; it was
+  working in the in-person mode".
+  **The numbers, before any code.** The same person, the same day, the same
+  enrolled print: **0.7939 on a microphone take and 0.3445 on an online one**,
+  with a DIFFERENT person scoring 0.3825 against that same online clip — the
+  recording is not a weaker copy of the speaker, it is somebody else. It is
+  not mush either: each take's first half against its own second half is 0.806
+  in person and **0.766 online**, so the online lane carries ONE consistent
+  voice that is not the one in the room. Its spectrum says the same thing —
+  −3.5 dB at 300–1000 Hz, where a voice is identified, and +5.5 dB above
+  4 kHz; ZCR 0.130 against 0.068. Ruled out by measurement, each on the good
+  recording: loudness, added noise, pitch and rate, comb/echo (delayed copies
+  at 5/20/40/80 ms all stayed ≥ 0.72), the mono downmix, device competition,
+  and the WebAudio round trip. What was left was the second SOURCE summed into
+  the take — the shared tab, which is a loudspeaker re-recorded through an
+  encoder and mixed a few milliseconds late on top of the same voices.
+  **So the online lane records the ROOM again** (`source: "room"`), and with
+  no picker to open there is no gesture to hold: walking into the live stage
+  starts the take, exactly as in person. The lane's own auto-start exception
+  is deleted, the copy that promised a picker is gone, and the mix chip stopped
+  claiming «صدای تب + میکروفون» over takes with no tab in them — **the chip
+  reads the TAKE (`engine.shared`) now, not the meeting's MODE**, which is the
+  shape that let a claim outlive two reversals.
+  **The share survives as an ADDITION, and that is the part worth keeping.**
+  The first cut of this change left the reversal's own case — a meeting held in
+  software we do not host — reachable only in the seconds before the auto-start
+  landed, because the button was gated on `!held`: the door existed and closed
+  itself. `addSharedAudio()` mixes a shared surface into the LIVE take instead
+  — same call, same recorder, one more input on the destination the room's
+  voices already reach — so nothing recorded is thrown away and nobody chooses
+  a source before they know they need one. Its refusals are NAMED rather than
+  folded into a boolean, because they ask for different things back, and the
+  own-tab one must be refused instead of obeyed (a second, later copy of the
+  voices already in the take splits one person into two speakers).
+  **Two instrument findings, both mine.** A `useCallback` written below the
+  page's early returns changed the hook ORDER between renders: React said so
+  and the page rendered NOTHING, which arrives as "the stepper is missing" —
+  29 tests failed for a reason that had nothing to do with any of them.
+  And the control test "nothing to add to when no take is running" **passed
+  under the mutation it was written for**: with no take the mix is torn down,
+  so "there is no destination" and "this take is over" are the same answer,
+  and the phase half of the guard could never fail. The discriminating state
+  is a take being FINISHED — the destination is torn down AFTER the recorder's
+  flush, and the browser's stop is asynchronous — so the fake now HOLDS a
+  flush and the test presses the share inside that window. Removing the phase
+  check turns it red by name.
+  Verify-red by mutation on eight behaviours: the shared-tab source restored
+  (1 red), the auto-start exception restored (2), the chip reading the mode
+  (1), the ended-share door removed (1), the refusals folded into one message
+  (1), our own tab mixed after all (1), the shared flag never published (1),
+  the phase guard removed (1 — after the control was rewritten).
+  NOT proven this side: that the tilt is gone. The next online meeting is the
+  measurement that settles it, and the readings above are here so it can be
+  compared rather than re-argued.
+  db 206 migrations · ml 148 tests · core 1420 tests · web 1318 tests + gate + sweep.

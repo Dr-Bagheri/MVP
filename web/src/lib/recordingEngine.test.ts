@@ -40,7 +40,7 @@ vi.mock("@/lib/takeBuffer", () => ({
   markPart: vi.fn(),
 }));
 
-const { startRecording, resume, discardRecording } = await import("./recordingEngine");
+const { addSharedAudio, finish, recorderSnapshot, startRecording, resume, discardRecording } = await import("./recordingEngine");
 const { publishRoomAudio } = await import("./roomAudio");
 type StartOptions = import("./recordingEngine").StartOptions;
 
@@ -100,6 +100,13 @@ class FakeMediaRecorder {
   }
   stop() {
     this.state = "inactive";
+    /* HELD, when a test needs the window where a take is finishing and its
+       mix is still alive — the browser's own stop is asynchronous, and that
+       gap is a real state, not a contrivance. Released by the test. */
+    if (holdFlush && this.onstop) {
+      heldStops.push(this.onstop);
+      return;
+    }
     // synchronous onstop keeps discardRecording's flush barrier honest
     this.onstop?.();
   }
@@ -108,6 +115,10 @@ class FakeMediaRecorder {
 /** connect() returns its argument so `proc.connect(mute).connect(dest)` chains */
 /** every track that reached the mix, in order — the online lane's subject */
 const mixed: string[] = [];
+
+/** a stop whose flush the fake is holding, and the switch that holds it */
+const heldStops: Array<() => void> = [];
+let holdFlush = false;
 
 class FakeAudioContext {
   sampleRate = 48_000;
@@ -157,6 +168,8 @@ function audioConstraintsOfCall(n: number): Record<string, unknown> {
 
 beforeEach(() => {
   mixed.length = 0;
+  heldStops.length = 0;
+  holdFlush = false;
   publishRoomAudio([]);
   getUserMedia.mockReset();
   getUserMedia.mockImplementation(async () => fakeStream([fakeTrack()]));
@@ -301,5 +314,114 @@ describe("the online take carries the room's own voices", () => {
        outdated cast */
     publishRoomAudio([{ id: "late", readyState: "live" } as unknown as MediaStreamTrack]);
     expect(mixed).toContain("late");
+  });
+});
+
+/**
+ * THE OTHER MEETING, JOINING A TAKE THAT IS ALREADY RUNNING (2026-09-07).
+ *
+ * An online meeting records this room from the moment somebody walks into
+ * the live stage, so by the time anyone reaches for a shared surface there
+ * are already minutes on disk. Restarting the take for it would either throw
+ * those away or leave two records of one meeting — so the share is mixed into
+ * the destination the room's voices already reach.
+ *
+ * Three of the four cases here are refusals, and they are separate because
+ * they ask for different things back. The own-tab one is the load-bearing
+ * one: it must be REFUSED rather than obeyed, and no screen can enforce that
+ * — the handle is only readable here.
+ */
+describe("another app's audio joins a running room take", () => {
+  function shareOf(handle: string | null, withAudio = true) {
+    const video = {
+      kind: "video", id: "share-video", readyState: "live",
+      stop() { this.readyState = "ended"; },
+      addEventListener() { /* the engine listens for `ended` on audio */ },
+      getCaptureHandle: () => (handle === null ? null : { handle }),
+    };
+    const audio = fakeTrack("share-audio");
+    return {
+      getTracks: () => (withAudio ? [video, audio] : [video]),
+      getVideoTracks: () => [video],
+      getAudioTracks: () => (withAudio ? [audio] : []),
+    };
+  }
+
+  function pickerAnswers(handle: string | null, withAudio = true) {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia, getDisplayMedia: async () => shareOf(handle, withAudio) },
+    });
+  }
+
+  it("mixes the app's audio into the LIVE take, without asking for a microphone twice", async () => {
+    pickerAnswers(null);
+    publishRoomAudio([{ id: "sina", readyState: "live" } as unknown as MediaStreamTrack]);
+    await startRecording(opts({ source: "room" }));
+    expect(mixed).toContain("sina");
+    expect(mixed).not.toContain("share-audio");
+
+    expect(await addSharedAudio()).toBe("ok");
+
+    expect(mixed, "the app's audio never reached the mix").toContain("share-audio");
+    /* THE HALF THAT MAKES IT AN ADDITION: a restart would acquire a second
+       microphone and leave the first take's audio in another call */
+    expect(getUserMedia, "the take was restarted").toHaveBeenCalledTimes(1);
+    expect(recorderSnapshot().callId).toBe("c-1");
+    expect(recorderSnapshot().shared).toBe(true);
+  });
+
+  it("refuses OUR OWN meeting tab — mixing it would record the room twice", async () => {
+    pickerAnswers("neurai-meeting");
+    publishRoomAudio([{ id: "sina", readyState: "live" } as unknown as MediaStreamTrack]);
+    await startRecording(opts({ source: "room" }));
+
+    expect(await addSharedAudio()).toBe("ownTab");
+
+    expect(mixed).not.toContain("share-audio");
+    /* and the take is untouched: a refusal is not a fault */
+    expect(recorderSnapshot().phase).toBe("recording");
+    expect(recorderSnapshot().shared).toBe(false);
+  });
+
+  it("names a share that carried no audio as that, and not as a failure to share", async () => {
+    pickerAnswers(null, false);
+    await startRecording(opts({ source: "room" }));
+
+    expect(await addSharedAudio()).toBe("shareNoAudio");
+    expect(recorderSnapshot().shared).toBe(false);
+  });
+
+  it("has nothing to add to when no take is running", async () => {
+    pickerAnswers(null);
+    expect(await addSharedAudio()).toBe("notLive");
+    expect(mixed).not.toContain("share-audio");
+  });
+
+  it("…and a take being FINISHED is past taking anything in — the discriminating case", async () => {
+    /*
+     * THE CASE THAT MAKES THE GUARD MEAN SOMETHING. With no take at all the
+     * mix is torn down, so "there is no destination" and "this take is over"
+     * are the same answer — the test above passes against a check that only
+     * asks whether a destination exists, which is what it did until this one
+     * was written (verify-red, mutation g: removing the phase check left the
+     * suite green).
+     *
+     * A take being finished still HAS its destination: it is torn down after
+     * the recorder's flush, and the browser's stop is asynchronous. Audio
+     * mixed in that window reaches a recorder that has stopped — silently, in
+     * the seconds a person is most likely to press something.
+     */
+    pickerAnswers(null);
+    await startRecording(opts({ source: "room" }));
+    holdFlush = true;
+    const finishing = finish();
+    expect(recorderSnapshot().phase).toBe("finishing");
+
+    expect(await addSharedAudio()).toBe("notLive");
+    expect(mixed).not.toContain("share-audio");
+
+    heldStops.splice(0).forEach((fn) => fn());
+    await finishing;
   });
 });

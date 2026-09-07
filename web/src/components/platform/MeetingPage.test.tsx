@@ -59,13 +59,22 @@ const tokenSpy = vi.fn((_id: string) => undefined);
    SETTABLE since 2026-09-06, and only ever between tests: a suite whose
    engine is frozen at "idle" cannot represent a take in progress, so the
    end button — half of the host rule — was unreachable by any assertion. */
-let ENGINE_SNAPSHOT: { phase: string; callId: string | null; recordedMs: number } =
-  { phase: "idle", callId: null, recordedMs: 0 };
-const engineIsRecording = (callId: string) => {
-  ENGINE_SNAPSHOT = { phase: "recording", callId, recordedMs: 12_000 };
+let ENGINE_SNAPSHOT: {
+  phase: string; callId: string | null; recordedMs: number;
+  shared: boolean; quality: string | null;
+} = { phase: "idle", callId: null, recordedMs: 0, shared: false, quality: null };
+const engineIsRecording = (callId: string, over: { shared?: boolean; quality?: string } = {}) => {
+  ENGINE_SNAPSHOT = {
+    phase: "recording", callId, recordedMs: 12_000,
+    shared: over.shared ?? false, quality: over.quality ?? null,
+  };
 };
+/** what the browser's share picker "answers" for the next addSharedAudio */
+let SHARE_RESULT: "ok" | "shareDenied" | "shareNoAudio" | "ownTab" = "ok";
+const shareSpy = vi.fn(async () => SHARE_RESULT);
 vi.mock("@/lib/recordingEngine", () => ({
   startRecording: (opts: unknown) => startSpy(opts),
+  addSharedAudio: () => shareSpy(),
   finish: vi.fn(async () => undefined),
   recorderSnapshot: () => ENGINE_SNAPSHOT,
   subscribeRecorder: () => () => undefined,
@@ -212,7 +221,9 @@ beforeEach(() => {
   patched.length = 0;
   finished.length = 0;
   startSpy.mockClear();
-  ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0 };
+  shareSpy.mockClear();
+  SHARE_RESULT = "ok";
+  ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0, shared: false, quality: null };
   tokenSpy.mockClear();
 });
 
@@ -317,35 +328,82 @@ describe("MeetingPage", () => {
   });
 
   /*
-   * THE ONLINE LANE STARTS ON A PRESS (user directive, 2026-09-04: "for the
-   * online meetings go with face screen share to get the audio from web").
+   * AN ONLINE MEETING RECORDS THE ROOM (2026-09-07, measured — the third
+   * report on one meeting).
    *
-   * Both halves matter and the FIRST is the one that would rot quietly.
-   * Walking into the stage must NOT start an online take: the share picker
-   * only opens for a gesture, so an auto-started one is refused with the
-   * same error a cancelled picker raises — the person is told they
-   * cancelled a dialog they were never shown. Verified red by deleting the
-   * `mode === "online"` line from the auto-start effect.
+   * 2026-09-04 pointed this lane at a SHARED TAB, and that cost a colleague's
+   * voice (it reached the recording only if the right surface was picked) and
+   * the speaker's own identity: the same person, the same day, the same
+   * enrolled print scored 0.79 on a microphone take and 0.34 on an online
+   * one, with a DIFFERENT person scoring higher. A meeting held in our room
+   * does not need the sum — everyone in it is already a track in the page.
+   *
+   * The share survives as an explicit act for the case the reversal was made
+   * for, and the test asserts BOTH, because either alone is satisfied by a
+   * lane that only ever does one thing.
    */
-  it("an online meeting waits for the button, then records the SHARED TAB", async () => {
+  it("walking into an online meeting records the ROOM, with no picker in the way", async () => {
     MEETING = meeting({ call_id: null, mode: "online", title: "جلسهٔ آنلاین" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    /* the PLAN does not record — a page that started a take on load would be
+       recording a room nobody has walked into */
     expect(startSpy).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    /* in the live stage, and still nothing opened */
-    const start = await screen.findByRole("button", { name: /شروع ضبط/ });
-    expect(startSpy).not.toHaveBeenCalled();
 
-    await userEvent.click(start);
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
     const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
-    /* "system", not "room" — the reversal. The meetings people actually
-       hold are in software we do not host, and our own room can only ever
-       record the people who came to OURS. */
-    expect(opts.source).toBe("system");
+    expect(opts.source).toBe("room");
     expect(opts.title).toBe("جلسهٔ آنلاین");
+  });
+
+  /*
+   * … AND THE MEETING HELD SOMEWHERE ELSE IS AN ADDITION, NOT A RESTART.
+   *
+   * The take is already running by the time anybody realises the meeting is
+   * in Zoom, so offering to START one with a share would mean discarding or
+   * finishing what is recorded. The share joins the live mix instead — and
+   * the chip is the discriminating half: it must name the take, because a
+   * chip that names the MODE said "tab + microphone" over every online take
+   * for three days, including the ones with no tab in them.
+   */
+  it("a running online take can take in another app's audio, and the chip says which mix it is", async () => {
+    engineIsRecording("c-9");
+    MEETING = meeting({ call_id: "c-9", call_status: "recording", mode: "online" });
+    CALL = call({ id: "c-9", status: "recording" });
+    const { unmount } = render(<MeetingPage id="m-1" />);
+
+    await screen.findByText("صدای اتاق + میکروفون");
+    expect(screen.queryByText("تب + اتاق + میکروفون")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /افزودن صدای برنامهٔ دیگر/ }));
+    await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
+    /* it ADDS: nothing was started, so nothing was thrown away */
+    expect(startSpy).not.toHaveBeenCalled();
+    unmount();
+
+    /* once the app's audio is in, the mix is named for what it carries and
+       the door is gone — pressing it again would mix a second copy */
+    engineIsRecording("c-9", { shared: true });
+    render(<MeetingPage id="m-1" />);
+    await screen.findByText("تب + اتاق + میکروفون");
+    expect(screen.queryByRole("button", { name: /افزودن صدای برنامهٔ دیگر/ })).toBeNull();
+  });
+
+  it("a share that ends offers the door back, and a refused picker says which refusal", async () => {
+    /* the take carries on with a microphone in a room where nobody is
+       speaking — the moment a person most needs the way back */
+    engineIsRecording("c-9", { shared: true, quality: "shareEnded" });
+    MEETING = meeting({ call_id: "c-9", call_status: "recording", mode: "online" });
+    CALL = call({ id: "c-9", status: "recording" });
+    SHARE_RESULT = "ownTab";
+    render(<MeetingPage id="m-1" />);
+
+    await screen.findByText("اشتراک صدا قطع شد");
+    await userEvent.click(await screen.findByRole("button", { name: /افزودن صدای برنامهٔ دیگر/ }));
+    /* the refusal that must NOT be obeyed, named as itself rather than as a
+       generic failure: our own tab would be a second copy of these voices */
+    expect(await screen.findByRole("alert")).toHaveTextContent("تبِ همین جلسه انتخاب شد");
   });
 
   /* WALKING IN IS THE START, where nothing has to be asked for (user

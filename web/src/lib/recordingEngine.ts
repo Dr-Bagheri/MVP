@@ -70,6 +70,14 @@ export interface RecorderSnapshot {
   liveSpeakers: string[];
   captionsDown: boolean;
   previews: { idx: number; url: string }[];
+  /**
+   * Is another app's audio in this take? Set by `addSharedAudio` and by the
+   * `system` start path. The chip beside the clock names the mix, and a chip
+   * that says "tab + microphone" over a take carrying neither is the kind of
+   * stale claim that survives a lane change — so the fact lives here rather
+   * than in a page's own state, where a second surface would spell it again.
+   */
+  shared: boolean;
 }
 
 export interface StartOptions {
@@ -125,6 +133,7 @@ let snapshot: RecorderSnapshot = {
   wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
   progress: { done: 0, pending: 0, failed: 0 }, error: null,
   captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
+  shared: false,
 };
 
 const listeners = new Set<() => void>();
@@ -180,6 +189,11 @@ let micLost = false;
 let takeNoiseSuppression = true;
 /** the system-audio mixing node — where a replacement mic must connect */
 let mixDest: MediaStreamAudioDestinationNode | null = null;
+
+/** another app's audio is in this take — set by the `system` start path and
+    by `addSharedAudio`, published on the snapshot so the mix chip is a claim
+    about the take rather than about the meeting's mode */
+let sharedIn = false;
 // caption lane
 let liveId: string | null = null;
 let liveRec: MediaRecorder | null = null;
@@ -592,6 +606,7 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   }
   rawTracks = [...micStream.getTracks()];
   shareEnded = false;
+  sharedIn = false;
   micLost = false;
   mixDest = null;
   micStream.getAudioTracks().forEach(watchMicTrack);
@@ -715,6 +730,7 @@ export async function startRecording(opts: StartOptions): Promise<void> {
       // the shared audio is NOT boosted: it arrives at the sender's own level
       ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
     }
+    sharedIn = !ownTab;
     const connectedShare = new Set<MediaStreamTrack>();
     const connectRoom = (tracks: MediaStreamTrack[]) => {
       for (const track of tracks) {
@@ -798,6 +814,7 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   patch({
     callId, title, recordedMs: base.offsetMs, previews: [], wave: [],
     chapterMarks: [], waveStartMs: base.offsetMs, quality: null,
+    shared: sharedIn,
   });
   startMeter();
   startPartRecorder(base.nextIdx, base.offsetMs);
@@ -863,6 +880,61 @@ function sharedSurfaceIsOurs(display: MediaStream): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * THE OTHER MEETING, MID-TAKE (2026-09-07).
+ *
+ * An online meeting starts recording the moment somebody walks into the live
+ * stage — mic plus this room's own tracks, no dialog. That is right for a
+ * meeting held HERE and it leaves one case open: a meeting held in software
+ * we do not host, whose audio can only be reached through a shared surface.
+ *
+ * Restarting the take for it would be the wrong shape twice over — the
+ * minutes already recorded would have to be finished or thrown away, and the
+ * person would be made to choose the source before they knew they needed it.
+ * So the share JOINS a running mix instead: same take, same call, same
+ * recorder, one more input on the destination the room's voices already
+ * reach.
+ *
+ * Every refusal is NAMED rather than folded into a boolean, because they ask
+ * for different things back: a cancelled picker is "press it again", a share
+ * with the audio box unticked is "tick the box", and OUR OWN TAB is the one
+ * case that must be refused instead of obeyed — mixing it would add a second,
+ * later copy of the very voices already in the take, which sounds like a bad
+ * room and splits one person into two speakers.
+ */
+export type AddShareResult = "ok" | "notLive" | "shareDenied" | "shareNoAudio" | "ownTab";
+
+export async function addSharedAudio(): Promise<AddShareResult> {
+  const ctx = audioCtx;
+  const dest = mixDest;
+  if ((snapshot.phase !== "recording" && snapshot.phase !== "paused") || ctx === null || dest === null) {
+    return "notLive";
+  }
+  let display: MediaStream;
+  try {
+    display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch {
+    return "shareDenied";
+  }
+  /* read BEFORE the video track is stopped — the handle rides that track and
+     a stopped track answers nothing (same order as the start path) */
+  const ownTab = sharedSurfaceIsOurs(display);
+  display.getVideoTracks().forEach((track) => track.stop());
+  const shareAudio = display.getAudioTracks();
+  if (ownTab || shareAudio.length === 0) {
+    shareAudio.forEach((track) => track.stop());
+    return ownTab ? "ownTab" : "shareNoAudio";
+  }
+  rawTracks.push(...shareAudio);
+  shareEnded = false;
+  shareAudio[0]!.addEventListener("ended", () => { shareEnded = true; });
+  // NOT boosted: it arrives at the sender's own level, like the room's tracks
+  ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
+  sharedIn = true;
+  patch({ shared: true, quality: snapshot.quality === "shareEnded" ? null : snapshot.quality });
+  return "ok";
 }
 
 export function addChapterMark(atMs: number): void {
@@ -983,7 +1055,7 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
   // straight back to the start form — there is nothing to review
   patch({
     phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
-    wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
+    wave: [], waveStartMs: 0, chapterMarks: [], quality: null, shared: false,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
     captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
   });
@@ -1020,7 +1092,7 @@ export function resetRecorder(): void {
   if (snapshot.phase !== "done" && snapshot.phase !== "failed" && snapshot.phase !== "idle") return;
   patch({
     phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
-    wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
+    wave: [], waveStartMs: 0, chapterMarks: [], quality: null, shared: false,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
     captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
   });
