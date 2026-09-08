@@ -6073,3 +6073,95 @@ sessions) for the cross-session narrative.
   `send_telegram_message` now carries `colleague`). NOT exercised live: an
   actual Telegram send, which would message a real colleague.
   db 216 migrations · core 1530 tests · web 1391 tests + gate + sweep.
+- 2026-09-08 (THE MEMORY IS THE SESSION'S, AND A NAME SITS ON ITS LOGO'S
+  CENTRE — and the carry-over nearly walked into the audit; commits 6708868,
+  64328d6): two user reports, and the finding is in the second half.
+  **"MAKE THE MEMORY PER SESSION NOT PER THREAD."** Yesterday's fix carried
+  ONE conversation, and that is not what a person means by "what we talked
+  about": they press «گفت‌وگوی تازه», ask the obvious follow-up, and meet an
+  assistant that has never heard of them. A thread is a filing decision, and
+  nobody re-files their own morning before asking a second question about it.
+  So an ask now carries the TAIL of the person's other recent conversations —
+  their own rows under their own identity (0016's `agent_session_own` scopes
+  every one of them to `actor_id = echo.actor_id()`), so nothing is readable
+  here that their own sidebar does not already show. No migration, no
+  widening. It is a LABELLED BLOCK in the system prompt rather than more
+  turns, which is the room's shape (`ROOM_HISTORY`): put in front of the
+  thread's own turns it would be indistinguishable from this conversation,
+  and «as I said above» would point at a screen the person is not looking at.
+  Verbatim — nothing summarises, because a memory that paraphrases is a
+  second author. Bounded, each bound a decision written where it is read:
+  twelve hours (a working day reaches from either end of it; last Tuesday
+  arriving as "recent context" is worse than forgetting), three conversations,
+  the last six turns of each, 600 characters a turn against the thread's
+  4,000. ARCHIVED is excluded — it is the person saying "done with this", and
+  `resolveForAsk` already refuses to resume one; a thread that cannot be
+  reopened must not answer through a prompt.
+  **THE FINDING, and it was one line from shipping.** `agent_run.request`
+  keeps the system prompt; 0013's `agent_run_read` admits an ADMIN to any run
+  in the org; 0016 keeps a conversation to the one person whose it is. So the
+  first cut — the block folded into `systemInstructions`, which is what every
+  other prompt line does — would have handed an admin, through the AUDIT
+  surface, a rolling transcript of every colleague's recent conversations:
+  the one thing the conversation wall is built to prevent, arriving by the
+  one path nobody looks at. `sessionContext` is its own field for that
+  reason: the runtime composes the model's prompt from it and records the
+  prompt WITHOUT it, keeping the SIZE — the honest answer to "why did this
+  run cost that", quoting nobody. Yesterday's `historyTurns` ruling, one
+  layer out, and the wrong state is now unrepresentable rather than watched
+  for: a caller cannot put those words in the recorded field, because it
+  never passes them there. A regeneration carries none of it — a replay
+  reproduces what was recorded.
+  **THE ALIGNMENT.** A connector page pinned its name to the TOP edge of a
+  40px logo (`items-start`), so a 15px line floated above the mark it belongs
+  to — measured on production before the change at 9.3px above the mark's
+  centre. Nothing else in the product does that: the shelf's tile stacks
+  them, the sources table and the connect dialog centre them; this header was
+  the one place a mark and its name disagreed, which is why it is the one
+  place it showed.
+  **My own generator wrote five newline escapes as real newlines** — `"\n"`
+  in a plain Python string is one character by the time it reaches the file —
+  so every `join("\n")` in the generated TypeScript became a string literal
+  cut in two. The 2026-09-04 escape leak in the half that fails LOUDLY: the
+  compiler said so on the first run. The repair is built from `chr(10)` and
+  raw strings, so it cannot repeat the mistake it fixes.
+  **And a probe of mine measured a restored screen.** Driving the composer in
+  the browser, three clicks "sent" nothing and the thread showed the previous
+  question and answer — which reads exactly like a working feature. The tell
+  was the composer STILL HOLDING ITS TEXT; the send button sits outside the
+  screenshot's own coordinate frame (853 against a 744-tall frame), so every
+  click missed by geometry. The verification moved to the product's own BFF
+  route, where a brand-new conversation is the absence of a `session_id` and
+  nothing can be restored underneath it.
+  Verify-red: fifteen mutations on the memory and five on the record wall,
+  control green first each time — the session never read, the current
+  conversation carried twice, a new conversation skipping it, the block
+  unframed, the newest trimmed instead of the oldest, an opening instead of a
+  tail, the oldest conversations kept, a colleague unnamed, an empty
+  conversation announced, the heading trimmed with its lines, a silent clip,
+  archived carried, the window gone, tool codes counted as speech, the clamps
+  removed; then the block folded into the recorded prompt, the model never
+  given it, the record keeping the words, a regeneration carrying the live
+  session, the route sending it as an instruction again.
+  **Proven on production**, in the user's Chrome and on real rows. THE
+  POSITIVE: a statement in one conversation («قرار است دوشنبه با تیم صدا
+  جلسه بگذارم») and, in a BRAND-NEW conversation, «با کدام تیم و چه روزی قرار
+  جلسه دارم؟» → «طبق صحبت قبلی، قرار است روز دوشنبه با «تیم صدا» جلسه داشته
+  باشید» — with `tools: 0` on that run, so the answer came from the carried
+  block and from nothing else. THE CONTROL: the same question after the source
+  conversations were ARCHIVED → «هیچ وظیفه یا تاریخی … ثبت نشده است», and that
+  run DID call tools and found nothing. THE WALL, read at the caller's own
+  authority on the live database: the three runs after the second deploy
+  record `sessionContextChars` 1428/1660/1431 with the prompt carrying neither
+  the block nor a conversation title, while the two runs made in the twenty
+  minutes between the deploys carry both — the defect and its fix in one
+  reading, and no other member ran an ask in that window, so nobody's
+  conversation but mine was ever in a recorded prompt. The alignment: the
+  name's centre and the mark's centre on the SAME pixel (118.1) where they
+  were 9.3 apart, measured on Gmail, Slack (with the settings kebab in the
+  row), Telegram and Google Calendar in English.
+  Seven verification conversations were archived rather than left: archiving
+  is what keeps them out of the user's own carry-over window, which is the
+  rule doing its job on its author.
+  Cost, said plainly: ~3k characters on top of the thread's ~12k, per ask.
+  db 216 migrations · core 1550 tests · web 1392 tests + gate + sweep.
