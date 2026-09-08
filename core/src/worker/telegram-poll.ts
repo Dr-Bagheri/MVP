@@ -699,8 +699,24 @@ export async function sweepTelegram(options: TelegramPollOptions, log: StepLogge
           "messages were older than the age ceiling and were not acted on");
       }
     } catch (error) {
-      log.warn({ event: "telegram_poll_failed", connection: row.connection_id, error_type: (error as Error).name },
-        "a bot could not be polled this round");
+      /*
+       * The NAME and a CODE, never a message.
+       *
+       * `error_type: "TypeError"` was all this line said the day the poller
+       * called a method the repo did not export, and it was not enough to
+       * diagnose from: a fetch failure, a missing method and a bad argument
+       * are one word. `cause.code` is undici's ENOTFOUND/ECONNREFUSED family
+       * — codes, not content — and the message's first clause names the
+       * callee rather than any of a person's words.
+       */
+      const cause = (error as { cause?: { code?: unknown } }).cause;
+      log.warn({
+        event: "telegram_poll_failed",
+        connection: row.connection_id,
+        error_type: (error as Error).name,
+        cause_code: typeof cause?.code === "string" ? cause.code : undefined,
+        at: String((error as Error).message ?? "").split(" ").slice(0, 4).join(" "),
+      }, "a bot could not be polled this round");
     }
   }
 }

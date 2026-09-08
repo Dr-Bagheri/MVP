@@ -4,6 +4,9 @@ import {
   type TelegramApi, type TelegramPollOptions,
 } from "../src/worker/telegram-poll.ts";
 import { hashCode, mintCode, normalizeCode } from "../src/api/telegram-link.ts";
+import { createConnectorsRepo } from "../src/api/connectors.ts";
+import { createTasksRepo } from "../src/api/tasks.ts";
+import type { TelegramConnectors, TelegramTasks } from "../src/worker/telegram-poll.ts";
 import type { Db, SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
@@ -332,6 +335,35 @@ const from = (id: number, body: Record<string, unknown>) => ({
     from: { id, is_bot: false, username: "sina" }, chat: { id },
     date: Math.floor(Date.now() / 1000), ...body,
   },
+});
+
+/**
+ * THE SEAM, checked against the PRODUCER.
+ *
+ * The poller called `connectors.providerCtx`, which the repo defined and did
+ * not export. main.ts passed the repo through `as never`, so the compiler was
+ * silent; every test in this file mocks the connector, so the fakes agreed
+ * with my belief rather than with the producer; and the only evidence was a
+ * `TypeError` once a minute on production, which the log rendered as one word.
+ *
+ * Rule 10, in its plainest form: the boundary fixture comes from the producing
+ * side. The cast is gone — main.ts now hands the real repos and the compiler
+ * checks the shape — and this asserts the other half, that the methods are
+ * really THERE at runtime and not merely declared.
+ */
+describe("the repos the worker actually passes", () => {
+  const db = { withIdentity: async () => [], withoutIdentity: async () => [], withActor: async () => [] } as never;
+
+  it("the connectors repo answers the call the poller makes", () => {
+    const connectors: TelegramConnectors = createConnectorsRepo(db);
+    expect(typeof connectors.providerCtx).toBe("function");
+  });
+
+  it("the tasks repo answers both calls the poller makes", () => {
+    const tasks: TelegramTasks = createTasksRepo(db);
+    expect(typeof tasks.board).toBe("function");
+    expect(typeof tasks.create).toBe("function");
+  });
 });
 
 describe("the sweep", () => {

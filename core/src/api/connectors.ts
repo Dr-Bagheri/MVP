@@ -1313,6 +1313,18 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       };
     },
 
+    /*
+     * The credential and the public settings for one provider (2026-09-08).
+     *
+     * It existed as an internal helper and the Telegram poller called it
+     * anyway — through an `as never` cast in the worker's wiring, so the
+     * compiler said nothing and 1478 green tests said nothing, and the only
+     * evidence was a `TypeError` once a minute on production. A method a
+     * second package needs is part of the surface; the cast that hid that is
+     * gone with it.
+     */
+    providerCtx,
+
     async sourceContext(
       identity: Identity, provider: ConnectorProvider, sourceKind: ConnectorSourceKind, sourceId: string,
     ): Promise<ConnectorContext> {

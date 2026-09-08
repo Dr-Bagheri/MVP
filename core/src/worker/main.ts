@@ -273,8 +273,13 @@ export async function main(): Promise<void> {
   const telegramTimer = setInterval(() => {
     void sweepTelegram({
       db,
-      connectors: mailConnectors as never,
-      tasks: createTasksRepo(db) as never,
+      /* NOT `as never`. The cast is what let this call reach a method the
+         repo did not export — a drift report somebody decided not to file,
+         which is this repo's own phrase for exactly this. `TelegramConnectors`
+         and `TelegramTasks` name the surfaces used, so a missing one is a
+         compile error rather than a TypeError once a minute in production. */
+      connectors: mailConnectors,
+      tasks: createTasksRepo(db),
       ml,
       storage,
       apiKey: process.env.OPENROUTER_API_KEY ?? "",
