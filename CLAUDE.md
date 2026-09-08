@@ -5895,3 +5895,96 @@ sessions) for the cross-session narrative.
   401 against a 404 control); web on Vercel. NOT proven live: a real dry run
   (it spends a provider call) and a restore on a real skill.
   db 215 migrations · core 1509 tests · web 1373 tests + gate + sweep.
+- 2026-09-08 (THE ROOM'S PAIRS COME APART IN PERSIAN, THE MENU JUMPS ON EVERY
+  REFRESH, AND A SPEAKER LEARNS WHICH ACCOUNT IT IS; commit dfd7834):
+  five items from four screenshots.
+  **THE TWO DEVICE DROPDOWNS (item 1), measured before deciding.** "The two
+  dropdowns are on the wrong side, each must go to the left in the fa version;
+  in en they are correct." The meeting room's control bar is LiveKit's, and
+  LiveKit welds each toggle to its device menu by flattening the two corners
+  where they meet — in PHYSICAL corners, which do not mirror. Rendered in a
+  static harness over the package's own stylesheet, both directions: LTR draws
+  one pill per pair, RTL drew two boxes with their OUTER edges cut, so the bar
+  read as six identical controls at even spacing and no chevron belonged to
+  anything. globals.css re-declares those corners logically, by specificity
+  rather than source order, naming ALL FOUR on each side — the package's rule
+  still decides any corner left unsaid, and in RTL that is the one that must
+  not be flat. Measured after: the toggle rounds 0/11 and the menu 11/0, edges
+  touching at the same pixel. NOT verified on production: walking into a live
+  meeting's stage STARTS a take, which is a write on the org's own data (the
+  2026-09-06 lesson), so the harness is the evidence and the guard is what
+  keeps it — `liveKitBar.guard` also asserts the package still spells its weld
+  physically, so the day it stops, the override is a red rather than a
+  stylesheet nobody can tell is dead.
+  **THE MENU JUMPED BECAUSE `null` MEANT TWO THINGS (item 2).** "Every time I
+  refresh, the help comes a little late and I see the settings icon jumping."
+  Settings and Help sit at the bottom of a `flex-1` column, held there by
+  `mt-auto`, so anything appearing BELOW them moves them — and the person's
+  card at the foot rendered only once `api.me()` answered, taking ~62px out of
+  that column half a second into every load. `me` was `Me | null`, where null
+  was both "still asking" and "there is nobody": the loading rule this repo
+  already wrote for the bell, one component further down. Three states now,
+  and the space is kept by the CARD'S OWN BOX — one `footCard` constant worn
+  by both, so they cannot be different heights.
+  **THE SPEAKERS PAGE LOSES TWO VIEWS AND GAINS THE FACT THAT MATTERS (items
+  3-4).** The three view chips were the whole of row two; two of the three
+  views were second drawings of rows the table already carried (two avatar
+  sizes, two spellings of "voice on file"), and the ＋ sat among them. The
+  table is the one that can be edited, so it is the one that stays; the ＋
+  moved into the section's own toolbar (R3 — `ManagementPane` grew the
+  `actions` slot Settings' pane has had since the models page), which is why
+  the directory now takes `addSignal`/`onCanAdd`: a counter, because two
+  presses are two openings, and the ROLE is read once, with the table, rather
+  than by a second `me()` on the page that could disagree with it. The
+  presence bar went with the cards — nothing else read it, and it cost one
+  request per record on every load; said out loud rather than buried, that
+  number is not shown anywhere now.
+  In its place, the fact this whole chain runs on: **`person.app_user_id` is
+  on the row.** It was a dialog behind the ⋯ menu, which is exactly why not
+  one of this deployment's rows had it set. The server's folded-name guess is
+  MARKED in the list and never pre-selected — a common Persian surname must
+  not quietly attach a colleague's identity to somebody else's voice — and
+  «عضو نیست» sends an explicit null, because "not a member after all" is an
+  answer and an omitted field would leave the old link standing.
+  **AND THE PICKER STOPPED ASKING (items 4-5).** "Remove that pop up as well,
+  it should handle it itself." An unresolved candidate opened a dialog asking
+  which directory person the account is — and with fourteen accounts and zero
+  links (measured 2026-09-07) that was not an edge case, it was the ordinary
+  path. One press does all of it now: reuse the directory row already carrying
+  that exact name, else create one, pair it best-effort (the PATCH is
+  admin-only; a member host still gets their link and is told the pairing was
+  not kept), then link. Matched on the exact string, never a fold — a fold
+  here would be a second opinion about who somebody is, and the server owns
+  the only one. The panel's foot takes a typed name for somebody who has no
+  account at all, which is the case no candidate can ever offer.
+  **VERIFY-RED, and the one that came back green.** Eleven mutations across
+  the four units, each turning exactly its own test red — except "a guest's
+  name is not trimmed", which could not fail: the test pressed the BUTTON, whose
+  own `disabled` carries the same guard, so the trim inside `addGuest` was
+  unreachable. The two are not duplicates — Enter has no disabled state — so
+  the test grew the keyboard door rather than the code losing a wall, and the
+  mutation is red now. The enroll suite's mock also went red for its own
+  recorded reason: it omits `members`, and its comment already said what that
+  does ("a mock that omits a method the component calls does not fake 'no
+  records' — it throws, and the failure arrives as whatever rendered last").
+  Two tooling notes: a namespace anchor by NAME hit `help.s.meetings` before
+  the `meetings` catalogue (the 2026-09-05 lesson, in the same shape), and
+  `globals.css` is the one LF file among CRLF neighbours — a whole-file
+  normalisation is a 1557-line diff for a 42-line change.
+  Verified on production, signed in: the ＋ sits in the toolbar row (centres
+  116.5 vs 117, at the row's end, `.btn btn-primary`), the table reads «نام ·
+  سمت · حساب کاربری · تیم · صدا · عملیات» with a select per row and no view
+  chips anywhere, and the panel opens over the live table with the org's nine
+  accounts in it; the English page reads "Name · Title · Account …" with no
+  raw keys. The rail was measured ACROSS a client-side navigation with a
+  mutation observer: the placeholder appears, the card comes back 1178ms
+  later, and the Settings link sits at y=738 in every frame — with the
+  control that gives the number meaning, since taking the foot card out of
+  the DOM by hand moves it to 806. **The room's own bar could not be opened**:
+  walking into a live stage starts a take, which is a write on the org's data
+  — so the meeting page's stylesheet was fetched and injected AFTER ours in
+  the live document (the worst case for source order) and the corners read
+  0/11 and 11/0 in RTL, 11/0 and 0/11 in LTR: welded both ways, by
+  specificity. The transcript's picker is NOT live-proven — this org has no
+  record with speakers on it.
+  db 215 migrations · core 1509 tests · web 1386 tests + gate + sweep.
