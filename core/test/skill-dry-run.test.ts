@@ -3,6 +3,12 @@ import { createSkillDryRun } from "../src/api/skill-dry-run.ts";
 import type { Db, SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
+/** the seam's own argument — a mock with no declared parameters types its
+    `calls` as an EMPTY TUPLE, so every assertion on what it was called with
+    is a type error the test suite cannot see (vitest transpiles, it does not
+    typecheck). Found by core's own tsc, 2026-09-08. */
+type DryRunCall = { identity: Identity; prompt: string; question: string; model: string };
+
 /**
  * Item 16 — trying a skill before anybody has to live with it.
  *
@@ -41,7 +47,7 @@ function fakeDb(row: Record<string, unknown> = { preferred_model: "openai/gpt-5-
 
 describe("trying a draft skill", () => {
   it("runs the DRAFT, not a saved row", async () => {
-    const runModel = vi.fn(async () => ({ text: "پاسخ", runId: "r-1" }));
+    const runModel = vi.fn(async (_input: DryRunCall) => ({ text: "پاسخ", runId: "r-1" }));
     const { db } = fakeDb();
     const out = await createSkillDryRun(db, { apiKey: "k", runModel }).dryRun(IDENTITY, {
       prompt: "روش پذیرش مشتری جدید را دنبال کن", question: "مشتری تازه آمده",
@@ -56,7 +62,7 @@ describe("trying a draft skill", () => {
   });
 
   it("walks the model ladder rather than the raw preference", async () => {
-    const runModel = vi.fn(async () => ({ text: "", runId: null }));
+    const runModel = vi.fn(async (_input: DryRunCall) => ({ text: "", runId: null }));
     /* a preference nobody typed that the product does not serve is NOT a
        rung (2026-08-29): the ladder falls through to the org's own list */
     const { db } = fakeDb({
@@ -95,7 +101,7 @@ describe("trying a draft skill", () => {
   });
 
   it("says no model is available rather than calling one that is not", async () => {
-    const runModel = vi.fn(async () => ({ text: "", runId: null }));
+    const runModel = vi.fn(async (_input: DryRunCall) => ({ text: "", runId: null }));
     const { db } = fakeDb({ preferred_model: null, allowed_models: null });
     await expect(createSkillDryRun(db, { apiKey: "k", runModel }).dryRun(IDENTITY, {
       prompt: "p", question: "q",

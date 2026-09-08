@@ -764,3 +764,85 @@ describe("translate_record — text for the summary, a job for the transcript", 
     expect(ready.detail).toContain("ready");
   });
 });
+
+/**
+ * A TELEGRAM MESSAGE IS ADDRESSED TO A PERSON, NOT TO A HANDLE (user report,
+ * 2026-09-08, with the screenshot).
+ *
+ * Asked to message a colleague, the assistant tried «@sinasepasi» and then a
+ * phone number, and both failed at Telegram — a bot cannot open a
+ * conversation with a person, so neither is an address. The one address that
+ * exists is the chat they opened with the bot themselves (db/0212's link),
+ * and the server resolves it from a colleague id (db/0216).
+ */
+describe("a Telegram message names a colleague", () => {
+  beforeEach(() => { connectorAction.mockReset(); orgPeople.mockReset(); });
+
+  it("resolves the person and sends their id, never the name or a @handle", async () => {
+    const { ctx } = surface();
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi", username: "sinasepasi" },
+    ]);
+    connectorAction.mockResolvedValue({ message_id: "42", chat: "" });
+
+    const result = await executeClientTool(
+      "send_telegram_message", { colleague: "@sinasepasi", text: "سلام" }, ctx,
+    );
+
+    expect(connectorAction).toHaveBeenCalledWith("telegram", "send_message", {
+      text: "سلام", user_id: "u-2",
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("a colleague WINS over a chat — one send has one recipient", async () => {
+    const { ctx } = surface();
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا سپاسی", display_name_en: null, username: "sinasepasi" },
+    ]);
+    connectorAction.mockResolvedValue({ message_id: "43", chat: "" });
+
+    await executeClientTool(
+      "send_telegram_message", { colleague: "sinasepasi", chat: "@somewhere", text: "س" }, ctx,
+    );
+
+    const args = connectorAction.mock.calls[0]![2] as Record<string, unknown>;
+    expect(args.user_id).toBe("u-2");
+    /* both would leave the server to pick, and the person on the card is the
+       one the reader said yes to */
+    expect(args).not.toHaveProperty("chat");
+  });
+
+  it("refuses an ambiguous name rather than picking one", async () => {
+    const { ctx } = surface();
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا سپاسی", display_name_en: null, username: "sinasepasi" },
+      { id: "u-3", display_name: "سینا رضایی", display_name_en: null, username: "sinar" },
+    ]);
+    const result = await executeClientTool("send_telegram_message", { colleague: "سینا", text: "س" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(connectorAction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a send with no recipient at all, and says why", async () => {
+    /* the model's own reflex is a @username or a phone number; neither
+       arrives here as an address, so the refusal has to name the shape that
+       works rather than repeat Telegram's «chat not found» */
+    const { ctx } = surface();
+    const result = await executeClientTool("send_telegram_message", { text: "سلام" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("@username");
+    expect(connectorAction).not.toHaveBeenCalled();
+  });
+
+  it("still posts to a channel the bot is in", async () => {
+    const { ctx } = surface();
+    connectorAction.mockResolvedValue({ message_id: "44", chat: "اخبار" });
+    const result = await executeClientTool("send_telegram_message", { chat: "@neurai_news", text: "خبر" }, ctx);
+    expect(connectorAction).toHaveBeenCalledWith("telegram", "send_message", {
+      chat: "@neurai_news", text: "خبر",
+    });
+    expect(result.ok).toBe(true);
+    expect(orgPeople, "a channel is not a person and needs no directory read").not.toHaveBeenCalled();
+  });
+});

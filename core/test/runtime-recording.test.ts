@@ -304,3 +304,73 @@ describe("web search and plural context (2026-08-18)", () => {
     expect(begun[0]).toMatchObject({ callId: "call-a" });
   });
 });
+
+/**
+ * THE CONVERSATION REACHES THE PROVIDER (user report, 2026-09-08).
+ *
+ * The runtime is where a thread stops being a database table and becomes
+ * something a model can read. It carried no history at all: `RunRequest` had
+ * `input` and nothing else, so the seam below could only ever have been
+ * handed one question.
+ */
+describe("agent runtime — the conversation so far", () => {
+  it("hands the prior turns to the provider call, in order", async () => {
+    const { store } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest,
+      tools: [],
+      history: [
+        { role: "user", text: "دیروز چه گفتیم؟" },
+        { role: "assistant", text: "سه بند باز ماند" },
+      ],
+    });
+
+    const options = runPiMock.mock.calls[0]![0] as {
+      userText: string; history: { role: string; text: string }[];
+    };
+    expect(options.history).toEqual([
+      { role: "user", text: "دیروز چه گفتیم؟" },
+      { role: "assistant", text: "سه بند باز ماند" },
+    ]);
+    /* and the question is still the question — a version that folded the
+       history into the input would satisfy "the model was told" and lose the
+       roles, which is what makes a turn attributable */
+    expect(options.userText).toBe("question");
+  });
+
+  it("records HOW MANY turns it was given, and never their words", async () => {
+    /* the thread already holds every word; a copy inside each of its own runs
+       is the same content stored twice, ageing in two places */
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest,
+      tools: [],
+      history: [{ role: "user", text: "متن محرمانه" }],
+    });
+
+    const request = (begun[0] as { request: Record<string, unknown> }).request;
+    expect(request.historyTurns).toBe(1);
+    expect(JSON.stringify(request)).not.toContain("محرمانه");
+  });
+
+  it("says nothing about history when there is none", async () => {
+    /* a fresh conversation has no memory, and `historyTurns: 0` on every
+       first turn is a field that means "nothing" — absent is the same fact
+       with nothing to read wrongly */
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({ ...baseRequest, tools: [] });
+
+    expect((begun[0] as { request: Record<string, unknown> }).request)
+      .not.toHaveProperty("historyTurns");
+    expect((runPiMock.mock.calls[0]![0] as { history: unknown[] }).history).toEqual([]);
+  });
+});

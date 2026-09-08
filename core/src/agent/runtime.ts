@@ -56,6 +56,16 @@ export interface RunRequest<TDeps> {
   web?: boolean | undefined;
   /** The question or instruction. Content must already be quoted by the caller. */
   input: string;
+  /**
+   * The turns before this one, oldest first (agent/history.ts).
+   *
+   * A conversation, not context: these are the same person's own earlier
+   * questions and the answers they were given, so they carry the trust of
+   * the surface they came from — unlike a transcript or an email, which is
+   * provider text and gets fenced. The caller decides what to include; this
+   * runtime only passes it to the model and records HOW MANY there were.
+   */
+  history?: readonly { role: "user" | "assistant"; text: string }[] | undefined;
   tools: DomainTool<TDeps, never>[];
   /**
    * M33 client-executed tools for THIS request (already closed over the
@@ -199,6 +209,12 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
             ...(request.clientTools ?? []).map((t) => t.name),
           ],
           skill: skill ? { id: skill.id, slug: skill.slug, level: skill.level } : null,
+          /* the COUNT, never the text: the thread already holds every word,
+             and copying a conversation into each of its own runs is the same
+             content stored twice, ageing in two places */
+          ...(request.history && request.history.length > 0
+            ? { historyTurns: request.history.length }
+            : {}),
           ...(request.provenance ? { provenance: request.provenance } : {}),
           ...(contextCallIds.length > 1 ? { callIds: contextCallIds } : {}),
           ...(request.web === true ? { web: true } : {}),
@@ -244,6 +260,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
           model: modelRef,
           systemPrompt,
           userText: input,
+          history: request.history ?? [],
           tools,
           beforeToolCall,
           signal: request.signal,

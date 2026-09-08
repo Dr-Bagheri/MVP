@@ -100,7 +100,9 @@ const NAMING: Readonly<Record<string, Naming>> = {
   correct_transcript: { subject: ["record"], excerpt: "text" },
   edit_summary: { subject: ["record"], excerpt: "body" },
   send_slack_message: { subject: ["channel"], excerpt: "text" },
-  send_telegram_message: { subject: ["chat"], excerpt: "text" },
+  /* the COLLEAGUE first: from 2026-09-08 a person is named, not addressed by
+     a chat id, and a card reading «۱۲۳۴۵۶۷» names nobody the reader knows */
+  send_telegram_message: { subject: ["colleague", "chat"], excerpt: "text" },
   send_whatsapp_message: { subject: ["to"], excerpt: "text" },
   create_jira_issue: { subject: ["project"], excerpt: "summary" },
   create_github_issue: { subject: ["repository"], excerpt: "title" },

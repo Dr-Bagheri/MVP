@@ -96,6 +96,8 @@ interface DbShape {
    * never registered here. The state the whole recovery flow keys off.
    */
   userMissing?: boolean;
+  /** collects every statement, in order (see `seen` in fakeDb) */
+  seen?: string[];
 }
 
 function fakeDb({
@@ -104,6 +106,11 @@ function fakeDb({
   callVisible = true, summaryVisible = true,
   keyValid = true, keyAllowsAssistant = false, preferredModel = null,
   registerFails = false, userMissing = false,
+  /* every statement this fake was asked, in order — the only way to assert
+     that one read happened BEFORE one write (2026-09-08: the assistant's
+     memory depends on the thread being read before the question is appended,
+     and a fake that answers both cannot tell the two orders apart) */
+  seen,
 }: DbShape = {}) {
   const make = (): SqlClient => ({
     async begin<T>(fn: (tx: SqlTx) => Promise<T>): Promise<T> {
@@ -117,6 +124,7 @@ function fakeDb({
       const answer = (rows: unknown[]): never[] =>
         Object.assign([...rows], { count: rows.length || 1 }) as unknown as never[];
       (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string) => {
+        seen?.push(sql);
         if (sql.includes("actor_is_platform_root")) {
           return [{ is_platform_root: platformRoot }];
         }
@@ -999,5 +1007,42 @@ describe("the board read's seed flag (2026-09-06)", () => {
     const res = await server(db).inject({ method: "GET", url: "/v1/tasks/board", headers: authed });
     expect(res.statusCode).toBe(200);
     expect(inserts(seen)).toHaveLength(4);
+  });
+});
+
+/**
+ * THE ASSISTANT REMEMBERS THE CONVERSATION (user report, 2026-09-08: "if we
+ * have already couple questions and answers … when it answers you it
+ * forgets").
+ *
+ * The route owns ONE rule of this, and it is an ordering: the thread is read
+ * BEFORE the question is appended to it. Both orders leave the same thread on
+ * screen; the wrong one sends the question to the model twice — once as
+ * history and once as the ask — and a model asked the same thing twice in one
+ * request answers the echo.
+ */
+describe("assistant memory", () => {
+  it("hands the model the thread, and reads it BEFORE appending the question", async () => {
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const seen: string[] = [];
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash", seen });
+
+    await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "چه شد؟", session_id: SESSION },
+    });
+
+    const read = seen.findIndex((sql) => sql.includes("from echo.agent_message m"));
+    const wrote = seen.findIndex((sql) => sql.includes("insert into echo.agent_message"));
+    expect(read, "the thread was never read").toBeGreaterThan(-1);
+    expect(wrote, "the question was never appended").toBeGreaterThan(-1);
+    expect(read).toBeLessThan(wrote);
+
+    /* and it reached the provider: the run carries the turn the fake's thread
+       holds, and NOT the question being asked right now */
+    const call = runPiMock.mock.calls[0]![0] as { history: { role: string; text: string }[] };
+    expect(call.history.length).toBeGreaterThan(0);
+    expect(call.history.map((t) => t.text)).not.toContain("چه شد؟");
   });
 });

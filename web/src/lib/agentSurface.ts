@@ -247,7 +247,9 @@ const TASK_LABEL_COLOURS = [
 /** the eight hands, mapped to the connector door they open */
 const CONNECTOR_HANDS: Record<string, { provider: ConnectorProvider; action: string; keys: readonly string[] }> = {
   send_slack_message: { provider: "slack", action: "send_message", keys: ["channel", "text"] },
-  send_telegram_message: { provider: "telegram", action: "send_message", keys: ["chat", "text"] },
+  send_telegram_message: { provider: "telegram", action: "send_message", keys: ["chat", "text"] },
+  /* `colleague` is resolved to a user id below, not passed through: the
+     server turns that into the chat the bot answers them in (db/0216) */
   send_whatsapp_message: { provider: "whatsapp", action: "send_message", keys: ["to", "text", "template", "language"] },
   create_jira_issue: { provider: "jira", action: "create_issue", keys: ["project", "summary", "description"] },
   create_github_issue: { provider: "github", action: "create_issue", keys: ["repository", "title", "body"] },
@@ -263,6 +265,31 @@ async function connectorHand(tool: string, a: Record<string, unknown>): Promise<
   for (const key of hand.keys) {
     const value = a[key];
     if (typeof value === "string" && value.trim() !== "") args[key] = value.trim();
+  }
+  if (tool === "send_telegram_message") {
+    /*
+     * A COLLEAGUE IS AN ADDRESS; A @USERNAME IS NOT (user report,
+     * 2026-09-08). Telegram will not let a bot open a conversation with a
+     * person, so the only person it can reach is one who opened the chat
+     * themselves — which is exactly what db/0212's link records. The name is
+     * resolved through the SAME resolver every other hand uses (exact or a
+     * refusal, never a guess), and the id it yields is sent instead: the
+     * chat number is resolved server-side and never comes back.
+     */
+    const named = typeof a.colleague === "string" ? a.colleague.trim() : "";
+    if (named !== "") {
+      const who = await resolveColleague(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      args.user_id = who.id;
+      /* a colleague WINS over a chat: a model that sent both would otherwise
+         address whichever one the server happened to prefer */
+      delete args.chat;
+    } else if (typeof args.chat !== "string" || args.chat === "") {
+      return {
+        ok: false,
+        detail: "name the colleague to send it to — a Telegram bot cannot message a person by @username or phone number",
+      };
+    }
   }
   if (tool === "call_mcp_tool") {
     /* the tool's arguments arrive as a JSON string (the schema stays flat);

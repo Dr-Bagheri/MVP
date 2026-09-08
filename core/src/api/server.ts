@@ -66,6 +66,7 @@ import {
 } from "../agent/router.ts";
 import { rememberFloor, rememberIncumbent, routeTurn } from "./routing.ts";
 import { floorInstruction } from "../agent/platform-map.ts";
+import { conversationHistory } from "../agent/history.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
@@ -5112,6 +5113,32 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       typeof body.session_id === "string" ? body.session_id : null,
       body.question,
     );
+    /*
+     * THE CONVERSATION SO FAR — read BEFORE the question is appended (user
+     * report, 2026-09-08: "when it answers you it forgets").
+     *
+     * The order is the whole of it: append first and the thread contains the
+     * question, which then reaches the model twice — once as history and once
+     * as the ask — and a model asked the same thing twice in one request
+     * answers the echo. Reading first also means a brand-new conversation
+     * reads an empty thread, which is exactly what it is.
+     *
+     * A failed read is silence, not a failed ask: an assistant that answers
+     * without its memory is worse than one with it and far better than one
+     * that refuses. It is logged, because "the assistant forgot again" must
+     * be answerable from the journal rather than from a person's impression.
+     */
+    const history = conversation.created
+      ? []
+      : await sessions.messages(identity, conversation.id)
+        .then((rows) => conversationHistory(rows))
+        .catch((error: unknown) => {
+          app.log.warn(
+            { session_id: conversation.id, err: error instanceof Error ? error.constructor.name : typeof error },
+            "assistant_history_unread",
+          );
+          return [];
+        });
     await sessions.append(identity, {
       sessionId: conversation.id, role: "user", content: body.question,
     });
@@ -5287,6 +5314,7 @@ ${workflowContext.content}`
 ${liveText}`
           : "",
       ].join(""),
+      history,
       skill,
       systemInstructions: instructionsFor(selectedAgent, others.map((o) => o.handle)),
       agentModel: selectedAgent?.model,

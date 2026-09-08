@@ -1125,14 +1125,25 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   {
     name: "send_telegram_message",
     label: { fa: "پیام در تلگرام", en: "Sending a Telegram message" },
+    /*
+     * THE RULE IS TELEGRAM'S, and it has to be in the description or the
+     * model invents an address (user report, 2026-09-08: asked to message a
+     * colleague, it tried their @username and then their phone number, and
+     * both failed — a bot cannot open a conversation with a person).
+     */
     description:
-      "Send a message from the person's Telegram bot to a chat the bot knows "
-      + "— a chat id from list_connector_items(telegram, updates), or a "
-      + "public @channel/@group the bot is in.",
+      "Send a message from the organisation's Telegram bot. Name a COLLEAGUE "
+      + "and it reaches the chat they opened with the bot themselves; a bot "
+      + "cannot start a conversation, so a colleague who has not linked their "
+      + "Telegram cannot be reached at all — say so and point at the code on "
+      + "their own profile page. A person's @username or phone number is NOT "
+      + "an address. `chat` is for a public @channel or a group the bot is in, "
+      + "or a chat id from list_connector_items(telegram, updates).",
     parameters: obj({
-      chat: str("The chat id (a number, from updates) or @username."),
+      colleague: str("Who to send it to — a colleague's @handle, username or full name."),
+      chat: str("A public @channel/@group, or a chat id from updates. Not a person."),
       text: str("The message."),
-    }, ["chat", "text"]),
+    }, ["text"]),
     effect: "write",
   },
   {

@@ -17,7 +17,11 @@ import type { Identity } from "../src/agent/types.ts";
  * be able to do is send a message, file a card or change a record.
  */
 
-const run = vi.fn(async () => ({
+/* the parameter is DECLARED even though the fake ignores it: a mock with no
+   declared parameters types its `calls` as an EMPTY TUPLE, and then every
+   assertion about what the runtime was asked for is a type error nothing
+   reports — vitest transpiles, it does not typecheck (core's tsc, 2026-09-08). */
+const run = vi.fn(async (_request: Record<string, unknown>) => ({
   runId: "r-1", text: "ok", model: "openai/gpt-5-mini", steps: [], failed: false,
 }));
 

@@ -34,6 +34,14 @@ export interface PiRunOptions {
   model: PiModelRef;
   systemPrompt: string;
   userText: string;
+  /**
+   * WHAT WAS SAID BEFORE, oldest first (agent/history.ts).
+   *
+   * Pi's own `AgentContext.messages` is documented as "transcript visible to
+   * the model", and it had been the empty array on every run this product
+   * has ever made — see loopInput below.
+   */
+  history?: readonly { role: "user" | "assistant"; text: string }[] | undefined;
   tools: unknown[];
   // `| undefined` explicitly: the repo runs exactOptionalPropertyTypes, so an
   // optional property and a present-but-undefined one are different types.
@@ -174,18 +182,54 @@ export function bridgeAgentEvent(
  * every model saw every question twice, and the translator — whose task is
  * to echo its input in another language — was the first surface honest
  * enough to show it (a doubled transcript, joined mid-line).
+ *
+ * `context.messages` IS THE CONVERSATION (2026-09-08). It was `[]` — with no
+ * caller able to put anything in it — so every ask was a first ask and the
+ * assistant asked people to repeat themselves. The prior turns go here, in
+ * front of this question, in the order they were said; the current question
+ * stays in `prompts` alone, which is what the doubling lesson above is
+ * about and is why the two halves are still built in one function.
+ *
+ * The message shape is Pi's own (`role` + text content blocks). The provider
+ * adapters read exactly those two fields — `openai-completions.js` maps an
+ * assistant turn to `{role:"assistant", content:<text>}` and ignores the
+ * `usage`/`stopReason` metadata a REPLY carries — so a remembered turn does
+ * not have to pretend to be a response object it never was.
  */
-export function loopInput(userText: string, systemPrompt: string, tools: unknown[]): {
+export function loopInput(
+  userText: string,
+  systemPrompt: string,
+  tools: unknown[],
+  history: readonly { role: "user" | "assistant"; text: string }[] = [],
+): {
   prompts: { role: "user"; content: { type: "text"; text: string }[]; timestamp: string }[];
-  context: { systemPrompt: string; messages: never[]; tools: unknown[] };
+  context: {
+    systemPrompt: string;
+    messages: { role: "user" | "assistant"; content: { type: "text"; text: string }[]; timestamp: string }[];
+    tools: unknown[];
+  };
 } {
+  const at = new Date().toISOString();
   return {
     prompts: [{
       role: "user" as const,
       content: [{ type: "text" as const, text: userText }],
-      timestamp: new Date().toISOString(),
+      timestamp: at,
     }],
-    context: { systemPrompt, messages: [], tools },
+    context: {
+      systemPrompt,
+      /* empty turns are dropped by history.ts before they reach here; the
+         filter is the belt: an assistant message with no content maps to a
+         null-content wire message, which some providers refuse outright */
+      messages: history
+        .filter((turn) => turn.text.trim() !== "")
+        .map((turn) => ({
+          role: turn.role,
+          content: [{ type: "text" as const, text: turn.text }],
+          timestamp: at,
+        })),
+      tools,
+    },
   };
 }
 
@@ -229,7 +273,9 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   let tokensIn: number | null = null;
   let tokensOut: number | null = null;
 
-  const { prompts, context } = loopInput(options.userText, options.systemPrompt, options.tools);
+  const { prompts, context } = loopInput(
+    options.userText, options.systemPrompt, options.tools, options.history ?? [],
+  );
 
   const config = loopConfig(options, model, reasoningRequired);
 

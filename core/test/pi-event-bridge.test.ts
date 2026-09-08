@@ -118,3 +118,50 @@ describe("loopConfig", () => {
     expect(cfg.maxTokens as number).toBeGreaterThan(0);
   });
 });
+
+/**
+ * THE CONVERSATION REACHES THE MODEL (user report, 2026-09-08: "the AI
+ * assistant and agents forget about the talks that we have before").
+ *
+ * `context.messages` is Pi's own "transcript visible to the model", and it
+ * was the empty array on every run — the thread was persisted, reloaded and
+ * rendered, and the model never saw a word of it. These assertions hold the
+ * combination the way Pi performs it: `[...context.messages, ...prompts]`.
+ */
+describe("loopInput carries the conversation", () => {
+  const history = [
+    { role: "user" as const, text: "دیروز درباره قرارداد حرف زدیم" },
+    { role: "assistant" as const, text: "بله، سه بند باز ماند" },
+  ];
+
+  it("puts the prior turns BEFORE this question, in order", () => {
+    const { prompts, context } = loopInput("کدام‌ها بودند؟", "system", [], history);
+    const wire = [...context.messages, ...prompts] as {
+      role: string; content: { type: string; text: string }[];
+    }[];
+    expect(wire.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(wire.map((m) => m.content[0]!.text)).toEqual([
+      "دیروز درباره قرارداد حرف زدیم",
+      "بله، سه بند باز ماند",
+      "کدام‌ها بودند؟",
+    ]);
+  });
+
+  it("does not repeat the question as history", () => {
+    /* the doubling this function was extracted to prevent, one layer out:
+       the route reads the thread BEFORE appending the human's turn, and a
+       version that read it after would send the question twice */
+    const { prompts, context } = loopInput("کدام‌ها بودند؟", "system", [], history);
+    const asked = [...context.messages, ...prompts]
+      .filter((m) => (m as { content: { text: string }[] }).content[0]!.text === "کدام‌ها بودند؟");
+    expect(asked).toHaveLength(1);
+  });
+
+  it("drops an empty turn — a null-content message is refused by some providers", () => {
+    const { context } = loopInput("q", "system", [], [
+      { role: "assistant", text: "   " },
+      { role: "assistant", text: "پاسخ" },
+    ]);
+    expect(context.messages).toHaveLength(1);
+  });
+});

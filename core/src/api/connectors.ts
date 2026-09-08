@@ -21,7 +21,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 import { iso, OFFERED_CONNECTOR_PROVIDERS } from "./vocabulary.ts";
-import type { Db, SqlTx } from "../db/identity.ts";
+import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
 import {
@@ -546,6 +546,56 @@ export function connectorSources(provider: ConnectorProvider): readonly string[]
   return providerDef(provider)?.sources ?? [];
 }
 
+/**
+ * WHERE THE BOT ANSWERS A COLLEAGUE (db/0216).
+ *
+ * User report, 2026-09-08: the assistant was asked to send a Telegram
+ * message to a colleague — with their @username and phone number — and
+ * failed. It could not have worked: **a bot cannot open a conversation
+ * with a person**, a @username addresses a public channel or group, and a
+ * phone number addresses nothing. The only address that exists for a
+ * person is the numeric chat they opened themselves.
+ *
+ * 0212's link IS that gesture, already made: the colleague opened this
+ * org's bot and sent the code they minted in the platform. So a linked
+ * colleague is addressable and an unlinked one is not, which is Telegram's
+ * own rule rather than one of ours.
+ *
+ * The id is resolved HERE and never returned: the caller sends `user_id`
+ * and gets back a message id, so no model, browser or log line holds a
+ * colleague's Telegram number. `chat` still passes straight through — a
+ * channel or a group the bot is in is a different kind of address and
+ * always was.
+ */
+export async function telegramRecipient(
+  db: Db, identity: Identity, args: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const who = typeof args.user_id === "string" ? args.user_id.trim() : "";
+  if (who === "") return args;
+  const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+    tx.unsafe<{ chat: string | null }>(
+      `select echo.telegram_chat_for($1::uuid) as chat`,
+      [assertUuid(who, "colleague id")],
+    ),
+  );
+  const chat = rows[0]?.chat ?? null;
+  if (chat === null) {
+    /* ONE sentence for every refusal — 0216 answers NULL to "not linked",
+       "not in this org" and "no such person" alike, on purpose: telling
+       them apart would make the door an oracle for who uses Telegram. */
+    throw new ValidationError(
+      "that colleague has not linked their Telegram — a bot cannot start a chat, "
+      + "so they open the org's bot and send the code from their own profile first",
+      { code: "telegram_not_linked" },
+    );
+  }
+  /* `user_id` does not travel to the provider: Telegram has never heard
+     of it, and an argument a provider ignores is one nobody notices is
+     being sent */
+  const { user_id: _resolved, ...rest } = args;
+  return { ...rest, chat: String(chat) };
+}
+
 export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}) {
   async function rows(identity: Identity): Promise<ConnectionRow[]> {
     return db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<ConnectionRow>(
@@ -878,7 +928,10 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       if (!def || !def.actions.includes(action)) {
         throw new ValidationError("unknown connector action", { code: "connector_action_invalid" });
       }
-      return def.act(await providerCtx(identity, provider), action, args);
+      const ready = provider === "telegram" && action === "send_message"
+        ? await telegramRecipient(db, identity, args)
+        : args;
+      return def.act(await providerCtx(identity, provider), action, ready);
     },
 
     /**
