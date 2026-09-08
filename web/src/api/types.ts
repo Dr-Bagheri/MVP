@@ -1348,3 +1348,23 @@ export interface RecalledDecision {
   due_on: string | null;
   shared: number;
 }
+
+/**
+ * One saved wording of a skill (item 16, db/0215).
+ *
+ * `created_by_name` is null when a migration wrote it — a shipped skill's
+ * first version. The screen says so in words rather than naming somebody who
+ * never touched the row.
+ */
+export interface SkillVersion {
+  id: string;
+  version: number;
+  name: string;
+  description: string;
+  prompt: string;
+  model: string | null;
+  tools: string[];
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
+}

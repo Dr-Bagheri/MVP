@@ -10,6 +10,8 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton, SkeletonCards } from "@/components/scaffold";
+import { SkillDryRun, SkillHistory } from "@/components/platform/SkillWorkshop";
+import { notify } from "@/lib/notify";
 import { Card, Chip } from "@/components/ui";
 
 /**
@@ -391,6 +393,52 @@ function SkillsPageContent() {
                 {busy ? t("saving") : draft.id ? t("save") : t("create")}
               </button>
             </PanelFooter>
+          </FormPanel>
+        </Section>
+      ) : null}
+
+      {/* ── TRY IT, and WHAT IT USED TO SAY (item 16) ──────────────────
+          Both belong under the editor and nowhere else: they are about the
+          draft in the box, and neither means anything on the list below. */}
+      {draft !== null ? (
+        <Section title={t("dryRunTitle")}>
+          <FormPanel>
+            <div className="px-5 py-4">
+              <SkillDryRun prompt={draft.prompt} model={draft.model} />
+            </div>
+          </FormPanel>
+        </Section>
+      ) : null}
+
+      {draft?.id ? (
+        <Section title={t("history")}>
+          <FormPanel>
+            <div className="px-5 py-1">
+              <SkillHistory
+                skillId={draft.id}
+                /*
+                 * RESTORING PUTS THE OLD WORDING IN THE EDITOR — it does not
+                 * save it. A button that silently made an old version live
+                 * would be the one destructive act on this screen with no
+                 * confirmation, and the author has not read the text yet: it
+                 * is behind a «متن» toggle. Landing it in the box means the
+                 * ordinary save is the thing that applies it, which also
+                 * means the history records the restore as its own version
+                 * (db/0215: a ledger that can go backwards is not one).
+                 */
+                onRestore={(v) => {
+                  setDraft((prev) => (prev === null ? prev : {
+                    ...prev,
+                    name: v.name,
+                    description: v.description,
+                    prompt: v.prompt,
+                    model: v.model ?? "",
+                    tools: v.tools,
+                  }));
+                  notify(t("versionRestored"));
+                }}
+              />
+            </div>
           </FormPanel>
         </Section>
       ) : null}

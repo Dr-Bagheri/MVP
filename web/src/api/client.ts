@@ -9,6 +9,7 @@
 // notes at their former sites.)
 import type {
   RecalledDecision,
+  SkillVersion,
   TelegramLinkRecord,
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
@@ -973,6 +974,27 @@ export const api = {
    * POST for a READ, and the body is why: a window of a live transcript is
    * CONTENT, and content does not go in a URL, a query string or a log line.
    */
+  /** every wording a skill has had (item 16) */
+  async skillVersions(skillId: string): Promise<SkillVersion[]> {
+    const body = await bff<{ versions: SkillVersion[] }>(`/api/skills/${skillId}/versions`);
+    return body.versions;
+  },
+
+  /**
+   * Try a DRAFT wording once, with no tools (item 16).
+   *
+   * The prompt travels in the body, not the URL: it is the organisation's own
+   * procedure, and content does not go in a query string or an access log.
+   */
+  async dryRunSkill(input: { prompt: string; question: string; model?: string }):
+    Promise<{ text: string; model: string; run_id: string | null }> {
+    return bff("/api/skills/dry-run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+
   async recallDecisions(meetingId: string, window: string): Promise<RecalledDecision[]> {
     const body = await bff<{ decisions: RecalledDecision[] }>(
       `/api/meetings/${meetingId}/recall`,

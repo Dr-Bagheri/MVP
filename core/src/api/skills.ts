@@ -192,8 +192,69 @@ function assertQuestions(questions: string[] | undefined): void {
   }
 }
 
+/** One saved wording of a skill (db/0215). */
+export interface SkillVersion {
+  id: string;
+  version: number;
+  name: string;
+  description: string;
+  prompt: string;
+  model: string | null;
+  tools: string[];
+  created_at: string;
+  created_by: string | null;
+  /** null = a migration wrote it (a shipped skill's first version) */
+  created_by_name: string | null;
+}
+
 export function createSkillAuthoring(db: Db) {
   return {
+    /**
+     * A SKILL'S HISTORY (db/0215) — every wording it has had.
+     *
+     * The question a team asks about a procedure is «what did this used to
+     * say», and until 0215 there was no answer: an edit overwrote the only
+     * copy and the agent's behaviour changed for everybody from that second.
+     *
+     * The prompt travels with each row. It is the whole point of the screen —
+     * a list of dates with no text is a history you cannot read — and it costs
+     * nothing extra: this is the caller's own skill, whose current prompt they
+     * are already looking at.
+     */
+    async versions(identity: Identity, skillId: string): Promise<SkillVersion[]> {
+      const id = assertUuid(skillId, "skill id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          `select v.id, v.version, v.name, v.description, v.prompt, v.model, v.tools,
+                  v.created_at, v.created_by,
+                  u.display_name as created_by_name
+             from echo.skill_version v
+             left join echo.app_user u on u.id = v.created_by
+            where v.skill_id = $1
+            order by v.version desc
+            limit 50`,
+          [id]));
+      /* an empty history is not "no such skill": the read policy answers
+         nothing for a skill the caller cannot see, and 0215's backfill means
+         a skill they CAN see always has at least version 1. Both are
+         reported as they are — the caller knows which id they asked about. */
+      return rows.map((row) => ({
+        id: row.id as string,
+        version: Number(row.version),
+        name: row.name as string,
+        description: row.description as string,
+        prompt: row.prompt as string,
+        model: (row.model as string | null) ?? null,
+        tools: Array.isArray(row.tools) ? (row.tools as string[]) : [],
+        created_at: (row.created_at as Date).toISOString(),
+        created_by: (row.created_by as string | null) ?? null,
+        /* NULL means a migration wrote it — a shipped skill's first version.
+           Naming a person there would put somebody on a row they never
+           touched (M15's spelling for "the vendor did this"). */
+        created_by_name: (row.created_by_name as string | null) ?? null,
+      }));
+    },
+
     /**
      * The rows the CALLER may edit, full definitions (prompt included).
      * Deliberately not the resolved picker view: an editor needs disabled

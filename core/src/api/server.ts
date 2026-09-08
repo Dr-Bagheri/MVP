@@ -73,6 +73,7 @@ import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssis
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTelegramLinkRepo } from "./telegram-link.ts";
 import { createLiveRecallRepo } from "./live-recall.ts";
+import { createSkillDryRun } from "./skill-dry-run.ts";
 import { isConnectorProvider } from "./connector-providers.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
@@ -242,6 +243,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const telegramLink = createTelegramLinkRepo(options.db);
   const liveRecall = createLiveRecallRepo(options.db);
+  const skillDryRun = createSkillDryRun(options.db, {
+    apiKey: options.openrouterKey,
+    fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+  });
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   const tasks = createTasksRepo(options.db);
   const projects = createProjectsRepo(options.db);
@@ -4128,6 +4133,44 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       max_tool_calls: body.max_tool_calls === null
         ? null
         : typeof body.max_tool_calls === "number" ? body.max_tool_calls : undefined,
+    }));
+  });
+
+  /**
+   * A SKILL'S HISTORY (item 16, db/0215).
+   *
+   * Read-only and visibility-free: the version's own read policy is the
+   * skill's, word for word, so this route adds no authority — a caller who
+   * cannot see the skill gets an empty list, which is the same nothing they
+   * get from the skill itself.
+   */
+  app.get("/v1/skills/:id/versions", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send({ versions: await skillAuthoring.versions(identity, id) });
+  });
+
+  /**
+   * TRY A DRAFT (item 16).
+   *
+   * The text on the author's screen, run once, with NO TOOLS — a prompt
+   * nobody has reviewed should not be able to send a message or file a card
+   * on its first outing. It writes an `agent_run` (a model was called and the
+   * organisation paid for it) and nothing else: no skill, no version, no
+   * conversation.
+   *
+   * There is deliberately no `skill_id` parameter. Trying the SAVED wording
+   * is what running the skill already does; what this exists for is the
+   * wording that is not saved yet, and accepting an id would make the route
+   * answer two different questions with one name.
+   */
+  app.post("/v1/skills/dry-run", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.send(await skillDryRun.dryRun(identity, {
+      prompt: typeof body.prompt === "string" ? body.prompt : "",
+      question: typeof body.question === "string" ? body.question : "",
+      ...(typeof body.model === "string" ? { model: body.model } : {}),
     }));
   });
 

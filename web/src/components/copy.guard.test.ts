@@ -48,6 +48,12 @@ const EXPLANATION =
  *               what a key's assistant permission grants.
  */
 const ALLOWED: Record<string, string[]> = {
+  /* CONSTRAINT — what a dry run can and cannot do (item 16, 2026-09-08). It
+     runs the draft WITHOUT SAVING IT and with NO TOOLS, so it sends nothing
+     and changes nothing; an author pressing «آزمایش کن» on an unreviewed
+     prompt has no other way to learn either, and both facts are the reason
+     the button is safe to press. */
+  "components/platform/SkillWorkshop.tsx": ["dryRunNote"],
   // STATE — the refusal card a non-admin sees instead of the page
   "components/platform/AuditLogs.tsx": ["adminOnlyNote"],
   "app/[locale]/management/models/page.tsx": ["adminOnlyNote"],
