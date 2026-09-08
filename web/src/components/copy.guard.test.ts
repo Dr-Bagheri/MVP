@@ -68,7 +68,11 @@ const ALLOWED: Record<string, string[]> = {
   // CONSEQUENCE — a transcript that may still change; a rename that reaches
   // the board (shown only once the name has changed); a schedule's meaning
   "app/[locale]/calls/[id]/page.tsx": ["provisionalHint"],
-  "components/platform/ProjectDialog.tsx": ["renameNote"],
+  /* 2026-09-08: the note moved with the act. It sat in the create/edit
+     dialog; editing is the panel now, so the CONSEQUENCE of a rename is
+     said beside the field that causes it and only while it is being
+     changed — which is the allowed kind at its sharpest. */
+  "components/platform/ProjectDetail.tsx": ["renameNote"],
   "components/platform/tasks/TaskDialogs.tsx": ["scheduleExplain"],
   // CONSEQUENCE — what deleting a member does (emptied, handle retired for
   // good), said beside the field that asks for the reason

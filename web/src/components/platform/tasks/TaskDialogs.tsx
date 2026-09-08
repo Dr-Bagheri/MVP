@@ -262,9 +262,19 @@ function LabelEditor({ label, onClose, onSaved }: {
 }
 
 /* ── the assignee picker: the org's people, searched by name ──────────── */
-export function AssigneePicker({ selected, onToggle, people }: {
+export function AssigneePicker({ selected, onToggle, people, copy }: {
   selected: string[];
   onToggle: (userId: string) => void;
+  /**
+   * THE THREE STRINGS THAT ARE ABOUT THE RELATIONSHIP, not about people.
+   *
+   * A project's rail draws this same control for its MEMBERS (2026-09-08),
+   * and «حذف مسئول» on a project reads as the wrong feature — the picture is
+   * one, the words belong to the surface. Everything else it renders (the
+   * search box, "nobody found", a person's role) says the same thing on both,
+   * so only these three are the caller's; omitted, they are the task's.
+   */
+  copy?: { remove: (name: string) => string; add: string; unnamed: string };
   /*
    * THE ROSTER, HANDED DOWN — not fetched here.
    *
@@ -317,7 +327,9 @@ export function AssigneePicker({ selected, onToggle, people }: {
           key={person.id}
           type="button"
           onClick={() => onToggle(person.id)}
-          title={t("removeAssignee", { name: personName(person, locale) })}
+          title={copy === undefined
+            ? t("removeAssignee", { name: personName(person, locale) })
+            : copy.remove(personName(person, locale))}
           className="btn btn-sm bg-accent-soft font-medium text-accent"
         >
           {/* NAME ONLY (user directive, 2026-09-04: "do not include the
@@ -332,12 +344,12 @@ export function AssigneePicker({ selected, onToggle, people }: {
       ))}
       {unnamed.map((id) => (
         <span key={id} className="btn btn-sm bg-surface-2 text-fg-subtle">
-          {t("assigneeUnnamed")}
+          {copy?.unnamed ?? t("assigneeUnnamed")}
         </span>
       ))}
       <button
         type="button"
-        aria-label={t("addAssignee")}
+        aria-label={copy?.add ?? t("addAssignee")}
         onClick={() => setOpen((v) => !v)}
         /* 2026-09-03: the theme's compact control, square by width, so it is
            exactly the height of the assignee chips it stands in a row with

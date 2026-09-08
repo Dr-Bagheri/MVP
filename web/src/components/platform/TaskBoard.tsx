@@ -716,7 +716,10 @@ export function TaskBoard() {
                 {/* the full form, opened FROM the column — a card is made
                     where it is going to live, and the board no longer carries
                     a separate «تسک جدید» that had to be told the column */}
-                <BoardAddRow label={t("addCard")} onClick={() => setCreating(col.id)} />
+                {/* `tCommon`, because the project panel's primary act opens
+                    this same dialog and one sentence gets one key
+                    (2026-09-08: «افزودن کارت» → «افزودن تسک») */}
+                <BoardAddRow label={tCommon("addTask")} onClick={() => setCreating(col.id)} />
               </div>
             </section>
           ))}
@@ -825,7 +828,6 @@ export function TaskBoard() {
           the row they pressed, which is where they were looking. */}
       {creatingProject ? (
         <ProjectDialog
-          mode="create"
           people={people}
           meId={me?.id ?? null}
           onClose={() => setCreatingProject(false)}

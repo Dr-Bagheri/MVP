@@ -370,7 +370,6 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
 
       {creating ? (
         <ProjectDialog
-          mode="create"
           people={people}
           meId={meId}
           onClose={() => setCreating(false)}

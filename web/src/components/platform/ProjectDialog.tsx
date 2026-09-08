@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { OrgPersonRecord, ProjectRecord, ProjectTone } from "@/api/types";
@@ -14,18 +14,27 @@ import { IconCheck, IconClose, IconPlus } from "@/components/icons";
 import { personName } from "@/lib/format";
 
 /**
- * THE PROJECT DIALOG — one form for making a project and for editing one
- * (user, 2026-09-05: "edit in projects window is not set to what it has in
- * it"). Until then the create dialog carried five fields — name, a line of
- * description, colour, icon, who is on it — and the edit dialog three of
- * them, drawn again in a different anatomy, so a project's icon and roster
- * could be chosen once and never changed from the same door. Two drawings of
- * one form are the pair that stops matching the first time either gains a
- * field; this is the one drawing.
+ * THE NEW-PROJECT DIALOG — the form that MAKES one, and since 2026-09-08 only
+ * that (user: "in projects edit mode it should edit the existing page the same
+ * way in tasks edit, not popping up another window").
+ *
+ * It carried both acts for three days, on the argument that two drawings of
+ * one form stop matching. The argument was right and the conclusion was one
+ * step too far: creating and editing are not the same act. Creating needs
+ * every field in front of the person at once, because there is no row yet and
+ * a half-made project has nowhere to be. Editing changes ONE field against a
+ * row that already exists, and belongs where that row is read — which for a
+ * project is now `ProjectDetail`'s rail, exactly as a card's is `TaskDetail`'s.
+ * The board has had this split since 0144; the project simply did not.
+ *
+ * So what is left here is the create path, and the edit machinery — the
+ * diff-based patch, the roster's added/removed pair, the rename note — moved
+ * with the act it belonged to rather than being kept for a caller that no
+ * longer exists.
  *
  * Its anatomy is the new-task dialog's (R8/R5): the 15px bold title with the
- * close box beside it, `FIELD_LABEL` over `PANEL_INPUT`/`PANEL_TEXTAREA`,
- * the footer split between cancel at the start and the primary at the end.
+ * close box beside it, `FIELD_LABEL` over `PANEL_INPUT`/`PANEL_TEXTAREA`, the
+ * footer split between cancel at the start and the primary at the end.
  *
  * The people picker is a LIST OF TOGGLES rather than a search box, and that
  * is a size judgement rather than a preference: these are colleagues in one
@@ -33,12 +42,12 @@ import { personName } from "@/lib/format";
  * that, the box arrives — and it arrives with a reason, not because a search
  * field looks more finished.
  *
- * EDIT IS DIFF-BASED, like every other form in this product: typing into a
- * field and putting it back sends nothing, so a no-op edit writes no row and
- * a stale page cannot clobber a colleague's change to a field it never
- * touched. The roster is written one person at a time (each call idempotent)
- * and the record is RE-READ once at the end, so the caller adopts the project
- * as the server holds it rather than as the form believed it.
+ * THE 0208 FIELDS ARE NOT HERE ON PURPOSE. A project's stage, priority, lead
+ * and two dates are all editable in the panel the moment it exists, and a
+ * create form that asks nine questions before anything can be made is a form
+ * people abandon at the fourth. Every one of them has a column default that
+ * reads as an honest starting state: planning has not begun, nobody has been
+ * named, no date has been promised.
  */
 
 export const PROJECT_TONES: ProjectTone[] = [
@@ -47,28 +56,26 @@ export const PROJECT_TONES: ProjectTone[] = [
 
 /* the eight the reference offers. A closed set for the same reason the tone
    is closed: a free emoji field is a text input somebody pastes a sentence
-   into, and the card draws it at 20px. */
-const ICON_CHOICES = ["📁", "🚀", "🎯", "🧩", "📈", "🛠️", "💡", "🌱"];
+   into, and the card draws it at 20px. EXPORTED since 2026-09-08: the detail
+   panel's rail offers the same eight, and a second list there is the pair
+   that drifts. */
+export const PROJECT_ICONS = ["📁", "🚀", "🎯", "🧩", "📈", "🛠️", "💡", "🌱"];
 
-type Props = {
+export function ProjectDialog({ people, meId, onClose, onSaved }: {
   people: OrgPersonRecord[];
   meId: string | null;
   onClose: () => void;
-  /** the record as the server returned it — created, or re-read after an edit */
+  /** the record as the server created it */
   onSaved: (project: ProjectRecord) => void;
-} & ({ mode: "create"; project?: undefined } | { mode: "edit"; project: ProjectRecord });
-
-export function ProjectDialog(props: Props) {
-  const { people, meId, onClose, onSaved } = props;
-  const editing = props.mode === "edit" ? props.project : null;
+}) {
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
   const locale = useLocale();
-  const [name, setName] = useState(editing?.name ?? "");
-  const [summary, setSummary] = useState(editing?.summary ?? "");
-  const [tone, setTone] = useState<ProjectTone>(editing?.tone ?? "blue");
-  const [icon, setIcon] = useState<string | null>(editing ? editing.icon : "📁");
-  const [members, setMembers] = useState<string[]>(editing?.member_ids ?? []);
+  const [name, setName] = useState("");
+  const [summary, setSummary] = useState("");
+  const [tone, setTone] = useState<ProjectTone>("blue");
+  const [icon, setIcon] = useState<string | null>("📁");
+  const [members, setMembers] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   /* A REFUSED WRITE KEEPS THE DIALOG (2026-09-06, the check-up). It used to
      call an `onFailed` that every parent answered by CLOSING it — the name,
@@ -77,44 +84,24 @@ export function ProjectDialog(props: Props) {
      the draft it refused, and the draft stays to be sent again. */
   const [refused, setRefused] = useState(false);
 
-  const patch = useMemo(() => {
-    const body: Partial<{ name: string; summary: string; tone: ProjectTone; icon: string | null }> = {};
-    if (!editing) return body;
-    if (name.trim() !== editing.name) body.name = name.trim();
-    if (summary.trim() !== editing.summary) body.summary = summary.trim();
-    if (tone !== editing.tone) body.tone = tone;
-    if (icon !== editing.icon) body.icon = icon;
-    return body;
-  }, [editing, name, summary, tone, icon]);
-  const added = editing ? members.filter((id) => !editing.member_ids.includes(id)) : [];
-  const removed = editing ? editing.member_ids.filter((id) => !members.includes(id)) : [];
-  const dirty = editing
-    ? Object.keys(patch).length > 0 || added.length > 0 || removed.length > 0
-    : name.trim() !== "";
-  const canSubmit = dirty && !busy && name.trim() !== "";
+  const canSubmit = !busy && name.trim() !== "";
 
   const submit = () => {
     if (!canSubmit) return;
     setBusy(true);
     setRefused(false);
-    const run = editing
-      ? (async () => {
-          if (Object.keys(patch).length > 0) await api.updateProject(editing.id, patch);
-          for (const id of added) await api.setProjectMember(editing.id, id, true);
-          for (const id of removed) await api.setProjectMember(editing.id, id, false);
-          return api.project(editing.id);
-        })()
-      : api.createProject({
-          name: name.trim(),
-          summary: summary.trim(),
-          tone,
-          icon,
-          member_ids: members,
-        });
-    void run.then(onSaved).catch(() => { setBusy(false); setRefused(true); });
+    void api.createProject({
+      name: name.trim(),
+      summary: summary.trim(),
+      tone,
+      icon,
+      member_ids: members,
+    })
+      .then(onSaved)
+      .catch(() => { setBusy(false); setRefused(true); });
   };
 
-  const title = editing ? t("edit") : t("newProject");
+  const title = t("newProject");
 
   return (
     <Overlay onClose={onClose} label={title} size="md">
@@ -134,7 +121,7 @@ export function ProjectDialog(props: Props) {
             maxLength={120}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            placeholder={editing ? undefined : t("namePlaceholder")}
+            placeholder={t("namePlaceholder")}
             className={PANEL_INPUT}
           />
         </label>
@@ -146,7 +133,7 @@ export function ProjectDialog(props: Props) {
             maxLength={400}
             rows={2}
             onChange={(e) => setSummary(e.target.value)}
-            placeholder={editing ? undefined : t("summaryPlaceholder")}
+            placeholder={t("summaryPlaceholder")}
             className={PANEL_TEXTAREA}
           />
         </label>
@@ -156,7 +143,7 @@ export function ProjectDialog(props: Props) {
         <div>
           <span className={FIELD_LABEL}>{t("fieldIcon")}</span>
           <div className="flex flex-wrap gap-1.5">
-            {ICON_CHOICES.map((choice) => (
+            {PROJECT_ICONS.map((choice) => (
               <button
                 key={choice}
                 type="button"
@@ -186,7 +173,7 @@ export function ProjectDialog(props: Props) {
                  reads as somebody else's), so a switch here would be a control
                  whose off position the server ignores. On EDIT the roster is
                  the record's, and leaving it is a real choice. */
-              const pinned = !editing && person.id === meId;
+              const pinned = person.id === meId;
               const on = pinned || members.includes(person.id);
               return (
                 <button
@@ -210,13 +197,6 @@ export function ProjectDialog(props: Props) {
           </div>
         </div>
 
-        {/* the rename's consequence, said before it happens rather than
-            discovered on the board — a project's name IS its folder's */}
-        {editing && "name" in patch ? (
-          <p className="well text-[11px] text-fg-muted">
-            {t("renameNote")}
-          </p>
-        ) : null}
       </div>
 
       {refused ? <p role="alert" className="mt-3 text-xs text-danger">{t("writeFailed")}</p> : null}
@@ -226,14 +206,8 @@ export function ProjectDialog(props: Props) {
           {tCommon("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={!canSubmit} className={FOOTER_PRIMARY}>
-          {editing ? (
-            tCommon("save")
-          ) : (
-            <>
-              <IconPlus width={14} height={14} />
-              {busy ? t("creating") : t("create")}
-            </>
-          )}
+          <IconPlus width={14} height={14} />
+          {busy ? t("creating") : t("create")}
         </button>
       </div>
     </Overlay>

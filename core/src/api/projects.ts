@@ -22,7 +22,11 @@
  * wall and this file adds no second opinion about who may see what.
  */
 import { NotFoundError, ValidationError } from "./errors.ts";
-import { iso } from "./vocabulary.ts";
+import {
+  iso,
+  PROJECT_PRIORITIES, PROJECT_STAGES,
+  type ProjectPriority, type ProjectStage,
+} from "./vocabulary.ts";
 import { TASK_COLUMN_TONES, type TaskColumnTone } from "./tasks.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -47,6 +51,23 @@ export interface ProjectRecord {
   /** live counts over that category — never stored */
   task_total: number;
   task_done: number;
+
+  // ── 0208: the facts a project owns about itself ──────────────────────────
+  stage: ProjectStage;
+  priority: ProjectPriority;
+  /** who is accountable — distinct from created_by, who typed the row */
+  lead_id: string | null;
+  /** a DAY, not an instant: a project has no clock time (0208) */
+  starts_on: string | null;
+  due_on: string | null;
+  /**
+   * The project's room, if it has one (0184's `chat_channel.project_id`).
+   *
+   * Read, never written here — the channel is the chat surface's to create,
+   * and this is the pointer a project's own screen needs to offer the door.
+   * A project with no room is the ordinary state, not a gap.
+   */
+  channel_id: string | null;
 }
 
 const MAX_NAME = 120;
@@ -87,6 +108,50 @@ function cleanIcon(value: unknown): string | null {
   return icon;
 }
 
+/**
+ * The two closed sets, refused BY NAME (0208).
+ *
+ * One function for both, because they are the same shape and a second copy is
+ * the one that stops matching. The refusal names the field and lists what is
+ * allowed — a caller that sent «finished» learns what to send instead, and the
+ * schema's 23514 says the same sentence one layer down.
+ */
+function cleanFromSet<T extends string>(
+  value: unknown, allowed: readonly T[], field: string, fallback: T,
+): T {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+    throw new ValidationError(`unknown project ${field}`, {
+      code: `project_${field}_invalid`,
+      params: { allowed: allowed.join(", ") },
+    });
+  }
+  return value as T;
+}
+
+/**
+ * A DAY, or nothing (0208).
+ *
+ * `YYYY-MM-DD` and nothing else: the column is a `date`, and accepting an
+ * instant here would mean choosing a timezone to drop it into — which is the
+ * pair of readings that moved a meeting by an offset on 2026-09-06. The
+ * check is on the SHAPE and then on the calendar (`2026-02-31` matches the
+ * pattern and is not a day), because a regex alone would let it through and
+ * Postgres would refuse it as a 22008 nobody's screen explains.
+ */
+function cleanDay(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const day = typeof value === "string" ? value.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new ValidationError(`${field} must be a day`, { code: `project_${field}_invalid` });
+  }
+  const at = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(at.getTime()) || at.toISOString().slice(0, 10) !== day) {
+    throw new ValidationError(`${field} is not a real day`, { code: `project_${field}_invalid` });
+  }
+  return day;
+}
+
 function cleanSummary(value: unknown): string {
   const summary = typeof value === "string" ? value.trim() : "";
   if (summary.length > MAX_SUMMARY) {
@@ -109,13 +174,20 @@ function cleanSummary(value: unknown): string {
 const PROJECT_ROWS = `
   select p.id, p.name, p.summary, p.tone, p.icon, p.archived_at,
          p.created_by, p.created_at,
+         p.stage, p.priority, p.lead_id, p.starts_on, p.due_on,
          tt.id as topic_id,
+         ch.id as channel_id,
          coalesce(mem.ids, '{}') as member_ids,
          coalesce(cnt.total, 0) as task_total,
          coalesce(cnt.done, 0) as task_done
     from echo.project p
     left join echo.task_topic tt
       on tt.project_id = p.id and tt.archived_at is null
+    /* the project's room (0184), read under the CALLER — a channel they may
+       not read comes back null, which is the same answer as "no room" and is
+       the right one: the door this pointer opens would refuse them anyway */
+    left join echo.chat_channel ch
+      on ch.project_id = p.id and ch.archived_at is null
     left join lateral (
       select array_agg(m.user_id) as ids
         from echo.project_member m where m.project_id = p.id
@@ -142,7 +214,28 @@ function toProject(row: Record<string, unknown>): ProjectRecord {
     member_ids: ((row.member_ids as string[] | null) ?? []).map(String),
     task_total: Number(row.task_total ?? 0),
     task_done: Number(row.task_done ?? 0),
+    stage: row.stage as ProjectStage,
+    priority: row.priority as ProjectPriority,
+    lead_id: (row.lead_id as string | null) ?? null,
+    /* a `date` column comes back as a JS Date from the driver and as a string
+       from a text cast, and the wire promises ONE shape — `YYYY-MM-DD`, the
+       day the column holds, with no zone to render it in */
+    starts_on: day(row.starts_on),
+    due_on: day(row.due_on),
+    channel_id: (row.channel_id as string | null) ?? null,
   };
+}
+
+/** a `date` as the wire spells it, whichever way the driver handed it over */
+function day(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    /* the column is a DAY with no zone; `toISOString` would first move it
+       into UTC, which on a machine east of Greenwich hands back yesterday */
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  }
+  return String(value).slice(0, 10);
 }
 
 /**
@@ -195,22 +288,35 @@ export function createProjectsRepo(db: Db) {
     input: {
       name?: unknown; summary?: unknown; tone?: unknown;
       icon?: unknown; member_ids?: unknown;
+      stage?: unknown; priority?: unknown; lead_id?: unknown;
+      starts_on?: unknown; due_on?: unknown;
     },
   ): Promise<ProjectRecord> {
     const name = cleanName(input.name);
     const summary = cleanSummary(input.summary);
     const tone = cleanTone(input.tone);
     const icon = cleanIcon(input.icon);
+    /* the 0208 fields are OPTIONAL on create and each falls back to the
+       column's own default — a create dialog that asks for five more answers
+       before a project can exist is a form people stop finishing */
+    const stage = cleanFromSet(input.stage, PROJECT_STAGES, "stage", "active");
+    const priority = cleanFromSet(input.priority, PROJECT_PRIORITIES, "priority", "medium");
+    const leadId = typeof input.lead_id === "string" && input.lead_id !== "" ? input.lead_id : null;
+    const startsOn = cleanDay(input.starts_on, "starts_on");
+    const dueOn = cleanDay(input.due_on, "due_on");
     const invited = Array.isArray(input.member_ids)
       ? input.member_ids.filter((v): v is string => typeof v === "string" && v !== "")
       : [];
 
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const created = await tx.unsafe<Record<string, unknown>>(
-        `insert into echo.project (org_id, name, summary, tone, icon, created_by)
-         values (echo.actor_org_id(), $1, $2, $3, $4, echo.actor_id())
+        `insert into echo.project
+           (org_id, name, summary, tone, icon, created_by,
+            stage, priority, lead_id, starts_on, due_on)
+         values (echo.actor_org_id(), $1, $2, $3, $4, echo.actor_id(),
+                 $5, $6, $7, $8::date, $9::date)
          returning id`,
-        [name, summary, tone, icon],
+        [name, summary, tone, icon, stage, priority, leadId, startsOn, dueOn],
       );
       const id = String(created[0]!.id);
 
@@ -263,6 +369,32 @@ export function createProjectsRepo(db: Db) {
     if ("summary" in patch) put("summary", cleanSummary(patch.summary));
     if ("tone" in patch) put("tone", cleanTone(patch.tone));
     if ("icon" in patch) put("icon", cleanIcon(patch.icon));
+
+    /* 0208. OMIT-LEAVES / NULL-CLEARS, the contract this product already has
+       at /v1/me and on the org form: `"lead_id" in patch` is the supplied
+       signal, and a null inside it genuinely clears the field. Reading
+       `patch.lead_id ?? undefined` instead would make "nobody leads this any
+       more" indistinguishable from "the form did not mention a lead", which
+       is the interaction where a save button does nothing. */
+    if ("stage" in patch) {
+      put("stage", cleanFromSet(patch.stage, PROJECT_STAGES, "stage", "active"));
+    }
+    if ("priority" in patch) {
+      put("priority", cleanFromSet(patch.priority, PROJECT_PRIORITIES, "priority", "medium"));
+    }
+    if ("lead_id" in patch) {
+      put("lead_id", typeof patch.lead_id === "string" && patch.lead_id !== ""
+        ? patch.lead_id
+        : null);
+    }
+    if ("starts_on" in patch) {
+      values.push(cleanDay(patch.starts_on, "starts_on"));
+      sets.push(`starts_on = $${values.length}::date`);
+    }
+    if ("due_on" in patch) {
+      values.push(cleanDay(patch.due_on, "due_on"));
+      sets.push(`due_on = $${values.length}::date`);
+    }
     /* ARCHIVED, not deleted: 0181 grants nobody DELETE on a project, and the
        api must not be the place that pretends otherwise */
     if ("archived" in patch) put("archived_at", patch.archived === true ? new Date() : null);

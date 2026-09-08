@@ -31,7 +31,7 @@ export type {
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,
-  ProjectRecord, ProjectTone, ProjectWorkloadRow,
+  ProjectRecord, ProjectTone, ProjectWorkloadRow, ProjectStage, ProjectPriority,
   TaskRecurrenceRecord,
   ChatChannelRecord, ChatMessageRecord, ChatEvent,
   ChatReactionRecord, ChatReplyPreview, JoinInviteRecord, InviteKind,

@@ -5,41 +5,64 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
+/* the VALUES come from `@echo/core/vocabulary` — `wire` is types-only by
+   design (its own header), so a value import from it resolves under
+   typecheck and fails in the bundler */
+import { PROJECT_STAGES, PROJECT_PRIORITIES } from "@echo/core/vocabulary";
 import type {
-  OrgPersonRecord, ProjectRecord, ProjectWorkloadRow,
+  OrgPersonRecord, ProjectRecord, ProjectStage, ProjectWorkloadRow,
   TaskCardRecord, TaskColumnRecord, TaskLabelRecord, TaskTopicRecord,
 } from "@/api/types";
-import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
+import { Select } from "@/components/Select";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { DetailPanel } from "./DetailPanel";
-import { TONE_DOT, PRIORITY_CHIP, NewTaskDialog } from "./tasks/TaskDialogs";
-import { ProjectDialog } from "./ProjectDialog";
 import {
-  BODY_HEADING, BODY_TEXT, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY,
+  AssigneePicker, DueField, PRIORITY_DOT, TONE_DOT, PRIORITY_CHIP, NewTaskDialog,
+} from "./tasks/TaskDialogs";
+import { TonePicker, PROJECT_ICONS } from "./ProjectDialog";
+import {
+  BODY_HEADING, BODY_TEXT, PANEL_INPUT, PANEL_TEXTAREA,
+  RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY, SECTION_EMPTY,
 } from "./tasks/panelStyle";
 import {
-  IconArchive, IconCheck, IconClose, IconPencil, IconPeople3, IconPlus, IconRetry,
-  IconTrash,
+  IconArchive, IconCheck, IconPencil, IconPeople3, IconPlus, IconRetry, IconTrash,
 } from "@/components/icons";
 import { SkeletonLines } from "@/components/scaffold";
 import { digits, formatDate, personName } from "@/lib/format";
 
 /**
- * ONE PROJECT (0181).
+ * ONE PROJECT (0181), and since 2026-09-08 THE PLACE A PROJECT IS EDITED.
  *
- * The reference's project screen has tabs — conversation, tasks, board,
- * calendar. Two of those are surfaces this product already has and one is not
- * built yet, so this page shows what is TRUE rather than the full row with
- * two of them empty:
+ * The user's directive was two sentences: "in projects edit mode it should
+ * edit the existing page the same way in tasks edit, not popping up another
+ * window — remove the second pop up window", and "give projects more related
+ * options". They are one change, because the second is only bearable inside
+ * the first: five more fields in a modal-over-a-modal is a form; five more
+ * fields in the rail is where a task already keeps its own.
  *
- *   · its people, which is the one thing a project owns.
- *   · its work — the tasks filed under the project's own category, read
- *     from the board (0181: the category IS the project on the board), with
- *     a door into the board itself filtered to it.
+ * SO THE SHAPE IS THE TASK DETAIL'S, exactly:
  *
- * The conversation tab arrives with the chat room. A tab that opens onto
- * «به‌زودی» is a promise the product has to keep on a schedule nobody set.
+ *   · «ویرایش» toggles the TITLE and the SUMMARY in place — the same
+ *     input-over-text the task's own header uses, saving on blur, with the
+ *     button reading «تمام» while it is on.
+ *   · EVERY OTHER FIELD IS A LIVE CONTROL IN THE RAIL, with no edit mode at
+ *     all. That is the reference's own reasoning and the task screen's: the
+ *     rail is where a card is actually changed, so a mode in front of it
+ *     would be a door in front of a door.
+ *   · `ProjectDialog` keeps ONE job — creating. Two shapes for one record is
+ *     the pair that stops matching, but creating and editing are not one act:
+ *     creating needs every field at once because the row does not exist yet,
+ *     editing changes one field against a row that does. The board has had
+ *     exactly this split since 0144 (NewTaskDialog to create, TaskDetail to
+ *     edit) and a project now matches it.
+ *
+ * WHAT THE RAIL CARRIES (0208 for the five that needed columns): the stage,
+ * the priority, the lead, the people, the two dates, the tone, the icon, the
+ * folder it owns on the board, its room, how far it has got, when it began.
+ *
+ * It keeps an address: `/projects?project=<id>` is a link a person can send,
+ * and the old `/projects/<id>` redirects there.
  */
 export function ProjectDetail({ id, meId, isAdmin, onClose }: {
   id: string;
@@ -54,7 +77,8 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
   const [board, setBoard] = useState<{ columns: TaskColumnRecord[]; tasks: TaskCardRecord[] } | null>(null);
   const [editing, setEditing] = useState(false);
-  const [managing, setManaging] = useState(false);
+  const [name, setName] = useState("");
+  const [summary, setSummary] = useState("");
   const [ordering, setOrdering] = useState(false);
   const [workload, setWorkload] = useState<ProjectWorkloadRow[] | null>(null);
   const [labels, setLabels] = useState<TaskLabelRecord[]>([]);
@@ -90,6 +114,16 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
     void api.projectWorkload(id).then(setWorkload).catch(() => setWorkload([]));
   }, [id, tasksEpoch, epoch]);
 
+  /* the drafts adopt the record — keyed on the VALUES as well as the id, so a
+     colleague's rename lands in the box rather than being overwritten by a
+     draft nobody is typing into (the task detail's own effect) */
+  const loadedName = typeof project === "object" && project !== null ? project.name : null;
+  const loadedSummary = typeof project === "object" && project !== null ? project.summary : null;
+  useEffect(() => {
+    if (loadedName !== null) setName(loadedName);
+    if (loadedSummary !== null) setSummary(loadedSummary);
+  }, [id, loadedName, loadedSummary]);
+
   const mine = useMemo(() => {
     if (typeof project !== "object" || project === null || board === null) return [];
     /* NO `topic_id === null` EARLY RETURN. It stood here and read as the
@@ -124,27 +158,18 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
     .map((mid) => people.find((p) => p.id === mid))
     .filter((p): p is OrgPersonRecord => p !== undefined);
   const done = mine.filter((task) => task.done).length;
+  /* `find` answers undefined for a null lead all by itself — no person has a
+     null id — so the ternary that stood here was a second way of asking one
+     question */
+  const lead = people.find((p) => p.id === project.lead_id) ?? null;
 
   const patch = (body: Parameters<typeof api.updateProject>[1]) => {
+    setError(null);
     void api.updateProject(project.id, body)
       .then(setProject)
       .catch(() => setError(t("writeFailed")));
   };
 
-  /*
-   * THE DETAIL PANEL, NOT A PAGE (R18, user ruling 2026-09-05: "when you click
-   * on a project it should open a pop-up window, not change the page — this
-   * problem is systematic"). The frame is DetailPanel's — the task detail's,
-   * measured — and this file owns only what goes in its slots: the ⋯ menu and
-   * the edit toggle beside the close, the way out to the board and the one
-   * primary act (giving work) at the other end, and a rail carrying a
-   * project's own facts — the folder it owns on the board, how far it has got,
-   * its tone, its people, when it began. Same anatomy as a task, its own
-   * contents.
-   *
-   * It keeps an address all the same: `/projects?project=<id>` is a link a
-   * person can send, and the old `/projects/<id>` redirects there.
-   */
   const start = isAdmin ? (
     <>
       <KebabMenu
@@ -175,133 +200,317 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           },
         ]}
       />
+      {/* THE TOGGLE, not a door (2026-09-08). It opened `ProjectDialog` over
+          this panel — a modal on a modal, which is what the user called "the
+          second pop up window". It now turns the two prose fields below into
+          the boxes that write them, exactly as the task detail's does, and
+          says «تمام» while it is on. */}
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={() => setEditing((v) => !v)}
         className="btn btn-sm border border-border font-medium text-fg hover:bg-border"
       >
         <IconPencil width={12} height={12} />
-        {t("edit")}
+        {editing ? tCommon("done") : t("edit")}
       </button>
     </>
   ) : null;
 
-  const end = (
-    <>
-      {/* the board, standing on this project's own folder. A link rather
-          than a second board: one place cards are moved. */}
-      <Link
-        href={project.topic_id === null ? "/tasks" : `/tasks?topic=${encodeURIComponent(project.topic_id)}`}
-        className="btn btn-sm bg-accent-soft font-medium text-accent"
-      >
-        {t("openBoard")}
-      </Link>
-      {/* GIVING WORK IS AN ADMIN'S (0186), the same wall the project itself
-          is behind — for a member the button would be a refusal. Anybody may
-          still create a card on the board; what is admin-walled is the
-          surface for handing it to somebody. */}
-      {isAdmin && project.topic_id !== null ? (
-        <button
-          type="button"
-          onClick={() => setOrdering(true)}
-          className="btn btn-sm bg-accent text-on-accent hover:opacity-90"
-        >
-          <IconPlus width={12} height={12} />
-          {t("newOrder")}
-        </button>
-      ) : null}
-    </>
-  );
+  /*
+   * ONE ACT AT THIS END (user, 2026-09-08: "remove وظایف").
+   *
+   * «وظایف» was a second door to the board filtered to this project — and the
+   * rail's «پوشهٔ برد» row is already that link, wearing the folder's own
+   * name. Two doors to one place is what this panel was extracted to stop.
+   *
+   * What is left is «افزودن تسک», the board's own key: the button opens the
+   * board's own dialog, so it says the board's own word.
+   */
+  const end = isAdmin && project.topic_id !== null ? (
+    /* GIVING WORK IS AN ADMIN'S (0186), the same wall the project itself is
+       behind — for a member the button would be a refusal. Anybody may still
+       create a card on the board; what is admin-walled is the surface for
+       handing it to somebody. */
+    <button
+      type="button"
+      onClick={() => setOrdering(true)}
+      className="btn btn-sm bg-accent text-on-accent hover:opacity-90"
+    >
+      <IconPlus width={12} height={12} />
+      {tCommon("addTask")}
+    </button>
+  ) : null;
 
   /*
-   * THE RAIL — the task detail's, row for row: an 11px/600 label above a
-   * 12.5px/600 value, receded when the value is empty so the row still reads
-   * as a row. What it CARRIES is a project's own facts.
+   * THE RAIL — the task detail's, row for row: an 11px/600 label over a
+   * 12.5px/600 value, receded when empty so the row still reads as a row.
+   *
+   * Every writable row is a LIVE control for an admin and a READING for a
+   * member. Not a disabled control: 0186's own rule is that a greyed button
+   * is a promise the product will not keep, and a member reading a project's
+   * stage is the ordinary case rather than a refusal.
    */
   const rail = (
     <>
-
-          {/* the board folder this project owns (0181) — the one row that
-              points somewhere, because the work itself lives there */}
-          <div>
-            <span className={RAIL_LABEL}>{t("fieldBoardFolder")}</span>
-            {project.topic_id === null ? (
-              <span className={RAIL_EMPTY}>{t("noBoardFolder")}</span>
-            ) : (
-              <Link href={`/tasks?topic=${project.topic_id}`} className={`${RAIL_VALUE} hover:text-accent`}>
-                <bdi>{project.name}</bdi>
-              </Link>
-            )}
+      {/* ── WHERE THE WORK IS (0208) ──────────────────────────────────── */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldStage")}</span>
+        {isAdmin ? (
+          <div className="flex flex-wrap gap-1">
+            {PROJECT_STAGES.map((stage) => (
+              <button
+                key={stage}
+                type="button"
+                aria-pressed={project.stage === stage}
+                onClick={() => patch({ stage })}
+                className={`btn btn-sm ${
+                  project.stage === stage
+                    ? "bg-accent-soft text-accent"
+                    : "text-fg-muted hover:text-fg"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${STAGE_DOT[stage]}`} aria-hidden />
+                {t(`stage_${stage}`)}
+              </button>
+            ))}
           </div>
+        ) : (
+          <span className="flex items-center gap-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${STAGE_DOT[project.stage]}`} aria-hidden />
+            <span className={RAIL_VALUE}>{t(`stage_${project.stage}`)}</span>
+          </span>
+        )}
+      </div>
 
-          {/* PROGRESS, counted off the board on every read (0181) — never a
-              stored number, so this row cannot disagree with the cards */}
-          <div>
-            <span className={RAIL_LABEL}>{t("fieldProgress")}</span>
-            {project.task_total === 0 ? (
-              <span className={RAIL_EMPTY}>{t("noWorkYet")}</span>
-            ) : (
-              <>
-                <span className={RAIL_VALUE}>
-                  {t("progress", {
-                    done: digits(project.task_done, locale),
-                    total: digits(project.task_total, locale),
-                  })}
+      {/* ── HOW URGENT — the board's own four levels, drawn the board's way */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldPriority")}</span>
+        {isAdmin ? (
+          <div className="flex flex-wrap gap-1">
+            {PROJECT_PRIORITIES.map((level) => (
+              <button
+                key={level}
+                type="button"
+                aria-pressed={project.priority === level}
+                onClick={() => patch({ priority: level })}
+                className={`btn btn-sm ${
+                  project.priority === level
+                    ? "bg-warning/10 text-warning"
+                    : "text-fg-muted hover:text-fg"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${PRIORITY_DOT[level]}`} aria-hidden />
+                {t(`priority_${level}`)}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_CHIP[project.priority]}`}>
+            {t(`priority_${project.priority}`)}
+          </span>
+        )}
+      </div>
+
+      {/* ── WHO IS ACCOUNTABLE (0208) ─────────────────────────────────────
+          A SELECT over the project's own members, not the whole org: a lead
+          who is not on the project is a state the roster would immediately
+          contradict, and the fix is to add them first. */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldLead")}</span>
+        {isAdmin ? (
+          <Select
+            value={project.lead_id ?? ""}
+            onChange={(v) => patch({ lead_id: v === "" ? null : v })}
+            ariaLabel={t("fieldLead")}
+            options={[
+              { value: "", label: t("noLead") },
+              ...members.map((person) => ({
+                value: person.id,
+                label: personName(person, locale),
+              })),
+            ]}
+          />
+        ) : lead === null ? (
+          <span className={RAIL_EMPTY}>{t("noLead")}</span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <Avatar name={personName(lead, locale)} size="xs" />
+            <span className={RAIL_VALUE}>{personName(lead, locale)}</span>
+          </span>
+        )}
+      </div>
+
+      {/* ── THE PEOPLE, edited where they are read ────────────────────────
+          This was a «+» opening a THIRD dialog (`MembersDialog`), which is
+          gone with it: the board's own picker draws this exactly, and the
+          only thing it needed was the project's words rather than a task's. */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldMembers")}</span>
+        {isAdmin ? (
+          <AssigneePicker
+            people={people}
+            selected={project.member_ids}
+            copy={{
+              remove: (personLabel) => t("removeMember", { name: personLabel }),
+              add: t("addMember"),
+              unnamed: t("unknownPerson"),
+            }}
+            onToggle={(userId) => {
+              const on = !project.member_ids.includes(userId);
+              setError(null);
+              void api.setProjectMember(project.id, userId, on)
+                .then(load)
+                .catch(() => setError(t("writeFailed")));
+            }}
+          />
+        ) : members.length === 0 ? (
+          <span className={`flex items-center gap-1.5 ${RAIL_EMPTY}`}>
+            <IconPeople3 width={12} height={12} />
+            {t("noMembers")}
+          </span>
+        ) : (
+          <ul className="space-y-1.5">
+            {members.map((person) => (
+              <li key={person.id} className="flex items-center gap-2">
+                <Avatar name={personName(person, locale)} size="xs" />
+                <span className={`min-w-0 flex-1 truncate ${RAIL_VALUE}`}>
+                  {personName(person, locale)}
                 </span>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div
-                    className="h-full rounded-full bg-accent"
-                    style={{ width: `${Math.round((project.task_done / project.task_total) * 100)}%` }}
-                  />
-                </div>
-              </>
-            )}
-          </div>
+                {person.id === meId ? (
+                  <span className="text-[10px] text-fg-subtle">{t("you")}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-          <div>
-            <span className={RAIL_LABEL}>{t("fieldTone")}</span>
-            <span className="flex items-center gap-2">
-              <span className={`h-3 w-3 rounded-md ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-              <span className={RAIL_VALUE}>{tCommon(`tone_${project.tone}`)}</span>
+      {/* ── THE TWO DAYS (0208) ───────────────────────────────────────────
+          The board's own picker, through `DayField` — a project's dates are
+          DAYS, so the instant the picker speaks is converted at this edge and
+          nowhere else (see the helper's note). */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldStarts")}</span>
+        {isAdmin ? (
+          <DayField value={project.starts_on} onPick={(day) => patch({ starts_on: day })} />
+        ) : project.starts_on === null ? (
+          <span className={RAIL_EMPTY}>{t("noDate")}</span>
+        ) : (
+          <span className={RAIL_VALUE}>{formatDate(dayToInstant(project.starts_on), locale)}</span>
+        )}
+      </div>
+
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldDue")}</span>
+        {isAdmin ? (
+          <DayField value={project.due_on} onPick={(day) => patch({ due_on: day })} />
+        ) : project.due_on === null ? (
+          <span className={RAIL_EMPTY}>{t("noDate")}</span>
+        ) : (
+          <span className={RAIL_VALUE}>{formatDate(dayToInstant(project.due_on), locale)}</span>
+        )}
+      </div>
+
+      {/* ── ITS COLOUR AND ITS MARK, live for an admin ────────────────────
+          Both were fields of the dialog this panel replaced. The tone picker
+          is the same component the create dialog draws, one import rather
+          than a second row of swatches. */}
+      {isAdmin ? (
+        <TonePicker value={project.tone} onChange={(tone) => patch({ tone })} label={t("fieldTone")} />
+      ) : (
+        <div>
+          <span className={RAIL_LABEL}>{t("fieldTone")}</span>
+          <span className="flex items-center gap-2">
+            <span className={`h-3 w-3 rounded-md ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
+            <span className={RAIL_VALUE}>{tCommon(`tone_${project.tone}`)}</span>
+          </span>
+        </div>
+      )}
+
+      {isAdmin ? (
+        <div>
+          <span className={RAIL_LABEL}>{t("fieldIcon")}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {PROJECT_ICONS.map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                aria-pressed={project.icon === choice}
+                /* pressing the chosen one CLEARS it — the create dialog's own
+                   behaviour, and the only way back to "no mark" without a
+                   second control that would say so twice */
+                onClick={() => patch({ icon: project.icon === choice ? null : choice })}
+                className={`btn btn-icon hover:bg-surface-2 ${
+                  project.icon === choice ? "bg-accent-soft ring-2 ring-accent" : ""
+                }`}
+              >
+                <span className="text-base">{choice}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* the board folder this project owns (0181) — the one row that points
+          somewhere, because the work itself lives there */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldBoardFolder")}</span>
+        {project.topic_id === null ? (
+          <span className={RAIL_EMPTY}>{t("noBoardFolder")}</span>
+        ) : (
+          <Link href={`/tasks?topic=${project.topic_id}`} className={`${RAIL_VALUE} hover:text-accent`}>
+            <bdi>{project.name}</bdi>
+          </Link>
+        )}
+      </div>
+
+      {/* ── THE ROOM (0184's `chat_channel.project_id`, published 0208) ────
+          A project may have a conversation, and until now its own screen was
+          the one place that could not reach it. Null is the ordinary state,
+          not a gap — so the row says "no room" rather than offering to make
+          one, which is the chat surface's act and not this panel's. */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldRoom")}</span>
+        {project.channel_id === null ? (
+          <span className={RAIL_EMPTY}>{t("noRoom")}</span>
+        ) : (
+          <Link
+            href={`/chat?room=${encodeURIComponent(project.channel_id)}`}
+            className={`${RAIL_VALUE} hover:text-accent`}
+          >
+            {t("openRoom")}
+          </Link>
+        )}
+      </div>
+
+      {/* PROGRESS, counted off the board on every read (0181) — never a
+          stored number, so this row cannot disagree with the cards */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldProgress")}</span>
+        {project.task_total === 0 ? (
+          <span className={RAIL_EMPTY}>{t("noWorkYet")}</span>
+        ) : (
+          <>
+            <span className={RAIL_VALUE}>
+              {t("progress", {
+                done: digits(project.task_done, locale),
+                total: digits(project.task_total, locale),
+              })}
             </span>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-2">
-              <span className={RAIL_LABEL}>{t("fieldMembers")}</span>
-              {isAdmin ? (
-                <button type="button" onClick={() => setManaging(true)}
-                  className="btn btn-icon -mt-1 text-fg-muted hover:text-fg" aria-label={t("manageMembers")}>
-                  <IconPlus width={12} height={12} />
-                </button>
-              ) : null}
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${Math.round((project.task_done / project.task_total) * 100)}%` }}
+              />
             </div>
-            {members.length === 0 ? (
-              <span className={`flex items-center gap-1.5 ${RAIL_EMPTY}`}>
-                <IconPeople3 width={12} height={12} />
-                {t("noMembers")}
-              </span>
-            ) : (
-              <ul className="space-y-1.5">
-                {members.map((person) => (
-                  <li key={person.id} className="flex items-center gap-2">
-                    <Avatar name={personName(person, locale)} size="xs" />
-                    <span className={`min-w-0 flex-1 truncate ${RAIL_VALUE}`}>
-                      {personName(person, locale)}
-                    </span>
-                    {person.id === meId ? (
-                      <span className="text-[10px] text-fg-subtle">{t("you")}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          </>
+        )}
+      </div>
 
-          <div>
-            <span className={RAIL_LABEL}>{t("fieldCreated")}</span>
-            <span className={RAIL_VALUE}>{formatDate(project.created_at, locale)}</span>
-          </div>
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldCreated")}</span>
+        <span className={RAIL_VALUE}>{formatDate(project.created_at, locale)}</span>
+      </div>
     </>
   );
 
@@ -320,20 +529,56 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         ) : null}
         rail={rail}
       >
-        {/* the title and its summary are ONE section of the divided body */}
+        {/* the title and its summary are ONE section of the divided body, and
+            the one place «ویرایش» changes: input over text, saved on blur,
+            the task detail's own pattern */}
         <div>
-        <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-          <h2 className={`truncate text-[17px] font-bold ${project.archived_at === null ? "text-fg" : "text-fg-subtle"}`}>
-            {project.name}
-          </h2>
-          {project.archived_at !== null ? (
-            <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
-              {t("archived")}
-            </span>
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
+            {editing ? (
+              <input
+                value={name}
+                maxLength={120}
+                aria-label={t("fieldName")}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => { if (name.trim() !== "" && name.trim() !== project.name) patch({ name: name.trim() }); }}
+                className={`${PANEL_INPUT} flex-1`}
+              />
+            ) : (
+              <h2 className={`truncate text-[17px] font-bold ${project.archived_at === null ? "text-fg" : "text-fg-subtle"}`}>
+                {project.name}
+              </h2>
+            )}
+            {project.archived_at !== null ? (
+              <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
+                {t("archived")}
+              </span>
+            ) : null}
+          </div>
+
+          {/* THE RENAME'S CONSEQUENCE, said while the box is open rather than
+              discovered on the board — a project's name IS its folder's. It
+              was a line in the dialog that is gone; it belongs beside the
+              field that causes it. */}
+          {editing && name.trim() !== project.name && name.trim() !== "" ? (
+            <p className="well mt-2 text-[11px] text-fg-muted">{t("renameNote")}</p>
           ) : null}
-        </div>
-        <p className={`${BODY_TEXT} mt-2`}>{project.summary === "" ? t("noSummary") : project.summary}</p>
+
+          {editing ? (
+            <textarea
+              value={summary}
+              maxLength={400}
+              rows={3}
+              aria-label={t("fieldSummary")}
+              onChange={(e) => setSummary(e.target.value)}
+              onBlur={() => { if (summary.trim() !== project.summary) patch({ summary: summary.trim() }); }}
+              className={`${PANEL_TEXTAREA} mt-2`}
+            />
+          ) : project.summary.trim() === "" ? (
+            <p className={`${SECTION_EMPTY} ${BODY_TEXT} mt-2`}>{t("noSummary")}</p>
+          ) : (
+            <p className={`${BODY_TEXT} mt-2`}>{project.summary}</p>
+          )}
         </div>
 
         {/* ── the work: the cards filed under this project's folder ──── */}
@@ -351,7 +596,6 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           ) : mine.length === 0 ? (
             <p className="py-6 text-center text-xs text-fg-subtle">{t("noWork")}</p>
           ) : (
-
             <ul className="space-y-1.5">
               {mine.slice(0, 12).map((task) => {
                 const column = board.columns.find((c) => c.id === task.column_id);
@@ -403,23 +647,6 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         />
       </DetailPanel>
 
-
-      {editing ? (
-        /* THE PROJECT DIALOG — the same form the projects page and the board
-           create with, pre-filled: name, description, colour, icon and the
-           roster (user, 2026-09-05: the edit door offered three of the five
-           things a project has in it). It re-reads the record after its
-           writes, so what lands here is the server's project. */
-        <ProjectDialog
-          mode="edit"
-          project={project}
-          people={people}
-          meId={meId}
-          onClose={() => setEditing(false)}
-          onSaved={(p) => { setEditing(false); setProject(p); }}
-        />
-      ) : null}
-
       {ordering && project.topic_id !== null ? (
         /* THE BOARD'S OWN NEW-TASK DIALOG, with this project's category
            already chosen and the schedule fields switched on. Not a second
@@ -441,16 +668,6 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
              the same fact spoken twice */
           onCreated={() => setOrdering(false)}
           onLabelsChanged={() => { void api.taskLabels().then(setLabels).catch(() => undefined); }}
-        />
-      ) : null}
-
-      {managing ? (
-        <MembersDialog
-          project={project}
-          people={people}
-          meId={meId}
-          onClose={() => setManaging(false)}
-          onChanged={load}
         />
       ) : null}
 
@@ -495,6 +712,54 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The stage's dot. Deliberately NOT the tone palette: a project's colour is
+ * the reader's own choice and says nothing about where the work is, so a
+ * stage drawn in it would be two facts wearing one swatch.
+ */
+const STAGE_DOT: Record<ProjectStage, string> = {
+  planning: "bg-fg-subtle",
+  active: "bg-info",
+  paused: "bg-warning",
+  done: "bg-success",
+};
+
+/**
+ * A DAY FIELD, over the board's own picker.
+ *
+ * The picker speaks INSTANTS — it hands back local noon for the day somebody
+ * pressed, and its own header says why ("midnight is the one hour of the day
+ * that lands on the wrong side of a timezone"). A project's dates are `date`
+ * columns: days, with no zone at all.
+ *
+ * So the conversion lives HERE, at the one edge where the two meet, rather
+ * than in `formatDate` or in the picker — both of which are right about what
+ * they already do. Out: local noon on that day. In: the local calendar day of
+ * the instant the picker chose, which is the day the person pressed.
+ */
+function dayToInstant(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12).toISOString();
+}
+
+function instantToDay(iso: string): string {
+  const at = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+}
+
+function DayField({ value, onPick }: {
+  value: string | null;
+  onPick: (day: string | null) => void;
+}) {
+  return (
+    <DueField
+      value={value === null ? null : dayToInstant(value)}
+      onPick={(iso) => onPick(iso === null ? null : instantToDay(iso))}
+    />
   );
 }
 
@@ -611,67 +876,5 @@ function Bar({ row }: { row: ProjectWorkloadRow }) {
       <div className="bg-info" style={{ width: pct(onTime > 0 ? onTime : 0) }} />
       <div className="bg-danger" style={{ width: pct(row.overdue) }} />
     </div>
-  );
-}
-
-function MembersDialog({ project, people, meId, onClose, onChanged }: {
-  project: ProjectRecord;
-  people: OrgPersonRecord[];
-  meId: string | null;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const t = useTranslations("projects");
-  const locale = useLocale();
-  /* the live set, so a toggle shows immediately and the list is re-read on
-     close — the write is one call per person and each one is idempotent */
-  const [on, setOn] = useState<string[]>(project.member_ids);
-  const [failed, setFailed] = useState(false);
-
-  const toggle = (userId: string) => {
-    const next = !on.includes(userId);
-    setOn((cur) => (next ? [...cur, userId] : cur.filter((v) => v !== userId)));
-    void api.setProjectMember(project.id, userId, next).catch(() => {
-      /* put it back: a roster that shows somebody who was never added is
-         the screen disagreeing with the record */
-      setOn((cur) => (next ? cur.filter((v) => v !== userId) : [...cur, userId]));
-      setFailed(true);
-    });
-  };
-
-  return (
-    <Overlay onClose={() => { onChanged(); onClose(); }} label={t("manageMembers")} size="sm">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg">{t("manageMembers")}</h2>
-        <button type="button" onClick={() => { onChanged(); onClose(); }} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
-          <IconClose width={14} height={14} />
-        </button>
-      </div>
-      {failed ? (
-        <p role="alert" className="mb-2 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {t("writeFailed")}
-        </p>
-      ) : null}
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-        {people.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-fg-subtle">{t("noColleagues")}</p>
-        ) : people.map((person) => (
-          <button
-            key={person.id}
-            type="button"
-            aria-pressed={on.includes(person.id)}
-            onClick={() => toggle(person.id)}
-            className={`tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-xs ${
-              on.includes(person.id) ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2"
-            }`}
-          >
-            <Avatar name={personName(person, locale)} size="xs" />
-            <span className="min-w-0 flex-1 truncate">{personName(person, locale)}</span>
-            {person.id === meId ? <span className="text-[10px]">{t("you")}</span> : null}
-            {on.includes(person.id) ? <IconCheck width={12} height={12} /> : null}
-          </button>
-        ))}
-      </div>
-    </Overlay>
   );
 }

@@ -70,6 +70,16 @@ const EXCLUDED: Record<string, string> = {
     "is no local union or local member list to drift. Same reasoning as " +
     "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
     "than copying, not an oversight.",
+  PROJECT_STAGES:
+    "not mirrored: the project panel imports the array from this module to " +
+    "draw one chip per stage, and `types.ts` re-exports `ProjectStage` from " +
+    "@echo/core/wire — so there is no local union and no local member list. " +
+    "Same reasoning as AUDIT_SOURCES: importing, not copying. The catalogues " +
+    "are asked for `stage_<member>` by Projects.test.",
+  PROJECT_PRIORITIES:
+    "not mirrored, and doubly so: it IS the task board's four levels (0144), " +
+    "so a second union here would be a copy of a copy. The panel imports the " +
+    "array and `types.ts` re-exports the type.",
   AGENT_CARD_KINDS:
     "not mirrored: `AgentCardItem.kind` IS core's `AgentCardKind`, imported " +
     "rather than restated, so an Exact<> here would compare a type with " +

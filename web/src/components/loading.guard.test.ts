@@ -154,6 +154,14 @@ const REMAINING: Record<string, number> = {
   "components/platform/WorkflowRunDialog.tsx": 1,
   "components/platform/dashboard/miniWidgets.tsx": 5,
   "components/platform/tasks/JalaliPicker.tsx": 1,
+  /* 2026-09-08 — TWO, and neither is a section: `DayField` converts a
+     project's `date` to the instant the picker speaks and back, and null
+     passes through both ways. Nothing is in flight, and there is no frame
+     to draw for a date nobody has picked — the same reading as the
+     TaskDialogs entry above it. Listed rather than pattern-matched away:
+     telling a conversion from a render by its shape is exactly the
+     false-positive factory that gets a guard muted. */
+  "components/platform/ProjectDetail.tsx": 2,
 };
 
 function codeOnly(text: string): string {

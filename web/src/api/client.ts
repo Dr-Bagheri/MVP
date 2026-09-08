@@ -11,7 +11,7 @@ import type {
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
   ChatChannelRecord, ChatMessageRecord, JoinInviteRecord, InviteKind,
-  ProjectRecord, ProjectTone, ProjectWorkloadRow,
+  ProjectRecord, ProjectTone, ProjectWorkloadRow, ProjectStage, ProjectPriority,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
   AuthoredWorkflow,
@@ -1521,6 +1521,11 @@ export const api = {
   async createProject(input: {
     name: string; summary?: string; tone?: ProjectTone; icon?: string | null;
     member_ids?: string[];
+    /* 0208 — optional on create, each falling back to the column's default:
+       a form that demands five more answers before a project can exist is a
+       form people abandon, and every one of them is editable in the panel */
+    stage?: ProjectStage; priority?: ProjectPriority; lead_id?: string | null;
+    starts_on?: string | null; due_on?: string | null;
   }): Promise<ProjectRecord> {
     return bff("/api/projects", {
       method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
@@ -1533,6 +1538,13 @@ export const api = {
      only door there is */
   async updateProject(id: string, patch: Partial<{
     name: string; summary: string; tone: ProjectTone; icon: string | null; archived: boolean;
+    /* 0208. `lead_id`, `starts_on` and `due_on` are `| null` because null
+       CLEARS here and omitting the key leaves the value — core reads
+       `"key" in patch` as the supplied signal, so the nullable type IS the
+       contract rather than a convenience. A day is `YYYY-MM-DD`: the column
+       is a date, and an instant would need a zone nobody chose. */
+    stage: ProjectStage; priority: ProjectPriority; lead_id: string | null;
+    starts_on: string | null; due_on: string | null;
   }>): Promise<ProjectRecord> {
     return bff(`/api/projects/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },

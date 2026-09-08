@@ -53,12 +53,18 @@ const created: Record<string, unknown>[] = [];
 const deleted: string[] = [];
 let createRefused = false;
 const patches: { id: string; body: Record<string, unknown> }[] = [];
+/** every PATCH the project panel sends — the rail is where a project is edited now */
+const projectPatches: { id: string; body: Record<string, unknown> }[] = [];
 
 function project(over: Partial<ProjectRecord>): ProjectRecord {
   return {
     id: "p-1", name: "بازطراحی سایت", summary: "", tone: "blue", icon: null,
     archived_at: null, created_by: "u-1", created_at: "2026-09-01T08:00:00.000Z",
     topic_id: "t-1", member_ids: [], task_total: 0, task_done: 0,
+    /* 0208's five, at the columns' own defaults — a fixture that omitted them
+       would be a project shape the server never sends */
+    stage: "active", priority: "medium", lead_id: null,
+    starts_on: null, due_on: null, channel_id: null,
     ...over,
   };
 }
@@ -99,7 +105,10 @@ vi.mock("@/api/client", () => ({
       created.push(input);
       return project({ id: "p-new", name: String(input.name) });
     },
-    updateProject: async (id: string, patch: Record<string, unknown>) => project({ id, ...patch }),
+    updateProject: async (id: string, patch: Record<string, unknown>) => {
+      projectPatches.push({ id, body: patch });
+      return project({ ...ONE, id, ...patch });
+    },
     setProjectMember: vi.fn(async () => undefined),
     deleteProject: async (id: string) => { deleted.push(id); },
     orgPeople: async () => PEOPLE,
@@ -148,6 +157,7 @@ beforeEach(() => {
   created.length = 0;
   deleted.length = 0;
   patches.length = 0;
+  projectPatches.length = 0;
   pushSpy.mockClear();
 });
 
@@ -372,6 +382,125 @@ describe("ProjectDetail", () => {
     await waitFor(() =>
       expect(screen.getByText("هنوز کاری زیر این پروژه ثبت نشده است.")).toBeInTheDocument());
     expect(screen.queryByText("کارِ یک پروژهٔ دیگر")).toBeNull();
+  });
+});
+
+/**
+ * THE PANEL IS THE EDITOR NOW (user directive, 2026-09-08: "in projects edit
+ * mode it should edit the existing page the same way in tasks edit, not
+ * popping up another window — remove the second pop up window").
+ *
+ * Each of these fails against the shape that shipped yesterday, which is what
+ * makes them worth having: yesterday «ویرایش» opened `ProjectDialog` over the
+ * panel, the roster opened a third dialog, and the rail was a read-out.
+ */
+describe("the project is edited in its own panel (2026-09-08)", () => {
+  it("«ویرایش» makes the name and the summary writable HERE, and opens no second window", async () => {
+    ONE = project({ id: "p-1", name: "بازطراحی سایت", summary: "خلاصه" });
+    render(detail("p-1", "u-1"));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "بازطراحی سایت" })).toBeInTheDocument());
+
+    /* THE BOX IS INSIDE THE PANEL ITSELF, and that is the whole assertion.
+       Counting dialogs was the first draft and it could not fail: a second
+       dialog opens in a PORTAL, and Radix marks everything outside the open
+       one `aria-hidden`, so the mutation that put yesterday's shape back was
+       invisible to `getAllByRole`. Comparing the box's own dialog to the
+       panel's is the question that distinguishes them. */
+    const panel = screen.getByRole("dialog");
+    await userEvent.click(screen.getByRole("button", { name: /ویرایش/ }));
+
+    expect(screen.getByLabelText("نام پروژه").closest("[role=\"dialog\"]")).toBe(panel);
+    expect(screen.getByLabelText("نام پروژه")).toHaveValue("بازطراحی سایت");
+    expect(screen.getByLabelText("توضیح کوتاه")).toHaveValue("خلاصه");
+    /* and the heading is GONE while the box is open — an input beside the
+       title it replaces would be the same name written twice */
+    expect(screen.queryByRole("heading", { name: "بازطراحی سایت" })).toBeNull();
+  });
+
+  it("saves a renamed project on blur, and says what a rename reaches", async () => {
+    ONE = project({ id: "p-1", name: "بازطراحی سایت" });
+    render(detail("p-1", "u-1"));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "بازطراحی سایت" })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /ویرایش/ }));
+
+    const box = screen.getByLabelText("نام پروژه");
+    await userEvent.clear(box);
+    await userEvent.type(box, "بازطراحی اپ");
+    /* the CONSEQUENCE, said while the box is still open and the choice is
+       still the person's — R21's allowed kind */
+    expect(screen.getByText(/پوشه/)).toBeInTheDocument();
+
+    await userEvent.tab();
+    await waitFor(() => expect(projectPatches).toHaveLength(1));
+    expect(projectPatches[0]!.body).toEqual({ name: "بازطراحی اپ" });
+  });
+
+  it("sends nothing when the name comes back to what it was", async () => {
+    ONE = project({ id: "p-1", name: "بازطراحی سایت" });
+    render(detail("p-1", "u-1"));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "بازطراحی سایت" })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /ویرایش/ }));
+
+    const box = screen.getByLabelText("نام پروژه");
+    await userEvent.type(box, " ");
+    await userEvent.tab();
+    /* a trailing space is not a rename. Without this, "saves on blur" is
+       satisfied by a version that writes a row every time the caret leaves
+       the field — and every one of those is an audit line nobody caused. */
+    expect(projectPatches).toHaveLength(0);
+  });
+
+  it("writes the stage and the priority from the rail", async () => {
+    ONE = project({ id: "p-1", stage: "active", priority: "medium" });
+    render(detail("p-1", "u-1"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /متوقف/ })).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /متوقف/ }));
+    await waitFor(() => expect(projectPatches).toHaveLength(1));
+    expect(projectPatches[0]!.body).toEqual({ stage: "paused" });
+
+    await userEvent.click(screen.getByRole("button", { name: /بحرانی/ }));
+    await waitFor(() => expect(projectPatches).toHaveLength(2));
+    expect(projectPatches[1]!.body).toEqual({ priority: "critical" });
+  });
+
+  it("names a lead from the project's OWN people, never the whole organisation", async () => {
+    /* رؤیا is in the org and NOT on this project: a lead who is not a member
+       is a state the roster on the same rail would contradict a line later */
+    ONE = project({ id: "p-1", member_ids: ["u-1"] });
+    render(detail("p-1", "u-1"));
+    /* the theme's Select is Radix: its trigger carries the CHOSEN label and
+       the options live in a portal until it is opened — and a Radix trigger
+       opens on POINTERDOWN, which fireEvent.click does not send */
+    await userEvent.click(await screen.findByLabelText("سرپرست"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "سینا" })).toBeInTheDocument());
+    expect(screen.queryByRole("option", { name: "رؤیا" })).toBeNull();
+  });
+
+  it("offers «افزودن تسک» and no second door to the board", async () => {
+    ONE = project({ id: "p-1", topic_id: "t-1" });
+    render(detail("p-1", "u-1"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /افزودن تسک/ })).toBeInTheDocument());
+    /* «وظایف» stood beside it and went to the same place as the rail's own
+       folder row (2026-09-08). Asserted as an ABSENCE because the version
+       that still renders it looks perfectly fine on its own. */
+    expect(screen.queryByRole("link", { name: "وظایف" })).toBeNull();
+  });
+
+  it("shows a MEMBER the readings and none of the controls", async () => {
+    ONE = project({ id: "p-1", stage: "paused", member_ids: ["u-1"] });
+    render(
+      <CrumbTitleProvider>
+        <ProjectDetail id="p-1" meId="u-1" isAdmin={false} onClose={() => undefined} />
+      </CrumbTitleProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("متوقف")).toBeInTheDocument());
+    /* the DISCRIMINATING half: the stage is on screen and there is no way to
+       change it — a test that only asserted the absence would pass against a
+       panel that renders nothing at all for a member */
+    expect(screen.queryByRole("button", { name: /متوقف/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /ویرایش/ })).toBeNull();
+    expect(screen.queryByLabelText("سرپرست")).toBeNull();
   });
 });
 

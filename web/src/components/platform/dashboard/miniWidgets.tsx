@@ -9,8 +9,8 @@ import { Link } from "@/i18n/routing";
 import { KebabMenu, SelectMenu } from "@/components/rowActions";
 import { StatusDot } from "@/components/DataTable";
 import {
-  Icon, IconCalendar, IconCheck, IconChevronRight, IconGavel, IconGlobe, IconMic, IconPause,
-  IconPlay, IconPulse, IconSettings,
+  Icon, IconAgent, IconCalendar, IconCheck, IconChevronRight, IconFileText, IconGavel,
+  IconGlobe, IconMic, IconPause, IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
 import { dayKeyOf, digits, formatDayMonth, formatTime, hourInResolvedZone, monthGrid, monthKeyOf, weekRangeLabel, weekStrip } from "@/lib/format";
@@ -132,8 +132,32 @@ function Refused() {
   return <p className="text-sm leading-7 ink-muted">{t("miniNoAccess")}</p>;
 }
 
-function Empty({ children }: { children: string }) {
-  return <p className="text-sm leading-7 ink-muted">{children}</p>;
+/**
+ * A TILE'S EMPTY STATE — an icon over a centred line, standing in the middle
+ * of the space the rows would have filled.
+ *
+ * It was a left-aligned paragraph hugging the tile's top corner, while
+ * «جلسات پیش‌رو» had grown its own centred icon-over-text copy a few hundred
+ * lines below (user, 2026-09-08: "put No meetings yet the same way in middle
+ * with icon like the upcoming meetings"). Two drawings of one state is the
+ * pair that stops matching the first time either is touched, so this is the
+ * one drawing and that panel now calls it.
+ *
+ * The ICON is the caller's, because only the caller knows what is missing —
+ * a calendar for meetings, a document for records — and a single generic
+ * glyph for every empty tile says nothing the sentence does not.
+ */
+function Empty({ icon, children }: { icon: ReactNode; children: string }) {
+  return (
+    <div className="grid min-h-0 flex-1 place-items-center py-4 text-center">
+      <div>
+        <span className="mx-auto mb-1.5 grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
+          {icon}
+        </span>
+        <p className="text-sm text-fg-muted">{children}</p>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -164,7 +188,9 @@ export function RecordsMiniWidget({ size }: { size: TileSize }) {
   if (rows === null) return <Waiting />;
   if (rows === "forbidden") return <Refused />;
   if (rows === "failed" || rows === "absent") return <Unreadable />;
-  if (rows.length === 0) return <Empty>{t("noRecords")}</Empty>;
+  if (rows.length === 0) {
+    return <Empty icon={<IconFileText width={16} height={16} />}>{t("noRecords")}</Empty>;
+  }
 
   return (
     <Rows>
@@ -451,7 +477,9 @@ export function AgentsWidget() {
     .map((handle) => rows.find((agent) => agent.handle === handle))
     .filter((agent): agent is AgentCard => agent !== undefined);
 
-  if (shown.length === 0) return <Empty>{t("miniNoAgents")}</Empty>;
+  if (shown.length === 0) {
+    return <Empty icon={<IconAgent width={16} height={16} />}>{t("miniNoAgents")}</Empty>;
+  }
 
   return (
     <Rows>
@@ -797,14 +825,8 @@ export function UpcomingWidget() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {ahead.length === 0 ? (
-        <div className="grid min-h-0 flex-1 place-items-center text-center">
-          <div>
-            <span className="mx-auto mb-1.5 grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
-              <IconCalendar width={16} height={16} />
-            </span>
-            <p className="text-sm text-fg-muted">{t("noUpcomingMeetings")}</p>
-          </div>
-        </div>
+        /* the shape this panel invented is now every tile's (2026-09-08) */
+        <Empty icon={<IconCalendar width={16} height={16} />}>{t("noUpcomingMeetings")}</Empty>
       ) : (
         <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto">
           {/*
@@ -875,7 +897,9 @@ export function LatestMeetingsWidget() {
 
   if (meetings === null) return <Waiting />;
   if (meetings === "failed") return <Unreadable />;
-  if (meetings.length === 0) return <Empty>{t("noMeetingsYet")}</Empty>;
+  if (meetings.length === 0) {
+    return <Empty icon={<IconCalendar width={16} height={16} />}>{t("noMeetingsYet")}</Empty>;
+  }
 
   /*
    * THE LAST MEETING — one, and one that has actually HAPPENED (user

@@ -69,5 +69,5 @@ export type {
 // Re-exported so one import covers a response and the vocabularies inside it.
 export type {
   AgentRunStatus, CalendarPreference, CallStatus, MemberRole, PartStatus,
-  TranscriptTiming, UserStatus,
+  ProjectPriority, ProjectStage, TranscriptTiming, UserStatus,
 } from "./vocabulary.ts";

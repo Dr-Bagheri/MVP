@@ -18,7 +18,10 @@ import { DIALOG_BODY, PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
 const ONE_BLOCK: Record<string, string> = {
   "meeting/InviteDialog.tsx": "a search box over a list, then two sections that already draw their own hairlines",
   "InvitePeople.tsx": "one list of colleagues over one footer",
-  "ProjectDetail.tsx": "its dialog is the members list alone; the detail itself is DetailPanel, which divides",
+  /* 2026-09-08: ProjectDetail left this list. Its one dialog was the
+     members list, and the roster is edited in the rail now — the panel
+     renders no Overlay of its own at all. Entry deleted, not emptied: an
+     entry naming a file that no longer qualifies reads as coverage. */
   /* the frame stands on Overlay since 2026-09-06 (Escape, the focus trap, the
      scroll lock), so this guard sees it as a pop-up; its body IS divided — by
      PANEL_SECTIONS and RAIL_SECTIONS, the two-column form of DIALOG_BODY, and

@@ -227,6 +227,25 @@ export const TRANSCRIPT_TIMINGS = ["full", "mixed", "none"] as const;
 export type TranscriptTiming = (typeof TRANSCRIPT_TIMINGS)[number];
 
 /**
+ * A PROJECT'S STAGE (0208) — where the work is.
+ *
+ * NOT the same fact as archived: `done` says the work finished, archived says
+ * the project is off the working list, and an abandoned project is archived
+ * without ever being done. Folding them into one column would make "we
+ * stopped" and "we finished" indistinguishable.
+ */
+export const PROJECT_STAGES = ["planning", "active", "paused", "done"] as const;
+export type ProjectStage = (typeof PROJECT_STAGES)[number];
+
+/**
+ * A PROJECT'S PRIORITY (0208) — deliberately the task board's own four levels
+ * (0144) rather than a second set. One vocabulary for "how urgent" across the
+ * product, so a filter can one day span both without a translation table.
+ */
+export const PROJECT_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+export type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
+
+/**
  * Summary TEMPLATES (user ruling, 2026-08-23 — this exact list, no sales
  * and no standup): a template is a structural addendum to the summarizer's
  * skill prompt, chosen per regeneration, never a second skill. The keys
