@@ -5843,3 +5843,55 @@ sessions) for the cross-session narrative.
   proven live: a card appearing in a real meeting, which needs a meeting with
   a recorded decision behind it.
   db 214 migrations · core 1494 tests · web 1373 tests + gate + sweep.
+- 2026-09-08 (BATCH E — AN ORGANISATION'S OWN PROCEDURE CAN BE TRIED, AND CAN
+  BE UNDONE; commit 32759a0; db 0215): item 16. The authoring surface has
+  existed since 0007 — what was missing is what turns a prompt into something
+  a team can RELY on.
+  **A CHANGE YOU CAN SEE AND UNDO (0215).** An edit was destructive: the
+  operations lead rewrites «روش پذیرش مشتری جدید», the agent's behaviour
+  changes for the whole organisation from that second, and the previous
+  wording is gone. The question people ask about a procedure is «what did this
+  used to say», and there was no answer. A TRIGGER is the writer and **no role
+  holds INSERT, UPDATE or DELETE** — `record_status_change`'s precedent, and
+  its sentence: the api can neither author a history nor omit one, and a
+  history the api can author is one the api can forge.
+  The row carries the skill's own `level`/`org_id`/`user_id` so its read policy
+  is 0018's `skill_read` WORD FOR WORD over its own columns, rather than an
+  `exists (select … from echo.skill …)` — which runs as the caller and
+  silently intersects with that table's policies (rule 11's author-side
+  corollary). They cannot drift, because the trigger copies them and nothing
+  else may write here.
+  **Restoring is an EDIT, not a rewind**: the screen puts an old wording in the
+  editor and the ordinary save applies it, appending a new version — so
+  version 7 may say what version 3 said and the history only grows (0211's
+  argument about a superseded decision, at a procedure). It also does not save
+  silently, because the author has not read the text yet: it is behind a «متن»
+  toggle. Only a change to the WORDING appends — enabling and archiving are
+  state, and a version per toggle buries the four edits that matter in forty
+  that do not.
+  **A WAY TO TRY IT.** `POST /v1/skills/dry-run` runs the draft on the screen,
+  once, under the author's identity, **with NO TOOLS**: a prompt nobody has
+  reviewed should not be able to send a message or file a card on its first
+  outing, and what a dry run answers («does this wording produce what I
+  meant») needs no reach at all. M44's rule — blast radius decides reach —
+  applied to the one case where the TEXT itself is unreviewed. It writes an
+  `agent_run` (a model was called and the org paid) and nothing else.
+  **Two findings from writing it.** The draft skill is TYPED rather than cast —
+  `as never` against a shape somebody else owns cost a TypeError once a minute
+  on production this morning, and the same reflex reached for it here. And the
+  first `skill-dry-run.test.ts` opened by calling the no-tools assertion "the
+  one this file exists for" while every test in it stubbed the model call, so
+  the tools argument was never handed to anything that could be asked about
+  it: **a header claiming a check the file cannot perform is the most
+  expensive kind of comment.** The assertion moved to its own file, which
+  mocks the runtime and reads what was actually offered — with a control
+  proving the runtime was called at all, since "no tools were offered" is
+  equally true of a dry run that never reached it.
+  R21's copy guard fired on the dry run's one sentence and got an ALLOW-LIST
+  ENTRY with its reason, never a rename: it is a CONSTRAINT — the draft runs
+  without being saved and with no tools — and there is nowhere else to learn
+  either.
+  Deployed: 0215 on production; core and the worker on Hetzner (both routes
+  401 against a 404 control); web on Vercel. NOT proven live: a real dry run
+  (it spends a provider call) and a restore on a real skill.
+  db 215 migrations · core 1509 tests · web 1373 tests + gate + sweep.
