@@ -359,6 +359,60 @@ describe("agent runtime — the conversation so far", () => {
     expect(JSON.stringify(request)).not.toContain("محرمانه");
   });
 
+  /**
+   * THE SESSION'S OTHER CONVERSATIONS REACH THE MODEL AND NOT THE RECORD.
+   *
+   * This is a WALL, not a tidiness rule. `agent_run.request` keeps the system
+   * prompt, 0013's `agent_run_read` admits an ADMIN to any run in the org,
+   * and 0016 keeps a conversation to the one person whose it is — so folding
+   * the carry-over into `systemInstructions` would hand an admin, through the
+   * audit surface, exactly the thing the conversation wall exists to keep
+   * from them. Both halves are asserted here because either alone is green
+   * against a broken version: absent from the record AND present in the
+   * prompt the model was given.
+   */
+  it("carries the session to the MODEL and keeps it out of the record", async () => {
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest,
+      tools: [],
+      sessionContext: "RECENT CONTEXT\n[conversation: بودجه]\nuser: متن محرمانه",
+    });
+
+    const request = (begun[0] as { request: Record<string, unknown> }).request;
+    expect(JSON.stringify(request), "a colleague's own thread, inside an admin-readable row")
+      .not.toContain("محرمانه");
+    /* the SIZE is kept, because "why did this run cost that" is a fair
+       question and a length quotes nobody */
+    expect(request.sessionContextChars).toBe("RECENT CONTEXT\n[conversation: بودجه]\nuser: متن محرمانه".length);
+    /* and the model really was given it — without this the test passes
+       against a version that simply drops the session on the floor */
+    const { systemPrompt } = runPiMock.mock.calls[0]![0] as { systemPrompt: string };
+    expect(systemPrompt).toContain("متن محرمانه");
+    expect(systemPrompt.startsWith(String(request.systemPrompt)), "the record is the prompt's own opening").toBe(true);
+  });
+
+  it("a REGENERATION carries no session — a replay reproduces what was recorded", async () => {
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest,
+      tools: [],
+      systemPromptOverride: "the recorded prompt, replayed",
+      sessionContext: "RECENT CONTEXT\n[conversation: بودجه]\nuser: متن محرمانه",
+    });
+
+    const { systemPrompt } = runPiMock.mock.calls[0]![0] as { systemPrompt: string };
+    expect(systemPrompt).toBe("the recorded prompt, replayed");
+    expect(JSON.stringify((begun[0] as { request: Record<string, unknown> }).request))
+      .not.toContain("محرمانه");
+  });
+
   it("says nothing about history when there is none", async () => {
     /* a fresh conversation has no memory, and `historyTurns: 0` on every
        first turn is a field that means "nothing" — absent is the same fact

@@ -5351,10 +5351,6 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       agent ? floorInstruction(agent.name, company.map(nameOf)) : undefined,
       selectedWorkflow?.instructions,
       profileInstruction,
-      /* every responder gets it, for the reason every responder gets
-         `history`: they are all answering the same person in the same
-         session, and one of them remembering is worse than none */
-      carryInstruction,
       contextLine,
       blocksInstruction,
       conciseInstruction,
@@ -5384,6 +5380,11 @@ ${liveText}`
           : "",
       ].join(""),
       history,
+      /* NOT part of `systemInstructions`: that string is recorded on the run,
+         and a run is admin-readable where a conversation is not (runtime.ts's
+         `sessionContext` carries the whole argument). Every responder gets it
+         from here, for the reason every responder gets `history`. */
+      sessionContext: carryInstruction,
       skill,
       systemInstructions: instructionsFor(selectedAgent, others.map((o) => o.handle)),
       agentModel: selectedAgent?.model,

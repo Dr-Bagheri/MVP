@@ -33,6 +33,24 @@ export interface RunRequest<TDeps> {
   systemInstructions?: string | undefined;
   /** Complete, recorded server prompt for a regenerate replay (M30). */
   systemPromptOverride?: string | undefined;
+  /**
+   * THE SESSION'S OTHER CONVERSATIONS (agent/history.ts), as a block for the
+   * model — and NOT for the record.
+   *
+   * It is its own field rather than part of `systemInstructions` for one
+   * reason, and it is a wall: `agent_run.request` keeps the system prompt,
+   * and 0013's `agent_run_read` admits an ADMIN to any run in the org, while
+   * 0016 keeps a conversation to the one person whose it is. Folded into the
+   * prompt, a colleague's own threads would reach an admin through the audit
+   * — the single thing the conversation wall is built to prevent. Separated,
+   * the wrong state is unrepresentable rather than watched for: a caller
+   * cannot put those words in the recorded field, because it never passes
+   * them there.
+   *
+   * What the record keeps is the SIZE, which is the honest answer to "why did
+   * this run cost that" and quotes nobody. Same ruling as `historyTurns`.
+   */
+  sessionContext?: string | undefined;
   /** A saved agent may pin a model just as a skill can; skills still win. */
   agentModel?: string | null | undefined;
   /**
@@ -185,6 +203,17 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
               : "")
       );
 
+      /*
+       * What the MODEL sees, which is the recorded prompt plus the session's
+       * other conversations. The two are deliberately different strings and
+       * the difference is a rule, not an oversight — see `sessionContext`.
+       * A REGENERATION carries none: it replays what was recorded, and an
+       * hour-old session is not what was recorded anyway.
+       */
+      const modelPrompt = request.systemPromptOverride === undefined && request.sessionContext
+        ? `${systemPrompt}\n\n${request.sessionContext}`
+        : systemPrompt;
+
       // (3) the run exists in the record BEFORE any provider or tool contact
       const runId = await runs.begin({
         orgId: identity.orgId,
@@ -214,6 +243,12 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
              content stored twice, ageing in two places */
           ...(request.history && request.history.length > 0
             ? { historyTurns: request.history.length }
+            : {}),
+          /* the SIZE of the session carried in, never a word of it: those
+             words are somebody's own conversations, and this row is one an
+             admin may read */
+          ...(request.sessionContext
+            ? { sessionContextChars: request.sessionContext.length }
             : {}),
           ...(request.provenance ? { provenance: request.provenance } : {}),
           ...(contextCallIds.length > 1 ? { callIds: contextCallIds } : {}),
@@ -258,7 +293,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
 
         const result = await runPi({
           model: modelRef,
-          systemPrompt,
+          systemPrompt: modelPrompt,
           userText: input,
           history: request.history ?? [],
           tools,
