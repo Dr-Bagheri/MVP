@@ -5623,3 +5623,155 @@ sessions) for the cross-session narrative.
   sweep over 1,288 tracked text files; git check-ignore in both directions on
   secrets, keys, the negated controls and this batch's own paths.
   db 207 migrations · ml 148 tests · core 1433 tests · web 1340 tests + gate + sweep.
+- 2026-09-08 (BATCH A — A PROJECT IS EDITED IN ITS OWN PANEL, AND IT HAS MORE
+  TO EDIT; commit d66df8f; db 0208): six items from five screenshots. «افزودن
+  کارت» and the project page's «واگذاری کار» are both «افزودن تسک» now (one
+  verb for one act — a board that calls the same thing a card here and work
+  there teaches two words for one object), «وظایف» is gone, and the empty
+  meetings panel is the centred icon-over-text shape its sibling already had.
+  **THE PROJECT EDIT DIALOG IS GONE.** A project detail already WAS a panel;
+  pressing «ویرایش» inside it opened a second pop-up over the first, which is
+  the shape the user called systematic. The panel edits in place — title and
+  summary are the text on screen, saved on blur; the rail is live controls for
+  an admin and readings for a member, which is the same component answering
+  the same question twice rather than two screens that can disagree.
+  **0208 gave a project the fields the rail needed**: stage, priority, a LEAD
+  (an account, in this org), a start day and a due day — days, not instants,
+  because a deadline is a date everywhere in this product and an instant would
+  move it by a zone. `project_lead_person` names its own column in the cascade
+  (`on delete set null (lead_id)`), which is 0188's lesson: a bare SET NULL
+  over a composite key containing a NOT NULL `org_id` can only ever RAISE, and
+  it reads as deliberate.
+  Two findings. `@echo/core/wire` is TYPES ONLY by design, so importing
+  `PROJECT_STAGES` from it compiled and then failed in the browser at runtime —
+  the arrays live in `@echo/core/vocabulary`, where every other closed set
+  lives. And db/119's first draft could not mint its fixture user: 0171's
+  `tg_app_user_is_authable` refuses an app_user with no `auth.users` row, which
+  is the wall working — the fixture inserts the identity first.
+  db 208 migrations · core 1433 tests · web 1347 tests + gate + sweep.
+- 2026-09-08 (BATCH B — A MEETING'S DECISIONS GET AN OWNER, A DEADLINE AND A
+  HISTORY; commit b6ccf7c; db 0209–0211): items 2 and 3 of the twenty.
+  **THE FINDING IS WHAT THIS BATCH DID NOT SHIP.** 0209 created
+  `echo.decision_log` for "what was decided", and 0160 already had one:
+  `echo.meeting_item`, with decisions and actions, `source` pinned by the
+  writing role, a moment, an owner field, an edit surface and a make-a-task
+  path. Two tables for one fact is the drift shape with a migration behind it.
+  0211 consolidates onto `meeting_item`, drops `decision_log` and
+  `task.decision_id` in the open, and removes the purge's `decision_log` delete
+  by REGENERATING the function from `pg_get_functiondef` rather than retyping
+  it (0132's rule, applied without being re-learned). The churn stays visible:
+  a duplicate feature caught inside a day is worth more as a record than as a
+  tidy history.
+  What a meeting item gained: `owner_id` (an ACCOUNT, in this org), `due_on` as
+  a DAY, `supersedes_id`, and a `status` — so a replaced decision stays on the
+  record, MARKED, rather than being overwritten; a ledger whose reader cannot
+  see what changed answers today's question with last quarter's decision.
+  0160's wall is re-asserted against the new columns: `echo_agent` holds INSERT
+  and nothing else, so an agent may CLAIM a decision and only a person may
+  agree. **That refusal is a GRANT, not a policy**, which is why the test uses
+  `t.denied` — an update walled by a policy is not refused, it matches zero
+  rows and succeeds (0186's note), and the first draft asserted the record and
+  aborted the transaction instead: the wall being STRONGER than the assertion
+  expected.
+  The summarizer gained a third advisory pass — transcript in, decisions and
+  commitments out, owners resolved only on an EXACT single match and left null
+  otherwise. **Null means unreadable and `[]` means nothing was decided**, and
+  the two are logged differently, because a meeting where nothing was settled
+  is a real answer. `meetings` is a REQUIRED option on the summarizer rather
+  than an optional one: the webhook dispatcher was written, tested, reviewed
+  and never registered, and an optional dependency is how that happens. Its
+  honest edge: `meeting_item.meeting_id` is NOT NULL, so an extraction from a
+  call with no meeting lands nowhere — `meetingIdForCall()` returns null and
+  the pass returns 0 rather than inventing a home for it.
+  The agents read the ledger (`list_decisions`, in the ROOM set — every active
+  member can already read a meeting), and the platform map names the area
+  BEFORE `records` so `/record/` cannot swallow it.
+  **FIVE OF MY OWN ASSERTIONS COULD NOT FAIL** and were rewritten: "no second
+  window" counted `role="dialog"` before and after, and a portal dialog is
+  `aria-hidden` to `getAllByRole`; the unreadable-vs-empty test used a prose
+  fixture that exits at the no-braces guard, never reaching the branch; the
+  ambiguous-first-name fixture had only full names in it, so there was no
+  ambiguity to resolve; and **the midnight handover cannot fail at +03:30** —
+  moved to the exported converter, where local noon is the mechanism rather
+  than a coincidence of this machine's zone.
+  Two guards fired on their own first runs, both true: a tool with no sentence
+  renders as its own identifier on the agent's page (`list_decisions` had none
+  — 13½ pointed at copy), and an icon at 10px is a second visual language
+  beside a set whose smallest step is 12.
+  Deployed: 0209–0211 on production; core and the worker on Hetzner (both units
+  active, health 200, `/v1/meetings/:id/items` 401 against a `/v1/nonsense`
+  404); web on Vercel. NOT proven live: the extraction pass itself, which runs
+  on the next real summary and costs a provider call.
+  db 211 migrations · core 1446 tests · web 1354 tests + gate + sweep.
+- 2026-09-08 (BATCH C — A VOICE NOTE TO THE BOT BECOMES A CARD, FOR SOMEBODY
+  WHO PROVED IT IS THEIRS; commits 0da97e8, 6d8e1cf, d886fac; db 0212–0213;
+  M51): item 10 of the twenty, and most of it is one sentence — **a Telegram
+  bot answers the open internet.**
+  M35 says an unattended job runs AS ITS OWNER, and the mail poller applies it
+  correctly because a mailbox is already one person's. A bot's inbox has the
+  opposite shape: its username is discoverable, and a stranger who messages it
+  is, to the platform, an integer. Reusing M35 there would have made this a
+  public write endpoint onto the organisation's board with the owner's
+  authority. So **identity comes BEFORE content**: an unlinked sender's words
+  are never read by a model, never reach a card, and cost nothing but the
+  sentence saying how to link. Written down as M51 precisely because the two
+  inboxes look alike and are not.
+  The proof is a code minted inside the product and sent to the bot from the
+  account being claimed. `echo.telegram_identity` has **no INSERT grant for
+  any role** — a link exists only because `redeem_telegram_link` was called —
+  which is what makes the code load-bearing rather than ceremonial. Short
+  codes pay for their size: 40 bits from an alphabet with no O/0 and no I/1/L,
+  fifteen minutes, one live code per person as a partial unique index, single
+  use, unknown/expired/spent refused identically. A link is PERSONAL: the
+  policies scope every row to `echo.actor_id()`, so an admin cannot enumerate
+  them — the voiceprint posture (0112), for the same reason.
+  There is no consent card on the resulting card, and the reasoning is already
+  on record for enrolment: **the person recorded a sentence, addressed it to
+  the bot and pressed send — the note IS the instruction.** What is owed
+  instead is VISIBILITY, so the bot replies with the card it made. A colleague
+  named in a note must match EXACTLY one member or the card stays with the
+  sender and the reply says which name could not be placed.
+  **Three findings in my own code, before production.** The PUT to storage
+  reached the global `fetch` and bypassed every seam — moved to
+  `signer.upload()`, where the `fetchImpl` seam already lives and where this
+  repo keeps its one conversation with storage. `{"title":""}` — a model
+  saying it could make nothing of the note — fell through to the prose reading
+  and became a card titled with raw JSON; a parsed refusal and unparseable
+  text are two kinds of nothing. And 0212 shipped a link flow a colleague
+  could not COMPLETE: `connector_connection` is owner-scoped, so everybody but
+  its owner read «send this to your organisation's bot» with no way to learn
+  which one. 0213 is a one-column door for a handle that is public by
+  construction.
+  **Verify-red, eleven behaviours, control first.** Ten went red; the eleventh
+  — "an ambiguous first name is refused" — stayed GREEN, because neither «سینا
+  سپاسی» nor «سینا رضایی» equals «سینا» to an exact matcher: the test was
+  measuring zero hits rather than a tie and could not have failed if the
+  resolver started returning `hits[0]`. **Second instance of that exact
+  fixture defect in two days.** Two colleagues are listed as «سینا» now, which
+  is also what a small organisation really looks like.
+  **THEN PRODUCTION ANSWERED TWICE, and both were mine.**
+  (1) A read-only owner-altitude probe (`db/scripts/probe-telegram.mjs`) found
+  `@Neurai7Bot` already connected with a NULL cursor: the mark was written
+  only when something arrived, and a freshly connected bot's inbox is empty by
+  construction — so every poll was still a "first look" and **the first
+  message anybody ever sent would have been dropped in silence.** Zero is a
+  real mark ("we have looked"), so it lands on every look now, and the mail
+  poller's 24-hour age ceiling comes with it as the belt behind the cursor.
+  (2) The poll then logged `TypeError` once a minute: the poller called
+  `connectors.providerCtx`, which the repo DEFINES and does not EXPORT.
+  **Three of this repo's own recorded failures had to be true at once** — the
+  worker passed the repo `as never` ("a cast against a wire type is a drift
+  report somebody decided not to file"), every test mocked the connector so
+  each fake agreed with my belief rather than with the producer (rule 10), and
+  the log said `error_type` alone, where a fetch failure, a missing method and
+  a bad argument are one word. All three fixed: the method is on the surface,
+  the cast is gone so the compiler checks the shape, the log carries
+  `cause.code`, and a new check asserts the REAL repos answer the calls the
+  poller makes — verified by un-exporting it again and watching that one test
+  go red.
+  Deployed: 0212–0213 on production; core and the worker on Hetzner;
+  web on Vercel. Live-proven on production: the poll succeeds, the mark landed
+  (`cursor 0`), `/v1/me/telegram` 401s against a 404 control. NOT proven: a
+  real voice note end to end — that needs somebody with a phone to link and
+  send one, which is a two-minute test for whoever has both.
+  db 213 migrations · core 1480 tests · web 1362 tests + gate + sweep.
