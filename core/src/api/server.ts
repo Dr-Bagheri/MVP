@@ -71,6 +71,7 @@ import { createAgentRuntime } from "../agent/runtime.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
+import { createTelegramLinkRepo } from "./telegram-link.ts";
 import { isConnectorProvider } from "./connector-providers.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
@@ -238,6 +239,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }
   }).catch(() => undefined);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
+  const telegramLink = createTelegramLinkRepo(options.db);
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   const tasks = createTasksRepo(options.db);
   const projects = createProjectsRepo(options.db);
@@ -3907,6 +3909,46 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.get("/v1/connectors", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send({ connectors: await connectors.list(identity) });
+  });
+
+  /*
+   * THE TELEGRAM LINK (db/0212, item 10) — four routes, all `requireActive`
+   * and all about the CALLER'S OWN account.
+   *
+   * There is deliberately no admin surface here. A link is a fact about
+   * somebody's personal messaging account, the same posture as a voiceprint:
+   * an admin governs the organisation, not a colleague's phone. The policies
+   * scope every row to `echo.actor_id()`, so this is what the wall already
+   * says rather than a rule these handlers enforce.
+   */
+  app.get("/v1/me/telegram", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    return reply.send(await telegramLink.status(identity));
+  });
+
+  /**
+   * Mint a code. The plaintext exists in exactly one response and is never
+   * readable again — the column holds a SHA-256 — so a person who loses the
+   * screen mints another rather than being told they already have one they
+   * cannot see.
+   */
+  app.post("/v1/me/telegram/code", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    return reply.send(await telegramLink.mint(identity));
+  });
+
+  app.delete("/v1/me/telegram/code", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    await telegramLink.cancel(identity);
+    return reply.code(204).send();
+  });
+
+  /** Unlink. 404 when there was nothing to unlink — the repo reads the
+   *  delete's own RETURNING rather than asking twice and risking two answers. */
+  app.delete("/v1/me/telegram", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    await telegramLink.unlink(identity);
+    return reply.code(204).send();
   });
 
   app.post("/v1/connectors/:provider/authorization", async (request, reply) => {

@@ -94,6 +94,14 @@ insert into argued_deletes (name) values
   -- chat_channel_member): what this removes is a person's place on a plan,
   -- never the plan and never anything they said. The meeting itself is not
   -- in this list -- 0148 gave it its own delete under `meeting`, above.
+  -- 0212: UNLINKING YOUR OWN TELEGRAM ACCOUNT, and cancelling the code that
+  -- would link it. Both are the personal shape at its narrowest: the policy
+  -- scopes each to `user_id = echo.actor_id()`, so this grant reaches exactly
+  -- one person's rows -- their own -- and nobody, including an org owner, can
+  -- reach anybody else's. The INSERT half is deliberately NOT granted: a link
+  -- exists only because a code was redeemed through the definer door, which
+  -- is the whole reason the code proves anything.
+  ('telegram_identity'), ('telegram_link_code'),
   ('meeting_attendee'),
   ('task_assignee'), ('task_checklist_item'), ('task_label'), ('task_label_link');
 
@@ -102,7 +110,7 @@ select t.ok(
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
    = (select array_agg(name order by name) from argued_deletes),
-  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), a person''s membership of a project (0181), a person''s place on a meeting (0202), a person''s membership of a channel (0184), a person''s own reaction and an inviter''s withdrawn invitation (0189), a project itself (0191) — every other product row is echo_purge''s alone');
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), a person''s membership of a project (0181), a person''s place on a meeting (0202), a person''s membership of a channel (0184), a person''s own reaction and an inviter''s withdrawn invitation (0189), a project itself (0191), a person''s own Telegram link and its code (0212) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.

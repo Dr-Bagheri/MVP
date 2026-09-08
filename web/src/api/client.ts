@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  TelegramLinkRecord,
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
   ChatChannelRecord, ChatMessageRecord, JoinInviteRecord, InviteKind,
@@ -961,6 +962,22 @@ export const api = {
    * URL IS the credential (single object, expiring), no session cookie or
    * token travels, and the response body is not consulted beyond ok-ness.
    */
+  /* THE TELEGRAM LINK (db/0212) — the caller's own account, four calls.
+     `mintTelegramCode` is the only one whose response holds a secret, and it
+     is deliberately not cached anywhere: the plaintext lives in one component's
+     state until the person leaves the screen. */
+  async telegramLink(): Promise<TelegramLinkRecord> {
+    return bff("/api/me/telegram");
+  },
+
+  async mintTelegramCode(): Promise<{ code: string; expires_at: string }> {
+    return bff("/api/me/telegram/code", { method: "POST" });
+  },
+
+  async unlinkTelegram(): Promise<void> {
+    await bff("/api/me/telegram", { method: "DELETE" });
+  },
+
   async putSignedPart(uploadUrl: string, blob: Blob, contentType: string): Promise<void> {
     const response = await fetch(uploadUrl, {
       method: "PUT",

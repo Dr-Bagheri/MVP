@@ -10,6 +10,7 @@ import type { Me, ModelInfo } from "@/api/types";
 import { Avatar } from "@/components/Avatar";
 import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
+import { TelegramLink } from "@/components/platform/TelegramLink";
 import { ExportAccountData } from "@/components/platform/ExportAccountData";
 import { TwoPane, type PaneGroup } from "@/components/platform/TwoPane";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
@@ -88,7 +89,7 @@ const JOB_TITLES: string[] = [
  * SESSION IS NOT A SECTION. It was a fifth heading over a single button; the
  * way out now sits at the foot of Identity, beside the account it ends.
  */
-const PROFILE_SECTIONS = ["identity", "preferences", "assistant", "password"] as const;
+const PROFILE_SECTIONS = ["identity", "preferences", "assistant", "telegram", "password"] as const;
 type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
 /** each section's heading — the menu item, the page title and the breadcrumb
@@ -97,6 +98,10 @@ const SECTION_LABEL: Record<ProfileSection, string> = {
   identity: "identityTitle",
   preferences: "prefsTitle",
   assistant: "assistantDataTitle",
+  /* the person's own phone (db/0212) — beside the assistant's data and above
+     the password, because it is the same kind of fact as a voiceprint: a
+     personal device this account speaks through */
+  telegram: "telegramTitle",
   password: "passwordTitle",
 };
 
@@ -679,6 +684,12 @@ export default function ProfilePage({
             profile field: it re-authenticates, it can fail for reasons the
             fields above never can, and folding it into the same submit would
             mean a rejected password discarded a perfectly good rename. */}
+      {active === "telegram" ? (
+        <Section>
+          <TelegramLink />
+        </Section>
+      ) : null}
+
       {active === "password" ? (
         <Section>
           <ChangePassword />

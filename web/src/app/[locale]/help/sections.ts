@@ -40,7 +40,7 @@ export const HELP_SECTIONS = [
   { slug: "projects", group: "parts", steps: 5 },
   { slug: "chat", group: "parts", steps: 6 },
   { slug: "workflows", group: "parts", steps: 6 },
-  { slug: "integrations", group: "parts", steps: 5 },
+  { slug: "integrations", group: "parts", steps: 6 },
   { slug: "agents", group: "parts", steps: 5 },
   { slug: "management", group: "parts", steps: 5 },
   { slug: "settings", group: "parts", steps: 6 },

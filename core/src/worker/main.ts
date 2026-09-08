@@ -19,8 +19,8 @@ import { Q_AGENT_RULES, createQueue } from "./queue.ts";
 import { createRunner } from "./runner.ts";
 import { createTranslateStep } from "./translate-step.ts";
 import { createTranslationsRepo } from "../api/translations.ts";
-import { createPartStep, type StorageSigner } from "./steps.ts";
-import { storageSignerFromEnv } from "../storage/signer.ts";
+import { createPartStep } from "./steps.ts";
+import { storageSignerFromEnv, type StorageSigner } from "../storage/signer.ts";
 import { createLinkSpeakersStep, createSummarizeStep } from "./call-steps.ts";
 import { createSummarizer } from "./summarizer.ts";
 import { createSignalStep } from "./signal-step.ts";
@@ -28,6 +28,8 @@ import { createWorkflowStep } from "./workflow-step.ts";
 import { sweepWorkflowTimers } from "./workflow-triggers.ts";
 import { sweepMailboxes } from "./mail-poll.ts";
 import { sweepMeetings } from "./meeting-prep.ts";
+import { sweepTelegram } from "./telegram-poll.ts";
+import { createTasksRepo } from "../api/tasks.ts";
 import { createConnectorsRepo } from "../api/connectors.ts";
 import { connectorCredentialsFromEnv } from "../api/connector-providers.ts";
 import { createMailDraftsRepo } from "../api/mail-drafts.ts";
@@ -258,6 +260,29 @@ export async function main(): Promise<void> {
    * minute 28 instead of minute 30 is the same brief, and polling a calendar
    * as often as an inbox spends quota on facts that were already scheduled.
    */
+  /*
+   * Item 10: the bot's inbox, once a minute.
+   *
+   * Faster than the mailbox (two minutes) because the promise is different:
+   * a voice note is sent by somebody who is watching their phone for the
+   * reply, and "by the time you arrive" is the whole feature. A minute is
+   * also what `due_telegram_polls` and `claim_telegram_poll` agree on — the
+   * interval and the due-predicate are ONE number in two places, and the
+   * database is the one that decides.
+   */
+  const telegramTimer = setInterval(() => {
+    void sweepTelegram({
+      db,
+      connectors: mailConnectors as never,
+      tasks: createTasksRepo(db) as never,
+      ml,
+      storage,
+      apiKey: process.env.OPENROUTER_API_KEY ?? "",
+      fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+    }, log as never);
+  }, 60_000);
+  telegramTimer.unref();
+
   const meetingTimer = setInterval(() => {
     void sweepMeetings({
       db,

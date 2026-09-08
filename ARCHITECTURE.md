@@ -2332,3 +2332,60 @@ per-call branch would fail a ready record.
 carry any tag; the page asks for English), translating the meeting's
 minutes or a summary through the transcriber (text has no audio), and a
 retry button on a failed translation (asking again already requeues).
+
+## M51 — An inbound message acts only for a linked account [user directive 2026-09-08, list item 10: "a Persian voice note to Telegram becomes a card"]
+
+**The decision.** A message arriving from a connector's inbox — today
+Telegram's, tomorrow WhatsApp's — is acted on **only when its sender resolves
+to an active member of that organisation through a link the member themselves
+minted**. Nothing else about the message is read first: not its words, not its
+attachments, not its language. An unlinked sender gets one sentence saying how
+to link and costs the organisation nothing.
+
+**Why this is an architecture decision and not a feature detail.** M35
+established that an unattended job runs AS ITS OWNER, and the mail poller
+applies it correctly: a mailbox is already one person's, so "who is this for"
+has a single answer before anything arrives. A bot's inbox has the opposite
+shape — it is addressed by the open internet, and its bot username is
+discoverable. Reusing M35 there would mean every stranger who finds the bot
+writes to the organisation's board with the owner's authority. **The two
+inboxes look alike and are not, and the difference has to be written down
+somewhere a future connector will read it.**
+
+**The shape of the proof** (db/0212): a code minted inside the product, where
+the person is signed in, sent to the bot from the account they are claiming.
+It proves exactly one thing — the holder of this messaging account is the
+person who was signed in when the code was made — and it carries no role, no
+scope and no capability. Everything the poller then does runs under that
+member's own identity and their own RLS, exactly as if they had typed it into
+the product. `echo.telegram_identity` has **no INSERT grant for any role**: a
+link exists only because `redeem_telegram_link` was called, which is what
+makes the code load-bearing rather than ceremonial.
+
+**Consequences, stated rather than discovered.**
+
+1. *A link is personal, not organisational.* An admin cannot enumerate them —
+   the policies scope every row to `echo.actor_id()`, the same posture as a
+   voiceprint (0112). An admin governs the organisation; a colleague's phone
+   is not the organisation.
+2. *The voice note is the consent act.* There is no consent card on the
+   resulting card: the person recorded a sentence, addressed it to the bot and
+   pressed send. What is owed instead is VISIBILITY — the bot replies with
+   what it made, in the same thread, seconds later, so a wrong card is fixed
+   by whoever caused it. This is the same reading as "enrolling is the consent
+   act" and it does NOT generalise to a message somebody else sent.
+3. *A colleague is never guessed.* A name in a note that does not match
+   exactly one member leaves the card with the sender, and the reply says
+   which name could not be placed. Everything else degrades to a default that
+   is visible on the card itself.
+4. *The audio does not persist.* The note is fetched, transcribed and dropped
+   in a `finally`. An object with no row pointing at it is invisible to
+   `platform_purge_org`, which enumerates objects FROM rows — so keeping it
+   would be a purge gap, and a voice note is not a record of a meeting.
+5. *The first look answers nothing.* Connecting a bot must not act on its
+   backlog; the mark is recorded and nothing is done.
+
+**What this does not decide.** Whether a GROUP chat may ever be a source. The
+schema is ready for it (`chat_id` is stored separately from
+`telegram_user_id`), and the question it opens — whose authority applies when
+four linked people are in one room — is not answered here.

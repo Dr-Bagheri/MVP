@@ -1310,3 +1310,20 @@ export interface CallTranslation {
   /** one translated text per segment id — empty until ready */
   segments: { segment_id: string; text: string }[];
 }
+
+/**
+ * A person's own Telegram link (db/0212).
+ *
+ * `code_expires_at` is the expiry of a live code and never the code: the
+ * server holds a SHA-256, so the plaintext exists once, in the response that
+ * minted it. A type that carried a `code` field here would be a claim the
+ * server cannot honour on a second read.
+ */
+export interface TelegramLinkRecord {
+  linked: boolean;
+  telegram_username: string | null;
+  linked_at: string | null;
+  code_expires_at: string | null;
+  /** the org bot's public @handle (db/0213) — null when none is connected */
+  bot_username: string | null;
+}

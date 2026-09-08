@@ -220,3 +220,63 @@ four only Jira's secret is unproven (its probes cannot discriminate).
 `send_slack_message` are the two that could be run today, and each writes
 something a person will see, so each waits for the operator's word rather
 than being fired to tick a box.
+
+---
+
+## Telegram's second job: a voice note becomes a card (db/0212, M51)
+
+Once a Telegram bot is connected, the worker reads its inbox once a minute.
+What it does with a message depends entirely on **who sent it**, and that is
+the whole design.
+
+### For a stranger
+
+Nothing. A bot username is discoverable, so most of what arrives at a bot is
+from somebody with no account here — and their words are never read by a
+model, never reach the board, and cost the organisation nothing but the one
+sentence the bot replies with, which says how to link.
+
+### For a linked colleague
+
+A voice note (or a text message) becomes a task card:
+
+1. the note's bytes are fetched **by core**, because a Telegram file URL
+   embeds the bot token and ml/ must never be handed a product credential;
+2. they are put in the `call-audio` bucket under `scratch/telegram/<org>/…`,
+   transcribed through the normal lane, and **removed in a `finally`** — the
+   text becomes the card, the audio does not persist;
+3. a model turns the sentence into a title, a folder, a column, a priority and
+   a deadline, choosing only from names it is given;
+4. the card is created under the **colleague's own identity**, with their RLS;
+5. the bot replies with the card it made.
+
+A colleague named in the note has to match **exactly one** member or the card
+stays with the sender and the reply says so. Nothing else is refused: a
+folder, column or priority the model invents is simply dropped.
+
+### Linking an account
+
+The person opens **Profile → Telegram** in the platform, presses *Create a
+link code*, and sends the eight-character code to the bot (typing it, or via
+`/start CODE`). The code is:
+
+* 40 bits from an alphabet with no `O`/`0` and no `I`/`1`/`L`,
+* stored as a SHA-256 — the plaintext exists once, in the response that minted
+  it,
+* valid for fifteen minutes, single use, one live code per person.
+
+Unknown, expired and already-spent codes are refused **identically**.
+
+### What an operator has to do
+
+Nothing beyond connecting the bot. There is no new credential, no new bucket
+and no console step — the bot token that `getMe` already vouched for is the
+only thing this lane uses. Telling colleagues the bot's `@username` is the
+whole rollout.
+
+### Not yet proven live
+
+The lane has not run against a real Telegram bot: it needs a connected bot and
+a person with a phone, which is a two-minute test for whoever has both. The
+poller, the link, the refusals and the card are covered by tests and by
+`db/test/121`; what no test here can produce is Telegram's own wire.

@@ -44,6 +44,22 @@ export interface StorageSigner {
   signUpload(bucket: string, path: string): Promise<{ url: string; token: string }>;
   signDownload(bucket: string, path: string, ttlSeconds: number): Promise<string>;
   /**
+   * Put bytes core already holds into an object (0212, the voice-note lane).
+   *
+   * Not a second spelling of `signUpload`: that one exists so a browser can
+   * send a 50MB document without it passing through this process. Here the
+   * bytes are ALREADY here — the worker downloaded a voice note from Telegram,
+   * whose own URL embeds the bot token and can therefore never be handed
+   * onward — so signing a URL for somebody else to use would be a round trip
+   * to nobody.
+   *
+   * It lives on the signer rather than in the caller for the reason every
+   * other method does: this module is the one place that talks to storage, so
+   * it is the one place with a `fetchImpl` seam, and a caller that reached for
+   * the global `fetch` would be untestable exactly where it matters.
+   */
+  upload(bucket: string, path: string, body: Uint8Array, contentType: string): Promise<void>;
+  /**
    * Delete one object (2026-09-06). Removing a meeting attachment deleted the
    * ROW and kept the bytes, and the purge enumerates objects from rows, so a
    * removed document lived on with nothing left that could ever find it —
@@ -135,6 +151,25 @@ export function createStorageSigner(config: StorageSignerConfig): StorageSigner 
         throw new StorageSignError("storage: upload sign response was unusable");
       }
       return { url: `${base}/storage/v1${relative.startsWith("/") ? "" : "/"}${relative}`, token };
+    },
+
+    async upload(bucket: string, path: string, body: Uint8Array, contentType: string): Promise<void> {
+      const { url } = await this.signUpload(bucket, path);
+      let response: Response;
+      try {
+        /* the signed URL IS the credential — single object, expiring — so no
+           key travels with the bytes and none can leak from a failure here */
+        response = await doFetch(url, {
+          method: "PUT",
+          headers: { "content-type": contentType },
+          body,
+        });
+      } catch {
+        throw new StorageSignError("storage: upload request failed");
+      }
+      /* status only: a failed body can echo the path, and the URL holds the
+         token */
+      if (!response.ok) throw new StorageSignError(`storage: upload failed (${response.status})`);
     },
 
     async signDownload(bucket: string, path: string, ttlSeconds: number): Promise<string> {

@@ -1171,7 +1171,8 @@
         "step2": "Google brings Gmail, the calendar, Drive and Meet. «Connect» takes you to Google's own sign-in, where you see exactly what is read.",
         "step3": "Drafting email needs its own permission; a connection made before that offers «Enable email drafts» to grant it.",
         "step4": "The «Connected integrations» tab shows what each connection can do and when it last worked; disconnecting is there too and takes effect at once.",
-        "step5": "Nothing is read from an outside service without your asking, and what is read goes to the model only for that task."
+        "step5": "Nothing is read from an outside service without your asking, and what is read goes to the model only for that task.",
+        "step6": "The Telegram bot does one more thing: create a link code in Profile → Telegram and send it to the bot, and from then on any voice note or message you send it becomes a task, with the card sent back to you. Until you send that code, the bot does nothing for you."
       },
       "agents": {
         "step1": "Agents are the organisation's AI colleagues. Echo is the general assistant; Roya runs the work in flight and Ava analyses the records — all three reach every part of the platform, with your role's own access. The agents page shows each with its name, handle and description.",
@@ -2288,6 +2289,21 @@
     "wakeAck": "Yes?"
   },
   "profile": {
+    "telegramTitle": "Telegram",
+    "telegramUnreadable": "The Telegram connection could not be read.",
+    "telegramRetry": "Try again",
+    "telegramAccount": "Telegram account",
+    "telegramLinked": "Connected",
+    "telegramHowTo": "Create the code below and send it to {bot} on Telegram. After that, any voice note or message you send the bot becomes a task.",
+    "telegramHowToNoBot": "Create the code below and send it to your organisation's Telegram bot. After that, any voice note or message you send the bot becomes a task.",
+    "telegramMint": "Create a link code",
+    "telegramMintAgain": "New code",
+    "telegramCodeExpires": "valid for {minutes} minutes",
+    "telegramCodeFailed": "The code could not be created.",
+    "telegramUnlink": "Disconnect",
+    "telegramUnlinkTitle": "Disconnect Telegram?",
+    "telegramUnlinkBody": "After this, your messages to the bot no longer become tasks. You can connect again whenever you like.",
+    "telegramUnlinkFailed": "The account could not be disconnected.",
     "title": "Profile",
     "displayName": "Name in Persian",
     "displayNameEn": "Name in English",

@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { User } from "@/api/types";
 
 /**
- * THE PROFILE IS FOUR SUB-PAGES NOW, in the order the user named them
- * (directive, 2026-09-04: "add a sub menu on top for it with order like this:
- * Identity, Preferences, Assistant & data, Change password").
+ * THE PROFILE'S SUB-PAGES, in the order the user named them (directive,
+ * 2026-09-04: "add a sub menu on top for it with order like this: Identity,
+ * Preferences, Assistant & data, Change password"). Telegram (db/0212) sits
+ * between the assistant's data and the password: it is the same kind of fact
+ * as a voiceprint — a personal device this account speaks through — and the
+ * password stays last because it is the one row that re-authenticates.
  *
  * Two properties, and the second is the one that rots. ORDER is the directive
  * itself, so it is asserted as a sequence rather than as four presences — a
@@ -46,6 +49,10 @@ vi.mock("@/api/client", async (importOriginal) => {
       setLocale: vi.fn(),
       meetings: async () => [],
       taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
+      telegramLink: async () => ({
+        linked: false, telegram_username: null, linked_at: null,
+        code_expires_at: null, bot_username: "neurai_bot",
+      }),
     },
   };
 });
@@ -63,14 +70,15 @@ async function open(section?: string) {
 const IDENTITY = "هویت";
 const PREFERENCES = "ترجیح‌ها";
 const ASSISTANT = "دستیار و داده‌ها";
+const TELEGRAM = "تلگرام";
 const PASSWORD = "تغییر گذرواژه";
 
 describe("the profile's section menu", () => {
-  it("lists the four sections in the order they were asked for", async () => {
+  it("lists the sections in the order they were asked for", async () => {
     await open();
     const nav = screen.getByRole("navigation");
     const labels = within(nav).getAllByRole("link").map((a) => a.textContent?.trim());
-    expect(labels).toEqual([IDENTITY, PREFERENCES, ASSISTANT, PASSWORD]);
+    expect(labels).toEqual([IDENTITY, PREFERENCES, ASSISTANT, TELEGRAM, PASSWORD]);
   });
 
   it("points each item at its own address", async () => {
@@ -80,7 +88,10 @@ describe("the profile's section menu", () => {
     /* Identity is the bare route: /profile and /profile/identity would be two
        addresses for one screen, and only one of them can be the one the avatar
        menu links to */
-    expect(hrefs).toEqual(["/profile", "/profile/preferences", "/profile/assistant", "/profile/password"]);
+    expect(hrefs).toEqual([
+      "/profile", "/profile/preferences", "/profile/assistant",
+      "/profile/telegram", "/profile/password",
+    ]);
   });
 });
 
@@ -111,6 +122,15 @@ describe("each section renders its own content, and only its own", () => {
     expect(screen.getByLabelText(/^زبان/)).toBeTruthy();
     expect(screen.queryByDisplayValue("سارا"), "the identity form leaked").toBeNull();
     expect(screen.queryByRole("button", { name: "خروج از حساب" })).toBeNull();
+  });
+
+  it("telegram: its own panel alone", async () => {
+    await open("telegram");
+    /* the section is reachable and renders — the guard that would otherwise
+       let a slug exist in the menu and resolve to Identity underneath it */
+    expect(await screen.findByText(/ربات تلگرام سازمان|@/)).toBeTruthy();
+    expect(screen.queryByDisplayValue("سارا")).toBeNull();
+    expect(screen.queryByLabelText(/^زبان/)).toBeNull();
   });
 
   it("password: its own form alone", async () => {
