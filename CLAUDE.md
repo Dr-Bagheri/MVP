@@ -5775,3 +5775,71 @@ sessions) for the cross-session narrative.
   real voice note end to end — that needs somebody with a phone to link and
   send one, which is a two-minute test for whoever has both.
   db 213 migrations · core 1480 tests · web 1362 tests + gate + sweep.
+- 2026-09-08 (BATCH D — THE LIVE MEETING GETS A QUIET SECOND BRAIN; commit
+  561b54f; db 0214): item 7. Mid-sentence, on the host's stage only, a card
+  says «this was already decided» — which meeting, when, and whether it still
+  stands. The corpus is the morning's ledger, so this needed an INDEX rather
+  than a feature: 0214 gives `meeting_item` the same generated, folded
+  tsvector `transcript_segment` has had since 0006, for 0006's own reason —
+  the fold belongs to the DATABASE, or a query folded in TypeScript misses
+  every Persian variant SILENTLY and recall reads as "just not very good".
+  **THE RULE IS ONE SENTENCE: a decision surfaces when it shares at least TWO
+  DISTINCTIVE WORDS with what is being said.** Both alternatives are recorded
+  beside the query because both are worse and both look reasonable:
+  `websearch_to_tsquery` ANDs, so thirty seconds of speech matches nothing
+  ever — the feature ships, never fires, and reads as taste; a single-word OR
+  fires on «که» and «را», which on this corpus is every decision every time.
+  Two words is the smallest rule that can be wrong in a way somebody notices.
+  The COUNT is returned to the card: «three words in common with what you just
+  said» is a claim a person can argue with, where a relevance score is not.
+  **The vision doc has item 7 depending on item 1 (semantic memory), and it
+  does not.** The ledger is structured and the words are the org's own, so
+  lexical recall over it is honest about what it is — which is the version
+  that can ship while the embedding lane is still blocked on a box.
+  Everything else is about staying QUIET, because a wrong card in a live
+  meeting is worse than no card: one ask per twelve seconds AND only after 120
+  new characters, a decision shown once is never shown again, a dismissal is
+  permanent, a failed read says nothing. The TAIL, not the transcript (a whole
+  meeting matches everything eventually). The meeting in progress is excluded
+  IN THE QUERY — its own decisions reach the ledger within seconds, so the
+  loudest hit would otherwise be the room quoting itself. Host-only is about
+  INTERRUPTION, not permission: the server enforces the meeting's own read
+  policy and nothing more; a card on ten screens is a broadcast, and a wrong
+  broadcast has to be corrected out loud.
+  **THREE OF MY OWN TESTS COULD NOT FAIL, and one was the code's fault.** The
+  floor assertion read `MIN_SHARED_TERMS`, so changing the rule moved the test
+  with it — **a test comparing the code with itself**; the window fixture was
+  340 characters against a 700-character cap, so the slice had nothing to cut;
+  and `dismiss` added to `seen` as well as filtering the screen, which could
+  never fail because an id reaches `seen` the moment it is drawn — two
+  spellings, one unexercised, collapsed to the filter.
+  **AND THE BATCH SHIPPED A BFF ROUTE THAT DID NOT EXIST.** Its `mkdir` sat
+  behind an `&&` after a script that failed, so it never ran — and typecheck
+  passed (a fetch URL is a string), 1370 tests passed (the client is mocked
+  everywhere), the production build passed (Next builds the routes that ARE
+  there). The only symptom would have been a 404 during a live meeting, which
+  the hook swallows on purpose. Two lessons, one old and one new: **brackets
+  belong to the file tools, and I used the shell** — the rule's own failure
+  mode, silent in the direction that looks like it worked. And the seam had no
+  instrument: `bffRoutes.guard.test.ts` now asserts every `/api/...` path the
+  client names resolves in the route tree — the check the 2026-08-13 close
+  declaration asked for and never got, **verified red by hiding this very
+  route**. It cost three false-positive rounds, each in its header: a
+  character class that truncated at a quote inside an interpolation, a
+  query-strip that cut a ternary at its own `?`, and a control whose `find`
+  matched a different path with "archive" in it.
+  Then **`bodyForward.guard` caught the replacement route on its first run** —
+  `JSON.stringify` into `coreFetch`, which stringifies itself: the exact
+  defect that guard was written for a day earlier, in code written an hour
+  after reading it.
+  Also: `db/scripts/probe-recall-sql.mjs` proves the query PARSES AND RUNS on
+  production (TypeScript cannot see a SQL error, and the first time a host is
+  in a meeting is the worst moment to find one). It reported honestly that its
+  discriminating half could not run — the org's ledger is empty — so that half
+  lives in `db/test/122` on fixture data instead: eleven checks, including the
+  one-word coincidence that must NOT surface and its control.
+  Deployed: 0214 on production; core and the worker on Hetzner (both active,
+  `/v1/meetings/:id/recall` 401 against a 404 control); web on Vercel. NOT
+  proven live: a card appearing in a real meeting, which needs a meeting with
+  a recorded decision behind it.
+  db 214 migrations · core 1494 tests · web 1373 tests + gate + sweep.
