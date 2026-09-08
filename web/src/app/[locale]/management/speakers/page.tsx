@@ -1,8 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { Skeleton } from "@/components/scaffold";
+import { IconPlus } from "@/components/icons";
 
 /**
  * MANAGEMENT · SPEAKERS — the voice-print directory, at its own Management
@@ -62,9 +65,35 @@ const SpeakersDirectory = dynamic(
 );
 
 export default function ManagementSpeakersPage() {
+  const t = useTranslations("speakersDir");
+  /**
+   * THE ＋ IS THE TOOLBAR'S, THE ROW IT OPENS IS THE DIRECTORY'S (user
+   * directive, 2026-09-08: "just keep the first sub-menu on top, and in the
+   * same row the add button, and the table").
+   *
+   * A counter rather than a boolean, because two presses in a row are two
+   * openings and a boolean cannot say that; and `canAdd` comes UP from the
+   * directory rather than being decided again here, so there is one answer to
+   * "may this person add somebody" instead of a second `me()` that could
+   * disagree with the one the table is drawn from.
+   */
+  const [addAt, setAddAt] = useState(0);
+  const [canAdd, setCanAdd] = useState(false);
   return (
-    <ManagementPane activeSlug="speakers">
-      <SpeakersDirectory />
+    <ManagementPane
+      activeSlug="speakers"
+      actions={canAdd ? (
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => setAddAt((n) => n + 1)}
+        >
+          <IconPlus width={14} height={14} />
+          {t("add")}
+        </button>
+      ) : null}
+    >
+      <SpeakersDirectory addSignal={addAt} onCanAdd={setCanAdd} />
     </ManagementPane>
   );
 }

@@ -54,10 +54,16 @@ const NOT_WIRED: readonly string[] = [];
 
 export function ManagementPane({
   activeSlug,
+  actions,
   children,
 }: {
   /** `""` on the Management landing itself — no item is current there. */
   activeSlug: string;
+  /** the section's one create button, at the END of row 1 (R3) — forwarded
+      to TwoPane, which is where every other pane's create button already
+      sits. Settings' pane has carried this since the models page; Management
+      grew it for Speakers (2026-09-08). */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   const t = useTranslations("management");
@@ -121,6 +127,7 @@ export function ManagementPane({
       heading={t("title")}
       groups={withSpeakers}
       activeSlug={activeSlug}
+      actions={actions}
     >
       {children}
     </TwoPane>

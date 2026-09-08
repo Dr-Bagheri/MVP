@@ -8,6 +8,7 @@ import type { Me } from "@/api/types";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { personName } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
+import { Skeleton } from "@/components/scaffold";
 import { signOutThisDevice } from "@/lib/signOut";
 import { useLocale } from "next-intl";
 import { IconChevronEnd, IconOpen, IconRobot } from "@/components/icons";
@@ -42,7 +43,23 @@ export function IconRail() {
   const t = useTranslations("platform");
   const locale = useLocale();
   const pathname = usePathname();
-  const [me, setMe] = useState<Me | null>(null);
+  /**
+   * THREE STATES, because two of them make the menu jump (user report,
+   * 2026-09-08: "every time I refresh, the help comes a little late and I see
+   * the settings icon jumping").
+   *
+   * `undefined` = still asking. It was `Me | null`, where null meant BOTH
+   * "the read has not landed" and "there is nobody" — so the person's card at
+   * the foot rendered nothing until the network answered. The destinations
+   * column is `flex-1` and Settings/Help are held at its bottom by `mt-auto`,
+   * so the card arriving half a second later took ~62px out of that column
+   * and pulled the two of them up with it, on every refresh.
+   *
+   * The card's own shell is a constant below, shared with the placeholder:
+   * the space is reserved by the same box at the same height, so there is no
+   * second spelling of it to drift.
+   */
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
   useEffect(() => {
     void api.me().then(setMe).catch(() => setMe(null));
   }, []);
@@ -108,6 +125,16 @@ export function IconRail() {
       </Link>
     );
   };
+
+  /**
+   * THE FOOT'S BOX, written once and worn by both the card and the space kept
+   * for it. Two copies of these classes would be two heights the day one of
+   * them gains a padding step — and the whole point of the placeholder is
+   * that its height is the card's.
+   */
+  const footCard = `flex items-center rounded-2xl border border-border ${
+    compact ? "justify-center p-1.5" : "gap-1.5 p-2.5"
+  }`;
 
   /* the person's role, said in their own language — three words, not a
      namespace borrowed from an admin screen */
@@ -294,12 +321,26 @@ export function IconRail() {
           opens the profile cannot also contain a button that ends the
           session — one nested inside the other is a click target that means
           two things depending on the pixel. */}
-      {me !== null ? (
-        <div
-          className={`flex items-center rounded-2xl border border-border ${
-            compact ? "justify-center p-1.5" : "gap-1.5 p-2.5"
-          }`}
-        >
+      {me === undefined ? (
+        /* THE SPACE THE CARD WILL TAKE, in the card's own box. The avatar is
+           what sets the height (36px at `md`), so the circle is what the
+           placeholder must be; the two bars beside it are shorter than that
+           and cost nothing. `data-testid` rather than a role: this is
+           furniture, hidden from assistive technology, and the test needs to
+           name it. */
+        <div className={footCard} aria-hidden data-testid="rail-foot-loading">
+          <span className={`-m-1 flex min-w-0 items-center p-1 ${compact ? "justify-center" : "flex-1 gap-2.5"}`}>
+            <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+            {compact ? null : (
+              <span className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-2.5 w-16" />
+              </span>
+            )}
+          </span>
+        </div>
+      ) : me !== null ? (
+        <div className={footCard}>
           <Link
             href="/profile"
             title={personName(me, locale)}

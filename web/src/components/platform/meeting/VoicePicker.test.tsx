@@ -110,42 +110,96 @@ describe("naming a voice from inside the transcript", () => {
     await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", null));
   });
 
-  it("asks WHICH directory person an unlearned colleague is, then remembers it and links", async () => {
+  it("resolves an unlearned colleague ITSELF, in the one press", async () => {
     /*
-     * The step without which this menu is decoration on this deployment: not
-     * one account is linked to a directory person, so every candidate
-     * arrives with `personId: null` and a picker that could only use
-     * resolved ones would refuse every press.
+     * The user's directive, 2026-09-08: "remove that pop up as well, it
+     * should handle it itself." A candidate with `personId: null` used to
+     * open a dialog asking which directory person the account is — and on
+     * this deployment EVERY candidate arrives that way (fourteen accounts,
+     * zero links, measured 2026-09-07), so the dialog was not an edge case,
+     * it was the ordinary path.
+     *
+     * The discriminating assertion is that ONE press finishes the job: under
+     * the version this replaces, nothing was written until three more.
      */
     draw();
     await openMenu();
     await userEvent.click(screen.getByRole("option", { name: /drbagheri/ }));
 
-    expect(await screen.findByText("voiceWhoTitle:drbagheri")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /voiceWhoPick/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "امیررضا باقری" }));
-    await userEvent.click(screen.getByRole("button", { name: "voiceWhoSave" }));
-
-    /* the pairing FIRST — it is the durable half, and it is what stops the
-       question coming back on every later meeting */
-    await waitFor(() => expect(updatePerson).toHaveBeenCalledWith("p-amir", { app_user_id: "u-host" }));
-    expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-amir");
+    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-new"));
+    /* named exactly as the option said — the label is a promise about what
+       the transcript will read */
+    expect(createPerson).toHaveBeenCalledWith("drbagheri", "");
+    /* and the durable half, so no later meeting asks or creates anything */
+    expect(updatePerson).toHaveBeenCalledWith("p-new", { app_user_id: "u-host" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  it("adds a person the directory has never held, under the name the host types", async () => {
+  it("reuses the directory row already carrying that name — never a second one", async () => {
+    /*
+     * The pairing is admin work and may be refused, so an unresolved
+     * candidate can come back meeting after meeting. Creating a person each
+     * time would fill the directory with copies of one colleague. Matched on
+     * the EXACT string, never a fold: a fold here would be a second opinion
+     * about who somebody is, and the server already owns the only one.
+     */
+    draw({
+      candidates: [{ memberId: "u-amir", name: "امیررضا باقری", personId: null, isHost: true, attended: true }],
+    });
+    await openMenu();
+    await userEvent.click(screen.getByRole("option", { name: /امیررضا باقری/ }));
+
+    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-amir"));
+    expect(createPerson).not.toHaveBeenCalled();
+    expect(updatePerson).toHaveBeenCalledWith("p-amir", { app_user_id: "u-amir" });
+  });
+
+  it("names a guest who has no account at all, from the panel's own field", async () => {
+    /*
+     * User directive, 2026-09-08: "here add the option to type the unknown
+     * not user as well as a speaker." A client or a candidate has no account,
+     * so no candidate can ever offer them — and a meeting with a guest in it
+     * is the ordinary case, not the exotic one.
+     */
     draw();
     await openMenu();
-    await userEvent.click(screen.getByRole("option", { name: /drbagheri/ }));
-    await userEvent.click(screen.getByRole("button", { name: /voiceWhoPick/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "voiceWhoNew" }));
+    const box = screen.getByLabelText("voiceGuest");
+    /* typed with the spaces a person actually leaves — the row is named by
+       what the transcript will read, not by what was in the box */
+    await userEvent.type(box, "  خانم رضایی  ");
+    await userEvent.click(screen.getByRole("button", { name: "voiceGuestAdd" }));
 
-    const box = screen.getByLabelText("voiceWhoName");
-    await userEvent.clear(box);
-    await userEvent.type(box, "امیررضا");
-    await userEvent.click(screen.getByRole("button", { name: "voiceWhoSave" }));
-
-    await waitFor(() => expect(createPerson).toHaveBeenCalledWith("امیررضا", ""));
+    await waitFor(() => expect(createPerson).toHaveBeenCalledWith("خانم رضایی", ""));
     expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-new");
+    /* a guest is a person, not an account: nothing is paired */
+    expect(updatePerson).not.toHaveBeenCalled();
+  });
+
+  it("adds a guest on Enter too — the field is where the typing already is", async () => {
+    draw();
+    await openMenu();
+    await userEvent.type(screen.getByLabelText("voiceGuest"), "خانم رضایی{Enter}");
+    await waitFor(() => expect(createPerson).toHaveBeenCalledWith("خانم رضایی", ""));
+    expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-new");
+  });
+
+  it("will not add a guest with no name — by either door", async () => {
+    /*
+     * The control for the two tests above, and it needs BOTH doors: the
+     * button carries the disabled state, and Enter does not — a guard on the
+     * button alone leaves the keyboard path putting a nameless row in the
+     * directory. (Verify-red found exactly that: a mutation to the trim
+     * inside `addGuest` could not fail while this test only pressed the
+     * button.)
+     */
+    draw();
+    await openMenu();
+    expect(screen.getByRole("button", { name: "voiceGuestAdd" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("voiceGuest"), "   ");
+    expect(screen.getByRole("button", { name: "voiceGuestAdd" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("voiceGuest"), "{Enter}");
+    expect(createPerson).not.toHaveBeenCalled();
+    expect(linkSpeaker).not.toHaveBeenCalled();
   });
 
   it("still links when the pairing cannot be saved — and SAYS it was not", async () => {
@@ -159,11 +213,8 @@ describe("naming a voice from inside the transcript", () => {
     draw();
     await openMenu();
     await userEvent.click(screen.getByRole("option", { name: /drbagheri/ }));
-    await userEvent.click(screen.getByRole("button", { name: /voiceWhoPick/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "امیررضا باقری" }));
-    await userEvent.click(screen.getByRole("button", { name: "voiceWhoSave" }));
 
-    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-amir"));
+    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-new"));
     expect(await screen.findByRole("status")).toHaveTextContent("voiceNotRemembered");
   });
 

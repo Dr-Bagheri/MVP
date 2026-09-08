@@ -9,9 +9,8 @@ import type { Me, Person, User } from "@/api/types";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
-import { Avatar } from "@/components/Avatar";
 import {
-  IconGauge, IconMicOff, IconMicPlus, IconPencil, IconPlus, IconRows, IconTeam, IconTrash, IconUser, IconUsers,
+  IconMicOff, IconMicPlus, IconPencil, IconTeam, IconTrash,
 } from "@/components/icons";
 import { filterChipClass } from "@/components/platform/sectionTabs";
 import { digits, personName } from "@/lib/format";
@@ -42,18 +41,38 @@ export const TITLE_CODES = [
 ] as const;
 
 /**
- * The org chart's BANDS. Titles carry seniority, never a reporting line —
- * so the chart draws ranks, and says so. Inventing edges ("who reports to
- * whom") from data we do not have would be the most confident lie on the
- * page.
+ * ONE READING OF THE LIST (user directive, 2026-09-08: "from speakers remove
+ * chart, card and table button from the second sub-menu — just keep the first
+ * sub-menu on top, and in the same row the add button, and the table").
+ *
+ * There were three: a table, a bento of cards, and an org chart drawn from the
+ * stored titles. The chips that chose between them were the whole of row two,
+ * and two of the three views were second drawings of rows the table already
+ * carried — which is how a directory came to have two avatar sizes and two
+ * spellings of "voice on file". The table is the one that can be edited, so it
+ * is the one that stays; `＋` moved up into the section's own toolbar, where
+ * every other create button in the product sits (R3).
+ *
+ * What went with the cards: PRESENCE, the "in n of the last 8 records" bar.
+ * Nothing else read it, and it cost one request per record on every load of
+ * this page. Said out loud rather than buried: that number is not shown
+ * anywhere now.
  */
-const CHART_BANDS = [
-  { key: "bandExec", codes: ["ceo", "cto", "coo", "cmo", "cfo"] as string[] },
-  { key: "bandLead", codes: ["vp", "director", "manager", "lead"] as string[] },
-  { key: "bandTeam", codes: ["employee", "other", ""] as string[] },
-] as const;
 
-export function SpeakersDirectory() {
+export function SpeakersDirectory({ addSignal = 0, onCanAdd }: {
+  /**
+   * The ＋ lives in the toolbar row, which belongs to the PAGE — this is how
+   * the press reaches the row it opens. A counter rather than a boolean: two
+   * presses in a row are two openings, and a boolean cannot say that.
+   */
+  addSignal?: number;
+  /**
+   * Whether that button should be there at all. The role is read HERE, with
+   * the directory, so there is one answer to "may this person add somebody"
+   * rather than a second `me()` on the page that could disagree with it.
+   */
+  onCanAdd?: (can: boolean) => void;
+} = {}) {
   const t = useTranslations("speakersDir");
   const tTitles = useTranslations("titles");
   const tCommon = useTranslations("common");
@@ -92,29 +111,16 @@ export function SpeakersDirectory() {
    */
   const [confirmVoiceClear, setConfirmVoiceClear] = useState<Person | null>(null);
   /**
-   * The 2026-08-25 batch: three views of one directory, a team filter, and
-   * presence. (The merge door left the UI on 2026-08-26 — see the kebab.)
-   *
-   * `view` — table (dense), cards (the bento reading of the same rows), or
-   * chart (the org tree the stored titles already describe).
    * `teamFilter` — null = everyone; "" = the people with no team yet.
-   * `identifying` — the person whose platform account is being decided.
-   * `presence` — person id → how many of the RECENT records they appear in,
-   * read bounded (the dashboard's rule: a directory page must not fan out
-   * one request per record in the org).
+   *
+   * (The merge door left the UI on 2026-08-26 — see the kebab. The three
+   * views and the presence bar left on 2026-09-08 — see the header.)
    */
-  const [view, setView] = useState<"table" | "cards" | "chart">("table");
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
-  /** the identify dialog: which person, and the account being proposed */
-  const [identifying, setIdentifying] = useState<Person | null>(null);
-  const [identifyTo, setIdentifyTo] = useState("");
-  /** org members, fetched when the dialog first opens (admin-only route) */
+  /** org members, for the account column — admin-only route, read once */
   const [members, setMembers] = useState<User[] | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamDraft, setTeamDraft] = useState("");
-  /* null until the read lands — "we have not counted" renders as a dash,
-     never as a zero someone would read as "never in a meeting" */
-  const [presence, setPresence] = useState<Record<string, number> | null>(null);
   /**
    * Voice enrollment (M39; scripted 2026-08-23 by user directive): pressing
    * enroll opens a compact panel with a PLATFORM-PROVIDED passage to read
@@ -290,6 +296,31 @@ export function SpeakersDirectory() {
     void api.me().then(setMe).catch(() => undefined);
   }, []);
 
+  /**
+   * The members list, once. It is an admin-only route and the account column
+   * needs it for EVERY row, so it is read with the directory rather than on a
+   * press — a select that has to fetch before it can open is a select that
+   * looks broken for a moment.
+   */
+  useEffect(() => {
+    if (!canManage) return undefined;
+    let live = true;
+    void api.members()
+      .then((rows) => { if (live) setMembers(rows); })
+      .catch(() => { if (live) setMembers([]); });
+    return () => { live = false; };
+  }, [canManage]);
+
+  /* the toolbar's ＋ belongs to the page (R3); this is the wire between them */
+  useEffect(() => { onCanAdd?.(canManage); }, [canManage, onCanAdd]);
+  useEffect(() => {
+    /* 0 is the mount, not a press */
+    if (addSignal === 0) return;
+    setAdding(true);
+    setName("");
+    setTitle("");
+  }, [addSignal]);
+
   async function renameFor(person: Person): Promise<void> {
     const next = editName.trim();
     setEditingId(null);
@@ -356,18 +387,23 @@ export function SpeakersDirectory() {
   }
 
   /**
-   * IDENTIFY (db/0005's column, written since 2026-08-26): this directory
-   * person IS this platform member. `""` means "not a member" and CLEARS
-   * the link — a real answer, not a missing one, which is why the patch
-   * sends an explicit null rather than omitting the field.
+   * WHICH ACCOUNT THIS PERSON IS (db/0005's column, written since 2026-08-26,
+   * on the row itself since 2026-09-08: "for each speaker put the ability to
+   * be connected to each user").
+   *
+   * It used to be a dialog behind the row's ⋯ menu, which meant the one fact
+   * that makes a voice nameable in a meeting was the one fact this table did
+   * not show. `""` means "not a member" and CLEARS the link — a real answer,
+   * not a missing one, which is why the patch sends an explicit null rather
+   * than omitting the field.
    */
-  async function doIdentify(): Promise<void> {
-    if (!identifying) return;
+  async function connectTo(person: Person, memberId: string): Promise<void> {
+    if ((person.app_user_id ?? "") === memberId) return;
     setBusy(true);
     try {
-      await api.updatePerson(identifying.id, { app_user_id: identifyTo || null });
+      await api.updatePerson(person.id, { app_user_id: memberId || null });
       setPeople(await api.directory());
-      notify(identifyTo ? t("identifyDone") : t("identifyCleared"));
+      notify(memberId ? t("identifyDone") : t("identifyCleared"));
     } catch (cause) {
       /* the server's refusals are CODES, and two of them mean something a
          person can act on: another row already claims this account, or the
@@ -382,54 +418,10 @@ export function SpeakersDirectory() {
         "warn",
       );
     } finally {
-      setIdentifying(null);
-      setIdentifyTo("");
       setBusy(false);
     }
   }
 
-  /** the members list is admin-only, so it is fetched on first need */
-  function openIdentify(person: Person): void {
-    /* the SUGGESTION is the server's — it folded the two names with the
-       same function the name index is built on. It is pre-selected, never
-       applied: a common Persian surname must not silently attach a
-       colleague's identity to a voice. */
-    setIdentifyTo(person.app_user_id ?? person.suggested_app_user_id ?? "");
-    setIdentifying(person);
-    if (members === null) {
-      void api.members().then(setMembers).catch(() => setMembers([]));
-    }
-  }
-
-  /**
-   * PRESENCE — how many of the recent records each person appears in.
-   * Bounded to the newest 8 records: a per-record request each, and a
-   * directory page that fans out over an org's whole history is the reason
-   * someone's API is slow. The footnote says how deep it looked.
-   */
-  const PRESENCE_DEPTH = 8;
-  useEffect(() => {
-    let live = true;
-    void api.listCalls({ includeArchived: false })
-      .then((calls) => calls
-        .filter((c) => c.deleted_at === null && c.status === "ready")
-        .sort((a, b) => b.started_at.localeCompare(a.started_at))
-        .slice(0, PRESENCE_DEPTH))
-      .then((recent) => Promise.all(
-        recent.map((call) => api.getSpeakers(call.id).catch(() => []))))
-      .then((rosters) => {
-        if (!live) return;
-        const counts: Record<string, number> = {};
-        for (const roster of rosters) {
-          const inThis = new Set(
-            roster.map((s) => s.person_id).filter((id): id is string => id !== null));
-          for (const id of inThis) counts[id] = (counts[id] ?? 0) + 1;
-        }
-        setPresence(counts);
-      })
-      .catch(() => undefined);
-    return () => { live = false; };
-  }, [speakersEpoch]);
 
   async function retitle(person: Person, nextTitle: string): Promise<void> {
     setBusy(true);
@@ -601,94 +593,28 @@ export function SpeakersDirectory() {
 
   return (
     <div className="space-y-4">
-      {/* the directory's own controls (2026-08-25): three readings of one
-          list, and the team filter the labels make possible */}
-      {/*
-        2026-09-03: ONE FAMILY IN ONE ROW. This row held three shapes — a 32px
-        bordered segment group, a 28px `rounded-full` filter pill and a 32px
-        bordered ＋ — and they sit inches apart, which is the directive at its
-        smallest legible scale. All three wear the theme's compact control
-        now, in the spelling Meetings.tsx and TaskBoard.tsx already use for
-        the same toolbar: view chips, a hairline, filter chips. Two boards and
-        a directory rendering the same row must not disagree about what a
-        filter looks like.
-      */}
-      {/* THE SECOND ROW WEARS THE PLATFORM'S FILTER CHIP (R3 row two, user
-          2026-09-05: "second sub-menu did not apply to all pages with a second
-          sub menu on top — apply and fix"). This row sits under Management's
-          toolbar, so it is row two: an outlined chip with an icon, never the
-          row-one tab it was drawn with. */}
-      {people !== null && (people.length > 0 || canManage) ? (
+      {/* ROW TWO IS A FILTER AND NOTHING ELSE (user directive, 2026-09-08).
+          The three view chips are gone with the two views they chose, and the
+          ＋ moved up into the section's own toolbar — R3's rule, which every
+          other create button in the product already follows. What is left is
+          the one question this row can still answer: which team.
+          The chip is the platform's own (R3 row two): an outlined chip with an
+          icon, so a filter here and a filter on the task board are the same
+          control. */}
+      {people !== null && teamsAvailable && teams.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={`flex flex-wrap items-center gap-1 ${
-              people.length === 0 ? "hidden" : ""
-            }`}
-            role="group"
-            aria-label={t("viewLabel")}
-          >
-            {(["table", "cards", "chart"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                className={filterChipClass(view === v)}
-                onClick={() => setView(v)}
-              >
-                {v === "table" ? <IconRows width={12} height={12} />
-                  : v === "cards" ? <IconUsers width={12} height={12} />
-                    : <IconGauge width={12} height={12} />}
-                {t(`view.${v}` as "view.table")}
-              </button>
-            ))}
-          </span>
-          {teamsAvailable && teams.length > 0 ? (
-            <>
-              {/* Meetings.tsx's own separator: the row carries two questions
-                  (which reading, which team) and a hairline says so without
-                  giving the second group a second shape */}
-              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-              <span className="flex flex-wrap items-center gap-1">
-                {[null, ...teams].map((team) => (
-                  <button
-                    key={team ?? "__all"}
-                    type="button"
-                    aria-pressed={teamFilter === team}
-                    className={filterChipClass(teamFilter === team)}
-                    onClick={() => setTeamFilter(teamFilter === team ? null : team)}
-                  >
-                    <IconTeam width={12} height={12} />
-                    {team === null ? t("allTeams") : team === "" ? t("noTeam") : team}
-                  </button>
-                ))}
-              </span>
-            </>
-          ) : null}
-          {/* the ＋ sits WITH the table's own controls (user directive,
-              2026-08-26: "the plus for the add must be on the table") and
-              opens a row INSIDE the table, where the new person will land */}
-          {canManage && (view === "table" || people.length === 0) ? (
+          {[null, ...teams].map((team) => (
             <button
+              key={team ?? "__all"}
               type="button"
-              /* 2026-09-03: the theme's compact control. It was 32px with a
-                 12px corner beside the chips it shares this row with; `.btn`
-                 composes `.tap`, so the hit-area class goes with the
-                 geometry. `.btn`/`.btn-sm` draw no border, so the quiet
-                 bordered face this button has always had stays explicit —
-                 and it stays quiet: making the ＋ a solid accent button is a
-                 decision about emphasis, not about shape. */
-              className="btn btn-sm ms-auto border border-border text-fg-muted hover:border-accent hover:text-fg"
-              aria-expanded={adding}
-              onClick={() => {
-                setAdding(true);
-                setName("");
-                setTitle("");
-              }}
+              aria-pressed={teamFilter === team}
+              className={filterChipClass(teamFilter === team)}
+              onClick={() => setTeamFilter(teamFilter === team ? null : team)}
             >
-              <span aria-hidden className="text-base leading-none"><IconPlus width={14} height={14} /></span>
-              {t("add")}
+              <IconTeam width={12} height={12} />
+              {team === null ? t("allTeams") : team === "" ? t("noTeam") : team}
             </button>
-          ) : null}
+          ))}
         </div>
       ) : null}
 
@@ -699,112 +625,6 @@ export function SpeakersDirectory() {
         {people !== null && people.length === 0 && !adding ? (
           <div className="p-4">
             <EmptyState text={t("empty")} />
-          </div>
-        ) : view === "cards" ? (
-          /* the BENTO reading of the same rows — a face, a title, a team,
-             the voice state, and how present they have been lately */
-          <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((person) => (
-              <div key={person.id} className="glass-tile group rounded-xl p-3">
-                <div className="flex items-start gap-3">
-                  {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn
-                      one. This card drew 40px and the chart below drew 28 —
-                      two marks for the same person, two views of one list, and
-                      40 is not a size the theme has a name for (the same
-                      sentence this file already carries about its 28px/32px
-                      buttons). `md` is 36: four pixels, in exchange for the
-                      directory agreeing with the roster and with itself.
-                      `display_name` and not `personName`: a directory Person
-                      has ONE name, so there is no locale choice to make. */}
-                  <Avatar name={person.display_name} size="md" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-fg">{person.display_name}</p>
-                    <p className="truncate text-xs text-fg-muted">
-                      {person.title ? tTitles(person.title) : t("noTitle")}
-                      {person.team ? ` · ${person.team}` : ""}
-                    </p>
-                  </div>
-                  {canManage ? (
-                    <IconAction
-                      label={t("delete")}
-                      danger
-                      className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                      onClick={() => setConfirmDelete(person)}
-                    >
-                      <IconTrash width={14} height={14} />
-                    </IconAction>
-                  ) : null}
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-                  {person.voice_enrolled_at ? (
-                    <span className="inline-flex items-center gap-1.5 text-fg-muted">
-                      <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-                      {person.voice_samples && person.voice_samples > 1
-                        ? t("voiceSamples", { n: digits(person.voice_samples, locale) })
-                        : t("voiceOn")}
-                    </span>
-                  ) : (
-                    <span className="text-fg-subtle">{t("voiceNone")}</span>
-                  )}
-                  {/* presence: the bar is the reading, the number is the
-                      fact — and until the read lands there is neither */}
-                  {presence === null ? (
-                    <span className="text-fg-subtle">—</span>
-                  ) : (
-                    <span
-                      className="flex items-center gap-1.5 text-fg-subtle"
-                      title={t("presenceIn", {
-                        n: digits(presence[person.id] ?? 0, locale),
-                        of: digits(PRESENCE_DEPTH, locale),
-                      })}
-                    >
-                      <span className="h-1.5 w-12 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                        <span
-                          className="block h-full rounded-full bg-accent"
-                          style={{ width: `${Math.min(100, ((presence[person.id] ?? 0) / PRESENCE_DEPTH) * 100)}%` }}
-                        />
-                      </span>
-                      {digits(presence[person.id] ?? 0, locale)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : view === "chart" ? (
-          /* the ORG CHART the titles already describe: rank bands, not an
-             invented reporting line — we know seniority, never who reports
-             to whom, and drawing edges we cannot know would be fiction */
-          <div className="space-y-4 p-4">
-            {CHART_BANDS.map((band) => {
-              const inBand = shown.filter((p) => band.codes.includes(p.title));
-              if (inBand.length === 0) return null;
-              return (
-                <div key={band.key}>
-                  <p className="mb-2 text-group-label font-medium text-fg-subtle">{t(band.key)}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {inBand.map((person) => (
-                      <span
-                        key={person.id}
-                        className="well flex items-center gap-2"
-                      >
-                        {/* 2026-09-03: the platform's avatar at `sm` — 28px,
-                            the size this chip already drew, so the picture is
-                            unchanged and it gains `shrink-0`, which a mark in
-                            a flex row beside a name that can be long wanted
-                            anyway. */}
-                        <Avatar name={person.display_name} size="sm" />
-                        <span className="text-sm text-fg">{person.display_name}</span>
-                        <span className="text-xs text-fg-subtle">
-                          {person.title ? tTitles(person.title) : ""}
-                          {person.team ? ` · ${person.team}` : ""}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         ) : (
           <DataTable<Person>
@@ -859,6 +679,11 @@ export function SpeakersDirectory() {
                       ]}
                     />
                   </td>
+                  {/* the ACCOUNT cell, empty on purpose: a person has to
+                      exist before an account can be attached to them, and a
+                      cell missing here would slide every later cell one
+                      column left */}
+                  <td className="px-4 py-2.5" />
                   {teamsAvailable ? <td className="px-4 py-2.5" /> : null}
                   {voiceReady ? <td className="px-4 py-2.5" /> : null}
                   <td className="px-4 py-2.5">
@@ -933,20 +758,6 @@ export function SpeakersDirectory() {
                   ]
                 : []),
               {
-                /* MERGE left this menu (user directive, 2026-08-26) and
-                   this took its place: who, on the platform, is this
-                   voice? The server op for merging survives for support —
-                   the product simply no longer offers it. */
-                key: "identify",
-                label: person.app_user_id ? t("identifyChange") : t("identify"),
-                icon: <IconUser />,
-                /* the server's wall is requireAdmin, and the members list
-                   this dialog needs is admin-only too — offering the row
-                   to a member would be a promise that 403s on press */
-                disabled: busy || !canManage,
-                onSelect: () => openIdentify(person),
-              },
-              {
                 key: "delete",
                 label: t("delete"),
                 icon: <IconTrash />,
@@ -1020,6 +831,64 @@ export function SpeakersDirectory() {
                     /* members SEE, never edit (user ruling, 2026-08-22) */
                     <span className="text-fg-muted">
                       {person.title ? tTitles(person.title) : t("noTitle")}
+                    </span>
+                  ),
+              },
+              {
+                /**
+                 * WHO THIS IS ON THE PLATFORM (user directive, 2026-09-08:
+                 * "for each speaker put the ability to be connected to each
+                 * user, so when we are choosing the speakers in the overview
+                 * it does not need me to say this account is which speaker").
+                 *
+                 * This was a dialog behind the row's ⋯ menu — so the one fact
+                 * that lets a meeting name a voice by itself was the one fact
+                 * the directory did not show, and on this deployment not a
+                 * single row had it set. On the row, in the same select the
+                 * title uses, it is a thing somebody does while reading the
+                 * table rather than a thing they have to go looking for.
+                 *
+                 * The SUGGESTION is still only a suggestion: the server folds
+                 * the two names with the same function the name index is
+                 * built on, and it is MARKED in the list rather than applied.
+                 * A common Persian surname must not quietly attach a
+                 * colleague's identity to somebody else's voice.
+                 */
+                key: "member",
+                header: t("colMember"),
+                className: "text-xs",
+                stopClick: true,
+                cell: (person: Person) =>
+                  canManage ? (
+                    <SelectMenu
+                      className="input-sm w-44"
+                      ariaLabel={t("colMember")}
+                      value={person.app_user_id ?? ""}
+                      /* the list is admin-only and read once; until it lands
+                         there is nothing to choose FROM, and an open menu
+                         holding one row reads as "there are no colleagues" */
+                      disabled={busy || members === null}
+                      onChange={(next) => void connectTo(person, next)}
+                      options={[
+                        { value: "", label: t("identifyNobody") },
+                        ...(members ?? []).map((m) => ({
+                          value: m.id,
+                          label:
+                            person.app_user_id === null
+                            && m.id === person.suggested_app_user_id
+                              ? t("identifySuggested", { name: personName(m, locale) })
+                              : m.username
+                                ? `${personName(m, locale)} · ${m.username}`
+                                : personName(m, locale),
+                        })),
+                      ]}
+                    />
+                  ) : (
+                    /* members SEE, never edit — and they see the NAME the
+                       server resolved, because the id alone is not
+                       renderable and their own members list is admin-only */
+                    <span className="text-fg-muted">
+                      {person.linked_member_name ?? t("identifyNobody")}
                     </span>
                   ),
               },
@@ -1132,55 +1001,6 @@ export function SpeakersDirectory() {
         />
       ) : null}
 
-      {/* IDENTIFY: which platform account is this person? The suggestion
-          arrives pre-selected and SAYS it is a suggestion — the admin is
-          the one who decides, because a link made on a name match is a
-          claim about who someone is. */}
-      {identifying !== null ? (
-        <ConfirmDialog
-          title={t("identifyTitle", { name: identifying.display_name })}
-          body={
-            <div className="space-y-3">
-              <p className="text-sm text-fg-muted">{t("identifyBody")}</p>
-              <SelectMenu
-                ariaLabel={t("identifyPick")}
-                value={identifyTo}
-                onChange={setIdentifyTo}
-                options={[
-                  { value: "", label: t("identifyNobody") },
-                  ...(members ?? []).map((m) => ({
-                    value: m.id,
-                    label: m.username
-                      ? `${personName(m, locale)} · ${m.username}`
-                      : personName(m, locale),
-                  })),
-                ]}
-              />
-              {identifying.suggested_app_user_id
-                && identifyTo === identifying.suggested_app_user_id
-                && identifying.app_user_id !== identifying.suggested_app_user_id ? (
-                <p className="text-xs text-accent">
-                  {t("identifySuggested", {
-                    name: identifying.suggested_member_name ?? "",
-                  })}
-                </p>
-              ) : null}
-              {members !== null && members.length === 0 ? (
-                <p className="text-xs text-warning">{t("identifyNoMembers")}</p>
-              ) : null}
-            </div>
-          }
-          confirmLabel={t("identifySave")}
-          cancelLabel={t("voiceCancel")}
-          danger={false}
-          busy={busy}
-          onCancel={() => {
-            setIdentifying(null);
-            setIdentifyTo("");
-          }}
-          onConfirm={() => void doIdentify()}
-        />
-      ) : null}
     </div>
   );
 }

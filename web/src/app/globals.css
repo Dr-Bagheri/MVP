@@ -394,6 +394,48 @@
   --lk-chat-header-height: 69px;
 }
 
+/*
+ * ── THE DEVICE PICKERS, WELDED IN BOTH DIRECTIONS ───────────────────────
+ *
+ * User report, 2026-09-08: "the two dropdowns are on the wrong side, each
+ * must go to the left in the fa version; in en they are correct."
+ *
+ * LiveKit joins each toggle to its device menu by flattening the two corners
+ * where they meet, and it spells that in PHYSICAL corners —
+ * `border-top-right-radius` on the group's first child,
+ * `border-top-left-radius` on the menu beside it. Physical corners do not
+ * mirror. In Persian the group runs right-to-left, so the flattened edges
+ * are the OUTER ones: the pair loses its seam, gains two square outer edges,
+ * and the bar reads as six controls of one shape at even spacing, where
+ * nobody can tell which chevron belongs to which button.
+ *
+ * Measured before deciding, in a static harness over the package's own
+ * stylesheet: LTR draws one pill per pair, RTL drew two boxes.
+ *
+ * The corners are LOGICAL here, so the weld follows the reading direction —
+ * the toggle keeps its inline-START corners, the menu its inline-END ones.
+ * In Persian that puts each chevron on the LEFT of the button it belongs to
+ * and joins the two into one control.
+ *
+ * SPECIFICITY, not source order: `[data-lk-theme="neurai"]` in front of the
+ * package's own selector wins wherever the two stylesheets land in the
+ * bundle. And all four corners are named on each side — the physical rule
+ * still decides any corner left unsaid, and in RTL that is exactly the one
+ * that must not be flat.
+ */
+[data-lk-theme="neurai"] .lk-button-group > .lk-button:first-child {
+  border-start-start-radius: var(--lk-border-radius);
+  border-end-start-radius: var(--lk-border-radius);
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+[data-lk-theme="neurai"] .lk-button-group-menu > .lk-button {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: var(--lk-border-radius);
+  border-end-end-radius: var(--lk-border-radius);
+}
+
 @layer components {
   /*
    * Card discipline: the border is always visible so a card never floats

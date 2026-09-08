@@ -19,12 +19,13 @@ vi.mock("@/api/client", () => ({
     directory: () => directory(),
     me: async () => ({ role: "owner" }),
     enrollVoice: (id: string, clip: Blob) => enrollVoice(id, clip),
-    /* the presence read (2026-08-25): this suite is about enrollment, but a
-       mock that omits a method the component calls does not fake "no
-       records" — it throws, and the failure arrives as whatever rendered
-       last. Both stubs answer with the empty case on purpose. */
-    listCalls: async () => [],
-    getSpeakers: async () => [],
+    /* the members read (2026-09-08, the account column): this suite is about
+       enrollment, but a mock that omits a method the component calls does not
+       fake "no colleagues" — it throws, and the failure arrives as whatever
+       rendered last. It answers with the empty case on purpose.
+       (`listCalls`/`getSpeakers` left with the presence bar and the cards
+       view they fed — a stub for a call nobody makes is scaffolding.) */
+    members: async () => [],
   },
 }));
 vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));

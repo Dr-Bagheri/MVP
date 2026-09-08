@@ -96,3 +96,36 @@ describe("the rail's width", () => {
     await settled();
   });
 });
+
+/**
+ * THE FOOT KEEPS ITS PLACE WHILE THE IDENTITY IS READ (user report,
+ * 2026-09-08: "every time I refresh, the help comes a little late and I see
+ * the settings icon jumping").
+ *
+ * Settings and Help are held at the bottom of a `flex-1` column by `mt-auto`,
+ * so anything that appears BELOW them moves them. The person's card is that
+ * anything: it used to render only once `api.me()` answered, which took ~62px
+ * out of the column half a second into every page load and pulled both
+ * destinations up.
+ *
+ * jsdom has no layout, so the assertion is the mechanism rather than the
+ * pixels: the space is kept by the CARD'S OWN BOX — the same class string,
+ * around the same 36px circle — which is why the two cannot be different
+ * heights. Measured on the rendered page separately.
+ */
+describe("the rail's foot", () => {
+  it("holds the card's own box until the person arrives", async () => {
+    render(<IconRail />);
+    /* SYNCHRONOUS, like every width assertion above: this is the frame a
+       person sees on every refresh, and the identity lands after it */
+    const holding = screen.getByTestId("rail-foot-loading");
+    expect(holding.getAttribute("aria-hidden"), "the placeholder is furniture").toBe("true");
+    const kept = holding.className;
+
+    const card = (await settled()).parentElement!;
+    expect(screen.queryByTestId("rail-foot-loading"), "the placeholder outlived the read").toBeNull();
+    /* the reserved box IS the card's box — a placeholder with its own
+       geometry reserves the wrong amount of space and jumps anyway */
+    expect(card.className).toBe(kept);
+  });
+});
