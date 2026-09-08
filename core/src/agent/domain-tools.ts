@@ -32,6 +32,7 @@ import { ToolDenied, type DomainTool } from "./tools.ts";
 import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
 import { createMembersRepo } from "../api/members.ts";
+import { createMeetingsRepo } from "../api/meetings.ts";
 import { NotFoundError } from "../api/errors.ts";
 import type { Db } from "../db/identity.ts";
 import type { ConnectorItem, ConnectorProvider } from "../api/connector-providers.ts";
@@ -58,6 +59,9 @@ const MAX_SEARCH_HITS = 8;
 const MAX_WINDOW_SEGMENTS = 120;
 const MAX_RELATED_CALLS = 10;
 const MAX_MEMBERS = 200;
+/* 0209 — the ledger is read whole far more often than a transcript is, so
+   the ceiling is generous; `truncated` says when it bit. */
+const MAX_DECISIONS = 200;
 
 /**
  * A repo's NotFoundError means "you cannot see this" — which for a tool is a
@@ -281,12 +285,103 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
     },
   };
 
+  /**
+   * 0209 — WHAT THE ORGANISATION DECIDED, as rows rather than paragraphs.
+   *
+   * This is the read that makes the ledger worth keeping. Without it an agent
+   * asked «چه تصمیم‌هایی گرفتیم» has to search transcripts and re-derive from
+   * prose what the platform already extracted and a person already confirmed
+   * — which is slower, costs a model call, and can disagree with the screen.
+   *
+   * TWO THINGS IT REFUSES TO BLUR:
+   *
+   *   · `confirmed` travels on every row. An unconfirmed extraction is a
+   *     CLAIM, and an agent that reports one as a decision has fabricated a
+   *     decision on the organisation's behalf. The description says so in
+   *     words the model reads, and the field says so in data it cannot skip.
+   *   · `status` travels too, so «برگشت خورد» is answerable. A ledger whose
+   *     reader cannot see what was superseded answers today's question with
+   *     last quarter's decision.
+   *
+   * Visibility is 0209's policy — a decision from a private call reaches only
+   * the people the call reaches — so this tool needs no opinion about who may
+   * see what, which is the shape every read tool here has.
+   */
+  const listDecisions: DomainTool<
+    ToolDeps,
+    { meeting_id?: string; kind?: string; only_open?: boolean }
+  > = {
+    name: "list_decisions",
+    label: "تصمیم‌ها و تعهدها",
+    description:
+      "Decisions the organization has made and commitments people have given, "
+      + "as rows: what was decided, who owes it, by when, which meeting it came "
+      + "from and where in the recording it was said. EVERY row carries "
+      + "`source`: 'ai' means a model found the sentence in a transcript and "
+      + "NOBODY HAS EDITED OR AGREED TO IT — report those as 'found in the "
+      + "record', never as settled. `status` says whether a decision still "
+      + "stands or was superseded by a later one; `done` ticks a commitment "
+      + "off.",
+    parameters: Type.Object({
+      meeting_id: Type.Optional(Type.String({
+        description: "Only this meeting's items. Omit for the whole organization.",
+      })),
+      kind: Type.Optional(Type.String({
+        description: "'decision' or 'commitment'. Omit for both.",
+      })),
+      only_open: Type.Optional(Type.Boolean({
+        description: "Only what is still standing and not ticked off.",
+      })),
+    }),
+    async run({ identity, deps }, args) {
+      /* 0211: the ledger IS `meeting_item` (0160) — one table for a meeting's
+         decisions, not a second one beside it. `commitment` is this tool's
+         word for the ledger's `action`, because that is what a person calls
+         it out loud; the mapping lives here and nowhere else. */
+      const rows = await createMeetingsRepo(deps.db).ledger(identity, {
+        meetingId: args.meeting_id,
+        kind: args.kind === "commitment"
+          ? "action"
+          : args.kind === "decision" ? "decision" : undefined,
+        openOnly: args.only_open === true,
+      });
+      /* projected, never spread: the record grows fields for the screen's
+         sake and a tool that passed the row through would start feeding every
+         one of them to a model the day somebody adds one */
+      const decisions = rows.slice(0, MAX_DECISIONS).map((d) => ({
+        id: d.id,
+        kind: d.kind === "action" ? "commitment" : d.kind,
+        text: d.body,
+        /* WHO SAID SO, and it is a fact rather than a flag: 0160 pins
+           `source` by the writing ROLE, so 'ai' means a model found the
+           sentence and no person has agreed to it. */
+        source: d.source,
+        owner_id: d.owner_id,
+        owner_name: d.owner,
+        due_on: d.due_on,
+        done: d.done,
+        status: d.status,
+        meeting_id: d.meeting_id,
+        meeting_title: d.meeting_title,
+        call_id: d.call_id,
+        said_at_ms: d.at_ms,
+        supersedes_id: d.supersedes_id,
+      }));
+      return {
+        decisions,
+        count: decisions.length,
+        truncated: rows.length > decisions.length,
+      };
+    },
+  };
+
   return [
     searchTranscripts as DomainTool<ToolDeps, never>,
     readWindow as DomainTool<ToolDeps, never>,
     getCall as DomainTool<ToolDeps, never>,
     listRelatedCalls as DomainTool<ToolDeps, never>,
     listMembers as DomainTool<ToolDeps, never>,
+    listDecisions as DomainTool<ToolDeps, never>,
   ];
 }
 
@@ -302,4 +397,5 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
  */
 export const DOMAIN_TOOL_NAMES = [
   "search_transcripts", "read_window", "get_call", "list_related_calls", "list_members",
+  "list_decisions",
 ] as const;

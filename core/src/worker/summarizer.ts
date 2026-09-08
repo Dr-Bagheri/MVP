@@ -14,6 +14,11 @@
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import type { Identity, Skill } from "../agent/types.ts";
+import {
+  composeExtractionInput, parseExtraction, resolveOwner,
+} from "./extract-decisions.ts";
+import type { MeetingsRepo } from "../api/meetings.ts";
+import { foldName } from "../agent/router.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import type { Summarizer } from "./call-steps.ts";
@@ -40,6 +45,18 @@ export interface SummarizerOptions<TDeps> {
    * org's first allowed model, then this. Raised with the steward.
    */
   fallbackModel?: string | undefined;
+  /**
+   * 0211 — where the decision/commitment pass writes its CLAIMS: the
+   * MEETING ITEMS table, which was already the ledger (0160). 0209 built a
+   * second one and 0211 took it back out; the header of that migration is
+   * the record of why.
+   *
+   * Required, not optional. An optional dependency is how a feature gets
+   * written, tested, reviewed and never wired: the webhook dispatcher had an
+   * SSRF guard and a replay-protected signing scheme and `total_messages = 0`
+   * over its entire life. Two call sites construct this; both must decide.
+   */
+  meetings: MeetingsRepo;
 }
 
 const FALLBACK_PROMPT = [
@@ -243,6 +260,7 @@ export function createSummarizer<TDeps>({
   provider,
   apiKey,
   fallbackModel,
+  meetings,
 }: SummarizerOptions<TDeps>): Summarizer {
   return {
     async summarize({ identity, callId, transcript, template, instruction, figures, speakers, verify, model }) {
@@ -315,14 +333,128 @@ export function createSummarizer<TDeps>({
         }
       }
 
+      /*
+       * 0209 — THE THIRD PASS: what was decided, and who owes what.
+       *
+       * After the summary and after the grounding check, and advisory like
+       * both: anything that fails here yields ZERO claims and the summary is
+       * unaffected. The rows land as `source = 'extracted'` with no
+       * confirmation — the agent role's insert policy permits no other shape,
+       * so the prompt, this call and the wall all say one sentence and the
+       * wall is the one that decides.
+       *
+       * `claims` distinguishes its two nothings (rule 12): null means the
+       * pass did not run or could not be read, 0 means a model read the
+       * meeting and found nothing decided. A screen that showed those the
+       * same way would tell somebody their meeting decided nothing when in
+       * fact nobody looked.
+       */
+      let claims: number | null = null;
+      if (!result.failed && transcript.trim()) {
+        try {
+          claims = await extractClaims({
+            runtime, identity, callId, transcript, meetings,
+            provider, apiKey, callerModel: skill?.model ?? callerModel, deps,
+          });
+        } catch {
+          // the null IS the forfeit; call-steps logs it
+          claims = null;
+        }
+      }
+
       return {
         body: result.text,
         model: result.model,
         runId: result.runId,
         grounding,
+        claims,
         skill,
         failed: result.failed,
       };
     },
   };
 }
+
+/**
+ * ONE EXTRACTION PASS: run the model, parse defensively, resolve the names it
+ * heard against the roster, write the survivors as claims.
+ *
+ * Returns how many LANDED, which is not how many the model produced: a claim
+ * whose text already exists on this call is refused by the repo, because
+ * regenerating a summary re-reads the same transcript and a second run would
+ * otherwise double every decision the first one found.
+ */
+async function extractClaims({
+  runtime, identity, callId, transcript, meetings,
+  provider, apiKey, callerModel, deps,
+}: {
+  /* the runtime as this pass uses it. Typed against what it RETURNS rather
+     than against the whole `AgentRuntime`: the extraction needs two fields of
+     the result, and a structural type says so instead of dragging the
+     runtime's generics through a helper that has no use for them. */
+  runtime: ReturnType<typeof createAgentRuntime>;
+  identity: Identity;
+  callId: string;
+  transcript: string;
+  meetings: MeetingsRepo;
+  provider?: string | undefined;
+  apiKey?: string | undefined;
+  callerModel?: string | undefined;
+  deps: unknown;
+}): Promise<number | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const run = await runtime.run({
+    identity,
+    kind: "summarizer",
+    skill: undefined,
+    provider,
+    callerModel,
+    apiKey,
+    callId,
+    tools: [],
+    deps,
+    input: composeExtractionInput(transcript, today),
+  });
+  if (run.failed) return null;
+
+  const claims = parseExtraction(run.text);
+  /* NULL, not []: an unreadable answer is not "this meeting decided nothing"
+     — the caller renders those differently and must be able to tell */
+  if (claims === null) return null;
+  if (claims.length === 0) return 0;
+
+  /*
+   * THE MEETING THIS RECORD BELONGS TO. `meeting_item` hangs off a MEETING,
+   * and a plain upload has none — so an extraction from one lands nowhere and
+   * says so, rather than being given a meeting it does not belong to. That is
+   * the honest reading of 0160's shape and not a limitation to route around:
+   * a bare recording with no meeting has no meeting page to put items on.
+   */
+  const meetingId = await meetings.meetingIdForCall(identity, callId);
+  if (meetingId === null) return 0;
+
+  /*
+   * THE ROSTER, for resolving a spoken name to an account. Read under the
+   * caller, so a name the reader cannot see resolves to nobody rather than to
+   * a person they were never entitled to know about. Both display names are
+   * candidates: a Persian meeting says «سینا» and the account may be spelled
+   * "Sina Sepasi", and matching only one of them is how a commitment ends up
+   * owned by nobody on a platform that knows exactly who said it.
+   */
+  const people = await meetings.roster(identity);
+  const rows = claims.map((claim) => ({
+    /* the ledger's own vocabulary: a decision is a `decision`, a commitment
+       is an `action` — 0160's five kinds, not a sixth invented here */
+    kind: (claim.kind === "commitment" ? "action" : "decision") as "action" | "decision",
+    body: claim.text,
+    ownerId: resolveOwner(claim.owner_name, people, foldName),
+    /* the NAME as spoken stays beside the resolved account: an owner the
+       roster could not match is still something the meeting heard, and
+       dropping it would lose the only record that anybody was named */
+    owner: claim.owner_name,
+    dueOn: claim.due_on,
+    atMs: claim.evidence_start_ms,
+  }));
+  return meetings.recordExtracted(identity, meetingId, rows);
+}
+

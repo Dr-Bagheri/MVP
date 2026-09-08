@@ -50,8 +50,29 @@ export interface MeetingItemRecord {
   /** the moment in the recording this came from; null = a person typed it,
       which is a different thing from "at zero" */
   at_ms: number | null;
+
+  // ── 0211: what the ledger needed and 0160 did not have ──────────────────
+  /** the ACCOUNT, when a spoken name resolved to exactly one colleague. The
+      free-text `owner` above stays for somebody with no row here. */
+  owner_id: string | null;
+  /** a DAY — a meeting says «تا شنبه», never a clock time */
+  due_on: string | null;
+  /** the earlier item this one replaces, so «کدام تصمیم برگشت خورد؟» is a
+      query rather than somebody's memory */
+  supersedes_id: string | null;
+  status: MeetingItemStatus;
+
   created_at: string;
+  /** which record it came from — only on the whole-organisation read, where
+      a row's own meeting is not the one being looked at */
+  meeting_id?: string;
+  call_id?: string | null;
+  meeting_title?: string;
 }
+
+/** standing until a later item replaces it, or a person reverses it (0211) */
+export const MEETING_ITEM_STATUSES = ["standing", "superseded", "reversed"] as const;
+export type MeetingItemStatus = (typeof MEETING_ITEM_STATUSES)[number];
 
 export interface MeetingAgendaItem {
   title: string;
@@ -354,6 +375,8 @@ export function sliceSummary(text: string): Array<{ kind: MeetingItemKind; body:
   return out;
 }
 
+export type MeetingsRepo = ReturnType<typeof createMeetingsRepo>;
+
 export function createMeetingsRepo(db: Db) {
   /** the select, with or without db/0202's roster (the capability is cached) */
   const rowsSql = async () => meetingRows(
@@ -548,26 +571,191 @@ export function createMeetingsRepo(db: Db) {
     if (!gone[0]) throw new NotFoundError();
   }
 
+/** one meeting_item row as the wire spells it — shared by the per-meeting
+    read and the whole-organisation ledger, so the two cannot disagree about
+    the same row (0211) */
+function toItem(row: Record<string, unknown>): MeetingItemRecord {
+  return {
+    id: String(row.id),
+    kind: String(row.kind) as MeetingItemKind,
+    body: String(row.body),
+    source: String(row.source) === "ai" ? "ai" as const : "user" as const,
+    done: row.done === true,
+    owner: row.owner === null ? null : String(row.owner),
+    at_ms: row.at_ms === null ? null : Number(row.at_ms),
+    owner_id: (row.owner_id as string | null) ?? null,
+    /* a `date` comes back as a JS Date from the driver; `toISOString` would
+       move it into UTC first, which east of Greenwich hands back yesterday */
+    due_on: row.due_on === null || row.due_on === undefined
+      ? null
+      : row.due_on instanceof Date
+        ? `${row.due_on.getFullYear()}-${String(row.due_on.getMonth() + 1).padStart(2, "0")}-${String(row.due_on.getDate()).padStart(2, "0")}`
+        : String(row.due_on).slice(0, 10),
+    supersedes_id: (row.supersedes_id as string | null) ?? null,
+    status: (row.status as MeetingItemStatus) ?? "standing",
+    created_at: iso(row.created_at),
+  };
+}
+
   /** 0160 — the meeting's decisions, action items, questions, risks and
       entities, oldest first inside each kind. */
   async function items(identity: Identity, meetingId: string): Promise<MeetingItemRecord[]> {
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
-        `select id, kind, body, source, done, owner, at_ms, created_at
+        `select id, kind, body, source, done, owner, at_ms, created_at,
+                owner_id, due_on, supersedes_id, status
            from echo.meeting_item
           where meeting_id = $1
           order by position, created_at`,
         [meetingId],
       );
+      return rows.map(toItem);
+    });
+  }
+
+  /**
+   * 0211 — THE WHOLE ORGANISATION'S LEDGER, across meetings.
+   *
+   * The read the "second brain" question needs: «چه تصمیم‌هایی گرفتیم و
+   * کدام‌شان برگشت خورد؟» spans meetings, and `items()` above answers for one.
+   * Same table, same policy — a row is visible exactly where its meeting is,
+   * so this adds no second opinion about who may see what.
+   */
+  async function ledger(
+    identity: Identity,
+    opts: {
+      kind?: MeetingItemKind | undefined;
+      meetingId?: string | undefined;
+      openOnly?: boolean | undefined;
+      limit?: number | undefined;
+    } = {},
+  ): Promise<MeetingItemRecord[]> {
+    const where: string[] = [];
+    const values: unknown[] = [];
+    if (opts.kind !== undefined) {
+      values.push(opts.kind);
+      where.push(`i.kind = $${values.length}`);
+    }
+    if (opts.meetingId !== undefined) {
+      values.push(opts.meetingId);
+      where.push(`i.meeting_id = $${values.length}`);
+    }
+    /* OPEN means standing and not ticked — the two facts a person means by
+       "what is still owed", and asking for one of them alone answers a
+       different question */
+    if (opts.openOnly === true) where.push(`i.status = 'standing' and not i.done`);
+    values.push(Math.min(Math.max(opts.limit ?? 200, 1), 500));
+
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select i.id, i.kind, i.body, i.source, i.done, i.owner, i.at_ms,
+                i.created_at, i.owner_id, i.due_on, i.supersedes_id, i.status,
+                i.meeting_id, m.title as meeting_title, m.call_id
+           from echo.meeting_item i
+           join echo.meeting m on m.id = i.meeting_id
+          ${where.length > 0 ? `where ${where.join(" and ")}` : ""}
+          order by coalesce(i.due_on, m.scheduled_at::date) desc nulls last,
+                   i.created_at desc
+          limit $${values.length}`,
+        values,
+      );
       return rows.map((row) => ({
-        id: String(row.id),
-        kind: String(row.kind) as MeetingItemKind,
-        body: String(row.body),
-        source: String(row.source) === "ai" ? "ai" as const : "user" as const,
-        done: row.done === true,
-        owner: row.owner === null ? null : String(row.owner),
-        at_ms: row.at_ms === null ? null : Number(row.at_ms),
-        created_at: iso(row.created_at),
+        ...toItem(row),
+        meeting_id: String(row.meeting_id),
+        meeting_title: String(row.meeting_title),
+        call_id: (row.call_id as string | null) ?? null,
+      }));
+    });
+  }
+
+  /**
+   * 0211 — THE EXTRACTION'S LANDING PLACE.
+   *
+   * Runs on the AGENT role, which 0160's policy pins to `source = 'ai'` and
+   * grants INSERT and nothing else. So a claim can be added and can never be
+   * edited or removed by the thing that made it, and this function needs no
+   * opinion about that — the grant already has one.
+   *
+   * Refused by BODY on the same meeting: regenerating a summary re-reads the
+   * same transcript, and without this a second run would double every
+   * decision the first one found. Returns how many LANDED.
+   */
+  async function recordExtracted(
+    identity: Identity,
+    meetingId: string,
+    rows: Array<{
+      kind: MeetingItemKind;
+      body: string;
+      ownerId: string | null;
+      owner: string | null;
+      dueOn: string | null;
+      atMs: number | null;
+    }>,
+  ): Promise<number> {
+    if (rows.length === 0) return 0;
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      let landed = 0;
+      for (const row of rows) {
+        const done = await tx.unsafe<{ id: string }>(
+          `insert into echo.meeting_item
+             (meeting_id, org_id, kind, body, source, owner, owner_id, due_on,
+              at_ms, position, created_by)
+           select $1, echo.actor_org_id(), $2, $3, 'ai', $4, $5, $6::date, $7,
+                  coalesce((select max(position) + 1 from echo.meeting_item
+                             where meeting_id = $1 and kind = $2), 0),
+                  echo.actor_id()
+            where not exists (
+              select 1 from echo.meeting_item e
+               where e.meeting_id = $1 and e.body = $3
+            )
+           returning id`,
+          [meetingId, row.kind, row.body, row.owner, row.ownerId, row.dueOn, row.atMs],
+        );
+        if (done[0]) landed += 1;
+      }
+      return landed;
+    });
+  }
+
+  /**
+   * WHICH MEETING A RECORD BELONGS TO, or null.
+   *
+   * Null is an ordinary answer, not a failure: a plain upload has no meeting,
+   * and an extraction from one has nowhere to land. Read under the caller, so
+   * a meeting they cannot see answers the same null — which is the right
+   * answer, because they could not write to it either.
+   */
+  async function meetingIdForCall(identity: Identity, callId: string): Promise<string | null> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<{ id: string }>(
+        `select id from echo.meeting where call_id = $1 limit 1`, [callId],
+      );
+      return rows[0] === undefined ? null : String(rows[0].id);
+    });
+  }
+
+  /**
+   * THE ROSTER, for turning a name somebody SPOKE into an account.
+   *
+   * Both display names and the handle travel: a Persian meeting says «سینا»
+   * and the account may be spelled "Sina Sepasi", and matching only one of
+   * them is how a commitment ends up owned by nobody on a platform that knows
+   * exactly who said it. Read under the caller, so a colleague the reader
+   * cannot see is not a person an extraction can name.
+   */
+  async function roster(identity: Identity): Promise<{ id: string; names: string[] }[]> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<{
+        id: string; display_name: string; display_name_en: string | null; username: string | null;
+      }>(
+        `select id, display_name, display_name_en, username
+           from echo.app_user
+          where org_id = echo.actor_org_id() and status = 'active'`,
+      );
+      return rows.map((r) => ({
+        id: String(r.id),
+        names: [r.display_name, r.display_name_en, r.username]
+          .filter((n): n is string => typeof n === "string" && n.trim() !== ""),
       }));
     });
   }
@@ -590,21 +778,13 @@ export function createMeetingsRepo(db: Db) {
                  coalesce((select max(position) + 1 from echo.meeting_item
                             where meeting_id = $1 and kind = $2), 0),
                  echo.actor_id())
-         returning id, kind, body, source, done, owner, at_ms, created_at`,
+         returning id, kind, body, source, done, owner, at_ms, created_at,
+                   owner_id, due_on, supersedes_id, status`,
         [meetingId, item.kind, item.body, item.owner, item.atMs],
       );
       const row = rows[0];
       if (row === undefined) throw new NotFoundError();
-      return {
-        id: String(row.id),
-        kind: String(row.kind) as MeetingItemKind,
-        body: String(row.body),
-        source: "user" as const,
-        done: row.done === true,
-        owner: row.owner === null ? null : String(row.owner),
-        at_ms: row.at_ms === null ? null : Number(row.at_ms),
-        created_at: iso(row.created_at),
-      };
+      return toItem(row);
     });
   }
 
@@ -1057,6 +1237,9 @@ export function createMeetingsRepo(db: Db) {
     list, detail, create, update, remove, topics, createTopic, updateTopic,
     byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
     items, addItem, updateItem, removeItem, extractItems,
+    /* 0211 — the whole-organisation ledger, the worker's landing place and
+       the roster it resolves spoken names against */
+    ledger, recordExtracted, roster, meetingIdForCall,
     addAttendees, removeAttendee, markAttended,
     board, setBoard, setPresenting, attachmentPath,
   };

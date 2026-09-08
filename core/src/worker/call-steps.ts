@@ -125,6 +125,15 @@ export interface SummaryWritten {
   failed: boolean;
   /** 0087 grounding report, null = unchecked (advisory, never blocking). */
   grounding?: { clean: boolean; model: string; flags: { claim: string; note: string }[] } | null;
+  /**
+   * 0209 — how many decisions and commitments LANDED as claims.
+   *
+   * Two nothings, deliberately apart (rule 12): `null` means the pass did not
+   * run or its answer could not be read; `0` means a model read the meeting
+   * and found nothing decided. A log line that showed them the same way would
+   * report a silent meeting when in fact nobody looked.
+   */
+  claims?: number | null;
 }
 
 export interface Summarizer {
@@ -354,6 +363,21 @@ export function createSummarizeStep({
           ],
         ),
       );
+
+      /* 0209 — the extraction's forfeit, said out loud (M21). `null` is the
+         pass having failed or answered unreadably; `0` is a meeting that
+         genuinely decided nothing, and only one of those is worth a warning. */
+      if (result.claims === null || result.claims === undefined) {
+        log.warn(
+          { call_id: payload.callId, event: "decision_extract_unread" },
+          "decision extraction yielded no readable verdict; the summary is unaffected",
+        );
+      } else {
+        log.info(
+          { call_id: payload.callId, claims: result.claims },
+          "decisions and commitments extracted",
+        );
+      }
 
       await lifecycle.setCallStatus(identity, payload.callId, "ready");
       log.info({ call_id: payload.callId, run_id: result.runId }, "call ready");

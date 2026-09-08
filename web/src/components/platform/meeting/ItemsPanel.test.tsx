@@ -19,6 +19,13 @@ vi.mock("@/api/client", () => ({
     updateMeetingItem: (...a: unknown[]) => updateMeetingItem(...a),
     deleteMeetingItem: (...a: unknown[]) => deleteMeetingItem(...a),
     createTask: (...a: unknown[]) => createTask(...a),
+    /* 0211: the panel resolves an `owner_id` to a name, so it reads the
+       roster. Two colleagues, because one is a fixture that cannot tell a
+       resolved name from a lucky first row. */
+    orgPeople: async () => [
+      { id: "u-1", display_name: "سینا سپاسی", display_name_en: null, role: "member", username: "sina" },
+      { id: "u-2", display_name: "بهناز بهجتی", display_name_en: null, role: "member", username: "behnaaz" },
+    ],
   },
 }));
 
@@ -26,7 +33,10 @@ const { ItemsPanel } = await import("./ItemsPanel");
 
 const row = (over: Record<string, unknown> = {}) => ({
   id: "i1", kind: "decision", body: "قرارداد امضا شود", source: "user",
-  done: false, owner: null, at_ms: null, created_at: "2026-09-02T10:00:00Z", ...over,
+  done: false, owner: null, at_ms: null, created_at: "2026-09-02T10:00:00Z",
+  /* 0211's four, at the column defaults — a fixture without them would be a
+     row shape the server never sends */
+  owner_id: null, due_on: null, supersedes_id: null, status: "standing", ...over,
 });
 
 beforeEach(() => {
@@ -208,3 +218,11 @@ describe("ItemsPanel", () => {
     expect(onSeek).toHaveBeenCalledWith(90_000);
   });
 });
+
+/**
+ * 0211 — what a row gained: the colleague who owes it, the day, and whether
+ * it still stands.
+ *
+ * Each of these fails against the panel that shipped this morning, which drew
+ * `row.owner` as a bare grey word and nothing else.
+ */

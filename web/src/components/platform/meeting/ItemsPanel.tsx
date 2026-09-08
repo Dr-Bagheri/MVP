@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { MEETING_ITEM_KINDS, type MeetingItem, type MeetingItemKind } from "@/api/types";
-import { IconCheck, IconClose, IconPencil, IconPlus, IconSparkle, IconTrash } from "@/components/icons";
+import { IconCheck, IconClose, IconPencil, IconPlus, IconSparkle, IconTrash, IconUser } from "@/components/icons";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Skeleton } from "@/components/scaffold";
-import { digits, formatClock } from "@/lib/format";
+import { digits, formatClock, formatDate, personName } from "@/lib/format";
+import type { OrgPersonRecord } from "@/api/types";
 
 /**
  * مصوبات / اکشن‌آیتم‌ها / سؤالات / ریسک‌ها / موجودیت‌ها — the five lists a
@@ -40,6 +41,42 @@ const EMPTY: Record<MeetingItemKind, MeetingItem[]> = {
   decision: [], action: [], question: [], risk: [], entity: [],
 };
 
+/**
+ * A `date` column as an instant `formatDate` can render.
+ *
+ * NOON, not midnight: a day has no zone and the formatter renders in the
+ * reader's, so midnight is the one hour that lands on the previous day west
+ * of Greenwich. The picker in this product already says exactly this about a
+ * deadline (JalaliPicker's own header); this is the same sentence at the
+ * other end of the wire.
+ */
+export function dayAsInstant(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12).toISOString();
+}
+
+/** owed and past its day, and still standing — three facts, not one */
+function overdue(row: MeetingItem): boolean {
+  if (row.due_on === null || row.done || row.status !== "standing") return false;
+  return dayAsInstant(row.due_on) < new Date().toISOString();
+}
+
+/**
+ * The colleague's name when the platform resolved one, the SPOKEN name
+ * otherwise.
+ *
+ * Not `owner_id ?? owner`: an id whose person the reader cannot see would
+ * render as a uuid, which is a database key where a name goes — the exact
+ * defect the transcript surfaces were fixed for on 2026-09-06. When the id
+ * resolves to nobody the spoken name is the better answer, and when there is
+ * neither the caller does not render the row at all.
+ */
+function ownerName(row: MeetingItem, people: OrgPersonRecord[], locale: string): string {
+  const person = people.find((p) => p.id === row.owner_id);
+  if (person !== undefined) return personName(person, locale);
+  return row.owner ?? "";
+}
+
 function group(rows: MeetingItem[]): Record<MeetingItemKind, MeetingItem[]> {
   const out: Record<MeetingItemKind, MeetingItem[]> = {
     decision: [], action: [], question: [], risk: [], entity: [],
@@ -58,6 +95,18 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   locale: string;
 }) {
   const t = useTranslations("meetings");
+  /*
+   * THE ROSTER, read here rather than handed down. `owner_id` is a name only
+   * if somebody resolves it, and the meeting page does not read the org's
+   * people — a prop nobody passes is an id rendered as a uuid, which is a
+   * database key where a name goes. Failure yields an empty list, and the
+   * SPOKEN name is what shows: worse than a resolved name, better than
+   * nothing, and never a raw id.
+   */
+  const [people, setPeople] = useState<OrgPersonRecord[]>([]);
+  useEffect(() => {
+    void api.orgPeople().then(setPeople).catch(() => setPeople([]));
+  }, []);
   const [rows, setRows] = useState<MeetingItem[] | null | "failed">(null);
   const [kind, setKind] = useState<MeetingItemKind>("decision");
   const [draft, setDraft] = useState("");
@@ -266,8 +315,37 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       {t("itemByAssistant")}
                     </span>
                   ) : null}
-                  {row.owner !== null ? (
-                    <span className="text-[10px] text-fg-subtle">{row.owner}</span>
+                  {/*
+                      WHO OWES IT (0211). The resolved colleague when the
+                      platform could name one, and the spoken name otherwise —
+                      «سینا گفت» is still something the meeting heard, and
+                      showing nothing because the roster could not match it
+                      would lose the only record that anybody was named.
+                  */}
+                  {row.owner_id !== null || row.owner !== null ? (
+                    <span className="flex items-center gap-1 text-[10px] text-fg-subtle">
+                      <IconUser width={12} height={12} />
+                      {ownerName(row, people, locale)}
+                    </span>
+                  ) : null}
+                  {/* the DAY it is owed. Rendered in the reader's own calendar
+                      like every other date here — a commitment «تا شنبه» is a
+                      Jalali Saturday to a Persian reader. */}
+                  {row.due_on !== null ? (
+                    <span className={`badge-num text-[10px] ${
+                      overdue(row) ? "text-danger" : "text-fg-subtle"
+                    }`}>
+                      {t("itemDue", { day: formatDate(dayAsInstant(row.due_on), locale) })}
+                    </span>
+                  ) : null}
+                  {/* SUPERSEDED or REVERSED, said on the row rather than by
+                      hiding it: a decision that was replaced is part of the
+                      record, and a ledger whose reader cannot see what changed
+                      answers today's question with last quarter's decision. */}
+                  {row.status !== "standing" ? (
+                    <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-muted">
+                      {t(`itemStatus_${row.status}`)}
+                    </span>
                   ) : null}
                   {row.at_ms !== null && onSeek !== undefined ? (
                     <button

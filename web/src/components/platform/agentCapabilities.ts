@@ -54,7 +54,8 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     key: "meetings",
     icon: "calendar",
     tools: [
-      "list_meetings", "get_meeting", "list_meeting_items", "list_meeting_folders",
+      "list_meetings", "get_meeting", "list_meeting_items", "list_decisions",
+      "list_meeting_folders",
       "create_meeting", "update_meeting", "add_meeting_item", "approve_minutes",
       "archive_meeting", "invite_to_meeting", "open_meeting",
       "update_meeting_item", "extract_meeting_items", "create_meeting_topic",

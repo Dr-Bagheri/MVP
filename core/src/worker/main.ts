@@ -31,6 +31,7 @@ import { sweepMeetings } from "./meeting-prep.ts";
 import { createConnectorsRepo } from "../api/connectors.ts";
 import { connectorCredentialsFromEnv } from "../api/connector-providers.ts";
 import { createMailDraftsRepo } from "../api/mail-drafts.ts";
+import { createMeetingsRepo } from "../api/meetings.ts";
 import { hasSignalTables } from "../db/capabilities.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { createSummarizerResolver } from "../agent/skill-store.ts";
@@ -97,6 +98,10 @@ export async function main(): Promise<void> {
   // like a pipeline bug.
   const storage: StorageSigner = storageSignerFromEnv();
 
+  /* 0211 — where the summarizer's third pass writes its claims: the meeting
+     items table, which was already the ledger. Required by
+     `SummarizerOptions`, so this cannot be the feature nobody wired. */
+  const meetings = createMeetingsRepo(db);
   const summarizer = createSummarizer({
     db,
     // The SAME resolver the assistant's /slug uses. If the summarizer resolved
@@ -120,6 +125,7 @@ export async function main(): Promise<void> {
     deps: { db: agentToolsDb(db) },
     apiKey: process.env.OPENROUTER_API_KEY,
     fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+    meetings,
   });
 
   /*

@@ -41,6 +41,7 @@ import { createDomainTools } from "../../src/agent/domain-tools.ts";
 import { noToolCallMarker } from "../../src/agent/runtime.ts";
 import { createSummarizerResolver } from "../../src/agent/skill-store.ts";
 import { createDeadLetterSink } from "../../src/worker/dead-letter.ts";
+import { createMeetingsRepo } from "../../src/api/meetings.ts";
 import { loadWorkerConfig } from "../../src/worker/config.ts";
 import { normalizeDbUrl } from "../../src/worker/main.ts";
 
@@ -376,6 +377,10 @@ async function main(): Promise<void> {
     console.log("\n[2] enqueue + run the real DAG");
     await queue.send(Q_PROCESS_PART, { callId, ownerId, partId });
 
+    /* 0211: the third pass writes here. Required by the options, which is
+       the point — a live pipeline that summarised and extracted nothing
+       would be the same silence as a feature nobody wired. */
+    const meetings = createMeetingsRepo(db);
     const summarizer = createSummarizer({
       db,
       // The one-arg specialisation, not the general resolver with a literal slug:
@@ -393,6 +398,7 @@ async function main(): Promise<void> {
     deps: { db },
         apiKey: process.env.OPENROUTER_API_KEY,
       fallbackModel: process.env.WORKER_SUMMARY_MODEL ?? "google/gemini-3.6-flash",
+      meetings,
     });
 
     const runner = createRunner({

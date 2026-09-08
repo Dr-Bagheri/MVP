@@ -1256,15 +1256,36 @@ export interface OrgSessionRow extends AuthSessionRow {
 export const MEETING_ITEM_KINDS = ["decision", "action", "question", "risk", "entity"] as const;
 export type MeetingItemKind = (typeof MEETING_ITEM_KINDS)[number];
 
+/** 0211 — standing until a later item replaces it, or a person reverses it */
+export const MEETING_ITEM_STATUSES = ["standing", "superseded", "reversed"] as const;
+export type MeetingItemStatus = (typeof MEETING_ITEM_STATUSES)[number];
+
 export interface MeetingItem {
   id: string;
   kind: MeetingItemKind;
   body: string;
   source: "user" | "ai";
   done: boolean;
+  /** the name as SPOKEN — kept beside the resolved account, because an owner
+      the roster could not match is still something the meeting heard */
   owner: string | null;
   at_ms: number | null;
+
+  // ── 0211: the ledger's own facts ────────────────────────────────────────
+  /** the colleague who owes it, when a name resolved to exactly one account */
+  owner_id: string | null;
+  /** a DAY (`YYYY-MM-DD`) — a meeting says «تا شنبه», never a clock time */
+  due_on: string | null;
+  /** the earlier item this one replaces */
+  supersedes_id: string | null;
+  status: MeetingItemStatus;
+
   created_at: string;
+  /** only on the whole-organisation ledger, where a row's own meeting is not
+      the one being looked at */
+  meeting_id?: string;
+  meeting_title?: string;
+  call_id?: string | null;
 }
 
 export interface MeetingAttachment {
