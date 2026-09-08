@@ -322,9 +322,16 @@ function harness(opts: {
   return { options, calls, sent, created, removed, modelCalls };
 }
 
+/* `date` is NOT decoration: a message with no readable date is exempt from
+   the age ceiling, so a fixture without one would silently stop exercising it */
+const NOW_S = Math.floor(Date.parse("2026-09-08T10:00:00Z") / 1000);
+
 const from = (id: number, body: Record<string, unknown>) => ({
   update_id: 101,
-  message: { from: { id, is_bot: false, username: "sina" }, chat: { id }, ...body },
+  message: {
+    from: { id, is_bot: false, username: "sina" }, chat: { id },
+    date: Math.floor(Date.now() / 1000), ...body,
+  },
 });
 
 describe("the sweep", () => {
@@ -393,6 +400,41 @@ describe("the sweep", () => {
     await sweepTelegram(h.options, log);
     expect(h.sent[0]!.text).toContain("منقضی");
     expect(h.created).toHaveLength(0);
+  });
+
+  it("marks a bot whose inbox is EMPTY, so the next look is not another first look", async () => {
+    /*
+     * The defect production found. The mark used to be written only when
+     * something arrived, and a freshly connected bot has an empty inbox — so
+     * no mark landed, every poll was still a "first look", and the first
+     * message anybody ever sent was dropped as backlog. Somebody's first
+     * attempt at a feature failing silently is how they learn it is broken.
+     */
+    const h = harness({ cursor: null, linked: true, messages: [] });
+    await sweepTelegram(h.options, log);
+    const marked = h.calls.find((c) => c.sql.includes("set_telegram_cursor"));
+    expect(marked, "an empty inbox left no mark").toBeTruthy();
+    expect(marked!.params?.[1]).toBe(0);
+  });
+
+  it("acts on a message that arrives AFTER the first look", async () => {
+    /* the pair, and the case a person actually lives: connect, then send.
+       Cursor 0 is a real mark — "we have looked" — not a missing one. */
+    const h = harness({ cursor: 0, linked: true, messages: [from(777, { text: "یک کار" })] });
+    await sweepTelegram(h.options, log);
+    expect(h.created).toHaveLength(1);
+  });
+
+  it("does not act on a message older than the age ceiling", async () => {
+    /* the belt behind the cursor: a message from two days ago is not new
+       under any reading, whatever the mark says */
+    const old = from(777, { text: "کار قدیمی" });
+    (old.message as Record<string, unknown>).date = NOW_S - 48 * 3600;
+    const h = harness({ cursor: 0, linked: true, messages: [old] });
+    await sweepTelegram(h.options, log);
+    expect(h.created).toHaveLength(0);
+    /* and the mark still moved past it — otherwise it is re-read forever */
+    expect(h.calls.some((c) => c.sql.includes("set_telegram_cursor"))).toBe(true);
   });
 
   it("acts on nothing the first time it looks at a bot", async () => {

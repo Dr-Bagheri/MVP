@@ -109,6 +109,8 @@ export interface TelegramMessage {
   /** a voice note or an audio file, when the message carried one */
   file_id: string | null;
   duration_s: number | null;
+  /** Telegram's own unix seconds — the age ceiling's only evidence */
+  date_s: number | null;
 }
 
 /**
@@ -141,6 +143,7 @@ export function readUpdates(payload: unknown): TelegramMessage[] {
         : typeof message.caption === "string" ? message.caption : "",
       file_id: typeof voice?.file_id === "string" ? voice.file_id : null,
       duration_s: Number.isFinite(Number(voice?.duration)) ? Number(voice?.duration) : null,
+      date_s: Number.isFinite(Number(message.date)) ? Number(message.date) : null,
     });
   }
   return out;
@@ -307,6 +310,20 @@ export interface TelegramApi {
   getFile(token: string, fileId: string): Promise<{ bytes: Buffer; contentType: string }>;
   sendMessage(token: string, chat: number, text: string): Promise<void>;
 }
+
+/**
+ * How old a message may be and still be acted on.
+ *
+ * The belt behind the cursor, and the mail poller's own reasoning: every
+ * "it answered all my old messages" defect so far has been a cursor that was
+ * correct in its own terms and wrong about the world. This does not depend on
+ * the cursor at all — a message from yesterday is not new under any reading.
+ *
+ * Only messages we can DATE are refused; Telegram always sends `date`, and an
+ * unreadable one leaves position as the only evidence, which is better than
+ * dropping real work to a field we could not parse.
+ */
+const MAX_AGE_HOURS = 24;
 
 const API = "https://api.telegram.org";
 
@@ -582,14 +599,26 @@ export async function sweepTelegram(options: TelegramPollOptions, log: StepLogge
       const ctx = await options.connectors.providerCtx(owner, "telegram");
       const messages = readUpdates(await api.getUpdates(ctx.bearer, cursor));
 
-      /* THE MARK MOVES FIRST, unconditionally. Telegram's own offset also
-         acknowledges the updates server-side, so a message left unmarked is
-         one this bot would be handed again every minute forever. */
+      /*
+       * THE MARK MOVES FIRST, and on EVERY look — including one that saw
+       * nothing.
+       *
+       * The first version wrote it only when `messages.length > 0`, which was
+       * wrong in the ordinary case and invisible until production was
+       * measured: a freshly connected bot has an empty inbox, so no mark
+       * landed, so every poll was still a "first look" — and the first message
+       * anybody ever sent was dropped as backlog. A person's first attempt at
+       * a feature failing silently is how they learn it does not work.
+       *
+       * Zero is a real mark: it says "we have looked", which is exactly the
+       * fact `cursor === null` is asking about. Telegram's own update_ids are
+       * large positives, so `offset = 1` still returns everything available —
+       * which is what the age ceiling below is for.
+       */
       const newest = messages.reduce((max, m) => Math.max(max, m.update_id), cursor ?? 0);
-      if (messages.length > 0) {
-        await db.withoutIdentity((tx) =>
-          tx.unsafe("select echo.set_telegram_cursor($1, $2)", [row.connection_id, newest]));
-      }
+      await db.withoutIdentity((tx) =>
+        tx.unsafe("select echo.set_telegram_cursor($1, $2)", [row.connection_id, newest]));
+
       if (cursor === null) {
         /* THE FIRST LOOK ANSWERS NOTHING. Connecting a bot must not act on a
            backlog: "new" means new since you asked, not new to us. */
@@ -599,8 +628,13 @@ export async function sweepTelegram(options: TelegramPollOptions, log: StepLogge
       }
 
       let handled = 0;
+      let stale = 0;
+      const floor = Date.now() - MAX_AGE_HOURS * 3_600_000;
       for (const message of messages) {
         if (handled >= (options.perSweep ?? 5)) break;
+        /* the ceiling, before anything else is read: an old message is not an
+           instruction, whatever the mark says */
+        if (message.date_s !== null && message.date_s * 1000 < floor) { stale += 1; continue; }
 
         /* ── IDENTITY BEFORE CONTENT ─────────────────────────────────────
            A code is the one thing a stranger may send that we act on, and
@@ -657,6 +691,12 @@ export async function sweepTelegram(options: TelegramPollOptions, log: StepLogge
             await api.sendMessage(ctx.bearer, message.chat_id, SAY.fa.failed);
           } catch { /* the reply is a courtesy; its failure is not the sweep's */ }
         }
+      }
+      /* said out loud, because a silent skip is how a poller that has stopped
+         working looks exactly like a quiet inbox (rule 12) */
+      if (stale > 0) {
+        log.warn({ event: "telegram_skipped_stale", connection: row.connection_id, count: stale, hours: MAX_AGE_HOURS },
+          "messages were older than the age ceiling and were not acted on");
       }
     } catch (error) {
       log.warn({ event: "telegram_poll_failed", connection: row.connection_id, error_type: (error as Error).name },
