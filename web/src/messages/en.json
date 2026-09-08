@@ -1593,6 +1593,10 @@
     "trendWindow": "{delta} in the last {days} days"
   },
   "meetings": {
+    "recallHeading": "Already decided",
+    "recallUntitled": "Untitled meeting",
+    "recallShared": "{n} words in common",
+    "recallDismiss": "Dismiss",
     "add": "Add",
     "addInvitee": "Add",
     "addNote": "Add note",

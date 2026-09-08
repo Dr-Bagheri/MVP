@@ -1327,3 +1327,24 @@ export interface TelegramLinkRecord {
   /** the org bot's public @handle (db/0213) — null when none is connected */
   bot_username: string | null;
 }
+
+/**
+ * A past decision the room is talking about again (item 7, db/0214).
+ *
+ * `shared` is the RULE, on the wire: how many distinctive words this decision
+ * has in common with what is being said. It is shown on the card because "in
+ * common with three words you just said" is something a host can check, where
+ * a relevance score is a number nobody can argue with.
+ */
+export interface RecalledDecision {
+  id: string;
+  kind: string;
+  body: string;
+  status: string;
+  meeting_id: string;
+  meeting_title: string | null;
+  decided_at: string;
+  owner_id: string | null;
+  due_on: string | null;
+  shared: number;
+}

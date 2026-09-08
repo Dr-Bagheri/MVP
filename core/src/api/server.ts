@@ -72,6 +72,7 @@ import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-sto
 import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTelegramLinkRepo } from "./telegram-link.ts";
+import { createLiveRecallRepo } from "./live-recall.ts";
 import { isConnectorProvider } from "./connector-providers.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
@@ -240,6 +241,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   }).catch(() => undefined);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const telegramLink = createTelegramLinkRepo(options.db);
+  const liveRecall = createLiveRecallRepo(options.db);
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   const tasks = createTasksRepo(options.db);
   const projects = createProjectsRepo(options.db);
@@ -3921,6 +3923,41 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * scope every row to `echo.actor_id()`, so this is what the wall already
    * says rather than a rule these handlers enforce.
    */
+  /**
+   * LIVE RECALL (item 7, db/0214) — what the organisation already decided
+   * about what is being said in this room right now.
+   *
+   * POST, and it is a READ. The body is a window of a live transcript, which
+   * is CONTENT: the one rule this repo has never bent is that content does
+   * not go in a URL, a query string or a log line, and a GET would put a
+   * meeting's words in all three. The verb follows the payload, not the
+   * semantics.
+   *
+   * `requireActive` and nothing else: a decision is readable by exactly the
+   * people who can read its meeting, so this route adds no authority. The
+   * page limits the card to the HOST, and that is a courtesy about
+   * interruption rather than a wall — which is why it is not asserted here,
+   * where it would read as one.
+   */
+  app.post("/v1/meetings/:id/recall", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const window = typeof body.window === "string" ? body.window : "";
+    if (window.trim() === "") {
+      throw new ValidationError("a window of what was said is required", { code: "recall_window_missing" });
+    }
+    /* a ceiling on the window, because the terms are capped anyway and an
+       unbounded body on a route called every few seconds is a shape somebody
+       will eventually point at this server */
+    const limit = typeof body.limit === "number" ? body.limit : undefined;
+    return reply.send({
+      decisions: await liveRecall.recall(identity, {
+        window: window.slice(-4000), exclude: id, ...(limit === undefined ? {} : { limit }),
+      }),
+    });
+  });
+
   app.get("/v1/me/telegram", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send(await telegramLink.status(identity));

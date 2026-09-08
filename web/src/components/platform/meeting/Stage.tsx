@@ -6,6 +6,8 @@ import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import type { MeetingAttachment, MeetingRecord } from "@/api/types";
 import { Whiteboard } from "./Whiteboard";
+import { RecallCards } from "./RecallCards";
+import { useLiveRecall } from "@/lib/liveRecall";
 import { MeetingRoom } from "./Room";
 import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icons";
 
@@ -25,7 +27,7 @@ import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icon
  */
 type Mode = "video" | "board" | "slides";
 
-export function MeetingStage({ meeting, isHost, onMeeting, recordingLive }: {
+export function MeetingStage({ meeting, isHost, onMeeting, recordingLive, liveText = "" }: {
   meeting: MeetingRecord;
   /** the HOST drives the stage (db/0206): the board, and what is presented.
       Everybody else watches — which is the point of the stage being shared
@@ -33,6 +35,14 @@ export function MeetingStage({ meeting, isHost, onMeeting, recordingLive }: {
   isHost: boolean;
   onMeeting: (m: MeetingRecord) => void;
   recordingLive: boolean;
+  /**
+   * What has been said so far, for live recall (item 7).
+   *
+   * Handed down rather than read here, for the same reason `isHost` is: the
+   * page owns the recording engine, and a component that reached for the
+   * engine itself would be a second opinion about whether a take is running.
+   */
+  liveText?: string;
 }) {
   const t = useTranslations("meetings");
   /*
@@ -44,6 +54,9 @@ export function MeetingStage({ meeting, isHost, onMeeting, recordingLive }: {
    * that has no chip.
    */
   const video = meeting.mode === "online";
+  /* the gate is stated once, here, so the hook and the cards cannot disagree
+     about who sees them */
+  const recall = useLiveRecall(meeting.id, liveText, isHost && recordingLive);
   const [mode, setMode] = useState<Mode>(video ? "video" : "board");
   const pdfInput = useRef<HTMLInputElement | null>(null);
   const shell = useRef<HTMLDivElement | null>(null);
@@ -115,7 +128,9 @@ export function MeetingStage({ meeting, isHost, onMeeting, recordingLive }: {
      * and how the reference reads: the thing that is being recorded and the
      * lamp saying so are the same object.
      */
-    <div ref={shell} className="card flex min-h-0 flex-col overflow-hidden p-0">
+    /* `relative`: the recall cards are absolutely placed over this box's
+       own corner, so a card arriving mid-stroke cannot reflow the board */
+    <div ref={shell} className="card relative flex min-h-0 flex-col overflow-hidden p-0">
       {/* ── the stage header ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-2">
         <div className="flex items-center gap-0.5 rounded-xl bg-surface-2 p-1">
@@ -269,6 +284,12 @@ export function MeetingStage({ meeting, isHost, onMeeting, recordingLive }: {
           )}
         </div>
       ) : null}
+
+      {/* ── the second brain (item 7) ──────────────────────────────────
+          Only for the host, only while a take is rolling: a card on ten
+          screens is a broadcast, and a card with no meeting under way is
+          recall of a room that is not talking. */}
+      <RecallCards cards={recall.cards} onDismiss={recall.dismiss} />
     </div>
   );
 }

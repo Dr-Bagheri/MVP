@@ -40,7 +40,13 @@ vi.mock("@livekit/components-react", () => ({
   useLocalParticipant: () => ({ isMicrophoneEnabled: true, isCameraEnabled: false }),
 }));
 vi.mock("./Whiteboard", () => ({ Whiteboard: () => <div data-testid="board" /> }));
-vi.mock("next-intl", () => ({ useTranslations: () => (k: string) => k }));
+/* useLocale too: the recall cards (item 7) render inside this stage and read
+   the locale for their date. A mock that names only the hooks the test's
+   subject uses breaks the moment the subject grows a neighbour. */
+vi.mock("next-intl", () => ({
+  useTranslations: () => (k: string) => k,
+  useLocale: () => "fa",
+}));
 vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));
 vi.mock("@/api/client", () => ({
   api: {

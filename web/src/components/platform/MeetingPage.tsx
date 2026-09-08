@@ -847,6 +847,7 @@ export function MeetingPage({ id }: { id: string }) {
           isHost={isHost}
           onMeeting={setMeeting}
           recordingLive={recordingLive}
+          liveText={engine.captions?.finals ?? ""}
         />
       ) : null}
       {active === "post" ? (
@@ -1386,13 +1387,17 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, locale, isHost, onMeeting, recordingLive }: {
+function HoldStage({ meeting, locale, isHost, onMeeting, recordingLive, liveText }: {
   meeting: MeetingRecord;
   locale: string;
   /** db/0206: the stage — the board and what is presented — is the host's */
   isHost: boolean;
   onMeeting: (m: MeetingRecord) => void;
   recordingLive: boolean;
+  /** what has been said so far, for live recall (item 7). Threaded from the
+      page, which owns the engine — a stage that reached for the recorder
+      itself would be a second opinion about whether a take is running. */
+  liveText: string;
   /* `meId` is gone with the invite dialog it was threaded down for (0202,
      2026-09-06): people are added on the PLAN now, in the one act that also
      tells them. A prop that nothing reads is the next person's invitation
@@ -1447,6 +1452,10 @@ function HoldStage({ meeting, locale, isHost, onMeeting, recordingLive }: {
         isHost={isHost}
         onMeeting={onMeeting}
         recordingLive={recordingLive}
+        /* the FINALS only (item 7): an interim caption is rewritten as the
+           recogniser hears more, so a window built from it changes under the
+           throttle and asks the same question with different words */
+        liveText={liveText}
       />
 
       {/* self-start: a grid item stretches by default, and `.tile` sets

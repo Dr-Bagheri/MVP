@@ -1593,6 +1593,10 @@
     "trendWindow": "{delta} در {days} روز گذشته"
   },
   "meetings": {
+    "recallHeading": "پیش‌تر تصمیم‌گیری شده",
+    "recallUntitled": "جلسهٔ بی‌عنوان",
+    "recallShared": "{n} واژهٔ مشترک",
+    "recallDismiss": "بستن",
     "add": "افزودن",
     "addInvitee": "افزودن",
     "addNote": "افزودن یادداشت",

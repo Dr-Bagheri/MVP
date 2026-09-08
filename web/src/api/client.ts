@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  RecalledDecision,
   TelegramLinkRecord,
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
@@ -966,6 +967,20 @@ export const api = {
      `mintTelegramCode` is the only one whose response holds a secret, and it
      is deliberately not cached anywhere: the plaintext lives in one component's
      state until the person leaves the screen. */
+  /**
+   * What was already decided about what is being said (item 7).
+   *
+   * POST for a READ, and the body is why: a window of a live transcript is
+   * CONTENT, and content does not go in a URL, a query string or a log line.
+   */
+  async recallDecisions(meetingId: string, window: string): Promise<RecalledDecision[]> {
+    const body = await bff<{ decisions: RecalledDecision[] }>(
+      `/api/meetings/${meetingId}/recall`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ window }) },
+    );
+    return body.decisions;
+  },
+
   async telegramLink(): Promise<TelegramLinkRecord> {
     return bff("/api/me/telegram");
   },
