@@ -190,3 +190,91 @@ describe("the floor", () => {
     await expect(createSessionsRepo(db).setFloor(IDENTITY, SESSION, ["roya"])).rejects.toBeInstanceOf(NotFoundError);
   });
 });
+/**
+ * THE SESSION'S OTHER CONVERSATIONS (user directive, 2026-09-08: "make the
+ * memory per session not per thread").
+ *
+ * `messages` above answers what was said in ONE conversation; this answers
+ * what the person has been talking to us about, which is the question a
+ * brand-new conversation cannot answer for itself.
+ *
+ * Two kinds of rule live here and they are tested differently. The GROUPING
+ * and the BOUNDS are behaviour, and a fake can be asked about them. The rest
+ * — archived excluded, the window, tool rows dropped — are in the statement,
+ * where a fake that decides its own rows cannot reach them; those are pinned
+ * as SQL text, deliberately and for the same reason the double-encode fix
+ * was (the string IS the wall), with the real check being db's own suite.
+ */
+describe("the other conversations of this session", () => {
+  const turn = (id: string, title: string, seq: number, over: Record<string, unknown> = {}) => ({
+    id, title, seq, role: "user", content: `${title}-${seq}`, author: null, ...over,
+  });
+
+  it("groups the rows into conversations, in the order they arrive", async () => {
+    const { db } = fakeDb(() => [
+      turn("s-old", "دیروز", 0),
+      turn("s-old", "دیروز", 1, { role: "assistant", content: "پاسخ", author: "roya" }),
+      turn("s-new", "امروز", 4),
+    ]);
+    const out = await createSessionsRepo(db).recentConversations(IDENTITY, {
+      exclude: SESSION, withinHours: 12, limit: 3, turnsEach: 6,
+    });
+    expect(out.map((c) => c.title)).toEqual(["دیروز", "امروز"]);
+    expect(out[0]!.rows).toHaveLength(2);
+    expect(out[0]!.rows[1]).toEqual({ role: "assistant", content: "پاسخ", author: "roya" });
+    expect(out[1]!.rows).toHaveLength(1);
+  });
+
+  it("EXCLUDES the conversation being asked in — carried in full elsewhere", async () => {
+    const { db, log } = fakeDb(() => []);
+    await createSessionsRepo(db).recentConversations(IDENTITY, {
+      exclude: SESSION, withinHours: 12, limit: 3, turnsEach: 6,
+    });
+    const read = log.find((l) => l.sql.includes("agent_session"));
+    expect(read?.params?.[0], "the current conversation is the first parameter").toBe(SESSION);
+  });
+
+  it("asks for every conversation when there is none to exclude", async () => {
+    /* the hub's first message opens its session AFTER this read in one path
+       and before it in another; null must mean "all of them", not "none" */
+    const { db, log } = fakeDb(() => []);
+    await createSessionsRepo(db).recentConversations(IDENTITY, {
+      exclude: null, withinHours: 12, limit: 3, turnsEach: 6,
+    });
+    const read = log.find((l) => l.sql.includes("agent_session"));
+    expect(read?.params?.[0]).toBeNull();
+    expect(read?.sql).toContain("is distinct from");
+  });
+
+  it("CLAMPS what it is asked for — every one of these multiplies an ask's cost", async () => {
+    const { db, log } = fakeDb(() => []);
+    await createSessionsRepo(db).recentConversations(IDENTITY, {
+      exclude: null, withinHours: 10_000, limit: 500, turnsEach: 5_000,
+    });
+    const [, hours, limit, turns] = log.find((l) => l.sql.includes("agent_session"))?.params ?? [];
+    expect(hours).toBe(24 * 7);
+    expect(limit).toBe(10);
+    expect(turns).toBe(40);
+  });
+
+  it("reads only what a session may carry: not archived, inside the window, words only", async () => {
+    const { db, log } = fakeDb(() => []);
+    await createSessionsRepo(db).recentConversations(IDENTITY, {
+      exclude: null, withinHours: 12, limit: 3, turnsEach: 6,
+    });
+    const sql = log.find((l) => l.sql.includes("agent_session"))?.sql ?? "";
+    /* archiving is the person saying "done with this" — `resolveForAsk`
+       already refuses to resume one, and a thread that cannot be reopened
+       must not go on answering through a prompt */
+    expect(sql).toContain("archived_at is null");
+    /* the window is what makes "per session" a claim rather than "everything
+       you have ever said" */
+    expect(sql).toContain("interval '1 hour'");
+    /* the newest conversations, and the END of each */
+    expect(sql).toContain("order by last_message_at desc");
+    expect(sql).toContain("order by seq desc");
+    /* tool rows are codes, not speech: dropped here so `turnsEach` counts
+       six things somebody said and not six rows of which four are codes */
+    expect(sql).toContain("role <> 'tool'");
+  });
+});

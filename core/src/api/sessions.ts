@@ -52,6 +52,7 @@ import { iso, isoOrNull } from "./vocabulary.ts";
 import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
+import type { PriorConversation } from "../agent/history.ts";
 
 /**
  * One page of conversations. 50 is generous for a sidebar and small enough
@@ -348,6 +349,101 @@ export function createSessionsRepo(db: Db) {
         );
         return rows.map(toMessage);
       });
+    },
+
+    /**
+     * THE PERSON'S OTHER RECENT CONVERSATIONS — the tail of each (user
+     * directive, 2026-09-08: "make the memory per session not per thread").
+     *
+     * `messages` above answers "what was said in THIS conversation"; this
+     * answers "what has this person been talking to us about", which is the
+     * question a new conversation cannot answer for itself. `agent_session_own`
+     * scopes both to `actor_id = echo.actor_id()`, so nothing here is readable
+     * that the caller's own sidebar does not already show them.
+     *
+     * ── The three bounds, and why each is a bound rather than a preference ──
+     *
+     * · `withinHours` — a window, because "session" is a claim about a working
+     *   stretch. Without it this is "everything you have ever said", and a
+     *   fortnight-old thread arriving as recent context is a lie the model
+     *   cannot check.
+     * · `limit` — the most recently touched conversations, so one busy thread
+     *   cannot crowd out the other two.
+     * · `turnsEach` — the END of each. A conversation's tail is where it was
+     *   left; its opening is where it started, which is rarely what somebody
+     *   is still on about.
+     *
+     * ARCHIVED is excluded here rather than by the caller: it is the same
+     * refusal `resolveForAsk` makes ("done with this" stays said), and a
+     * conversation that cannot be resumed must not go on answering through a
+     * prompt. Tool rows and blank turns are dropped IN SQL as well as in
+     * `carriedConversations` — not a second spelling of the rule, but the
+     * reason `turnsEach` means six things somebody said rather than six rows
+     * of which four are codes.
+     */
+    async recentConversations(
+      identity: Identity,
+      options: {
+        /** the conversation this ask is in — carried in full elsewhere */
+        exclude?: string | null | undefined;
+        withinHours: number;
+        limit: number;
+        turnsEach: number;
+      },
+    ): Promise<(PriorConversation & { id: string })[]> {
+      const exclude = options.exclude ? assertUuid(options.exclude, "session id") : null;
+      /* clamped, not trusted: every one of these multiplies what a single ask
+         costs, and the caller is a route with literals in it today */
+      const hours = Math.min(Math.max(Math.trunc(options.withinHours), 1), 24 * 7);
+      const limit = Math.min(Math.max(Math.trunc(options.limit), 1), 10);
+      const turns = Math.min(Math.max(Math.trunc(options.turnsEach), 1), 40);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          // The sessions are chosen FIRST and the turns fetched per session
+          // (lateral, as `list` does): the other order reads every message the
+          // person owns and then throws nearly all of them away.
+          `select s.id, s.title, m.seq, m.role, m.content, m.author
+             from (
+               select id, title, last_message_at
+                 from echo.agent_session
+                where archived_at is null
+                  and id is distinct from $1::uuid
+                  and last_message_at is not null
+                  and last_message_at >= now() - ($2::int * interval '1 hour')
+                order by last_message_at desc
+                limit $3
+             ) s
+             join lateral (
+               select seq, role, content, author
+                 from echo.agent_message
+                where session_id = s.id
+                  and role <> 'tool'
+                  and content <> ''
+                order by seq desc
+                limit $4
+             ) m on true
+            order by s.last_message_at asc, m.seq asc`,
+          [exclude, hours, limit, turns],
+        ),
+      );
+      /* grouped by walking the rows: they arrive oldest conversation first and
+         each conversation's turns in order, so a change of id is a boundary */
+      const out: (PriorConversation & { id: string })[] = [];
+      for (const row of rows) {
+        const id = String(row.id);
+        let convo = out[out.length - 1];
+        if (convo === undefined || convo.id !== id) {
+          convo = { id, title: String(row.title), rows: [] };
+          out.push(convo);
+        }
+        (convo.rows as { role: "user" | "assistant" | "tool"; content: string; author: string | null }[])
+          .push({
+            role: row.role as "user" | "assistant" | "tool",
+            content: String(row.content),
+            author: (row.author as string | null) ?? null,
+          });
+      }
+      return out;
     },
 
     /**

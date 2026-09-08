@@ -255,6 +255,22 @@ describe("the integration detail page", () => {
     expect(heading.closest("header")!.nextElementSibling!.className, "the body under the header row").toBe("mt-3");
   });
 
+  /**
+    * The alignment the user photographed (2026-09-08). jsdom has no layout, so
+    * what a unit test can hold is the RULE — `items-center` present and the
+    * top-aligned spelling absent — plus the proof that there is a mark here to
+    * be centred against at all, without which the class assertion is a claim
+    * about an empty row. The measurement itself belongs on the rendered page
+    * and is in the log: the mark's centre and the name's centre, on production.
+    */
+  it("the name sits on the MARK'S CENTRE, not on its top edge", async () => {
+    await act(async () => { render(<IntegrationDetail slug="gmail" />); });
+    const header = (await screen.findByRole("heading", { name: "جی‌میل" })).closest("header")!;
+    expect(header.className).toContain("items-center");
+    expect(header.className, "the top-aligned version").not.toContain("items-start");
+    expect(header.querySelector("[data-brand='gmail']"), "the mark it is centred against").toBeTruthy();
+  });
+
   it("an MCP connection's page names its server beside the label", async () => {
     CONNECTORS = [{
       ...ZOOM, provider: "mcp", account_label: "tools.example.test",

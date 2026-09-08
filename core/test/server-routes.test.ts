@@ -98,6 +98,19 @@ interface DbShape {
   userMissing?: boolean;
   /** collects every statement, in order (see `seen` in fakeDb) */
   seen?: string[];
+  /**
+   * The person's OTHER recent conversations (2026-09-08), as the carry-over
+   * read returns them. Empty by default on purpose: a fake that invented a
+   * second conversation for every test would put words into prompts that
+   * dozens of assertions read for other reasons.
+   */
+  priorTurns?: Record<string, unknown>[];
+  /**
+   * Every statement WITH its parameters. `seen` above answers "in what
+   * order"; this answers "with what", which is the only way to see an
+   * argument the route computes and the database never reports back.
+   */
+  calls?: { sql: string; params?: unknown[] | undefined }[];
 }
 
 function fakeDb({
@@ -106,6 +119,7 @@ function fakeDb({
   callVisible = true, summaryVisible = true,
   keyValid = true, keyAllowsAssistant = false, preferredModel = null,
   registerFails = false, userMissing = false,
+  priorTurns = [], calls,
   /* every statement this fake was asked, in order — the only way to assert
      that one read happened BEFORE one write (2026-09-08: the assistant's
      memory depends on the thread being read before the question is appended,
@@ -123,8 +137,9 @@ function fakeDb({
        */
       const answer = (rows: unknown[]): never[] =>
         Object.assign([...rows], { count: rows.length || 1 }) as unknown as never[];
-      (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string) => {
+      (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string, params?: unknown[]) => {
         seen?.push(sql);
+        calls?.push({ sql, params });
         if (sql.includes("actor_is_platform_root")) {
           return [{ is_platform_root: platformRoot }];
         }
@@ -148,6 +163,14 @@ function fakeDb({
          * that answered nothing here would turn every assistant test into a
          * 400 — which is exactly what it did until this existed.
          */
+        /*
+         * The SESSION's other conversations, ahead of the branch below: this
+         * query names `echo.agent_session` too, and answering it with a
+         * session row would hand the carry-over a conversation whose every
+         * turn is the string "undefined". Keyed on the ordering line, which
+         * is unique to it.
+         */
+        if (sql.includes("order by s.last_message_at asc")) return priorTurns;
         if (sql.includes("agent_session")) {
           return sql.includes("update") ? [] : [{
             id: SESSION, title: "چه خبر", last_message_at: null,
@@ -1044,5 +1067,100 @@ describe("assistant memory", () => {
     const call = runPiMock.mock.calls[0]![0] as { history: { role: string; text: string }[] };
     expect(call.history.length).toBeGreaterThan(0);
     expect(call.history.map((t) => t.text)).not.toContain("چه شد؟");
+  });
+});
+/**
+ * AND THE SESSION AROUND IT (user directive, 2026-09-08: "make the memory per
+ * session not per thread").
+ *
+ * The route's part is again small and again the whole of it: the person's
+ * other recent conversations are read beside the thread, and what comes back
+ * is framed as a RECORD in the system prompt rather than added to the turns.
+ * The block below is what a reader of the prompt would see; the rules that
+ * shape it are in history.test.ts, and which rows it is allowed to be built
+ * from are in sessions-repo.test.ts.
+ */
+describe("assistant memory, across conversations", () => {
+  const prior = [
+    { id: "s-earlier", title: "سررسید پروژه", seq: 0, role: "user", content: "سررسید کی است؟", author: null },
+    { id: "s-earlier", title: "سررسید پروژه", seq: 1, role: "assistant", content: "چهاردهم مهر", author: null },
+  ];
+
+  it("carries the other conversations into the prompt, named and framed as a record", async () => {
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash", priorTurns: prior });
+
+    await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "همان کار", session_id: SESSION },
+    });
+
+    const { systemPrompt } = runPiMock.mock.calls[0]![0] as { systemPrompt: string };
+    expect(systemPrompt).toContain("[conversation: سررسید پروژه]");
+    expect(systemPrompt).toContain("user: سررسید کی است؟");
+    expect(systemPrompt).toContain("assistant: چهاردهم مهر");
+    /* FRAMED, not merged: the model is told what it is reading, or it answers
+       as though the person could see it on the screen in front of them */
+    expect(systemPrompt).toContain("RECENT CONTEXT");
+    expect(systemPrompt).toMatch(/not this conversation/i);
+    /* and it stays OUT of the turns — those are this conversation, and a
+       carried line among them is a sentence nobody said here */
+    const { history } = runPiMock.mock.calls[0]![0] as { history: { text: string }[] };
+    expect(history.map((t) => t.text)).not.toContain("چهاردهم مهر");
+  });
+
+  it("EXCLUDES the conversation being asked in — or it arrives twice, as turns AND as a record", async () => {
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const calls: { sql: string; params?: unknown[] | undefined }[] = [];
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash", priorTurns: prior, calls });
+
+    await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "همان کار", session_id: SESSION },
+    });
+
+    const read = calls.find((c) => c.sql.includes("order by s.last_message_at asc"));
+    expect(read, "the session was never read").toBeDefined();
+    expect(read?.params?.[0]).toBe(SESSION);
+  });
+
+  it("THE CONTROL: nothing to carry means no heading at all", async () => {
+    /* the version that always writes the heading passes the test above and
+       fails here — and on a fresh account it would promise the model a
+       record of conversations that do not exist */
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash" });
+
+    await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "سلام", session_id: SESSION },
+    });
+
+    const { systemPrompt } = runPiMock.mock.calls[0]![0] as { systemPrompt: string };
+    expect(systemPrompt).not.toContain("RECENT CONTEXT");
+    expect(systemPrompt).not.toContain("[conversation:");
+  });
+
+  it("a BRAND-NEW conversation still carries the session — the case it exists for", async () => {
+    /* the thread read is skipped when the conversation was just created (it
+       has nothing in it); the carry-over must not be skipped with it, or the
+       reported bug — «گفت‌وگوی جدید», then an assistant that has never heard
+       of you — survives the fix */
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash", priorTurns: prior });
+
+    await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "ادامهٔ همان" },
+    });
+
+    const { systemPrompt, history } = runPiMock.mock.calls[0]![0] as
+      { systemPrompt: string; history: unknown[] };
+    expect(history, "a new conversation has no thread of its own").toEqual([]);
+    expect(systemPrompt).toContain("[conversation: سررسید پروژه]");
   });
 });

@@ -201,7 +201,25 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                   `providerLabel` — none of them is on the wire). The frame
                   is structure and structure does not wait for the network;
                   only what the wire decides waits, below. */}
-              <header className="flex flex-wrap items-start gap-4">
+              {/*
+                * THE NAME SITS ON THE MARK'S CENTRE (user report, 2026-09-08,
+                * with the two screenshots: "the name and the logo in
+                * connectors pages are not align — the name should be align
+                * with the center of the logo").
+                *
+                * It was `items-start`, so a 15px line of text was pinned to
+                * the top edge of a 40px logo and read as floating above it.
+                * Nothing else in the product does that: the shelf's tile
+                * stacks them, the sources table and the connect dialog both
+                * centre them — this header was the one place a mark and its
+                * name did not agree, which is why it is the one place it
+                * showed.
+                *
+                * The kebab moves with it, and that is right too: it is the
+                * third thing on this row, and a row where two of three items
+                * are centred has no reason to hold the third at the top.
+                */}
+              <header className="flex flex-wrap items-center gap-4">
                 {/* the provider's own mark, the same one the tile on the shelf
                     wears (brandMarks.tsx) — so the card you clicked and the
                     page it opens read as the same object; the house icon only
