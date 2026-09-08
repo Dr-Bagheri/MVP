@@ -5988,3 +5988,88 @@ sessions) for the cross-session narrative.
   specificity. The transcript's picker is NOT live-proven — this org has no
   record with speakers on it.
   db 215 migrations · core 1509 tests · web 1386 tests + gate + sweep.
+- 2026-09-08 (THE ASSISTANT HAD NO MEMORY AT ALL, AND A BOT CANNOT KNOCK
+  FIRST; commit a372ec4; db 0216): two user reports, and the first one is
+  the larger finding of the two.
+  **"WHEN IT ANSWERS YOU IT FORGETS."** There was no memory to leak: the
+  thread was persisted (M4, db/0018), resumed, reloaded and rendered, and the
+  MODEL never saw a word of it. `runPi` took one `userText`, and `loopInput`
+  handed Pi a context whose `messages` — documented in the package as "the
+  transcript visible to the model" — was `[]` on every run this product has
+  ever made. So every turn was a first turn, and the screenshot shows exactly
+  what that produces: a person asks twice for the same message to be sent, and
+  the assistant asks what they are talking about. **The ROOM had a transcript
+  since 2026-09-05 and the assistant — the surface people actually talk to —
+  did not**, which is why nobody had found it: two surfaces, one with memory,
+  and the one that reads as "the AI" without.
+  The fix is a slot that already existed: `RunRequest.history` → `runPi` →
+  `context.messages`, and the route reads the thread BEFORE it appends the
+  question. That ORDER is the whole of the route's part — both orders leave
+  the same thread on screen, and the wrong one sends the question twice (once
+  as history, once as the ask) to a model that then answers the echo. It is
+  asserted as an ordering over the statements the fake was asked, because a
+  fake that answers both reads cannot tell the two orders apart.
+  `agent/history.ts` holds what a model is shown, out of the route so it can
+  be tested: tool rows are not conversation (they are codes by design), a
+  COLLEAGUE'S TURN IS NAMED (`roya: …` — unnamed, Echo reads her words as its
+  own and says "as I explained" about something it never said, the flattening
+  the room fixed in September), the oldest goes first when the budget is spent
+  (24 turns / 12k chars / 4k per turn), and a clipped turn is MARKED because a
+  silent clip is a lie about what was said. The run records `historyTurns`,
+  never the words: the thread already holds them, and a copy inside each of
+  its own runs is the same content ageing in two places.
+  **A BOT CANNOT OPEN A CONVERSATION (db/0216).** The second report: the
+  assistant was asked to send a colleague a Telegram message, was given their
+  @username AND their phone number, and failed — with a suggestion to check
+  whether the bot was connected. The bot was connected. **It could not have
+  succeeded**: Telegram lets a bot answer only a chat somebody opened with it,
+  a @username addresses a public channel or group, and a phone number
+  addresses nothing at all. The tool asked for a chat id from `updates`,
+  which is a number nobody has and no model will invent correctly.
+  It was already knowable. 0212's link IS that gesture, recorded: a colleague
+  opens the org's bot and sends the code they minted in their own profile. So
+  the send resolves a NAMED COLLEAGUE through the same exact-or-refuse
+  resolver every other hand uses, and 0216 turns that person into the chat the
+  bot answers them in — a one-column, one-argument definer door, echo_app
+  only, resolved inside the send and never returned, so no model, browser or
+  log line holds a colleague's Telegram number. NULL is the answer to "not
+  linked", "not in this org" and "no such person" alike, on purpose: telling
+  them apart would make the door an oracle for who uses Telegram. The refusal
+  says what to do instead of relaying «chat not found», the consent card names
+  the PERSON rather than a chat id, and a channel still passes straight
+  through — a group the bot is in was never a person.
+  **AND CORE'S TYPECHECK HAD BEEN RED SINCE YESTERDAY.** Seven errors in the
+  dry-run tests from batch E, every one a mock declared with no parameters —
+  vitest types `calls` as an EMPTY TUPLE, so `calls[0]![0]` is a type error
+  and every assertion about what the seam was called with is unchecked. I
+  never ran core's `tsc` on that batch; the suite was green and green is what
+  I looked at. **A green vitest run is not a typecheck** — rule 9's runtime
+  family, pointed at my own gate.
+  Verify-red: nine mutations on the memory (the transcript dropped, an empty
+  turn on the wire, the runtime keeping it to itself, the run recording the
+  WORDS, the read moved after the append, a tool row counted as speech, a
+  colleague's turn unnamed, the budget trimming the newest, a silent clip) and
+  eight on Telegram (five in core, three in the browser), each red on its own
+  test with the control green first. One of my own tests could not fail and
+  was rewritten: "the newest turn survives its own budget" is unreachable
+  under the shipped limits, because the per-turn clip lands every turn at 4k
+  under a 12k ceiling — it takes explicit limits, and the relationship it
+  depends on is now an assertion of its own.
+  Cost, said out loud: an ask now carries up to ~12k characters of
+  conversation, which is a real token cost per turn and the price of the
+  feature. The caps bound it; the regenerate path is unchanged, because a
+  replay's job is to reproduce what was recorded.
+  Proven on production in the user's Chrome, in one throwaway thread: "the
+  number seven" → «That is the number seven», then "what number did I just
+  say?" → **«You just said the number seven.»** — a question that cannot be
+  answered without the conversation, and could not have been answered
+  yesterday. The CONTROL is the half that makes it evidence: the same question
+  in a NEW conversation got «In your most recent recording, you counted "1, 2,
+  3"» — no leak between threads, and the first answer came from the thread
+  rather than from anything global. (Two test conversations are in the
+  history, the user's to keep or delete.) Deployed: 0216 applied first, core
+  on Hetzner (both units active, health 200, ask and the connector action 401
+  against a 404 control), web on Vercel (the one chunk naming
+  `send_telegram_message` now carries `colleague`). NOT exercised live: an
+  actual Telegram send, which would message a real colleague.
+  db 216 migrations · core 1530 tests · web 1391 tests + gate + sweep.
