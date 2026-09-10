@@ -486,7 +486,16 @@ async function exchangeCode(
  * Sixty seconds early, so a token about to expire is not handed to a call
  * that outlives it.
  */
-export function needsRefresh(spec: { refreshable: boolean }, token: TokenPayload, now: number): boolean {
+export function needsRefresh(
+  spec: { refreshable: boolean }, token: TokenPayload, now: number, status: ConnectionRow["status"] = "connected",
+): boolean {
+  /* a row a failed refresh marked EXPIRED is retried on its next use rather
+     than refused forever: the failure may have been ours (2026-09-10 — Slack's
+     refresh answers in a shape its exchange does not, and the first reader
+     threw on it) or the network's, and a person should not have to reconnect
+     for either. With no refresh token left, the retry refuses cleanly
+     (`connector_reconnect_required`) instead of handing a dead token on. */
+  if (status === "expired") return true;
   const expiry = token.expiresAt ? Date.parse(token.expiresAt) : NaN;
   if (!Number.isFinite(expiry) || expiry >= now + 60_000) return false;
   return spec.refreshable || token.refreshToken !== null;
@@ -628,21 +637,26 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
     ));
   }
 
-  async function connection(identity: Identity, provider: ConnectorProvider): Promise<ConnectionRow> {
+  async function connection(
+    identity: Identity, provider: ConnectorProvider, opts: { alsoExpired?: boolean } = {},
+  ): Promise<ConnectionRow> {
     const found = (await rows(identity)).find((row) => row.provider === provider);
-    if (!found || found.status !== "connected") throw new NotFoundError();
+    /* `alsoExpired` is the token path's: an expired row is one whose refresh
+       once failed, and the token path is where a retry can happen */
+    const usable = found?.status === "connected" || (opts.alsoExpired === true && found?.status === "expired");
+    if (!found || !usable) throw new NotFoundError();
     return found;
   }
 
   async function token(identity: Identity, provider: ConnectorProvider): Promise<{ connection: ConnectionRow; token: TokenPayload }> {
-    const conn = await connection(identity, provider);
+    const conn = await connection(identity, provider, { alsoExpired: true });
     const { key } = requireStore(options);
     const secret = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<SecretRow>(
       `select encrypted_payload from echo.connector_secret where connection_id = $1 limit 1`, [conn.id],
     ));
     if (!secret[0]) throw new NotFoundError();
     let current = decrypt(key, secret[0].encrypted_payload);
-    if (connectorKind(provider) === "oauth" && needsRefresh(oauthSpec(provider), current, Date.now())) {
+    if (connectorKind(provider) === "oauth" && needsRefresh(oauthSpec(provider), current, Date.now(), conn.status)) {
       try {
         current = await refreshToken(provider, requireConfigured(options, provider), current);
         await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(

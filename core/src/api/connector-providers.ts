@@ -337,8 +337,14 @@ const slack: ProviderDef = {
        and answers in the same authed_user shape, so pickToken serves both. */
     pkce: false, tokenAuth: "body", tokenBody: "form", refreshable: true,
     pickToken: (json) => {
-      const user = json.authed_user as Record<string, unknown> | undefined;
-      return { access_token: user?.access_token, scope: user?.scope, expires_in: user?.expires_in, refresh_token: user?.refresh_token };
+      /* the EXCHANGE nests the person's tokens under `authed_user`; the
+         REFRESH answers them at the TOP level with token_type "user"
+         (Slack's rotation guide) — one shape or the other, never both. The
+         first version read only the nested one, so the first refresh this
+         product ever ran threw on `access_token: undefined` and marked the
+         connection expired (2026-09-10). */
+      const user = (json.authed_user as Record<string, unknown> | undefined) ?? json;
+      return { access_token: user.access_token, scope: user.scope, expires_in: user.expires_in, refresh_token: user.refresh_token };
     },
   },
   sources: ["channels", "mentions"],

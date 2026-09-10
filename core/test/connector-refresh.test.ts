@@ -39,6 +39,12 @@ describe("whether a connector token is renewed before use", () => {
     expect(needsRefresh({ refreshable: false }, token({ refreshToken: null }), NOW)).toBe(false);
   });
 
+  it("an EXPIRED row is retried on its next use — a failed refresh must not brick the connection", () => {
+    expect(needsRefresh({ refreshable: true }, token({ expiresAt: at(10 * 60_000) }), NOW, "expired")).toBe(true);
+    /* the control: the same row while connected, with time left, is left alone */
+    expect(needsRefresh({ refreshable: true }, token({ expiresAt: at(10 * 60_000) }), NOW, "connected")).toBe(false);
+  });
+
   it("Slack's definition now says what its tokens do under rotation", () => {
     expect(providerDef("slack")?.oauth?.refreshable).toBe(true);
   });

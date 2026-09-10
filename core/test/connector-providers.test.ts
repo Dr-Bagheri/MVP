@@ -172,3 +172,31 @@ describe("the two parsers that fail silently when wrong", () => {
     for (const ip of ["8.8.8.8", "172.32.0.1", "2606:4700::1111"]) expect(isPrivateAddress(ip), ip).toBe(false);
   });
 });
+
+/**
+ * SLACK'S TWO TOKEN SHAPES (2026-09-10). The authorization-code exchange
+ * nests a user's tokens under `authed_user`; the refresh under token rotation
+ * answers them at the top level with `token_type: "user"` — both fixtures are
+ * transcribed from Slack's rotation guide. The first reader knew only the
+ * nested one, so the first refresh this product ever ran threw and marked a
+ * working connection expired. One `pickToken` must read both.
+ */
+describe("slack's pickToken reads the exchange AND the refresh", () => {
+  const pick = providerDef("slack")!.oauth!.pickToken!;
+
+  it("the exchange: nested under authed_user", () => {
+    const exchanged = pick({
+      ok: true, app_id: "A1", team: { id: "T1", name: "neurai" },
+      authed_user: { id: "U1", scope: "channels:read,chat:write", access_token: "xoxe.xoxp-1-first", expires_in: 43200, refresh_token: "xoxe-1-first", token_type: "user" },
+    });
+    expect(exchanged).toEqual({ access_token: "xoxe.xoxp-1-first", scope: "channels:read,chat:write", expires_in: 43200, refresh_token: "xoxe-1-first" });
+  });
+
+  it("the refresh: at the top level, token_type user", () => {
+    const refreshed = pick({
+      ok: true, app_id: "A1", id: "U1", scope: "channels:read,chat:write",
+      access_token: "xoxe.xoxp-1-second", expires_in: 43200, refresh_token: "xoxe-1-second", token_type: "user",
+    });
+    expect(refreshed).toEqual({ access_token: "xoxe.xoxp-1-second", scope: "channels:read,chat:write", expires_in: 43200, refresh_token: "xoxe-1-second" });
+  });
+});
