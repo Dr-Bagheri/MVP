@@ -121,6 +121,7 @@ representable.
 | Phase | What | Where it lives | Status |
 |---|---|---|---|
 | P1 | Session grant; folder ≠ project (vocabulary, `list_projects`, `folders`, `create_task` by project/folder/assignee) | web runner + core tools + db/0193 | **shipped 2026-09-06** |
+| P1½ | The meeting's aftermath finds its people: «summary ready» to the roster, «you committed to this» to each owner, as bell cards that open the meeting (M35 amendment) | worker summarize step + db/0217 + the bell | **shipped 2026-09-10** |
 | P2 | The plan card: one consent for a batch, every item named; Echo's "more than three" rule produces it | core (a `propose_plan` client tool) + web card | proposed |
 | P3 | Agents as assignees: `echo_agent_task` queue, server-side runs on borrowed authority, proposals + standing rules, progress as comments, review column | core worker + db (queue, agent_principal) + web | proposed |
 | P4 | The authority ledger on the agent's page; the card becomes the exception | web + core (standing rules per class/scope) | proposed |

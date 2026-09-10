@@ -18,6 +18,7 @@
  * the next N minutes", and `meeting_prep` remembers what has been prepared.
  * A meeting that moves later gets prepared once, when it is next up.
  */
+import { pollFailureFields } from "./poll-failure.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
@@ -257,12 +258,12 @@ export async function sweepMeetings(options: MeetingPrepOptions, log: StepLogger
         } catch (error) {
           /* the TYPE, never the message — a calendar entry's title can ride
              in a provider's error sentence (invariant 7) */
-          log.warn({ event: "meeting_prep_failed", error_type: (error as Error).name },
+          log.warn({ event: "meeting_prep_failed", ...pollFailureFields(error) },
             "could not prepare one meeting");
         }
       }
     } catch (error) {
-      log.warn({ event: "meeting_poll_failed", connection: row.connection_id, error_type: (error as Error).name },
+      log.warn({ event: "meeting_poll_failed", connection: row.connection_id, ...pollFailureFields(error) },
         "a calendar could not be polled this round");
     }
   }

@@ -51,7 +51,7 @@ import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
 import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
 import { createCallsRepo, type CallsRepo } from "./calls.ts";
-import { ConflictError, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
+import { ConflictError, errorLogLine, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { reportError } from "../observe/watchtower.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
 import { createMemberPasswordRepo } from "./member-password.ts";
@@ -381,43 +381,22 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   /** One error path for every route — no handler formats its own. */
   app.setErrorHandler((error, request, reply) => {
     const mapped = mapError(error);
-    if (mapped.ours) {
-      // ours: log the TYPE, tell the caller nothing. Never the message —
-      // it may quote a transcript, and "no content in logs" is M9/invariant 7.
-      const kind = error instanceof Error ? error.constructor.name : typeof error;
-      // For a database failure, structured schema identifiers instead: they
-      // say WHICH rule broke, and unlike the message they cannot contain a
-      // row value (steward-ratified convention).
-      request.log.error(
-        { err: kind, pg: pgErrorFields(error) },
-        // The diagnosis when the mapper has one — a SQLSTATE with a specific
-        // operational meaning should not leave a reader to look it up. Still
-        // codes and identifiers only; the diagnosis is our own prose, never
-        // the database's message.
-        mapped.diagnosis ?? "internal error",
-      );
-      // item 10: the same fact reaches the watchtower, scrubbed by
-      // construction (observe/watchtower.ts owns what may travel)
-      reportError(error, { where: "api", route: request.routeOptions?.url ?? "?" });
-    } else {
-      /**
-       * Not ours — but one class of "theirs" earns a line anyway.
-       *
-       * An RLS refusal maps to 404, which is the right answer for the caller
-       * and complete silence for us. That silence hid a real policy bug: an
-       * owner soft-deleting their own call got `not found`, because the
-       * post-update row is invisible to a non-admin under `call_read` and
-       * Postgres therefore refuses the write. The route looked like it worked
-       * on a row that did not exist. Nothing was logged, so nothing was
-       * noticed until I probed the database directly.
-       *
-       * warn, not error: usually it IS just a caller reaching for a row they
-       * may not touch. But "usually" is the point — at zero volume you cannot
-       * tell that case from a policy that refuses everyone. Structured fields
-       * only, never the message.
-       */
-      const pg = pgErrorFields(error);
-      if (pg?.code === "42501") request.log.warn({ pg }, "row policy refused a write");
+    /*
+     * WHAT IS LOGGED is decided in errors.ts (`errorLogLine`), where it is
+     * tested without a server: the TYPE never the message for ours (it may
+     * quote a transcript — M9 / invariant 7), the pg fields never the detail,
+     * the mapper's diagnosis when it has one, a warn for a row policy
+     * refusing a write (the soft-delete finding — a 404 to the caller is
+     * right and was total silence for us), and, since 2026-09-10, a WARN
+     * naming the provider's status for a connector's refusal, which used to
+     * log as "internal error" with the status dropped. `report` is whether
+     * the watchtower hears it (item 10: codes only, scrubbed by construction
+     * in observe/watchtower.ts).
+     */
+    const line = errorLogLine(error, mapped);
+    if (line !== null) {
+      request.log[line.level](line.fields, line.msg);
+      if (line.report) reportError(error, { where: "api", route: request.routeOptions?.url ?? "?" });
     }
     reply.code(mapped.status).send(mapped.body);
   });
@@ -1140,7 +1119,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
            product can no longer name, which is the honest rendering of that
            state and not an empty row. */
         `select c.id, c.kind, c.title, c.session_id, c.created_at, c.read_at,
-                c.body, u.display_name as from_name, u.display_name_en as from_name_en
+                c.body, c.meeting_id, u.display_name as from_name, u.display_name_en as from_name_en
            from echo.agent_card c
            left join echo.app_user u on u.id = c.from_user_id
           order by (c.read_at is null) desc, c.created_at desc
@@ -1152,6 +1131,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         kind: row.kind,
         title: row.title,
         session_id: row.session_id,
+        /* 0217: the meeting a meeting_ready / meeting_commitment card opens;
+           null for every other kind, and for a card whose meeting is gone */
+        meeting_id: (row.meeting_id as string | null) ?? null,
         created_at: iso(row.created_at as Date | string),
         read: row.read_at !== null,
         /* empty string for every kind that keeps its content elsewhere —

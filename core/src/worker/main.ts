@@ -159,7 +159,9 @@ export async function main(): Promise<void> {
       // ml + storage arm M39 voice matching; without them the step is
       // exactly the pre-M39 step (matching is best-effort either way)
       createLinkSpeakersStep({ db, queue, lifecycle, ml, storage }),
-      createSummarizeStep({ db, lifecycle, summarizer, queue }),
+      /* 0217: the same repo the summarizer writes the ledger through, so the
+         step can deliver what that pass landed */
+      createSummarizeStep({ db, lifecycle, summarizer, queue, meetings }),
       // M35: signals — briefs and digests, each run AS the owner
       createSignalStep({ db }),
       // M41 P1: the workflow executor — one message, one step, as-owner

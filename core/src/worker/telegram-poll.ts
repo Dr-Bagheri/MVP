@@ -36,6 +36,7 @@
  * the card with the sender and the reply says so. Everything else the model
  * proposes degrades to a default that is visible on the card itself.
  */
+import { pollFailureFields } from "./poll-failure.ts";
 import { randomUUID } from "node:crypto";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
@@ -700,22 +701,15 @@ export async function sweepTelegram(options: TelegramPollOptions, log: StepLogge
       }
     } catch (error) {
       /*
-       * The NAME and a CODE, never a message.
-       *
-       * `error_type: "TypeError"` was all this line said the day the poller
-       * called a method the repo did not export, and it was not enough to
-       * diagnose from: a fetch failure, a missing method and a bad argument
-       * are one word. `cause.code` is undici's ENOTFOUND/ECONNREFUSED family
-       * — codes, not content — and the message's first clause names the
-       * callee rather than any of a person's words.
+       * The NAME and a CODE, never a message — `error_type: "TypeError"` was
+       * all this line said the day the poller called a method the repo did
+       * not export. The fields moved to poll-failure.ts (2026-09-10) so the
+       * mailbox and the calendar say the same things.
        */
-      const cause = (error as { cause?: { code?: unknown } }).cause;
       log.warn({
         event: "telegram_poll_failed",
         connection: row.connection_id,
-        error_type: (error as Error).name,
-        cause_code: typeof cause?.code === "string" ? cause.code : undefined,
-        at: String((error as Error).message ?? "").split(" ").slice(0, 4).join(" "),
+        ...pollFailureFields(error),
       }, "a bot could not be polled this round");
     }
   }

@@ -10,6 +10,7 @@ import type { Db, SqlTx } from "../db/identity.ts";
 import type { Lifecycle } from "./lifecycle.ts";
 import { Q_AGENT_RULES, Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
 import { enqueueWorkflowEvents } from "./workflow-triggers.ts";
+import type { MeetingsRepo } from "../api/meetings.ts";
 import { StepError, type StepHandler } from "./runner.ts";
 import type { MlClient } from "./ml-client.ts";
 import { matchEnrolledVoices, type StorageSignerLike, type VoiceMatchOptions } from "./voice-match.ts";
@@ -134,6 +135,13 @@ export interface SummaryWritten {
    * report a silent meeting when in fact nobody looked.
    */
   claims?: number | null;
+  /**
+   * 0217 — WHERE the extraction landed: the meeting (null for a plain
+   * recording, which has none) and the ids of the rows actually inserted.
+   * The aftermath delivery names exactly those rows.
+   */
+  meetingId?: string | null;
+  itemIds?: string[];
 }
 
 export interface Summarizer {
@@ -166,6 +174,13 @@ export interface SummarizeOptions {
   summarizer: Summarizer;
   /** For the post-call signal and the workflow triggers (M35, M41). */
   queue: Queue;
+  /**
+   * 0217 — delivers the meeting's aftermath (the roster's «ready» cards, the
+   * owners' commitments) once the summary and its extraction have landed.
+   * Required, not optional, for the reason `SummarizerOptions.meetings` gives:
+   * an optional dependency is how a feature ends up written and never wired.
+   */
+  meetings: MeetingsRepo;
   /** Ceiling on transcript characters handed to the model. Context is the budget (M8). */
   maxTranscriptChars?: number;
 }
@@ -175,6 +190,7 @@ export function createSummarizeStep({
   lifecycle,
   summarizer,
   queue,
+  meetings,
   maxTranscriptChars = 120_000,
 }: SummarizeOptions): StepHandler {
   return {
@@ -366,17 +382,49 @@ export function createSummarizeStep({
 
       /* 0209 — the extraction's forfeit, said out loud (M21). `null` is the
          pass having failed or answered unreadably; `0` is a meeting that
-         genuinely decided nothing, and only one of those is worth a warning. */
+         genuinely decided nothing; and a plain recording has no meeting to
+         extract INTO — three nothings, only one of them worth a warning. */
       if (result.claims === null || result.claims === undefined) {
         log.warn(
           { call_id: payload.callId, event: "decision_extract_unread" },
           "decision extraction yielded no readable verdict; the summary is unaffected",
+        );
+      } else if (result.meetingId === null) {
+        log.info(
+          { call_id: payload.callId, event: "decision_extract_no_meeting" },
+          "a plain recording has no meeting to extract into; the summary is unaffected",
         );
       } else {
         log.info(
           { call_id: payload.callId, claims: result.claims },
           "decisions and commitments extracted",
         );
+      }
+
+      /*
+       * 0217 — THE AFTERMATH REACHES THE PEOPLE IT CONCERNS. Until today the
+       * extraction wrote a ledger nobody was told about, and the summary's
+       * readiness reached one person (the owner, through the brief). Now the
+       * roster is told the summary is ready and each owner is told what they
+       * owe — bell cards, written through a definer door that checks this
+       * caller is the host and reads every recipient from the meeting's own
+       * rows. Best-effort like the signal below: a card that could not be
+       * written must never fail the call that just finished processing, and
+       * the warn is the forfeit said out loud (M21).
+       */
+      if (result.meetingId) {
+        try {
+          const cards = await meetings.deliverMeetingCards(identity, result.meetingId, result.itemIds ?? []);
+          log.info(
+            { call_id: payload.callId, meeting_id: result.meetingId, event: "meeting_cards_delivered", cards },
+            "the meeting's aftermath was delivered to its people",
+          );
+        } catch (error) {
+          log.warn(
+            { call_id: payload.callId, meeting_id: result.meetingId, event: "meeting_cards_failed", error_type: (error as Error).name },
+            "the meeting's aftermath could not be delivered; the summary is unaffected",
+          );
+        }
       }
 
       await lifecycle.setCallStatus(identity, payload.callId, "ready");

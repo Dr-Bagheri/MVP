@@ -1565,6 +1565,24 @@ post-call brief; cron.weekly → digest (self-service toggle). v1 outputs
 are model-free by design (the shipped value is the unasked delivery);
 model-composed briefs are a later upgrade with its own spend decision.
 
+**Amendment 2026-09-10 — the meeting's aftermath rides the same channel
+(db/0217).** Two more agent-initiated cards, delivered by the summarize step
+the moment a meeting's summary and its decision/commitment extraction (0211)
+have landed: `meeting_ready` to every account on the roster but the host
+(the host has the brief), and `meeting_commitment` to the owner of each
+action item the extraction resolved to an account — the item's own sentence
+on the card, once per (meeting, owner, sentence). Written through ONE
+definer door, `echo.deliver_meeting_cards`, because `agent_card_own` lets a
+person write cards only for themselves and that stays so: the door checks
+the caller is the meeting's HOST (0202), reads every recipient from the
+meeting's own rows, and leaves `from_user_id` NULL — the platform made the
+card, and a card the platform composed never wears a colleague's name.
+Cards point at the MEETING (`agent_card.meeting_id`, a composite FK whose
+set-null names its column) rather than at a conversation; the bell opens
+the meeting page. Still no inbox of things to approve: a commitment card is
+something you were told, and turning it into a task remains the person's
+press on the meeting's own ledger.
+
 ## M36 — The autonomy dial [user-approved 2026-08-21]
 
 Per-user `watch | assist | act` (db/0073), org-cappable

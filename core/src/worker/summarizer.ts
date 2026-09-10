@@ -350,12 +350,17 @@ export function createSummarizer<TDeps>({
        * fact nobody looked.
        */
       let claims: number | null = null;
+      let meetingId: string | null = null;
+      let itemIds: string[] = [];
       if (!result.failed && transcript.trim()) {
         try {
-          claims = await extractClaims({
+          const extracted = await extractClaims({
             runtime, identity, callId, transcript, meetings,
             provider, apiKey, callerModel: skill?.model ?? callerModel, deps,
           });
+          claims = extracted.claims;
+          meetingId = extracted.meetingId;
+          itemIds = extracted.itemIds;
         } catch {
           // the null IS the forfeit; call-steps logs it
           claims = null;
@@ -368,6 +373,8 @@ export function createSummarizer<TDeps>({
         runId: result.runId,
         grounding,
         claims,
+        meetingId,
+        itemIds,
         skill,
         failed: result.failed,
       };
@@ -384,7 +391,7 @@ export function createSummarizer<TDeps>({
  * regenerating a summary re-reads the same transcript and a second run would
  * otherwise double every decision the first one found.
  */
-async function extractClaims({
+export async function extractClaims({
   runtime, identity, callId, transcript, meetings,
   provider, apiKey, callerModel, deps,
 }: {
@@ -401,7 +408,19 @@ async function extractClaims({
   apiKey?: string | undefined;
   callerModel?: string | undefined;
   deps: unknown;
-}): Promise<number | null> {
+}): Promise<{ claims: number | null; meetingId: string | null; itemIds: string[] }> {
+  /*
+   * THE MEETING FIRST (2026-09-10). `meeting_item` hangs off a MEETING, and a
+   * plain upload has none — so an extraction from one lands nowhere and says
+   * so, rather than being given a meeting it does not belong to. That is the
+   * honest reading of 0160's shape and not a limitation to route around: a
+   * bare recording with no meeting has no meeting page to put items on. The
+   * lookup used to come AFTER the model call, which spent a provider run on
+   * every plain recording to then write nothing.
+   */
+  const meetingId = await meetings.meetingIdForCall(identity, callId);
+  if (meetingId === null) return { claims: 0, meetingId: null, itemIds: [] };
+
   const today = new Date().toISOString().slice(0, 10);
   const run = await runtime.run({
     identity,
@@ -415,23 +434,15 @@ async function extractClaims({
     deps,
     input: composeExtractionInput(transcript, today),
   });
-  if (run.failed) return null;
+  if (run.failed) return { claims: null, meetingId, itemIds: [] };
 
   const claims = parseExtraction(run.text);
   /* NULL, not []: an unreadable answer is not "this meeting decided nothing"
-     — the caller renders those differently and must be able to tell */
-  if (claims === null) return null;
-  if (claims.length === 0) return 0;
-
-  /*
-   * THE MEETING THIS RECORD BELONGS TO. `meeting_item` hangs off a MEETING,
-   * and a plain upload has none — so an extraction from one lands nowhere and
-   * says so, rather than being given a meeting it does not belong to. That is
-   * the honest reading of 0160's shape and not a limitation to route around:
-   * a bare recording with no meeting has no meeting page to put items on.
-   */
-  const meetingId = await meetings.meetingIdForCall(identity, callId);
-  if (meetingId === null) return 0;
+     — the caller renders those differently and must be able to tell. The
+     meeting stays named either way: the roster is told the summary is ready
+     whether or not the ledger could be read. */
+  if (claims === null) return { claims: null, meetingId, itemIds: [] };
+  if (claims.length === 0) return { claims: 0, meetingId, itemIds: [] };
 
   /*
    * THE ROSTER, for resolving a spoken name to an account. Read under the
@@ -455,6 +466,7 @@ async function extractClaims({
     dueOn: claim.due_on,
     atMs: claim.evidence_start_ms,
   }));
-  return meetings.recordExtracted(identity, meetingId, rows);
+  const landed = await meetings.recordExtracted(identity, meetingId, rows);
+  return { claims: landed.landed, meetingId, itemIds: landed.itemIds };
 }
 

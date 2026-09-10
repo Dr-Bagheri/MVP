@@ -23,6 +23,7 @@
  * still a seen message; leaving the mark behind would re-examine (and
  * re-charge for) the same mail every two minutes forever.
  */
+import { pollFailureFields } from "./poll-failure.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { firstServable } from "../api/models.ts";
@@ -431,7 +432,9 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
           "messages were older than the age ceiling and were not answered");
       }
     } catch (error) {
-      log.warn({ event: "mail_poll_failed", connection: row.connection_id, error_type: (error as Error).name },
+      /* the class, a code, the provider's status and the callee — never the
+         sentence (poll-failure.ts carries the 2026-09-08 reason) */
+      log.warn({ event: "mail_poll_failed", connection: row.connection_id, ...pollFailureFields(error) },
         "a mailbox could not be polled this round");
     }
   }

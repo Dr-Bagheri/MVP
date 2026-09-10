@@ -14,11 +14,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const answered: Array<{ id: string; accept: boolean }> = [];
 let INVITES: Array<Record<string, unknown>> = [];
+let INVITE_READS = 0;
 const push = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
-    invites: async () => INVITES,
+    invites: async () => { INVITE_READS += 1; return INVITES; },
     respondToInvite: async (id: string, accept: boolean) => {
       answered.push({ id, accept });
       return { kind: "meeting", target_id: "m-9" };
@@ -32,8 +33,18 @@ vi.mock("next-intl", () => ({
 }));
 vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));
 vi.mock("@/lib/refreshBus", () => ({ useRefreshEpoch: () => 0 }));
+/* the poll is captured, not timed: its rhythm is visiblePoll's own test;
+   what this file asserts is that the gate hands it the real read and the
+   interval it claims */
+let POLL: { run: () => void; every: number } | null = null;
+vi.mock("@/lib/visiblePoll", () => ({
+  visiblePoll: (run: () => void, every: number) => {
+    POLL = { run, every };
+    return () => { POLL = null; };
+  },
+}));
 
-import { MeetingInviteGate } from "./MeetingInviteGate";
+import { INVITE_POLL_MS, MeetingInviteGate } from "./MeetingInviteGate";
 
 const meetingInvite = {
   id: "inv-1", kind: "meeting", target_id: "m-9",
@@ -101,9 +112,25 @@ describe("the meeting invitation asks", () => {
     second.unmount();
 
     /* …and it does not ask again in this tab, because a dialog that returns
-       every thirty seconds is a dialog people click through */
+       every two minutes is a dialog people click through */
     render(<MeetingInviteGate />);
     await waitFor(() => expect(INVITES).toHaveLength(1));
     expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+});
+
+describe("the gate's poll", () => {
+  it("polls through visiblePoll at two minutes, and each poll is the real read", async () => {
+    render(<MeetingInviteGate />);
+    await waitFor(() => expect(screen.getByText("جلسهٔ محصول")).toBeInTheDocument());
+    expect(POLL?.every).toBe(INVITE_POLL_MS);
+    expect(INVITE_POLL_MS).toBe(120_000);
+
+    /* the invitation is answered elsewhere; the next poll notices */
+    const before = INVITE_READS;
+    INVITES = [];
+    POLL!.run();
+    await waitFor(() => expect(INVITE_READS).toBe(before + 1));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   });
 });

@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { formatDate } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
+import { visiblePoll } from "@/lib/visiblePoll";
 
 /**
  * A MEETING INVITATION ASKS, RATHER THAN WAITING TO BE FOUND (user directive,
@@ -36,6 +37,16 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
  * forgotten should be reminded.
  */
 const DISMISSED = "neurai-invite-dismissed";
+
+/**
+ * Two minutes, and only while the tab is on screen. It was thirty seconds in
+ * every open tab, visible or not: 4,276 reads of /v1/invites in three days on
+ * production, eleven times the next route, most of them from tabs nobody was
+ * looking at — and a hidden tab cannot show the dialog it is polling for.
+ * Two minutes is still "at the moment they have been added" for a courtesy
+ * on top of the bell; the refresh bus covers the person's own writes at once.
+ */
+export const INVITE_POLL_MS = 120_000;
 
 function dismissed(): Set<string> {
   try {
@@ -80,12 +91,10 @@ export function MeetingInviteGate() {
 
   useEffect(look, [look, epoch]);
 
-  /* the person already in the product when somebody adds them: slow, because
-     this is a courtesy on top of the bell rather than the record of it */
-  useEffect(() => {
-    const timer = setInterval(look, 30_000);
-    return () => clearInterval(timer);
-  }, [look]);
+  /* the person already in the product when somebody adds them: slow, only
+     while this tab is on screen, and a courtesy on top of the bell rather
+     than the record of it (INVITE_POLL_MS carries the measurement) */
+  useEffect(() => visiblePoll(look, INVITE_POLL_MS), [look]);
 
   if (invite === null) return null;
 

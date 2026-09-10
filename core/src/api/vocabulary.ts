@@ -348,6 +348,10 @@ export const AGENT_CARD_KINDS = [
      sent, and that difference is why it carries its own text instead of
      pointing at a conversation. */
   "member_message",
+  /* 0217 — the meeting's aftermath: «the summary is ready» to the roster,
+     «you committed to this» to each owner. Both point at a MEETING
+     (`meeting_id` on the card) rather than at a conversation. */
+  "meeting_ready", "meeting_commitment",
 ] as const;
 export type AgentCardKind = (typeof AGENT_CARD_KINDS)[number];
 

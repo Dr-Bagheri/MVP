@@ -39,6 +39,22 @@ import { clearNotifications, notifyHistory, subscribeNotify, type PlatformNotice
  * lives in the conversation it came from. A dismiss that deleted the
  * agent's message would be the bell deciding what the record says.
  */
+/**
+ * THE CARD'S FIRST LINE, per kind. A message shows its text (its title is
+ * empty by construction — 0167). A MEETING card (0217) shows a sentence built
+ * from the catalogue around the meeting's title, because the server stores
+ * DATA — the title, the commitment — and no prose, so the same card reads in
+ * Persian on the Persian screen and in English on the English one (one
+ * language per screen, 2026-09-06). Every other kind shows the title the
+ * platform composed for it.
+ */
+function cardText(card: AgentCardItem, t: (key: string, values?: Record<string, string | number>) => string): string {
+  if (card.kind === "member_message") return card.body;
+  if (card.kind === "meeting_ready") return t("cardMeetingReady", { title: card.title });
+  if (card.kind === "meeting_commitment") return t("cardCommitment", { title: card.title });
+  return card.title;
+}
+
 export function NotificationBell() {
   const t = useTranslations("presence");
   const locale = useLocale();
@@ -145,6 +161,18 @@ export function NotificationBell() {
      */
     if (card.kind === "member_message") { setOpen(false); return; }
     setOpen(false);
+    /*
+     * A CARD ABOUT A MEETING OPENS THE MEETING (0217): its review tab holds
+     * the summary the «ready» card announces and the ledger the commitment
+     * came from, with «make it a task» beside it. A meeting card whose
+     * meeting is GONE (meeting_id nulled by the FK) falls through to the
+     * conversations like any other card — a 404 wearing a notification is
+     * worse than a list that has nothing to do with it.
+     */
+    if (card.meeting_id !== null && (card.kind === "meeting_ready" || card.kind === "meeting_commitment")) {
+      router.push(`/meetings/${encodeURIComponent(card.meeting_id)}`);
+      return;
+    }
     router.push("/conversations");
   }
 
@@ -264,8 +292,14 @@ export function NotificationBell() {
                           not a heading — so rendering `title` here would draw a
                           dated blank row and call it a notification. */}
                       <span className={card.read ? "text-fg-muted" : ""}>
-                        {card.kind === "member_message" ? card.body : card.title}
+                        {cardText(card, t)}
                       </span>
+                      {/* 0217: a commitment shows the SENTENCE the meeting
+                          heard under the meeting's name — that sentence is
+                          the whole reason the card exists */}
+                      {card.kind === "meeting_commitment" && card.body !== "" ? (
+                        <span className={`mt-0.5 block ${card.read ? "text-fg-muted" : "text-fg"}`}>{card.body}</span>
+                      ) : null}
                       <span className="mt-0.5 block text-[10px] text-fg-subtle">
                         {/* who it came from, before when: a message is read as
                             "Sara said" and a digest as "last Monday" */}

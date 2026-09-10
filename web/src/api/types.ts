@@ -796,6 +796,10 @@ export interface AgentCardItem {
       survives, the name does not. */
   from_name: string | null;
   from_name_en: string | null;
+  /** 0217: the meeting a `meeting_ready` / `meeting_commitment` card opens.
+      Null for every other kind — and for a meeting card whose meeting is
+      gone, which the bell sends to the conversations rather than to a 404. */
+  meeting_id: string | null;
 }
 
 export type AgentEvent =

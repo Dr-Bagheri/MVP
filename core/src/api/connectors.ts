@@ -470,6 +470,28 @@ async function exchangeCode(
   }, "the provider did not accept this connection");
 }
 
+/**
+ * WHETHER A TOKEN IS RENEWED BEFORE USE (2026-09-10).
+ *
+ * The spec's `refreshable` says what a provider's tokens USUALLY do; the
+ * payload says what THIS token came with. Slack is why the second half
+ * exists: its definition said `refreshable: false` — Slack user tokens do not
+ * expire, unless the app has token rotation switched on, which this one does
+ * — so the connection stored a refresh token and a twelve-hour expiry and
+ * was never renewed. From 2026-09-07 20:45 UTC every Slack read answered 502
+ * while the shelf said «متصل است». A token that arrived WITH a refresh token
+ * and an expiry is renewable whatever the spec expected: the provider has
+ * said so in the only way it can.
+ *
+ * Sixty seconds early, so a token about to expire is not handed to a call
+ * that outlives it.
+ */
+export function needsRefresh(spec: { refreshable: boolean }, token: TokenPayload, now: number): boolean {
+  const expiry = token.expiresAt ? Date.parse(token.expiresAt) : NaN;
+  if (!Number.isFinite(expiry) || expiry >= now + 60_000) return false;
+  return spec.refreshable || token.refreshToken !== null;
+}
+
 async function refreshToken(
   provider: ConnectorProvider, config: { clientId: string; clientSecret: string }, previous: TokenPayload,
 ): Promise<TokenPayload> {
@@ -620,9 +642,7 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
     ));
     if (!secret[0]) throw new NotFoundError();
     let current = decrypt(key, secret[0].encrypted_payload);
-    const expiry = current.expiresAt ? Date.parse(current.expiresAt) : NaN;
-    const renewable = connectorKind(provider) === "oauth" && oauthSpec(provider).refreshable;
-    if (renewable && Number.isFinite(expiry) && expiry < Date.now() + 60_000) {
+    if (connectorKind(provider) === "oauth" && needsRefresh(oauthSpec(provider), current, Date.now())) {
       try {
         current = await refreshToken(provider, requireConfigured(options, provider), current);
         await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(

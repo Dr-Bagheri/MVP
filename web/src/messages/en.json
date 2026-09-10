@@ -2262,6 +2262,8 @@
     "bellInvites": "Invitations",
     "bellLabel": "Notifications",
     "bellRecent": "Recent events",
+    "cardCommitment": "Your commitment from “{title}”:",
+    "cardMeetingReady": "The summary of “{title}” is ready.",
     "close": "Close",
     "composerMenu": "Options",
     "connectors": "Connections",

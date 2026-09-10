@@ -13,7 +13,8 @@ import {
   assistantAllowed, createApiKeysRepo, hashToken, identityFromApiKey, isApiKey,
   KEY_PREFIX, safeEqual,
 } from "../src/api/apikeys.ts";
-import { mapError, pgErrorFields, UnauthenticatedError, ValidationError } from "../src/api/errors.ts";
+import { errorLogLine, mapError, pgErrorFields, UnauthenticatedError, ValidationError } from "../src/api/errors.ts";
+import { ProviderRefusal } from "../src/api/connector-providers.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
@@ -377,5 +378,58 @@ describe("constant-time comparison", () => {
     expect(safeEqual("abc", "abc")).toBe(true);
     expect(safeEqual("abc", "abd")).toBe(false);
     expect(safeEqual("abc", "abcd")).toBe(false);
+  });
+});
+
+/**
+ * WHAT THE ERROR HANDLER LOGS (2026-09-10). Production had eight
+ * `{"err":"ProviderRefusal","msg":"internal error"}` lines at level 50 on
+ * 2026-09-08, every one a 502 the caller had been answered correctly. The
+ * decision lives in `errorLogLine` now, so it is pinned here rather than
+ * behind a running server — the provider case is the reason the function
+ * exists, and the other three are the behaviour it must not have changed.
+ */
+describe("what the error handler logs", () => {
+  it("a connector provider's refusal is a WARNING that names the provider's status — not an internal error", () => {
+    const error = new ProviderRefusal(403, "slack conversations.list");
+    const mapped = mapError(error);
+    expect(mapped).toMatchObject({
+      status: 502,
+      body: { kind: "provider", code: "provider_refused", params: { status: 403 } },
+    });
+    const line = errorLogLine(error, mapped);
+    expect(line).toEqual({
+      level: "warn",
+      fields: { event: "provider_refused", provider_status: 403 },
+      msg: "the connected provider refused the request",
+      report: false,
+    });
+    /* neither the old label nor the callee the message names */
+    expect(JSON.stringify(line)).not.toMatch(/internal error|conversations/);
+  });
+
+  it("ours stays an ERROR carrying the type and the diagnosis, and reaches the watchtower", () => {
+    const error = Object.assign(new Error("terminated"), { code: "25P03" });
+    const line = errorLogLine(error, mapError(error))!;
+    expect(line.level).toBe("error");
+    expect(line.report).toBe(true);
+    expect(line.msg).toMatch(/idle-in-transaction/);
+    expect(line.fields).toMatchObject({ err: "Error", pg: { code: "25P03" } });
+    expect(JSON.stringify(line)).not.toMatch(/terminated/);
+  });
+
+  it("a row policy refusing a write keeps its warn line — the soft-delete finding", () => {
+    /* the producer's shape (rule 10): a WITH CHECK refusal carries this
+       routine, and the mapper narrows on it — a bare 42501 is a GRANT
+       refusal, which is ours and stays a 500 */
+    const error = Object.assign(new Error("new row violates row-level security policy"), { code: "42501", routine: "ExecWithCheckOptions" });
+    const line = errorLogLine(error, mapError(error))!;
+    expect(line).toMatchObject({ level: "warn", msg: "row policy refused a write", report: false });
+    expect(JSON.stringify(line)).not.toMatch(/violates/);
+  });
+
+  it("a caller's mistake logs nothing", () => {
+    const error = new ValidationError("bad input");
+    expect(errorLogLine(error, mapError(error))).toBeNull();
   });
 });

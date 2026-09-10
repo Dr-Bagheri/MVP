@@ -2262,6 +2262,8 @@
     "bellInvites": "دعوت‌ها",
     "bellLabel": "اعلان‌ها",
     "bellRecent": "رویدادهای اخیر",
+    "cardCommitment": "تعهد شما در جلسهٔ «{title}»:",
+    "cardMeetingReady": "خلاصهٔ جلسهٔ «{title}» آماده است.",
     "close": "بستن",
     "composerMenu": "گزینه‌ها",
     "connectors": "اتصال‌ها",

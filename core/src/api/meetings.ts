@@ -691,10 +691,13 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
       dueOn: string | null;
       atMs: number | null;
     }>,
-  ): Promise<number> {
-    if (rows.length === 0) return 0;
+  ): Promise<{ landed: number; itemIds: string[] }> {
+    if (rows.length === 0) return { landed: 0, itemIds: [] };
     return db.withIdentity(identity, async (tx: SqlTx) => {
-      let landed = 0;
+      /* the ids of what LANDED, not what was offered: the aftermath delivery
+         (0217) names these rows, and a row the duplicate guard refused must
+         not be delivered a second time under its first copy's id */
+      const itemIds: string[] = [];
       for (const row of rows) {
         const done = await tx.unsafe<{ id: string }>(
           `insert into echo.meeting_item
@@ -711,9 +714,26 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
            returning id`,
           [meetingId, row.kind, row.body, row.owner, row.ownerId, row.dueOn, row.atMs],
         );
-        if (done[0]) landed += 1;
+        if (done[0]) itemIds.push(String(done[0].id));
       }
-      return landed;
+      return { landed: itemIds.length, itemIds };
+    });
+  }
+
+  /**
+   * 0217 — THE AFTERMATH, DELIVERED: «the summary is ready» to the roster and
+   * «you committed to this» to each owner, as bell cards, through the door
+   * that checks the caller is the HOST and reads every recipient from the
+   * meeting's own rows (never from this argument list). `itemIds` are the
+   * rows THIS extraction landed; the door is idempotent by lookup as well,
+   * so a regenerated summary re-delivers nothing. Returns the cards written.
+   */
+  async function deliverMeetingCards(identity: Identity, meetingId: string, itemIds: string[]): Promise<number> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<{ n: number | string }>(
+        "select echo.deliver_meeting_cards($1, $2::uuid[]) as n", [meetingId, itemIds],
+      );
+      return Number(rows[0]?.n ?? 0);
     });
   }
 
@@ -1239,7 +1259,7 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
     items, addItem, updateItem, removeItem, extractItems,
     /* 0211 — the whole-organisation ledger, the worker's landing place and
        the roster it resolves spoken names against */
-    ledger, recordExtracted, roster, meetingIdForCall,
+    ledger, recordExtracted, roster, meetingIdForCall, deliverMeetingCards,
     addAttendees, removeAttendee, markAttended,
     board, setBoard, setPresenting, attachmentPath,
   };

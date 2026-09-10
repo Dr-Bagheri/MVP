@@ -376,3 +376,64 @@ export function mapError(error: unknown): MappedError {
 
   return { status: 500, body: { error: "internal error", kind: "internal" }, ours: true };
 }
+
+/**
+ * WHAT THE ERROR HANDLER LOGS, decided in one place so it can be tested
+ * without a server (2026-09-10).
+ *
+ * Production, 2026-09-08: eight lines reading `{"err":"ProviderRefusal",
+ * "msg":"internal error"}` at level 50 — every one a Slack or Telegram call
+ * the PROVIDER had refused, correctly answered to the caller as a 502 with
+ * the status class as a param. The log dropped that status, the one field
+ * `ProviderRefusal` exists to carry, and called the whole thing internal: a
+ * revoked token, a rate limit and an outage all read as our code crashing,
+ * and a reader chasing "internal error" finds nothing of ours to fix. Rule
+ * 12's indistinguishability debt, in the log rather than the response.
+ *
+ * So, in order:
+ *   · a provider's refusal is a WARNING naming the provider's status — not
+ *     ours to fix, not the watchtower's to page about;
+ *   · everything else `ours` is an ERROR carrying the TYPE (never the message
+ *     — it may quote a transcript; M9 / invariant 7), the pg fields (schema
+ *     identifiers, never detail) and the mapper's diagnosis when it has one;
+ *   · an RLS refusal of a WRITE keeps its warn line — 42501 maps to 404, which
+ *     is right for the caller and total silence for us, and that silence once
+ *     hid a real policy bug (an owner soft-deleting their own call got "not
+ *     found" because the post-update row was invisible under `call_read`);
+ *   · a caller's mistake logs nothing.
+ *
+ * `report` is whether the watchtower hears it (item 10: codes only, scrubbed
+ * by observe/watchtower.ts) — ours only.
+ */
+export interface ErrorLogLine {
+  level: "warn" | "error";
+  fields: Record<string, unknown>;
+  msg: string;
+  report: boolean;
+}
+
+export function errorLogLine(error: unknown, mapped: MappedError): ErrorLogLine | null {
+  const source = error as { providerStatus?: unknown } | null;
+  if (mapped.body.kind === "provider" && typeof source?.providerStatus === "number") {
+    return {
+      level: "warn",
+      fields: { event: "provider_refused", provider_status: source.providerStatus },
+      msg: "the connected provider refused the request",
+      report: false,
+    };
+  }
+  if (mapped.ours) {
+    const kind = error instanceof Error ? error.constructor.name : typeof error;
+    return {
+      level: "error",
+      fields: { err: kind, pg: pgErrorFields(error) },
+      msg: mapped.diagnosis ?? "internal error",
+      report: true,
+    };
+  }
+  const pg = pgErrorFields(error);
+  if (pg?.code === "42501") {
+    return { level: "warn", fields: { pg }, msg: "row policy refused a write", report: false };
+  }
+  return null;
+}

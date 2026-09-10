@@ -329,7 +329,13 @@ const slack: ProviderDef = {
     /* USER scopes only: the connector acts as the person, not as a bot the
        whole workspace can see — the reach rule at the provider */
     extraAuthorize: { user_scope: SLACK_USER_SCOPES },
-    pkce: false, tokenAuth: "body", tokenBody: "form", refreshable: false,
+    /* Slack user tokens live forever UNLESS the app has token rotation on —
+       then they arrive with a refresh_token and a twelve-hour expiry, and this
+       app does (2026-09-10: the stored expiry sat twelve hours after the
+       connect, and every read since had been a 502 behind a «connected» tile).
+       The refresh is the same oauth.v2.access with grant_type=refresh_token
+       and answers in the same authed_user shape, so pickToken serves both. */
+    pkce: false, tokenAuth: "body", tokenBody: "form", refreshable: true,
     pickToken: (json) => {
       const user = json.authed_user as Record<string, unknown> | undefined;
       return { access_token: user?.access_token, scope: user?.scope, expires_in: user?.expires_in, refresh_token: user?.refresh_token };
