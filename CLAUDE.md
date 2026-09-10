@@ -6219,3 +6219,94 @@ sessions) for the cross-session narrative.
   (weaker by Soniox's own docs), and existing records keep their old speaker
   rows — there is no re-transcribe route today.
   db 216 migrations · ml 154 tests · core 1550 tests · web 1392 tests + gate + sweep.
+- 2026-09-10 (THE SWEEP: a meeting's aftermath finds its people, the
+  provider's refusal names its status, the poll sleeps with the tab — and
+  Slack had been dead behind a «connected» tile; commits 9428fb2, 06f990c;
+  db 0217): user directive, "check the whole platform for bugs as well, try
+  to speed up the code and make it more AI agentic with the same things we
+  have."
+  **What the logs said first.** The api's eight "5xx" since 09-07 were all
+  502s, every one a connector PROVIDER refusing (Slack channels, a Telegram
+  send) — mapped correctly to the caller and logged as `{"err":
+  "ProviderRefusal","msg":"internal error"}` at level 50 with the status
+  DROPPED, the one field the class exists to carry. My own note from before
+  the context break had called them unmapped 500s; the log, re-read by
+  LEVEL rather than by a guessed status pattern, said otherwise — the first
+  grep matched a date format the api never writes and reported zero for
+  every day, a probe with no subject. The worker's TypeError has not
+  recurred since the 09-08 20:23 restart: closed. `/v1/invites` was the one
+  hot route — 4,276 reads in three days, eleven times the next — from a
+  thirty-second interval in every open tab, visible or not.
+  **The agentic piece (db/0217, M35 amended).** The summarizer's third pass
+  (0211) wrote decisions and commitments into a ledger nobody was told
+  about, and the summary's readiness reached one person — the owner,
+  through the brief. The summarize step delivers the aftermath now:
+  `meeting_ready` to every account on the roster but the host,
+  `meeting_commitment` — the item's own sentence — to the owner of each
+  action the extraction resolved, once per (meeting, owner, sentence). ONE
+  definer door, `echo.deliver_meeting_cards`: `agent_card_own` still lets a
+  person write cards only for themselves (test 124 asserts the direct insert
+  is still refused); the door checks the caller is the HOST (0202), reads
+  every recipient from the meeting's own rows, leaves `from_user_id` NULL —
+  a card the platform composed never wears a colleague's name — and is
+  idempotent by lookup, so a regenerated summary re-delivers nothing.
+  `agent_card.meeting_id` is a composite FK whose set-null NAMES ITS COLUMN
+  (0188's class); the bell opens the meeting; the server stores DATA (the
+  title, the sentence) and the catalogue says the words around it, so the
+  card reads in the screen's language. The extraction looks the meeting up
+  BEFORE the model call — a plain upload used to spend a provider run to
+  then write nothing. Best-effort in the step: a card that cannot be written
+  never fails a call that just finished processing. Test 124 walks the
+  matrix (18 checks): the roster told, the owners told, the host told only
+  what they owe, a pending colleague told nothing, a decision and an unowned
+  action reaching nobody, a second delivery writing nothing, a non-host
+  refused 42501, another organisation's meeting «no such meeting» 22023, the
+  wall, the grant, nobody reading another's card, a deleted meeting leaving
+  four cards with the pointer nulled.
+  **The four fixes.** `errorLogLine` in errors.ts decides the handler's
+  line where it can be tested: a provider's refusal is a WARN with
+  `event: provider_refused, provider_status`; ours stays an error with
+  type, pg fields and diagnosis; the 42501 write refusal keeps its warn; a
+  caller's mistake logs nothing. The three pollers log `pollFailureFields`
+  — the CLASS by constructor name (`name` is "Error" for every subclass that
+  does not set it, ProviderRefusal included), undici's cause code, the
+  provider's status, the first four words of the message and never the
+  sentence. `visiblePoll` runs the gate's read every two minutes while the
+  tab is visible, catches up once on return after a long absence and never
+  on a short switch. And **Slack**: its definition said `refreshable:
+  false`, the app has token rotation ON, so the connection stored a refresh
+  token and a twelve-hour expiry and was never renewed — expired since
+  2026-09-07 20:45 UTC, every read since a 502, the tile «متصل است».
+  `needsRefresh` trusts the token over the spec now.
+  **Then production answered twice in ten minutes.** The first refresh this
+  product ever ran threw on `access_token: undefined` and marked the row
+  expired: Slack's REFRESH answers a user token at the TOP level with
+  `token_type: "user"`, while the EXCHANGE nests it under `authed_user`
+  (the rotation guide; both shapes are fixtures now) — `pickToken` reads
+  both. And an expired row was refused FOREVER: a failed refresh bricked the
+  connection until somebody reconnected; it is retried on its next use now.
+  The retry ran and Slack refused it: its refresh tokens are single-use, and
+  the 05:08 attempt had succeeded on Slack's side while we dropped the
+  answer, so the stored one is revoked. **Slack needs ONE reconnect by the
+  user** — «اتصال دوبارهٔ Slack» on the shelf, which now honestly reads
+  «منقضی شده» — and from then on it renews itself every twelve hours.
+  Zoom's stale expiry was only stale: refreshable, and unused since the
+  09-08 probes.
+  Verify-red by mutation on fourteen behaviours across the three rounds,
+  control green first each time: the provider line, the delivery, a failed
+  delivery failing the call, the model asked before the meeting, the dropped
+  status, the poll on every switch, the hidden tab polling, the tab hidden
+  from the start, the meeting card opening the conversations, the bare
+  interval, the spec asked instead of the token, Slack's definition, the
+  nested-only reader, the never-retried row.
+  Proven on production: 0217 applied (124 ran against the live door, 18
+  checks); core deployed twice (both units active, health 200, `/v1/cards`
+  401 against a 404 control, both entrypoints parse under strip-types);
+  `/api/cards` carries `meeting_id` on all 30 rows; the failed refresh
+  logged as `err: "Error"` — the plain Error the fix names; the retry
+  answered 400 with the row `expired`; Vercel built 9428fb2 for both
+  projects. NOT proven live: a real meeting delivering its cards — no
+  meeting has been summarized since the deploy, and a write test on the
+  org's data is what cost the board on 2026-09-06. The next summarized
+  meeting is the measurement.
+  db 217 migrations · ml 154 tests · core 1575 tests · web 1402 tests + gate + sweep.
