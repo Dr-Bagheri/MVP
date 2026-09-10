@@ -6165,3 +6165,57 @@ sessions) for the cross-session narrative.
   rule doing its job on its author.
   Cost, said plainly: ~3k characters on top of the thread's ~12k, per ask.
   db 216 migrations · core 1550 tests · web 1392 tests + gate + sweep.
+- 2026-09-10 (THE LOCAL DIARIZER DECIDES THE SPEAKERS — Soniox said two, the
+  room held six; commit b33c696; ml rebuilt and restarted on Hetzner): user
+  report, "voice diarization did not work properly in meetings, it usually
+  does not go past 2 speakers but usually there are more speakers than 2".
+  **Measured before deciding.** The 206-second production take `167e5da9`
+  (org neurai): Soniox's own diarization returned TWO speakers — whole file or
+  VAD-spliced alike, on paid `/process` runs with VAD on and off, so the
+  speech-only concatenation the pipeline sends was not the cause. The local
+  pipeline (pyannote segmentation over ERes2Net clusters at the 1.0 threshold
+  ruled on 2026-08-13) returned SIX on the same audio, covering 99.8% of
+  Soniox's words — and at word level each of Soniox's two labels fanned out
+  across all six local voices, which says its split there was not by voice at
+  all. Controls at the same threshold: a one-voice take → 1; two two-voice
+  takes → 2 and 2. A diarizer right on every control and finding more voices
+  on the disputed take is the one to believe.
+  **The rule reversed** (`ml/src/pipeline.ts`, `singleStream`): on mono audio
+  the LOCAL diarizer labels the words and the STT lane's own labels are the
+  FALLBACK — the old order read "the lane already separated the voices with
+  full-file context", and on the recordings this product makes it had not.
+  "Errs toward the human-fixable direction" (the 2026-08-13 ruling) is what it
+  rests on: a roster that is too long is merged in two clicks; one that is too
+  short has put two people's words under one name in the record the product
+  treats as the truth. Three ways the local diarizer does NOT get the words,
+  each a named warning the record keeps — `diarization_local_skipped_too_long`
+  (a part past `ML_LOCAL_DIARIZE_MAX_MS`, 90 minutes: sherpa holds the whole
+  take as Float32, 3.84 MB a minute, on a box with about a gigabyte to spare),
+  `diarization_local_failed`, `diarization_local_found_nothing` — and
+  `provenance.diarization.lane_speakers` keeps the lane's own count whichever
+  labels win, so a record that went from two voices to six says where each
+  number came from. `setDiarizer` is the test seam (the `setLanes` shape); six
+  tests walk the preference, the control (no local → `stt`), the failure, the
+  empty answer, the ceiling (the diarizer is not asked to hold the file —
+  calls 0) and the undiarized lane. Verify-red by mutation on six behaviours,
+  control first, each red by name: the lane's labels winning again, the lane's
+  count dropped, a failed local run failing the job, the ceiling ignored, an
+  empty local answer silently replacing the lane's labels, the fallback
+  forgetting to say why.
+  **The deploy trap, and the acceptance that measured the OLD dist.** `node
+  node_modules/.bin/tsc` FAILS on the server (the .bin entry is a shell shim,
+  not JavaScript); under `set -e` the `&&` chain stopped and the `;`-separated
+  acceptance ran against the dist that was already there — and reported two
+  speakers, which read exactly like "the fix does not work". `node
+  node_modules/typescript/bin/tsc -p tsconfig.json`, the marker checked in
+  `dist/src/pipeline.js`, both services restarted; the same take then yielded
+  SIX speakers (`source: clustering, engine: sherpa-onnx, lane_speakers: 2`),
+  stable with VAD on and off. Minted: **a deploy whose build step failed
+  silently leaves an acceptance that measures yesterday — check the
+  artifact's marker before believing any number it produces.**
+  Cost, said plainly: ~64 s of processing against ~17 s for that 206 s file
+  (the local diarizer runs at about a quarter of real time on this box). Not
+  changed: live captions during a meeting are Soniox's real-time diarization
+  (weaker by Soniox's own docs), and existing records keep their old speaker
+  rows — there is no re-transcribe route today.
+  db 216 migrations · ml 154 tests · core 1550 tests · web 1392 tests + gate + sweep.
