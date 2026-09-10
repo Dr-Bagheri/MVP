@@ -8,7 +8,8 @@ import path from "node:path";
 import { resetConfig } from "../src/config.js";
 import { resetLanes, setLanes } from "../src/stt/registry.js";
 import { resetVadEngine } from "../src/vad/index.js";
-import { resetDiarizer } from "../src/diarize/index.js";
+import { resetDiarizer, setDiarizer, type DiarSegment, type Diarizer } from "../src/diarize/index.js";
+import { MlError } from "../src/errors.js";
 import { buildServer } from "../src/server.js";
 import { HealthSchema, ProcessResponseSchema } from "../src/schema.js";
 import type { SttInput, SttLane, SttResult, TimestampGranularity } from "../src/stt/types.js";
@@ -61,6 +62,31 @@ class StubLane implements SttLane {
   }
 }
 
+/**
+ * A local diarizer that answers with whatever segments it is given, on the
+ * ORIGINAL file's timeline — which is where the pipeline runs it (`full`), and
+ * where the stub lane's four words land after the VAD map is undone: on the
+ * ten-second fixture they sit near 0.0s, 1.0s, 8.0s and 9.0s.
+ */
+class FakeDiarizer implements Diarizer {
+  readonly name = "fake-diarizer";
+  calls = 0;
+  constructor(private readonly answer: DiarSegment[] | (() => never)) {}
+  async available() { return true; }
+  async diarize(): Promise<DiarSegment[]> {
+    this.calls++;
+    if (typeof this.answer === "function") this.answer();
+    return this.answer as DiarSegment[];
+  }
+}
+
+/** three voices over the fixture's two speech regions: S1, S2 | S3, S3 */
+const THREE_VOICES: DiarSegment[] = [
+  { start_ms: 0, end_ms: 800, speaker: "S1" },
+  { start_ms: 900, end_ms: 1600, speaker: "S2" },
+  { start_ms: 7900, end_ms: 10000, speaker: "S3" },
+];
+
 let dir: string;
 let monoWav: string;
 let stereoWav: string;
@@ -87,7 +113,7 @@ afterAll(async () => {
 });
 
 afterEach(() => {
-  for (const k of ["ML_ALLOW_LOCAL_PATHS", "ML_LANE_ORDER", "ML_REQUIRE_WORD_TIMESTAMPS", "ML_URL_ALLOWLIST"]) {
+  for (const k of ["ML_ALLOW_LOCAL_PATHS", "ML_LANE_ORDER", "ML_REQUIRE_WORD_TIMESTAMPS", "ML_URL_ALLOWLIST", "ML_LOCAL_DIARIZE_MAX_MS"]) {
     delete process.env[k];
   }
   resetConfig();
@@ -230,13 +256,86 @@ suite("POST /process — mono", () => {
     expect(body.media.codec).toContain("mp3");
   });
 
-  it("keeps the lane's speakers when the lane diarized", async () => {
-    configure(new StubLane("word", true));
-    const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+  /**
+   * WHO DECIDES THE SPEAKERS (2026-09-10). The local diarizer, when it can;
+   * the lane's own labels when it cannot. It read the other way until a
+   * production take Soniox had split into TWO voices turned out to hold SIX
+   * by the local pipeline — with the local pipeline right on every control
+   * (pipeline.ts, singleStream, carries the measurement). Each fallback is a
+   * warning the record keeps, and the lane's own count rides in provenance
+   * whichever labels the words wear.
+   */
+  describe("who decides the speakers", () => {
+    it("the LOCAL diarizer's labels win over the lane's, and the lane's count is kept beside them", async () => {
+      configure(new StubLane("word", true));
+      const local = new FakeDiarizer(THREE_VOICES);
+      setDiarizer(local);
+      const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
 
-    expect(body.provenance.diarization.source).toBe("stt");
-    expect(new Set(body.words.map((w) => w.speaker))).toEqual(new Set(["S1", "S2"]));
-    expect(body.speakers.map((s) => s.label).sort()).toEqual(["S1", "S2"]);
+      expect(local.calls).toBe(1);
+      expect(body.provenance.diarization).toEqual({ source: "clustering", engine: "fake-diarizer", lane_speakers: 2 });
+      /* the words carry the local voices — three, where the lane alternated two */
+      expect(new Set(body.words.map((w) => w.speaker))).toEqual(new Set(["S1", "S2", "S3"]));
+      expect(body.speakers.map((s) => s.label).sort()).toEqual(["S1", "S2", "S3"]);
+      expect(body.degraded).toBe(false);
+      expect(body.warnings).toEqual([]);
+    });
+
+    it("THE CONTROL: with no local diarizer the lane's labels stand, and say so", async () => {
+      /* the old rule, now the fallback — and the assertion that the local
+         diarizer was actually consulted above rather than the test passing
+         on a stub that happened to agree */
+      configure(new StubLane("word", true));
+      setDiarizer(null);
+      const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+
+      expect(body.provenance.diarization).toEqual({ source: "stt", engine: null, lane_speakers: 2 });
+      expect(new Set(body.words.map((w) => w.speaker))).toEqual(new Set(["S1", "S2"]));
+      expect(body.warnings).toEqual([]);
+    });
+
+    it("a local diarizer that FAILS costs a warning, never the transcript", async () => {
+      configure(new StubLane("word", true));
+      setDiarizer(new FakeDiarizer(() => { throw new MlError("diarization_failed", "boom"); }));
+      const res = await post({ audio_path: monoWav });
+
+      expect(res.statusCode).toBe(200);
+      const body = ProcessResponseSchema.parse(res.json());
+      expect(body.provenance.diarization.source).toBe("stt");
+      expect(body.warnings).toContain("diarization_local_failed");
+      expect(new Set(body.words.map((w) => w.speaker))).toEqual(new Set(["S1", "S2"]));
+    });
+
+    it("a local diarizer that finds NOBODY leaves the lane's labels, and says which nothing", async () => {
+      configure(new StubLane("word", true));
+      setDiarizer(new FakeDiarizer([]));
+      const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+
+      expect(body.provenance.diarization.source).toBe("stt");
+      expect(body.warnings).toContain("diarization_local_found_nothing");
+      expect(body.words.some((w) => w.speaker !== null)).toBe(true);
+    });
+
+    it("a part past the local ceiling keeps the lane's labels rather than the memory", async () => {
+      /* the fixture is ten seconds; a one-second ceiling makes it "too long" */
+      configure(new StubLane("word", true), { ML_LOCAL_DIARIZE_MAX_MS: "1000" });
+      const local = new FakeDiarizer(THREE_VOICES);
+      setDiarizer(local);
+      const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+
+      expect(local.calls, "the diarizer was not asked to hold a file past the ceiling").toBe(0);
+      expect(body.provenance.diarization.source).toBe("stt");
+      expect(body.warnings).toContain("diarization_local_skipped_too_long");
+    });
+
+    it("a lane that did NOT diarize still gets the local voices, as before", async () => {
+      configure(new StubLane("word", false));
+      setDiarizer(new FakeDiarizer(THREE_VOICES));
+      const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+
+      expect(body.provenance.diarization).toEqual({ source: "clustering", engine: "fake-diarizer", lane_speakers: null });
+      expect(body.speakers).toHaveLength(3);
+    });
   });
 
   it("returns no speakers at all when diarization is off", async () => {

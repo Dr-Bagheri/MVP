@@ -60,6 +60,16 @@ const Schema = z.object({
   // Soniox's async model: five hours per file, the provider's own limit.
   ML_SONIOX_MAX_DURATION_MS: int(5 * 60 * 60 * 1000),
   ML_MAX_BYTES: int(500 * 1024 * 1024),
+  /*
+   * THE LOCAL DIARIZER'S CEILING (2026-09-10). sherpa's offline diarization
+   * holds the whole take in memory as Float32 — 16 kHz × 4 bytes = 3.84 MB a
+   * minute, plus the int16 buffer it was decoded from — on a box with about a
+   * gigabyte to spare. Ninety minutes is ~520 MB at the peak; the recorder's
+   * own part ceiling (45 MiB at 48 kbps ≈ 130 minutes) is past what that box
+   * can promise. A part longer than this keeps the lane's own speaker labels
+   * and says so in the warnings, rather than taking the process down with it.
+   */
+  ML_LOCAL_DIARIZE_MAX_MS: int(90 * 60 * 1000),
   ML_WORK_DIR: z.string().optional().transform((v) => v || os.tmpdir()),
 
   // Tool + model locations. ffmpeg is resolved from these or from PATH;

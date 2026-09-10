@@ -8,7 +8,7 @@ import { MlError } from "./errors.js";
 import type { JobLog } from "./log.js";
 import { channelsAreDistinct, concatRegions, extractChannel, ffmpegVersionString, probe, toMono16k } from "./audio/ffmpeg.js";
 import { openWavStream, wavDuration } from "./audio/wav.js";
-import { assignSpeakers, diarizer } from "./diarize/index.js";
+import { assignSpeakers, diarizer, type DiarSegment } from "./diarize/index.js";
 import type { Options, ProcessResponse, Segment, Speaker, Word } from "./schema.js";
 import { maxDurationForLanes, transcribe } from "./stt/registry.js";
 import type { Attempt, LaneOutcome } from "./stt/registry.js";
@@ -94,6 +94,7 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
   if (outcome.diarFoundNothing && words.length > 0) {
     warnings.push("diarization_found_no_speakers");
   }
+  warnings.push(...outcome.diarWarnings);
 
   const anchored =
     lane.result.timestamps === "none" ? anchorTimelessWords(words, segments, durationMs) : words;
@@ -127,7 +128,7 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
         timestamps: lane.result.timestamps,
         attempts: lane.attempts as Attempt[],
       },
-      diarization: { source: diarSource, engine: diarEngine },
+      diarization: { source: diarSource, engine: diarEngine, lane_speakers: outcome.laneSpeakers },
     },
     degraded,
     warnings,
@@ -148,6 +149,10 @@ interface StreamOutcome {
   diarFoundNothing: boolean;
   diarSource: "channels" | "clustering" | "stt" | "none";
   diarEngine: string | null;
+  /** how many voices the LANE separated on its own; null when it did not */
+  laneSpeakers: number | null;
+  /** the diarization decisions worth a line in the record (see singleStream) */
+  diarWarnings: string[];
 }
 
 /** Mono (or forced-mix) audio: one transcription, then diarize if the lane didn't. */
@@ -183,32 +188,94 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
   let diarSource: StreamOutcome["diarSource"] = "none";
   let diarEngine: string | null = null;
   let diarFoundNothing = false;
+  const diarWarnings: string[] = [];
+  /* the lane's own count, kept beside whichever labels win — the day a
+     reader asks why a two-voice record became a six-voice one, the answer
+     is on the row rather than in somebody's memory */
+  const laneSpeakers = lane.result.diarized
+    ? new Set(lane.result.words.map((w) => w.speaker).filter((s): s is string => s !== null)).size
+    : null;
 
   if (!wantSpeakers) {
     // "off" is enforced here, not merely requested of the lane. A provider
     // that labels speakers anyway must not smuggle them into the record.
     words = words.map((w) => ({ ...w, speaker: null }));
-  } else if (lane.result.diarized) {
-    // The lane already separated the voices with full-file context.
-    diarSource = "stt";
   } else {
+    /*
+     * THE LOCAL DIARIZER DECIDES THE SPEAKERS; THE LANE'S LABELS ARE THE
+     * FALLBACK (user report, 2026-09-10: "voice diarization did not work
+     * properly in meetings — it usually does not go past 2 speakers, but
+     * usually there are more").
+     *
+     * This used to read the other way — "the lane already separated the
+     * voices with full-file context" — and on the recordings this product
+     * actually makes, it had not. Measured on a 206-second meeting take from
+     * production: Soniox returned TWO speakers, whole file or VAD-spliced
+     * alike; the local pipeline (pyannote segmentation over ERes2Net
+     * clusters, threshold 1.0) returned SIX, covering 99.8% of Soniox's own
+     * words — and each of Soniox's two labels fanned out across all six, so
+     * its split there was not by voice at all. The same local diarizer, same
+     * threshold, on three controls: a one-voice take → 1, two two-voice
+     * takes → 2 and 2. A diarizer that is right on the controls and finds
+     * more voices on the disputed take is the one to believe.
+     *
+     * "Errs toward the human-fixable direction" is the ruling this rests on
+     * (2026-08-13): a roster that is too long is merged by a person in two
+     * clicks; a roster that is too short has put two people's words under
+     * one name, in the record the product treats as the truth. Whichever
+     * diarizer labels the words, the other's count is in the provenance.
+     *
+     * Three ways the local diarizer does NOT get the words, each said out
+     * loud in `warnings`: no engine on this deployment, a part past its
+     * memory ceiling (config.ts, ML_LOCAL_DIARIZE_MAX_MS), or a run that
+     * failed or found nobody. In each the lane's labels stand — a transcript
+     * with the provider's speakers beats a job that failed because a second
+     * opinion crashed (M21: forfeit the derived artifact, never the data).
+     */
     const engine = await diarizer();
-    if (engine) {
-      const segs = await engine.diarize(full, { maxSpeakers: job.options.max_speakers });
+    const ceilingMs = config().ML_LOCAL_DIARIZE_MAX_MS;
+    let local: DiarSegment[] | null = null;
+    if (engine === null) {
+      if (!lane.result.diarized) job.log.warn({ step: "diarize" }, "no diarizer available; words carry no speaker");
+    } else if (durationMs > ceilingMs) {
+      job.log.warn({ step: "diarize", duration_ms: durationMs, ceiling_ms: ceilingMs }, "part too long for local diarization");
+      diarWarnings.push("diarization_local_skipped_too_long");
+    } else {
+      try {
+        local = await engine.diarize(full, { maxSpeakers: job.options.max_speakers });
+      } catch (e) {
+        /* the class of the failure, never its message: a native binding's
+           error text can quote paths, and a model's can quote nothing useful */
+        job.log.warn(
+          { step: "diarize", engine: engine.name, error_type: e instanceof MlError ? e.type : e instanceof Error ? e.name : typeof e },
+          "local diarization failed",
+        );
+        diarWarnings.push("diarization_local_failed");
+      }
+    }
+
+    if (engine !== null && local !== null && local.length > 0) {
+      words = assignSpeakers(words, local);
+      diarSource = "clustering";
+      diarEngine = engine.name;
+      const found = new Set(local.map((s) => s.speaker)).size;
+      if (laneSpeakers !== null && laneSpeakers !== found) {
+        job.log.info({ step: "diarize", lane_speakers: laneSpeakers, local_speakers: found }, "speakers from the local diarizer");
+      }
+    } else if (lane.result.diarized) {
+      diarSource = "stt";
+      if (local !== null) diarWarnings.push("diarization_local_found_nothing");
+    } else if (engine !== null && local !== null) {
       // M19: a component that silently finds nothing must say so. Zero
       // speakers on audio with words means every word comes back unlabeled,
       // which reads downstream as "a transcript with no speakers" rather than
       // as "the diarizer failed" — indistinguishable at exactly the moment the
       // difference matters.
-      if (segs.length === 0) {
-        job.log.warn({ step: "diarize", engine: engine.name }, "diarizer found no speakers");
-        diarFoundNothing = true;
-      }
-      words = assignSpeakers(words, segs);
+      job.log.warn({ step: "diarize", engine: engine.name }, "diarizer found no speakers");
+      diarFoundNothing = true;
+      words = assignSpeakers(words, local);
       diarSource = "clustering";
       diarEngine = engine.name;
-    } else {
-      job.log.warn({ step: "diarize" }, "no diarizer available; words carry no speaker");
     }
   }
 
@@ -223,6 +290,8 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
     diarFoundNothing,
     diarSource,
     diarEngine,
+    laneSpeakers,
+    diarWarnings,
   };
 }
 
@@ -296,6 +365,8 @@ async function perChannel(job: Job, channels: number): Promise<StreamOutcome> {
     // them, so there is no detection step here to fail silently.
     diarFoundNothing: false,
     diarSource: job.options.diarize === "off" ? "none" : "channels",
+    laneSpeakers: null,
+    diarWarnings: [],
     diarEngine: null,
   };
 }

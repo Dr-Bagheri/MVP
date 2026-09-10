@@ -140,6 +140,10 @@ export const ProvenanceSchema = z
       .object({
         source: z.enum(["channels", "clustering", "stt", "none"]),
         engine: z.string().nullable(),
+        /** how many voices the STT lane itself separated, when it did — kept
+            whichever diarizer's labels the words carry, so a record that went
+            from two voices to six says where each number came from */
+        lane_speakers: z.number().int().nonnegative().nullable(),
       })
       .strict(),
   })

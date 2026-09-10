@@ -117,7 +117,12 @@ export interface MlProcessResult {
       timestamps: MlTimestamps;
       attempts: { lane: string; ok: boolean; ms: number; error_type: string | null }[];
     };
-    diarization: { source: "channels" | "clustering" | "stt" | "none"; engine: string | null };
+    diarization: {
+      source: "channels" | "clustering" | "stt" | "none";
+      engine: string | null;
+      /** the lane's own count, beside whichever labels won (ml, 2026-09-10) */
+      lane_speakers?: number | null;
+    };
   };
   degraded: boolean;
   warnings: string[];

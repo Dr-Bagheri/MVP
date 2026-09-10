@@ -30,5 +30,15 @@ export function resetDiarizer(): void {
   cached = undefined;
 }
 
+/**
+ * Test seam, the shape `setLanes` already has for the STT lanes: the pipeline
+ * now PREFERS the local diarizer over a lane's own labels (2026-09-10), and
+ * that preference is a rule worth a test that does not depend on two ONNX
+ * models being present on the machine running it.
+ */
+export function setDiarizer(engine: Diarizer | null): void {
+  cached = engine;
+}
+
 export type { Diarizer, DiarSegment } from "./types.js";
 export { assignSpeakers } from "./types.js";
