@@ -45,10 +45,16 @@ export const BOARD_COLUMN =
      816px column on a 1280 laptop with the assistant open, so the board
      scrolled sideways on the screen most people work at, and on a 1920
      monitor the same four columns left a third of the lane empty. Each
-     column takes an equal share of the lane now, with a 14rem floor under
-     which the lane scrolls — a phone gets the scroll, a laptop gets four
-     columns that fit, a monitor gets four columns that fill. */
-  "glass flex min-w-[14rem] flex-1 basis-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
+     column takes an equal share of the lane now, with a floor under which
+     the lane scrolls — a phone gets the scroll, a laptop gets four columns
+     that fit, a monitor gets four columns that fill. THE FLOOR IS 11.5rem,
+     measured on production after the first cut shipped at 14: on a 1280
+     laptop with the assistant open (30vw, the user's own ruling) the page
+     column is 762px inside, and four columns plus three gaps fit only under
+     ~182px each — 14rem was 217 and the board still scrolled on the one
+     screen the ruling is about. 11.5rem is 178 there, 201 on a 1920
+     monitor, and a card keeps 158px of text at the narrowest. */
+  "glass flex min-w-[11.5rem] flex-1 basis-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
 
 export const BOARD_HEADER = "flex items-center justify-between gap-1 px-1 py-1";
 export const BOARD_HEADER_START = "flex min-w-0 items-center gap-1";

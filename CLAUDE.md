@@ -6892,5 +6892,25 @@ sessions) for the cross-session narrative.
   truth line says the same.
   Verified: typecheck, 1587 web tests in 222 files (three guards and a kit
   test new), the build gate, the token verifier, the encoding sweep.
+  **PROVEN ON PRODUCTION through the iframe instrument, five widths, in the
+  user's Chrome.** The page column is the full width between the menus at
+  every size: 1265 of an 1841px main at 1920 (was 1138 in 1831, centred),
+  1694 of 2472 at 2560 (was 1268), 816 of 1210 at 1280 with the assistant
+  open at its 30vw, and 663 of 705 on the 768 tablet (was 415 — the open
+  panel is no longer reserved there). Zero elements past the viewport on
+  every page at every width. The rails are on screen — grey and tinted on
+  tasks and meetings, grey alone on users, chat and projects — the lifted
+  pill reads `bg-surface text-fg shadow-card` on row one and `bg-surface
+  text-accent shadow-card` on row two, and NOT ONE pill on any page wears
+  the retired filled-accent pair. The pill is 30 / 33 / 37 / 41px at 430 /
+  1280 / 1920 / 2560 (the 34 token on a 14 / 15.5 / 17.5 / 19.5 root);
+  captions read 10.66px at 1280 and 12.03 at 1920, count badges 9.69 and
+  10.94, and the board's page has zero `text-[Npx]` classes left. The rail
+  shows from 768 up and the bottom bar at 430.
+  **One correction from the reading**: the first cut floored a board column
+  at 14rem, and on the 1280 laptop with the assistant open the four columns
+  spanned 903 inside a 762px column — the board still scrolled on the one
+  screen the ruling is about. 11.5rem (178px there, 201 on a monitor) is
+  the floor now; `board.guard` followed the literal.
   db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
   web 1587 tests + gate + sweep.
