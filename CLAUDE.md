@@ -6912,5 +6912,36 @@ sessions) for the cross-session narrative.
   spanned 903 inside a 762px column — the board still scrolled on the one
   screen the ruling is about. 11.5rem (178px there, 201 on a monitor) is
   the floor now; `board.guard` followed the literal.
+  **Then the second reading found the second fixed width.** With the floor
+  at 11.5rem the four columns fit their share (748 in 762) and the lane
+  STILL scrolled — its children, listed: four sections at 178 and one
+  button at 213, the «افزودن ستون» slot, a column-wide dashed box that was
+  the one thing in the lane not sized as a share. It is the board's own
+  dashed «+» now (the folder strip's square, drawn column-tall at 34px, the
+  label as its accessible name), and the floor is 11rem so four columns and
+  the strip fit together at 1280 with the assistant open. A lane that reads
+  as fitting from its column count alone is the count trap in a layout: the
+  measurement has to be of the LANE.
+  **And the last hand-rolled table joined `DataTable`**: the API keys card
+  on the connectors page drew its own `<table>` — collapsed borders, a
+  hairline head, `divide-y` rows — the one surface whose rows did not look
+  like every other table's, under a ruling that says tables must. The same
+  head, row cards and pager now; server order kept; the revoke column marked
+  as its own controls; a dead key dimmed through `rowClassName`.
+  **A load flake, named so nobody chases it**: `selectMenuWidth.test`'s
+  rendered-panel case went red twice while the build gate ran beside the
+  suite (2.6s and 3.1s) and green every time alone or in a quiet full run —
+  a Radix panel queried before it mounted under a loaded machine, on a file
+  this batch never touched. The 2026-09-06 tree-scan lesson, on a component
+  test.
+  **Read on production after the strip shipped (5da050f)**: at 1280 with the
+  assistant open the lane's scroll width EQUALS its client width (762 = 762)
+  — four columns at 171 and the «افزودن ستون» strip at 33, nothing left of
+  the old floors in the DOM; at 1920 four columns at 279 in a 1204 lane, no
+  scroll. **The keys table could not be read live**: this organisation has
+  minted no API key, so the connectors page renders the card's empty state
+  («هنوز کلیدی ساخته نشده است») and there is no table on the page to
+  measure — the conversion is proven by typecheck, the suite and the gate,
+  and the first minted key is the screen's own proof.
   db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
   web 1587 tests + gate + sweep.
