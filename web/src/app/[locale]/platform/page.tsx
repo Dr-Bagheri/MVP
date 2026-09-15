@@ -1418,7 +1418,9 @@ function Toolbar({
           `w-56` is the only thing left for a caller to say. */}
       <form className="flex gap-2" onSubmit={submit}>
         <input
-          className="input w-56"
+          /* the compact field (2026-09-15): an in-page search sits in the row
+             with 34px pills and buttons, at the row's edge, and is their size */
+          className="input-sm w-56"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder={placeholder}

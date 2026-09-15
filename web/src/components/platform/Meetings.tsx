@@ -394,22 +394,6 @@ export function Meetings() {
             : <IconArrowUp width={14} height={14} />}
         </button>
       </FilterChips>
-        <label className="relative w-full sm:w-[18rem]">
-          <span className="sr-only">{t("searchMeetings")}</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("searchMeetings")}
-            className="input ps-9"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-subtle"
-            style={{ insetInlineStart: "0.75rem" }}
-          >
-            <IconSearch width={14} height={14} />
-          </span>
-        </label>
 
         {/*
           * THE TOPIC, AS A DROPDOWN.
@@ -545,9 +529,34 @@ export function Meetings() {
           * a utility and `.btn-icon` a component class, so the utility layer
           * wins on its own and no `!` is needed.
           */}
-        <div className={`${FILTER_TRACK} ms-auto`}>
-          {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
-          {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
+        {/* THE SEARCH AT THE ROW'S EDGE (user, 2026-09-15: "the search bar in
+            meeting should be attached to the side like the buttons on top of
+            it"). It stood mid-row after the sort; it is the END group now,
+            under «جلسه جدید», with the view switch beside it — and it is the
+            compact field, the size of every other control on this row. The
+            same rule reaches every in-page search (Integrations, the
+            console): a search is a tool ON the toolbar, at its edge. */}
+        <div className="ms-auto flex flex-wrap items-center gap-2">
+          <label className="relative w-full sm:w-[18rem]">
+            <span className="sr-only">{t("searchMeetings")}</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("searchMeetings")}
+              className="input-sm ps-8"
+            />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-subtle"
+              style={{ insetInlineStart: "0.625rem" }}
+            >
+              <IconSearch width={14} height={14} />
+            </span>
+          </label>
+          <div className={FILTER_TRACK}>
+            {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
+            {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
+          </div>
         </div>
       </div>
 

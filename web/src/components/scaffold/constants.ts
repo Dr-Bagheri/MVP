@@ -240,7 +240,8 @@ export const SCAFFOLD = {
     top: 26,        // desktop: the title's distance from the top bar
     topSm: 20,      // below md, where vertical space is scarcer
     inline: 16,     // below md
-    inlineMd: 28,   // desktop gutter — the FLOOR of the two percentages below
+    inlineMd: 24,   // desktop gutter — the FLOOR of the two percentages below
+                    // (28 → 24 on 2026-09-15: "make the gap on the sides lesser")
     /*
      * THE PAGE IS A SHARE OF THE SCREEN, NOT A NUMBER OF PIXELS (user ruling,
      * 2026-09-15: "the size of the pages' content — in some screens it fits
@@ -259,8 +260,11 @@ export const SCAFFOLD = {
      * with `inlineMd` as its floor: 2% of a 1800px main is 36px of air, 7%
      * is 126 — proportions that hold at every width instead of at one.
      */
-    gutterPct: 2,
-    readingGutterPct: 7,
+    /* 2 / 7 for the first hours; "make the gap on the sides of the content
+       lesser" the same evening, and «small» chosen from the three offered:
+       ~1% for a list or a board, ~3% for a form or a reading page. */
+    gutterPct: 1,
+    readingGutterPct: 3,
     bottom: 40,     // room under the last section
     /* the menu heading's own top — it has to land on the page title's line,
        so it moves WITH `top` and keeps the optical offset between a 14px

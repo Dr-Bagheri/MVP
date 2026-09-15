@@ -176,7 +176,15 @@ export function DataTable<T>({
             separated card rows in the meetings list's own clothes, so every
             table in the product changed by editing one class rather than
             fifteen screens (user directive, 2026-09-02) */}
-        <table className={`table-cards w-full min-w-max${hideHeader ? " table-headless" : ""}`}>
+        {/* NO `min-w-max` (user ruling, 2026-09-15: "sideways scroll is not
+            the problem when it's vertical; do not make the horizontal scroll
+            mode, avoid those"). It let every column keep its natural width
+            and pushed the table past its wrapper into a sideways scroll —
+            which is what the speakers table did at 1280. The table is
+            `w-full` and its cells may wrap, so it FITS the column and grows
+            DOWN; the wrapper keeps `overflow-x-auto` only as the last belt
+            for a phone-width screen no six-column table can fit. */}
+        <table className={`table-cards w-full${hideHeader ? " table-headless" : ""}`}>
           <thead className={hideHeader ? "sr-only" : undefined}>
             <tr>
               {selecting ? (
@@ -205,7 +213,7 @@ export function DataTable<T>({
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`table-head px-4 py-3 ${column.headClassName ?? ""}`}
+                  className={`table-head px-3 py-2 ${column.headClassName ?? ""}`}
                 >
                   {column.srOnly ? (
                     <span className="sr-only">{column.header}</span>
@@ -279,7 +287,13 @@ export function DataTable<T>({
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className={`px-4 py-3.5 ${column.className ?? ""}`}
+                        /* DENSER (2026-09-15, "fix the fonts"): the cell inset
+                           came down with the row gap and the cell type — see
+                           `.table-cards` — so a table row is a list row's
+                           height rather than a card's. `break-words` is what
+                           lets a long value (an IP, an address) fold instead
+                           of widening the column past the page. */
+                        className={`break-words px-3 py-2.5 ${column.className ?? ""}`}
                         onClick={
                           column.stopClick ? (e) => e.stopPropagation() : undefined
                         }
@@ -310,7 +324,7 @@ export function DataTable<T>({
                       the row points at.
                     */}
                     {menuItems ? (
-                      <td className="w-12 px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <td className="w-12 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         {menuItems(row).length > 0 ? (
                           <KebabMenu label={t("rowActions")} items={menuItems(row)} />
                         ) : null}

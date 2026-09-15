@@ -33,9 +33,16 @@ describe("a table's first row and the gap above it", () => {
   });
 
   it("the stylesheet takes back one band above a headed table and two bands above a headless one", () => {
-    expect(rule(".table-cards")).toMatch(/margin-top:\s*calc\(-1 \* var\(--table-row-gap, 8px\)\)/);
+    /* THE BAND IS READ, NOT TYPED (2026-09-15). This pinned `8px` and went red
+       when the row gap moved to 6 — a correct red about the wrong thing: the
+       rule is that the take-back EQUALS the band, whatever the band is, so a
+       gap that moves without its take-back is what must fail, and a gap that
+       moves with it must not. */
+    const band = rule(".table-cards").match(/border-spacing:\s*0 var\(--table-row-gap, (\d+px)\)/)?.[1];
+    expect(band, "the row gap declares its default").toBeDefined();
+    expect(rule(".table-cards")).toMatch(new RegExp(`margin-top:\\s*calc\\(-1 \\* var\\(--table-row-gap, ${band}\\)\\)`));
     /* exactly two bands: a first draft took back a pixel more for the hidden
        row and every table's first row sat 1px above the gap (measured live) */
-    expect(rule(".table-cards.table-headless")).toMatch(/margin-top:\s*calc\(-2 \* var\(--table-row-gap, 8px\)\);/);
+    expect(rule(".table-cards.table-headless")).toMatch(new RegExp(`margin-top:\\s*calc\\(-2 \\* var\\(--table-row-gap, ${band}\\)\\);`));
   });
 });

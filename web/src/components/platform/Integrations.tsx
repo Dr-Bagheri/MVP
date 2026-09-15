@@ -421,18 +421,18 @@ export function Integrations() {
               <EmptyState text={t("noneConnected")} />
             ) : (
               <>
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <label className="min-w-0 flex-1 sm:max-w-xs">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {/* THE SEARCH AT THE ROW'S EDGE (user ruling, 2026-09-15:
+                      every in-page search joins its toolbar row at the edge,
+                      the meetings page's shape) — `ms-auto` puts it at the
+                      END beside nothing, in the compact size the row's pills
+                      wear. It stood first, `flex-1`, and read as the row's
+                      subject rather than as a tool on it. */}
+                  <label className="ms-auto w-full sm:w-[18rem]">
                     <span className="sr-only">{t("searchPlaceholder")}</span>
                     <input
                       type="search"
-                      /* audit finding, 2026-09-02: `h-10 min-h-0 py-0 text-sm`
-                         re-answered the one question `.input` exists to answer
-                         — and pinned 40px at EVERY width, discarding the 44px
-                         hit-area floor the class carries below md. The Audit
-                         Logs filter was stripped of the same four for the
-                         same reason; the class owns height and type here too. */
-                      className="input"
+                      className="input-sm"
                       placeholder={t("searchPlaceholder")}
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}

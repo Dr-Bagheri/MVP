@@ -373,11 +373,10 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                           <span className="sr-only">{t("searchAssets")}</span>
                           <input
                             type="search"
-                            /* audit finding, 2026-09-02: `h-9 min-h-0 py-0
-                               text-sm` re-answered all four questions .input
-                               exists to answer — a 36px field beside the
-                               product's 40px ones */
-                            className="input"
+                            /* the compact field (2026-09-15): an in-page
+                               search is a tool on its row, at the edge, at the
+                               row's own 34 */
+                            className="input-sm"
                             placeholder={t("searchAssets")}
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}

@@ -38,8 +38,8 @@ its width (`PlatformShell`: `md:pe-assistant lg:pe-[var(--assistant-rail)]`).
 
 **Width.** `PageContainer` (`scaffold/Page.tsx`) is the column and it is the
 whole width between the menus. A `normal` surface (a list, a board) keeps a
-2 % gutter; a `small` one (a form, a reading page) a 7 % gutter — both with the
-desktop gutter (28px) as the floor (`SCAFFOLD.page.gutterPct`). Nothing in a
+1 % gutter; a `small` one (a form, a reading page) a 3 % gutter — both with the
+desktop gutter (24px) as the floor (`SCAFFOLD.page.gutterPct`). Nothing in a
 page names a max-width in pixels.
 
 **The two sub-menus** are `platform/sectionTabs.tsx`, and they are one design in
@@ -59,6 +59,12 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   a view switch) sit in `end`.
 - An on/off filter is `toggleClass(on)` with `aria-pressed` — the same pill,
   lifting on its own.
+- A THIRD row (the task board's folder strip) is row two's rail again:
+  `FILTER_TRACK`. The tasks page is the default for how a third row looks.
+- An in-page SEARCH is a tool on its toolbar row, at the row's END edge, in
+  the compact field (`.input-sm`, 34px like the pills beside it) — never a
+  row of its own and never first in the row. Meetings is the shape; the
+  integrations and console searches wear it too.
 - A menu of ROUTES (Settings, Management, Profile, Help) is the same track:
   `TwoPane` renders its links with `sectionTabClass`.
 - A tab strip inside a dialog is the same track: `panelStyle.TAB_BAR` is
@@ -72,7 +78,7 @@ spelled by hand).
 
 | Thing | The one spelling | Guard |
 |---|---|---|
-| Table | `DataTable` (`components/DataTable.tsx`) — header, rows, skeleton, pager, menu, selection all inside it | `loading.guard`, `confirm.guard` |
+| Table | `DataTable` (`components/DataTable.tsx`) — header, rows, skeleton, pager, menu, selection all inside it. It FITS its column and grows down: cells wrap, nothing scrolls sideways (user ruling 2026-09-15). Rows are the detail size with a 6px gap. | `loading.guard`, `confirm.guard` |
 | Button | `.btn` / `.btn-primary` / `.btn-secondary` at 38 · `.btn-sm` at 34 · `.btn-icon` at 28 · `.btn-icon-sm` at 34 (`globals.css`) — a height, min-height or text size written beside `btn` is a defect | `control.guard`, `units.guard` |
 | Field | `.input` / `.input-sm`, `Field`, `FormRow` | `select.guard` |
 | Card | `.card` (a page block) · `.card-row` (a card in a list) · `.well` (a row inside a card) · `.tile` is a card; a row of tiles says `tile-row` | `surface.guard`, `tileRow.guard` |
@@ -84,9 +90,10 @@ spelled by hand).
 
 ## 4. Sizing — everything rides the screen
 
-The root font-size is fluid (`globals.css`: 15.5px at 1280, 16 at 1440, 17.5
-at 1920, 20 at 2560), so a size written in **rem** scales with the monitor and a
-size written in **px** does not. Every size in the tree is a token or a rem:
+The root font-size is fluid (`globals.css`: 15.1px at 1280, 15.4 at 1440, 16.3
+at 1920, 16.5 at 2560 — re-pitched 2026-09-15 so a monitor is not a magnified
+laptop), so a size written in **rem** scales with the monitor and a size
+written in **px** does not. Every size in the tree is a token or a rem:
 
 - Type: `text-page-title` 16 · `text-section-title` 15 · `text-pane-title` 14 ·
   `text-menu-item` 13.5 · `text-sm` 13 · `text-detail` 12.5 · `text-caption` 11 ·

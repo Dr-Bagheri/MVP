@@ -312,8 +312,16 @@
      * size); the baseline moves so 16px lands at 1440 — a laptop, not a
      * large desktop. 1280 → 15.5 · 1440 → 16 · 1920 → 17.5 · 2560 → 20
      * (clamped). Below md the floor keeps a phone legible.
+     *
+     * RE-PITCHED 2026-09-15 ("we still have size font problem … fix the
+     * fonts"). The slope above enlarged a 1920 monitor by an eighth and a
+     * 2560 one by a quarter, and every reading the user sent since was
+     * "too big". The ramp is gentler and its ceiling is close to the
+     * reference's fixed 16: 1280 → 15.1 · 1440 → 15.4 · 1920 → 16.3 ·
+     * 2560 → 16.5 (clamped). Still fluid, so a laptop and a monitor are not
+     * one size — but a monitor is no longer a magnified laptop.
      */
-    font-size: clamp(14px, 11.5px + 0.3125vw, 20px);
+    font-size: clamp(14px, 12.5px + 0.2vw, 16.5px);
   }
   html[data-theme="dark"] {
     color-scheme: dark;
@@ -1566,13 +1574,20 @@
    put the rounded corners on the wrong end of every Persian row. */
 .table-cards {
   border-collapse: separate;
-  border-spacing: 0 var(--table-row-gap, 8px);
+  /* DENSER (2026-09-15, "fix the fonts … tables fit in the page"): the row
+     gap 8 → 6 and the cell type the DETAIL role (12.5 at the 16px root)
+     rather than the body's 13 — a table row is a list row, not a card, and
+     the security page's sessions read as a stack of cards at 1920. `td`
+     inherits this size; a cell that names its own (`text-xs`, a chip) keeps
+     it. */
+  font-size: 0.78125rem;
+  border-spacing: 0 var(--table-row-gap, 6px);
   /* THE SPACING IS BETWEEN ROWS, NOT ABOVE THE FIRST (user, 2026-09-06:
      "gap in the images, fix it" — every table page measured 30px from its
      toolbar to the first row against the board's 13). `border-spacing`
      also paints its band above the first row, so the table is pulled up by
      one band and the first thing in it starts where the table starts. */
-  margin-top: calc(-1 * var(--table-row-gap, 8px));
+  margin-top: calc(-1 * var(--table-row-gap, 6px));
 }
 /* a HEADLESS table (DataTable `hideHeader`): the header row is `sr-only`,
    and Chrome keeps a positioned <thead> in the table's layout — a row of no
@@ -1584,7 +1599,7 @@
    17 and put the row 1px ABOVE the gap on every page, which is how the
    measurement earned its second reading. */
 .table-cards.table-headless {
-  margin-top: calc(-2 * var(--table-row-gap, 8px));
+  margin-top: calc(-2 * var(--table-row-gap, 6px));
 }
 /* GLASS ROWS (2026-09-08). A <tr> can carry neither a border nor a radius,
    so both were painted on the CELLS — and with the borders gone the cells now
