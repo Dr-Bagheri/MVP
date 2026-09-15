@@ -82,7 +82,11 @@ export function FirstRunDoor() {
 
   return (
     <Overlay onClose={() => close(null)} label={t("firstRunTitle")} size="xl">
-      <div className={`${DIALOG_BODY} md:flex-row md:gap-8`}>
+      {/* DIALOG_BODY is the scroll box and the section rhythm; it is NOT a flex
+          row, so the two halves are made one here — the first deploy showed
+          them stacked, the preview under the fold (read on production, not
+          in a test: jsdom lays nothing out) */}
+      <div className={`${DIALOG_BODY} flex flex-col gap-6 md:flex-row md:divide-y-0 md:gap-8 [&>*]:py-0`}>
         <div className="flex flex-col md:w-2/5">
           <h2 className="text-2xl font-bold text-fg">{t("firstRunTitle")}</h2>
           <div className="mt-6 flex flex-col gap-2" role="radiogroup" aria-label={t("firstRunTitle")}>

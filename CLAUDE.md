@@ -6995,3 +6995,84 @@ sessions) for the cross-session narrative.
   1280 and 29 / 35 / 39 at 1920 — one family, scaled.
   db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
   web 1589 tests + gate + sweep.
+- 2026-09-15 (night — B2C FIRST: A PERSON ARRIVES INTO THEIR OWN WORKSPACE,
+  THE GATE IS ONE EMAIL FIELD, AND A FIRST-TIME FLOW TEACHES THE PRODUCT;
+  M54, db/0223; commits 5971511, 7747e93 + the layout fix; core and web
+  deployed, 0223 on production): the user's two asks — "make a structure
+  for B2C first, then they can make it B2B; tell me what must change" and
+  "the login and the site take their hints from Wispr Flow: one click on
+  your email and you are in, it personalises, connects and teaches, on the
+  web, the same way" — taken whole.
+  **The structure is docs/B2C-STRUCTURE.md and it is one sentence**: a
+  person who arrives on their own founds a PERSONAL workspace and is its
+  active owner (0056's own "the confirmed email is the acceptance", back in
+  the one branch where it is safe); a team is what that workspace becomes
+  by inviting (a definer trigger on `echo.invitation` flips `org.kind`,
+  never back). What did NOT change is the wall: a name still joins pending
+  (0082), an invitation is still the instant door (0060), and marking an org
+  `accepts_signups` now means MANAGED INTAKE — the console's existing flag
+  is the switch back to today's B2B behaviour, no new setting. 0150's
+  oldest-org fallback is gone. `register_account` was rebuilt on 0150's
+  body (the 0155 lesson), and `app_user.onboarding` + `onboarding_completed_at`
+  carry the flow, backfilled for every member active before today —
+  measured after on production: 14 humans and 6 agent seats stamped, the 2
+  disabled accounts not, 3 orgs all `team`, nothing marked = B2C mode.
+  **The gate**: `/sign-in` is an email field; GoTrue `/otp` with
+  `create_user` (signing up and signing in are one act — `/sign-up`
+  redirects), the mail carries a token-hash link to `/api/auth/confirm?type=
+  magiclink` and a six-digit code for `/api/auth/otp/verify`, both exchanged
+  server-side (M1); the password form is one link away. **The flow**:
+  `/onboarding`, outside the shell with the reference's five-stage rail and
+  eleven steps, every question OURS (what NeurAI is for, the one permission
+  we hold — a voice signature — the real meter, the real push-to-talk key,
+  the real recogniser in a mock room, the speed reveal, the savings slider);
+  every answer PATCHed as given, the step saved with each Continue, the stamp
+  once, «later» everywhere; the shell sends any NULL-stamped member there and
+  treats ABSENT as a different fact all the way down. **The door** on Home,
+  once: five lessons on the real controls (`data-tour` targets on the
+  new-meeting button, the composer, the board's add row, the invite button,
+  the shelf) with a video slot that draws the illustration until a recording
+  exists (`ONBOARDING_VIDEOS`, all null — Q4 for the user).
+  **Five instruments spoke before production did.** (1) 30_agent_wall fired
+  on the new trigger function — a new function is PUBLIC's to execute by
+  default (0204's lesson, met by the guard not the author). (2) Tests 50 and
+  80 pinned "signing up founds no organization" with a count read as
+  `echo_app` and no actor — zero orgs before and zero after, an assertion
+  that could only agree with itself (rule 11's counting corollary, in two
+  files that had passed for weeks); rewritten to read the count at owner
+  altitude on both sides. (3) copy.guard took `savingsNote` as the
+  CONSTRAINT it is; icons.guard caught a «＋» typed where `IconPlus` belongs;
+  routeMap.guard and rhythm.guard each got the flow's entry WITH its reason.
+  (4) The shell's preferences test went red on "app router not mounted"
+  because the shell now asks the router — stubbed there, exercised in its own
+  test. (5) **A JS `String.replace` with a STRING replacement turns `$$`
+  into `$`**: a migration body pasted through it lost its dollar quotes and
+  0223 failed on "syntax error at or near $" — always a function replacer.
+  Locally: stock Postgres 17.10 validates plpgsql DECLARE types at CREATE with
+  the function's empty search_path (0066's `citext` fails where Supabase
+  passes) — `check_function_bodies off` on the throwaway DB; and 0150's
+  self-check RAISES on a database with no active org, so a fresh local run
+  needs one org seeded at 0149. Both in memory.
+  **What the deployed screen showed that no test could**: the door's two
+  halves stacked with the preview under the fold — `DIALOG_BODY` is the
+  scroll box and the section rhythm, not a flex row, so `md:flex-row` on
+  it did nothing; jsdom lays nothing out. Fixed in the follow-up commit.
+  Verify-red by mutation on nine behaviours, one test file each, control
+  green first: the shell's redirect deleted, its `=== null` loosened (the
+  control went red), landingFor always home, `create_user` dropped, the
+  once-guard removed, answers kept local, Continue never waiting, the lesson
+  never starting, the door shown mid-flow. **Proven on production**: the
+  migration and the fixture suite (72 PASS, "the wall holds"); core's pair
+  401/401/404; the BFF pairs (400 `invalid` on a malformed address with
+  nothing created, 401 on an invented code, 401 vs 404 on the save route);
+  in the user's Chrome, rendered text with the catalogue-only control at 0:
+  the gate is one field and two buttons, the door opened for the owner with
+  its five choices and no `<video>`. NOT provable here: a real mail arriving
+  and being clicked — it needs the Supabase Magic Link template
+  (docs/ONBOARDING.md §5) and a mailbox; the first real sign-up through the
+  gate is the acceptance run. Pre-existing and not this batch's: the
+  `history.test.ts` ZWNJ contradiction (recorded earlier today) and the
+  `SpeakersDirectory.account` case that is red under full-suite load and
+  green alone (the selectMenuWidth class).
+  db 223 migrations · core 1866 tests (1 pre-existing red) · web 1631 tests +
+  gate + sweep.

@@ -429,6 +429,44 @@ its server, pointed the other way, and the model would have called it.
 
 ---
 
+## 7h. Deployment record — 2026-09-15, night (5971511 + 7747e93: M54, db/0223)
+
+A migration first (§5): `0223_a_person_arrives_into_their_own_workspace`
+applied from this laptop through the `.env` loader (the `#` in the owner
+password — see 7f) — its self-checks ran on production and rolled their probe
+back; then the fixture-scoped suite against production: **72 files PASS, "the
+wall holds"**, 127 at 20 checks against the live door. Read afterwards at
+owner altitude (counts only): 3 orgs, all `team`; no intake org marked
+(= B2C mode); 14 active humans and 6 agent seats backfilled as onboarded, the
+2 disabled accounts not; both new triggers present; neither new definer door
+executable by PUBLIC.
+
+Then §3 for core at 7747e93: archive 24 642 612 bytes, sha256 `5dc55de4…`
+equal on both ends; markers on disk before restarting (`/v1/me/onboarding`
+×1 in server.ts, `hasOnboarding` ×3 in members.ts); `pnpm install` had
+nothing to do; both entrypoints parse under strip-types; both units `active`,
+`/health` `{"ok":true}`, no warnings in the minute after; the pair at the
+server: `PATCH /v1/me/onboarding` **401**, `/v1/me` **401**, `/v1/nonsense`
+**404**.
+
+Web on Vercel from the same push. Probed from outside: `/fa/sign-up` 307 →
+`/fa/sign-in`; `/fa/onboarding` signed out 307 → sign-in; `POST
+/api/auth/otp` with a malformed address 400 `invalid` (GoTrue's own
+sentence, nothing created), with no body 400 `bad_body`; `POST
+/api/auth/otp/verify` with an invented address 401 `invalid`; `PATCH
+/api/me/onboarding` signed out 401 against `/api/nonsense` 404. In the
+user's Chrome, rendered text (script text rejected, catalogue-only control 0):
+the gate is one email field with «ادامه» and «ورود با گذرواژه» and nothing
+else; on Home the first-run door opened for the owner with its five choices,
+«همین حالا امتحان کن» / «بعداً», no `<video>` and the «coming soon» line.
+
+**Operator step outstanding:** the Supabase Magic Link template
+(docs/ONBOARDING.md §5). Until it is changed, the mail carries neither our
+link nor the code — the gate is correct in code and unreachable in
+configuration.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
