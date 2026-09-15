@@ -6945,3 +6945,53 @@ sessions) for the cross-session narrative.
   and the first minted key is the screen's own proof.
   db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
   web 1587 tests + gate + sweep.
+
+- 2026-09-15 (last — THE FOUR RULINGS FROM THE USER'S OWN SCREENSHOTS, AND
+  THE WALK OVER EVERY PAGE; commits d82459d, 8ff9339): "in case of third
+  sub menu the tasks page style is the default; we still have size font
+  problem; all tables prefer to fit in the page; make the gap on the sides
+  lesser; the search bar in meeting should be attached to the side like the
+  buttons on top of it; check all the pages, all the sub pages … finish this
+  front end once and for all." Four decisions were put to the user before
+  anything was applied platform-wide, and the answers are the design:
+  **tables never scroll sideways** ("sideways scroll is not the problem when
+  it's vertical; avoid those"), **fix the fonts** (left to judgement), **every
+  in-page search joins its row's edge**, **side gaps «small»** (~1% / ~3%).
+  **Tables fit.** `DataTable` wore `min-w-max`, which let every column keep
+  its natural width and pushed the table past its wrapper into a sideways
+  scroll — the speakers page's scrollbar in the screenshot. It is `w-full`
+  now and its cells wrap (`break-words`), so a table fits its column and
+  grows down; the cell inset came down (`px-3 py-2.5`), the row gap 8 → 6,
+  and the cell type is the DETAIL role (12.5 at the 16px root) — a row reads
+  as a list row, not a card. The gap test pinned the old `8px` literally and
+  went red for the right reason about the wrong thing; it reads the band
+  from the stylesheet now and fails only when a take-back is left behind,
+  verified red exactly there.
+  **Fonts.** The fluid root enlarged a 1920 monitor by an eighth and a 2560
+  one by a quarter, and every reading the user sent said "too big".
+  Re-pitched to `clamp(14px, 12.5px + 0.2vw, 16.5px)`: 15.1 at 1280, 16.3 at
+  1920, 16.5 at 2560 — still fluid, the ceiling beside the reference's fixed
+  16, a monitor no longer a magnified laptop.
+  **Gutters** 2% / 7% → 1% / 3%, floor 28 → 24. **Search**: the meetings
+  search moved from mid-row to the END group under «جلسه جدید» beside the
+  view switch, in the compact field; integrations and the console took the
+  same place and size; recorded in the kit and pinned by two tests (the
+  meetings one verified red by moving the group off the edge — and its first
+  draft named the view switch by an invented label; the catalogue says
+  «فهرست»). **A third row** is row two's rail; the tasks page is the default.
+  **THE WALK, on production through the iframe instrument**: twenty-eight
+  pages at 1280 — home, meetings, tasks, projects, chat, workflows, agents,
+  integrations, conversations, profile, help, assistant, the console, ten
+  management sections, five settings sections — and the table pages again at
+  1920, 2560, 768 and 430. Every reading: **zero elements past the viewport
+  on every page at every width; every table EXACTLY its wrapper's width with
+  no scroll** (779/779 at 1280, 1194/1194 at 1920, 1615/1615 at 2560,
+  621/621 at 768, 402/402 at 430); root 15.06 / 16.34 / 16.5 / 14.04 / 14;
+  the gutter 23–25 on list and form pages at 1280 and 29 on the hub pages
+  (the one structure the user exempted), 38 at 1920, 52 at 2560; the table
+  cell type 11.77px at 1280 (= 0.78125rem); rails on every page with a
+  sub-menu and none on the hub; zero pills in the retired coat; the three
+  in-page searches compact and at the edge; button heights 26 / 32 / 36 at
+  1280 and 29 / 35 / 39 at 1920 — one family, scaled.
+  db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
+  web 1589 tests + gate + sweep.
