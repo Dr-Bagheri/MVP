@@ -6580,3 +6580,59 @@ sessions) for the cross-session narrative.
   db 207 migrations · web tests: Summary + keys green (full suite has 4
   pre-existing reds, unrelated — Meetings' `api.orgPeople` mock and copy.guard's
   `scheduleMeetingSubtitle`).
+
+- 2026-09-15 (THE TREES BECOME ONE, AND THE SERVER CATCHES UP WITH THE WEB;
+  commit c39a8a3; core + ml deployed; db 0218–0222 on production): the user
+  brought the finished tree from the other PC as a bare folder (no `.git`,
+  nothing gitignored) and asked for main to BE that folder, as one commit on
+  `05fe3e4`. Done as a whole-tree replacement: hard reset, every tracked file
+  removed with `git rm`, the folder copied in with `robocopy /E` (never
+  `/MIR` — a mirror would have deleted `.git`), `.env` / `node_modules` /
+  `ml/models` untouched. 382 files — 99 A, 258 M, 22 D, 3 R — with the
+  deletions exactly `web/src/components/platform/{Dashboard*,dashboard/*,
+  meeting/*}` plus four in `web/src/lib`, zero CR-only diffs, and the
+  `0132 → 0154` migration rename visible as a rename. The twelve untracked
+  files this laptop had (the 2026-09-15 local-setup batch: `.env.example`,
+  `scripts/dev.mjs`, `db/scripts/first-org.mjs`, `db/scripts/lib/dotenv.mjs`,
+  `docs/LOCAL-SETUP.md`, a different `0218`) were REMOVED on the user's
+  instruction — left in place, `git add -A` would have swept a second `0218`
+  into the commit beside the folder's. **That batch is the one capability
+  not in main now**; rebuilding it is the user's call. The Desktop's other
+  copy (`Desktop/MVP`, ec80385, 92 migrations) is a clean ancestor of main
+  with nothing uncommitted and contributes nothing; `Desktop/new-version`
+  was deleted by the user after the transfer.
+  **The laptop had no git identity** — the first commit attempt failed; a
+  repo-local `user.name`/`user.email` was set to the existing commits' author.
+  **PRODUCTION IS THE `.env` PROJECT.** The Hetzner `core.env` names
+  `icnbeprlqqjojwjzjdgj` (SUPABASE_URL and the app-role URL alike), and this
+  laptop's `.env` carries that project's OWNER string — so the migration half
+  of the deploy ran from here: `repair-ledger-0154.mjs` (the ledger held the
+  renumbered file under `0132`), `migrate` (0218–0222), `test` (71 files,
+  1007 checks, all PASS). The trap on the way: **the owner password contains
+  `#`, and Node's `--env-file` treats `#` in an unquoted value as a comment**
+  — 48 of 111 characters arrived, and the first probe read as "the URL is
+  doubled" until the lengths were compared; the repair script also hands the
+  URL to `pg` raw, which rejects a raw `#`. Driven through a scratchpad
+  runner that loads `.env` whole and percent-encodes the password the way
+  `db.mjs`'s `normalizeDbUrl` does. The seed/repair scripts look for a root
+  `.env.dev`; this machine has `.env`.
+  **THE «NOT FOUND» WAS THE WEB AHEAD OF THE SERVER.** The user pressed
+  «Create demo organization» on the platform console and got «not found»:
+  Vercel had built the web from the push within minutes, while the core on
+  Hetzner still ran the 05fe3e4-era tree (0217 present, `demo-orgs.ts`
+  absent), so the BFF's `POST /v1/platform/demo-orgs` met Fastify's 404 —
+  identical to `/v1/nonsense`, while `/v1/me` gave the 401 that proved the
+  api was up. Settled by the numbers before anything else: the screenshot
+  said 11 users, the local database 15, and nothing listened on :3100/:8080
+  here, so the report was about production. Deployed per runbook §3 (record
+  §7f): archive with matching hashes, install, both entrypoints under
+  strip-types, ml rebuilt WITH the dist marker checked, restart, health in
+  1 s, zero level≥40 journal lines; the pair reads 401/404/401 at all three
+  altitudes (server, api.neurai.pt, the app.neurai.pt BFF). The demo seed
+  itself was NOT pressed — it writes an organisation into production.
+  Tooling facts for this laptop, in memory: the server key is
+  `~/.ssh/neurai_claude` (the runbook's `neurai_hetzner` does not exist
+  here; `id_ed25519` is the GitHub key); the `.env` runner recipe above.
+  db 222 migrations · core 1575 tests · web 1402 tests + gate + sweep
+  (the other machine's counts; not re-run here — pnpm install and the db
+  suite were).

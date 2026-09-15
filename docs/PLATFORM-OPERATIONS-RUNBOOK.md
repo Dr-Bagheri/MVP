@@ -349,6 +349,59 @@ proposals, model-composed briefs.
 
 ---
 
+## 7f. Deployment record — 2026-09-15 (the other machine's tree lands: c39a8a3)
+
+Commit `c39a8a3` is the whole tree built on the other PC, applied on top of
+`05fe3e4` as ONE commit (382 files: 99 added, 258 modified, 22 deleted, 3
+renamed — the dashboard and the old meeting stage removed on purpose). Vercel
+built the web from the push at once; core and ml were deployed by this
+procedure four hours later, from the Asus laptop — whose server key is
+`~/.ssh/neurai_claude`, not `neurai_hetzner` (§2: the key is a property of
+the machine).
+
+**Schema first, and it was already done.** Production's Supabase project is
+the one this laptop's `.env` names (`icnbeprlqqjojwjzjdgj`), so the owner
+connection for §4 was at hand — with one trap: its password contains `#`.
+Node's `--env-file` cuts an unquoted value at `#` (48 characters arrived of
+111), and `repair-ledger-0154.mjs` hands the URL to `pg` raw, so the scripts
+were driven through a small loader that reads `.env` whole and percent-encodes
+the password exactly as `db.mjs`'s `normalizeDbUrl` does (there is no
+`.env.dev` on this machine; that is the file the seed/repair scripts look for).
+  1. `node db/scripts/repair-ledger-0154.mjs` → `renamed
+     0132_the_sweeps_get_their_indexes → 0154_…` — the ledger still held the
+     file under its old number; without it `migrate` re-runs the file and
+     fails on indexes that already exist.
+  2. `node db/scripts/db.mjs migrate` → applied 0218–0222; ledger 222 rows.
+  3. `node db/scripts/db.mjs test` (fixture-only, nothing dropped) → 71
+     files, 1007 checks, all PASS — "the wall holds".
+
+Then §3 exactly: `git archive` of c39a8a3 (24.6 MB; sha256 `6190f903…`
+identical on both ends) → extract over `/opt/neurai/app` → chown →
+`pnpm install --frozen-lockfile` (3.2 s; the only new packages are the
+web's `react-markdown`/`remark-gfm`) → `api/main.ts` AND `worker/main.ts`
+parsed with `--experimental-strip-types --check` → ml rebuilt with
+`node node_modules/typescript/bin/tsc -p tsconfig.json` and the emitted
+`dist/src/config.js` checked for the new marker (`int(90 * 60 * 1000)`
+present, the old 35-minute one absent — the 2026-09-10 rule: read the
+artifact, never the exit code) → restart ml, api, worker. No env name is new
+since 05fe3e4, so `core.env` was not touched. Health 200 after 1 s; ml's
+health names `sherpa-eres2netv2`; the worker started at concurrency 2; zero
+level≥40 lines in the three journals afterwards.
+
+**The discriminating pair at three altitudes** — on the server, through
+`api.neurai.pt`, and through `app.neurai.pt`'s BFF: `/v1/platform/demo-orgs`
+**401** beside `/v1/nonsense` 404 and `/v1/me` 401; on the BFF
+`/api/platform/demo-orgs` 401, `/api/nonsense` 404, an empty POST 400. Before
+this deploy the same route answered 404 at every altitude, which is exactly
+what the platform console's «not found» on «Create demo organization» was:
+the web had shipped ahead of the server, and a no-such-route nothing reads
+as a no-such-feature nothing from a browser.
+
+Not done here, on purpose: the demo seed itself was not pressed (it writes
+an organisation into production — the operator's button).
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
