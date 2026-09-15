@@ -38,7 +38,7 @@ import { SPEAKER_TONES } from "./Review";
  * The interim fragment is drawn muted and unstamped, because it is not yet a
  * row: the provider can and does revise it.
  */
-export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded = false, footRoom = false }: {
+export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded = false }: {
   rows: readonly CaptionRow[];
   /** the fragment the provider has not finalised — may still change */
   interim: string;
@@ -51,26 +51,18 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded
    */
   lane: "off" | "down" | "on";
   locale: string;
-  /**
-   * KEEP THE FLOOR CLEAR, for something that floats over it.
-   *
-   * The stage's recall cards (item 7) are absolutely placed at this box's
-   * bottom so that a card arriving mid-sentence cannot reflow the words
-   * somebody is mid-way through reading. But this scroller auto-follows to the
-   * bottom, so the newest captions — the ones being spoken — were landing
-   * exactly underneath the card stack and could not be read at all. (These
-   * cards were first built to float over a whiteboard, where there was nothing
-   * to cover.)
-   *
-   * So the room is reserved for the WHOLE take rather than only while a card is
-   * up: padding that appeared and vanished with the stack would reflow the
-   * transcript on every arrival, which is the thing the absolute placement
-   * exists to prevent. The cost is a quiet gap under the last line; the
-   * alternative is words nobody can see.
-   *
-   * Three cards is the cap (`lib/liveRecall.ts`), so this is sized for three.
+  /*
+   * NO FLOOR IS RESERVED (user report, 2026-09-15: "when the record started
+   * [it] went to scroll mode and showed me the bottom of it and i didnt see
+   * the text"). There used to be a `footRoom` prop here — 224px of bottom
+   * padding held for the whole take, so that the recall cards floating over
+   * this box's FOOT could never cover the newest line. On a laptop the box is
+   * ~300px tall, so the padding WAS the box: the follow pinned to the bottom,
+   * the bottom was empty, and the words sat above the fold from the very
+   * first row. The cards float over the box's TOP corner now (RecallCards.tsx,
+   * over the oldest lines), the newest line is the last thing in the
+   * scroller, and that is exactly what `useThreadFollow` pins to.
    */
-  footRoom?: boolean;
   /**
    * INSIDE THE STAGE CARD.
    * A tile nested in a tile is two frames around one thing, so the embedded
@@ -93,7 +85,7 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded
       <div
         ref={follow.scrollerRef}
         onScroll={follow.onScroll}
-        className={`scroll-quiet min-h-0 flex-1 overflow-y-auto pe-1${footRoom ? " pb-56" : ""}`}
+        className="scroll-quiet min-h-0 flex-1 overflow-y-auto pe-1"
       >
         {/* ONE wrapper, because the follow watches exactly one element: the
             interim line grows and shrinks between renders, and a sibling of

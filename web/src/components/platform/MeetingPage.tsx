@@ -706,11 +706,7 @@ function LiveTake({ engine, live, starting, locale, meetingId, isHost, liveText 
   const recall = useLiveRecall(meetingId, liveText, isHost && live);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* `relative`: the recall cards are absolutely placed over this box's
-          own bottom corner — they must not push the scope, the clock or the
-          transcript, because a card arriving mid-sentence that reflows the
-          words somebody is reading is worse than the card is good */}
-      <section className="tile relative flex min-h-0 flex-1 flex-col items-center gap-3 p-5" aria-label={t("stage_hold")}>
+      <section className="tile flex min-h-0 flex-1 flex-col items-center gap-3 p-5" aria-label={t("stage_hold")}>
         {/*
           THE LIGHT IS SAID ONCE.
           It was said twice — the top bar's on-air pill and a second line
@@ -727,25 +723,37 @@ function LiveTake({ engine, live, starting, locale, meetingId, isHost, liveText 
         {!live && !starting ? (
           <p className="text-sm font-medium text-fg-muted">{t("statusReady")}</p>
         ) : null}
-        <div className="w-full max-w-3xl">
-          {/*
-            THE SCOPE GLOWS FOR `recording`, NOT FOR `live` — a paused take
-            is still a take, and `live` says so, but nothing is reaching the
-            microphone. A halo over a stopped recorder is the same lie the
-            pill's pulsing dot is forbidden to tell.
-          */}
+        {/*
+          THE BAR, NOT THE HALL (user directive, 2026-09-15: "the recording
+          bar … make it smaller like the last image, something small and
+          clean"). The scope stood 112px tall over a 30px clock, and the
+          transcript got whatever was left — on a laptop, three lines. It
+          wears the record page's own player bar now (Review.tsx: play ·
+          label · strip · time, one `.card` row): a 32px strip with the clock
+          inline at its end, so the two instruments read as ONE thing across
+          the finish line, and the words get the height the scope was
+          spending on itself. `dir="ltr"` for the reason the player has it —
+          time runs left-to-right in both locales, and the newest bar is the
+          right edge.
+
+          THE SCOPE GLOWS FOR `recording`, NOT FOR `live` — a paused take is
+          still a take, and `live` says so, but nothing is reaching the
+          microphone. A halo over a stopped recorder is the same lie the
+          pill's pulsing dot is forbidden to tell.
+        */}
+        <div className="card flex w-full max-w-3xl items-center gap-3 px-3 py-2" dir="ltr">
           <WaveScope
             wave={engine.wave}
             level={engine.level}
             live={engine.phase === "recording"}
-            className="h-28"
+            className="wave-scope-strip h-8 min-w-0 flex-1"
           />
+          {/* the clock is the take's own length, in the page's digits; ONE
+              LINE, the way the player's time is (`badge-num`) */}
+          <span className="badge-num shrink-0 text-xs font-medium tabular-nums text-fg">
+            {formatClock(Math.floor(engine.recordedMs / 1000), locale)}
+          </span>
         </div>
-        {/* the clock is the take's own length, in the page's digits and always
-            left-to-right: a duration is not a sentence */}
-        <p dir="ltr" className="text-3xl font-bold tabular-nums text-fg">
-          {formatClock(Math.floor(engine.recordedMs / 1000), locale)}
-        </p>
         {/* THE MIX, said only when it is WRONG. The engine knows when the
             microphone has gone quiet or is clipping, and a red light over a
             recording of nothing is the worst shape a fault can take here. */}
@@ -761,25 +769,27 @@ function LiveTake({ engine, live, starting, locale, meetingId, isHost, liveText 
           it, which is what makes the pair readable while somebody is talking,
           and it is what fills the empty half the card used to show.
         */}
-        <LiveTranscript
-          rows={engine.captionRows}
-          interim={engine.captions?.interim ?? ""}
-          speakers={engine.liveSpeakers}
-          lane={lane}
-          locale={locale}
-          embedded
-          /* the recall cards float over this box's bottom — reserve their room
-             for the whole take so the newest captions are never underneath
-             them, and so a card's arrival never reflows the words */
-          footRoom={isHost && live}
-        />
+        {/* `relative`: the recall cards float over the TRANSCRIPT's own top
+            corner (2026-09-15, moved from the stage's foot — RecallCards.tsx
+            says why) and push nothing: not the bar above, not the words
+            below. The transcript reserves no room for them any more. */}
+        <div className="relative flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+          <LiveTranscript
+            rows={engine.captionRows}
+            interim={engine.captions?.interim ?? ""}
+            speakers={engine.liveSpeakers}
+            lane={lane}
+            locale={locale}
+            embedded
+          />
 
-        {/* ── the second brain (item 7) ───────────────────────────────────
-            «این را قبلاً تصمیم گرفته بودیم» — a decision from an earlier
-            meeting, surfaced while the room is still talking about it. Renders
-            nothing at all when there is nothing to recall, so the gate above is
-            the only thing that decides whether this is here. */}
-        <RecallCards cards={recall.cards} onDismiss={recall.dismiss} />
+          {/* ── the second brain (item 7) ─────────────────────────────────
+              «این را قبلاً تصمیم گرفته بودیم» — a decision from an earlier
+              meeting, surfaced while the room is still talking about it.
+              Renders nothing at all when there is nothing to recall, so the
+              gate above is the only thing that decides whether this is here. */}
+          <RecallCards cards={recall.cards} onDismiss={recall.dismiss} />
+        </div>
       </section>
     </div>
   );

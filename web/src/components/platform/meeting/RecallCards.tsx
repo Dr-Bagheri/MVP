@@ -33,10 +33,17 @@ export function RecallCards({ cards, onDismiss }: {
   if (cards.length === 0) return null;
 
   return (
-    /* absolutely placed over the stage's own corner: it must not push the
-       board or the room, because a card arriving mid-stroke that reflows the
-       canvas is worse than the card is good */
-    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-20 flex flex-col gap-2">
+    /* absolutely placed over the transcript's TOP-END corner (moved from the
+       stage's foot, 2026-09-15): it must not PUSH the words — a card arriving
+       mid-sentence that reflows the line somebody is reading is worse than the
+       card is good — and it must not COVER the newest line either, which is
+       what floating at the foot did (the transcript reserved 224px under its
+       last line for these, and on a laptop that reservation was the whole
+       box). The oldest lines are the ones a listener has already read, so a
+       stack over their line-ends costs the least. `end-0` is the far side of
+       the reading direction in both locales; `top-10` clears the box's own
+       header line. */
+    <div className="pointer-events-none absolute end-0 top-10 z-20 flex w-80 max-w-full flex-col gap-2">
       {cards.map((card) => (
         <div key={card.id}
           className="card-row pointer-events-auto flex items-start gap-2.5 bg-surface/95 backdrop-blur">

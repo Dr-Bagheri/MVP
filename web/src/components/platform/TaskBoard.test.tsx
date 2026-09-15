@@ -687,3 +687,68 @@ describe("«مهلت امروز» is the platform's today (2026-09-06)", () => {
     expect(screen.queryByText("دیروزِ سکو")).toBeNull();
   });
 });
+
+describe("a card carries its own delete, and a column carries none (2026-09-15)", () => {
+  /*
+   * User directive: "remove the delete button for the columns so you have
+   * solid columns always, and add the small delete icon on the tasks cards".
+   * A column is structure; a card is a thing. Asserted as a PAIR — the
+   * column's control GONE and the card's PRESENT — because either half alone
+   * passes against a version that merely lost every trash icon on the page.
+   */
+  const cardOf = (title: string): HTMLElement =>
+    screen.getByText(title).closest("[role=button]") as HTMLElement;
+
+  it("shows the trash on a card the reader may delete, and on no column header", async () => {
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo", created_by: "u-me" })];
+    render(<TaskBoard />);
+    await screen.findByText("اجرای اسکریپت");
+
+    const header = columnRegion("برای انجام").querySelector("header") as HTMLElement;
+    expect(within(header).queryByRole("button", { name: /بایگانی/ })).toBeNull();
+    expect(within(cardOf("اجرای اسکریپت")).getByRole("button", { name: "حذف تسک" })).toBeInTheDocument();
+  });
+
+  it("asks first in the platform's dialog — a no deletes nothing, a yes deletes and re-reads the board", async () => {
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo", created_by: "u-me" })];
+    render(<TaskBoard />);
+    await screen.findByText("اجرای اسکریپت");
+    const readsBefore = boardReads;
+
+    await userEvent.click(within(cardOf("اجرای اسکریپت")).getByRole("button", { name: "حذف تسک" }));
+    const title = await screen.findByText("تسک «اجرای اسکریپت» حذف شود؟");
+    const dialog = title.closest("[role='alertdialog'], [role='dialog']") as HTMLElement;
+    /* the press opened the dialog and touched nothing: the card is still on
+       the board and the detail panel did not open under it */
+    expect(boardTasks).toHaveLength(1);
+    await userEvent.click(within(dialog).getByRole("button", { name: "انصراف" }));
+    await waitFor(() => expect(screen.queryByText("تسک «اجرای اسکریپت» حذف شود؟")).toBeNull());
+    expect(boardTasks).toHaveLength(1);
+    expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument();
+
+    await userEvent.click(within(cardOf("اجرای اسکریپت")).getByRole("button", { name: "حذف تسک" }));
+    const again = (await screen.findByText("تسک «اجرای اسکریپت» حذف شود؟"))
+      .closest("[role='alertdialog'], [role='dialog']") as HTMLElement;
+    await userEvent.click(within(again).getByRole("button", { name: "حذف برای همیشه" }));
+    /* gone from the wire AND from the screen, by a re-read rather than a
+       hopeful splice */
+    await waitFor(() => expect(screen.queryByText("اجرای اسکریپت")).toBeNull());
+    expect(boardTasks).toHaveLength(0);
+    expect(boardReads).toBeGreaterThan(readsBefore);
+  });
+
+  it("offers a member no trash on a colleague's card — the door (0162) would refuse it", async () => {
+    ME = { id: "u-me", org_name: "نورای", role: "member" };
+    boardTasks = [
+      card({ id: "t-1", title: "کارت خودم", column_id: "col-todo", created_by: "u-me" }),
+      card({ id: "t-2", title: "کارت همکار", column_id: "col-todo", created_by: "u-other" }),
+    ];
+    render(<TaskBoard />);
+    await screen.findByText("کارت همکار");
+
+    /* the control: their OWN card still carries it, so "no trash" is a
+       decision and not a missing feature */
+    expect(within(cardOf("کارت خودم")).getByRole("button", { name: "حذف تسک" })).toBeInTheDocument();
+    expect(within(cardOf("کارت همکار")).queryByRole("button", { name: "حذف تسک" })).toBeNull();
+  });
+});

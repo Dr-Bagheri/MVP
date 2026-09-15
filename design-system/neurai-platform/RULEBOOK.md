@@ -465,6 +465,18 @@ loosened rule — and the user's "except this part" is what puts one there.
   column.
 - **Solid =** `board.guard.test.ts`: both boards import the module, neither
   spells the six literals, and the module still says them (the control).
+- **The card's delete, and the column's none** (user ruling 2026-09-15:
+  "remove the delete button for the columns so you have solid columns
+  always, and add the small delete icon on the tasks cards and projects
+  cards"): a column is STRUCTURE and its header carries no delete; a card is
+  a THING and carries `BoardCardDelete` from the same module — the theme's
+  `.btn-icon`, subtle until the pointer reaches it and red under it, opening
+  the platform's one confirm dialog and never the write. Rendered only for a
+  reader the door admits (a task: its creator or an admin, db/0162; a
+  project: an admin, db/0191) — a control the server would refuse is worse
+  than none. Pinned by `TaskBoard.test` and `Projects.test` as the PAIR:
+  header without, card with; a member with their own and without a
+  colleague's. The archive door for a column stays on the server.
 - **Open under this rule:** the column name is still an unstyled rename-in-
   place button; the header's acts on projects are read-only by design (a
   column is edited on the board that owns it).
@@ -777,6 +789,31 @@ breakpoint, and each was invisible from a desktop:
   steps, both composite-equals-token pairs, and the quiet sheet's position as a
   relationship — verified red by restoring the shipped values, which fails 3
   pairs and exits 1, each naming its own defect.
+
+### R24 · Audio bars — the player and the recorder are ONE row — FIXED (2026-09-15), pinned
+
+- **The rule:** wherever a take is heard or made, it is a single `.card`
+  row: `flex items-center gap-3 px-3 py-2`, `dir="ltr"` (time runs
+  left-to-right in both locales), a 32px strip filling the width, the time
+  inline at the strip's end as `badge-num` tabular digits. The record page's
+  player (Review.tsx: play · label · strip · time · download · speed) and
+  the live stage's recorder (MeetingPage.tsx: strip · clock, the scope in
+  its `.wave-scope-strip` form — no tint, no vignette, the bar's own corner)
+  wear it. NO HALL: the scope stood as a 112px letterbox over a 30px clock
+  and the transcript got what was left, which on a laptop was three lines.
+- **What was measured:** the user's own screenshots, 2026-09-15 — the
+  player bar ("something small and clean") beside the recording stage ("the
+  recording bar … i dont like").
+- **Pinned by:** `MeetingPage.test` ("draws the take as ONE bar") and
+  `meeting/AudioBar.test`; a `text-3xl` clock or an `h-28` scope on the
+  stage is red.
+- **With it, the words:** the live transcript reserves NO floor under its
+  last line (the follow pins to the bottom, so the bottom must be the
+  words); the recall cards float over the transcript's TOP-END corner in a
+  320px stack, over the lines a listener has already read. Pinned by the
+  same file ("reserves NO floor …") and `LiveTranscript.test`.
+- **Open under this rule:** the calls page's player (calls/[id]) is the same
+  family and was not re-measured this round.
 
 ## Bugs found while measuring (not rules — fixes)
 

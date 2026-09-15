@@ -1813,6 +1813,17 @@
    nothing the filter did not already cost and removes the edge; the
    hysteresis in WaveScope.tsx is what stops it being asked for in the
    first place. */
+/* THE STRIP (2026-09-15): the same scope at the height of a player bar's
+   waveform. The frame's decorations are sized for a 112px hall — a 70px
+   inset vignette on a 32px box is a box that is all vignette — so the strip
+   keeps the lanes, the glow and the grain and drops the frame: no tint, no
+   vignette, the bar's own corner. It sits INSIDE a `.card` row (the meeting
+   page's recording bar), which supplies the ground. */
+.wave-scope.wave-scope-strip {
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+}
 .wave-scope { transition: filter 260ms ease-out; }
 .wave-scope[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .20)); }
 .wave-scope[data-glow="2"] {

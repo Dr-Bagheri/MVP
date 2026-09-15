@@ -673,3 +673,53 @@ describe("a refused write keeps the dialog (2026-09-06)", () => {
     expect(within(dialog).getByRole("button", { name: /ساخت پروژه/ })).not.toBeDisabled();
   });
 });
+
+describe("a project card carries its own delete (2026-09-15)", () => {
+  /*
+   * User directive: "add the small delete icon on the tasks cards and
+   * projects cards". The same control the task board's card wears
+   * (BoardCardDelete, R17's one module), on every view that shows a project
+   * — and for an ADMIN only, because deleting a project is (0191); a member
+   * is offered nothing rather than a control the server would refuse.
+   */
+  it("shows an admin the trash on the kanban card and on the list row, and a member neither", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+    const cardEl = screen.getByText("پروژهٔ الف").closest("a") as HTMLElement;
+    expect(within(cardEl).getByRole("button", { name: "حذف" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "لیست" }));
+    const row = (await screen.findByText("پروژهٔ الف")).closest("a") as HTMLElement;
+    expect(within(row).getByRole("button", { name: "حذف" })).toBeInTheDocument();
+
+    cleanup();
+    render(<Projects isAdmin={false} meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+    expect(screen.queryByRole("button", { name: "حذف" })).toBeNull();
+  });
+
+  it("asks in the platform's dialog — a no deletes nothing, a yes deletes exactly that project", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    await userEvent.click(screen.getByRole("button", { name: "حذف" }));
+    const dialog = (await screen.findByText("حذف پروژه؟"))
+      .closest("[role='alertdialog'], [role='dialog']") as HTMLElement;
+    /* the body names what STAYS — the folder and the room — because that is
+       what decides whether the press is safe */
+    expect(within(dialog).getByText(/پوشهٔ آن‌ها روی برد می‌ماند/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "انصراف" }));
+    await waitFor(() => expect(screen.queryByText("حذف پروژه؟")).toBeNull());
+    expect(deleted).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "حذف" }));
+    const again = (await screen.findByText("حذف پروژه؟"))
+      .closest("[role='alertdialog'], [role='dialog']") as HTMLElement;
+    await userEvent.click(within(again).getByRole("button", { name: "حذف" }));
+    await waitFor(() => expect(deleted).toEqual(["p-a"]));
+  });
+});

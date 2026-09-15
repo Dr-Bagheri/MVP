@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconPlus } from "@/components/icons";
+import { IconPlus, IconTrash } from "@/components/icons";
 import { TONE_DOT } from "../tasks/TaskDialogs";
 
 /**
@@ -81,6 +81,44 @@ export function BoardAddRow({ label, onClick }: { label: string; onClick: () => 
     >
       <IconPlus width={12} height={12} />
       {label}
+    </button>
+  );
+}
+
+/**
+ * THE CARD'S OWN DELETE (user directive, 2026-09-15: "remove the delete
+ * button for the columns so you have solid columns always, and add the small
+ * delete icon on the tasks cards and projects cards").
+ *
+ * A column is the board's STRUCTURE and structure is not deleted from a
+ * header; a card is a THING and carries its own. It is the theme's icon
+ * control (R4's `.btn-icon`), quiet until the pointer reaches it and red under
+ * it — and it never deletes by itself: the press hands the card to the
+ * platform's ONE confirm dialog (confirm.guard). It stops the press where it
+ * lands, in both senses: the card around it opens on click and lifts on hold,
+ * and a delete that also opened the card would put the dialog under a panel;
+ * on the projects board the card is an anchor, so the default is prevented
+ * too. Rendered by BOTH boards from this module (R17) — a trash drawn twice
+ * is the pair that stops matching.
+ *
+ * `-my-1`: the control is 28px tall beside a 20px title line; the negative
+ * margins keep the row the line's height, so a card with the icon is not
+ * taller than a card without it.
+ *
+ * The CALLER decides whether to render it: on the task board a card's delete
+ * is the creator's or an admin's (db/0162), on the projects board an admin's
+ * (db/0191) — and a control the server would refuse is worse than none.
+ */
+export function BoardCardDelete({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
+      className="btn btn-icon -my-1 shrink-0 text-fg-subtle hover:text-danger"
+    >
+      <IconTrash width={12} height={12} />
     </button>
   );
 }

@@ -17,7 +17,7 @@ import { TaskDetail } from "./tasks/TaskDetail";
 import {
   BOARD_ADD_COLUMN, BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
   BOARD_CARD_SLOT, BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE,
-  BoardAddRow, BoardSlot,
+  BoardAddRow, BoardCardDelete, BoardSlot,
 } from "./board/boardStyle";
 import { ProjectDialog } from "./ProjectDialog";
 import { TopicNameBox } from "./TopicNameBox";
@@ -114,7 +114,8 @@ export function TaskBoard() {
      reason the button moved into the column. */
   const [creating, setCreating] = useState<string | null>(null);
   const [openTask, setOpenTask] = useState<TaskDetailRecord | null>(null);
-  const [condemnedColumn, setCondemnedColumn] = useState<TaskColumnRecord | null>(null);
+  /* the card about to be deleted — the dialog is the only way to the write */
+  const [condemnedTask, setCondemnedTask] = useState<TaskCardRecord | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [toneMenu, setToneMenu] = useState<string | null>(null);
   const draggedColumn = useRef<string | null>(null);
@@ -685,17 +686,13 @@ export function TaskBoard() {
                   <span className={BOARD_COUNT}>
                     {digits(columnCards(col.id).length, locale)}
                   </span>
-                  <button
-                    type="button"
-                    aria-label={t("archiveColumn", { name: seededName(col.name) })}
-                    title={t("archiveColumn", { name: seededName(col.name) })}
-                    onClick={() => setCondemnedColumn(col)}
-                    /* 2026-09-03: the theme's icon control — an icon-only
-                       button is exactly what `.btn-icon` is measured for */
-                    className="btn btn-icon text-fg-subtle hover:text-danger"
-                  >
-                    <IconTrash width={12} height={12} />
-                  </button>
+                  {/* NO DELETE ON A COLUMN (user directive, 2026-09-15:
+                      "remove the delete button for the columns so you have
+                      solid columns always"). A column is the board's
+                      structure; a card is a thing and carries its own delete
+                      (Card, below). The archive door stays on the server — a
+                      column is still a row somebody can retire — but not
+                      from here. */}
                 </span>
               </header>
 
@@ -727,6 +724,11 @@ export function TaskBoard() {
                     onCancel={() => setLifted(null)}
                     onOpen={() => openDetail(task.id)}
                     onToggleDone={(done) => void patchTask(task.id, { done })}
+                    /* the creator's or an admin's (0162) — nobody else is
+                       offered a control the door would refuse */
+                    onDelete={isAdmin || (me !== null && task.created_by === me.id)
+                      ? () => setCondemnedTask(task)
+                      : undefined}
                   />
                 ))}
                 {/* the full form, opened FROM the column — a card is made
@@ -821,18 +823,22 @@ export function TaskBoard() {
         />
       ) : null}
 
-      {condemnedColumn !== null ? (
+      {/* THE CARD'S DELETE, confirmed in the platform's one dialog — the same
+          words the detail panel uses for the same act (0162: the creator's or
+          an admin's; the door refuses anyone else). The board re-reads on
+          success, so the card is gone the moment the dialog is. */}
+      {condemnedTask !== null ? (
         <ConfirmDialog
-          title={t("archiveColumnTitle", { name: condemnedColumn.name })}
-          body={t("archiveColumnBody")}
-          confirmLabel={t("archiveConfirm")}
+          danger
+          title={t("deleteTaskTitle", { title: condemnedTask.title })}
+          body={t("deleteTaskBody")}
+          confirmLabel={t("deleteConfirm")}
           cancelLabel={t("cancel")}
-          onCancel={() => setCondemnedColumn(null)}
+          onCancel={() => setCondemnedTask(null)}
           onConfirm={() => {
-            const target = condemnedColumn;
-            setCondemnedColumn(null);
-            void api.updateTaskColumn(target.id, { archived: true })
-              .then(load).catch(refusal);
+            const target = condemnedTask;
+            setCondemnedTask(null);
+            void api.deleteTask(target.id).then(load).catch(refusal);
           }}
         />
       ) : null}
@@ -856,7 +862,7 @@ export function TaskBoard() {
 
 /** the reference's card: title, labels, its record, priority, progress —
     and the thing a hand moves (holdDrag: a click opens it, a hold lifts it) */
-function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel, onOpen, onToggleDone }: {
+function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel, onOpen, onToggleDone, onDelete }: {
   task: TaskCardRecord;
   labels: TaskLabelRecord[];
   people: OrgPersonRecord[];
@@ -869,6 +875,10 @@ function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel,
   onCancel: () => void;
   onOpen: () => void;
   onToggleDone: (done: boolean) => void;
+  /** the card's own delete (BoardCardDelete), or nothing — absent for a reader
+      the door would refuse (0162: the creator or an admin), because a control
+      that refuses is worse than none */
+  onDelete?: () => void;
 }) {
   const t = useTranslations("tasks");
   const drag = useHoldDrag({ onLift, onOver, onDrop, onCancel });
@@ -940,6 +950,9 @@ function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel,
         <span className={`min-w-0 flex-1 text-sm leading-5 ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
           {task.title}
         </span>
+        {onDelete !== undefined ? (
+          <BoardCardDelete label={t("deleteTask")} onClick={onDelete} />
+        ) : null}
       </div>
 
       {worn.length > 0 ? (

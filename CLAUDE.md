@@ -6636,3 +6636,61 @@ sessions) for the cross-session narrative.
   db 222 migrations · core 1575 tests · web 1402 tests + gate + sweep
   (the other machine's counts; not re-run here — pnpm install and the db
   suite were).
+
+- 2026-09-15 (evening — THE RECORDING BAR, THE WORDS UNDER IT, AND A CARD
+  THAT CARRIES ITS OWN DELETE; R24, R17 amended): five screenshots and four
+  asks — "make the recording bar smaller like the last image, something
+  small and clean"; "the live transcription … went to scroll mode and
+  showed me the bottom of it and i didnt see the text — the page must
+  always follow the text"; "remove the delete button for the columns so you
+  have solid columns always, and add the small delete icon on the tasks
+  cards and projects cards"; and, standing over all of it, "make the theme
+  perfect and solid so anything added in future follows it".
+  **THE EMPTY SCREEN HAD A PRECISE CAUSE, and it was a reservation.** The
+  transcript's scroller carried `pb-56` — 224px held under the last line for
+  the whole take, so the recall cards floating over the box's FOOT could
+  never cover the newest words. On a laptop the box is ~300px tall, so the
+  reservation WAS the box: `useThreadFollow` pinned to the bottom, the
+  bottom was padding, and the first row sat above the fold from the moment
+  it arrived — the screenshot's scrollbar with nothing under it. The floor is
+  gone; the cards float over the transcript's TOP-END corner instead, in a
+  320px stack over the lines a listener has already read (`RecallCards.tsx`,
+  in a `relative` box shared with the transcript so they can land on neither
+  the bar above nor the stage). Pinned on the PAGE, where the floor was
+  passed in: a scroller with no `pb-` and a stack with `top-` and no
+  `bottom-`, both red by mutation.
+  **THE BAR IS THE PLAYER'S ROW (R24).** The stage stood a 112px scope over
+  a 30px clock and gave the words what was left; it wears Review.tsx's own
+  player bar now — one `.card` row, `dir="ltr"`, a 32px strip filling the
+  width and the clock inline at its end as `badge-num` digits — so the two
+  instruments read as one thing across the finish line. `.wave-scope-strip`
+  drops the frame's decorations (a 70px inset vignette on a 32px box is a
+  box that is all vignette) and keeps the lanes, the glow and the grain.
+  Red by mutation: `h-28` back, `text-3xl` back.
+  **A COLUMN IS STRUCTURE; A CARD IS A THING (R17 amended).** The column
+  header's trash is gone from the task board (the projects board never had
+  one — its columns are the task board's own). `BoardCardDelete` lives in
+  `board/boardStyle.tsx`, the boards' ONE module: the theme's `.btn-icon`,
+  subtle until hovered and red under the pointer, `preventDefault` +
+  `stopPropagation` because a task card opens on click and lifts on hold and
+  a project card is an ANCHOR, and it never writes — the press hands the card
+  to the platform's one confirm dialog with the detail panel's own words.
+  Rendered only for a reader the door admits: a task's creator or an admin
+  (db/0162), a project's admin (db/0191); a control the server would refuse
+  is worse than none. Pinned as the PAIR on both boards (header without,
+  card with; a member with their own card's and without a colleague's), the
+  dialog's no deleting nothing and its yes deleting exactly that id and
+  re-reading. Three `archiveColumn*` keys left both catalogues with the
+  control. Every mutation red on exactly its own test (seven reds, six
+  lines); the guards — board, confirm, control, surface, copy, loading,
+  keys — green throughout.
+  **The gate earned its keep once more:** vitest, verify-pairs and the sweep
+  were green while Next's stricter typecheck refused an unused `container`
+  in a new test — "the suite and the typechecker cannot see this class of
+  failure; that is why this gate exists", on its own author.
+  R6 census for the next round: 205 raw `text-[Npx]` sizes in 52 files
+  (`11px` ×112, `10px` ×68) — the rulebook's own next item.
+  NOT proven live yet: the bar and the follow need a real take, which is a
+  write on the org's data (2026-09-06) — the user's next recording is the
+  measurement; the boards are verified on production after the deploy.
+  db 222 migrations · core 1575 tests · web 1572 tests + gate + sweep.

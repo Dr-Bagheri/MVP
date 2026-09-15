@@ -878,3 +878,80 @@ describe("the record's own scroll", () => {
     expect(page.match(/<SectionScroller>/g) ?? []).toHaveLength(2);
   });
 });
+
+describe("the recording bar, and the words under it (2026-09-15)", () => {
+  /*
+   * Two user directives from one set of screenshots: "the recording bar …
+   * make it smaller like the last image, something small and clean", and
+   * "the live transcription when the record started went to scroll mode and
+   * showed me the bottom of it and i didnt see the text — fix it that the
+   * page always follow the text".
+   *
+   * The second one had a precise cause: the transcript reserved 224px under
+   * its last line for the recall cards that floated over its foot, and on a
+   * laptop that reservation WAS the box — the follow pinned to an empty
+   * bottom and the words sat above the fold. So the floor is gone and the
+   * cards float over the transcript's TOP corner instead. Both are asserted
+   * here, on the page, because the page is where the floor was passed in.
+   */
+  const recalled = {
+    id: "d-1", kind: "decision", body: "قرارداد با NAI تمدید شد", status: "standing",
+    meeting_id: "m-0", meeting_title: "جلسهٔ قبل", decided_at: "2026-08-20T10:00:00.000Z",
+    owner_id: null, due_on: null, shared: 0,
+  };
+  const talking = "تصمیم‌ها را مرور کنیم. ".repeat(12);
+
+  const liveTake = () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    startSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = {
+        ...idleEngine(),
+        phase: "recording", callId: "c-9", recordedMs: 8_000,
+        captions: { finals: talking, interim: "" },
+        captionRows: [{ atMs: 5_000, text: "خب، شروع کنیم." }],
+        liveSpeakers: [],
+      };
+    });
+  };
+
+  it("draws the take as ONE bar — the strip beside the clock in a single card, no hall over the words", async () => {
+    liveTake();
+    const { container } = render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    act(() => { pushEngine?.(); });
+
+    const scope = container.querySelector(".wave-scope") as HTMLElement | null;
+    expect(scope, "the scope rendered").not.toBeNull();
+    expect(scope!.className).toContain("wave-scope-strip");
+    expect(scope!.className).toContain("h-8");
+    expect(scope!.className).not.toContain("h-28");
+    /* the clock rides in the SAME card as the strip — one instrument, the
+       player bar's own shape — and nowhere as a heading */
+    const bar = scope!.closest(".card") as HTMLElement | null;
+    expect(bar, "the strip sits in a card row").not.toBeNull();
+    expect(bar!.querySelector(".tabular-nums")).not.toBeNull();
+    expect(container.querySelector(".text-3xl")).toBeNull();
+  });
+
+  it("reserves NO floor under the transcript, and floats the recall cards over its TOP corner", async () => {
+    liveTake();
+    RECALL = [recalled];
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    act(() => { pushEngine?.(); });
+    await waitFor(() => expect(recallSpy).toHaveBeenCalled());
+
+    const transcript = screen.getByRole("region", { name: "رونویسی زنده" });
+    const scroller = transcript.querySelector(".overflow-y-auto") as HTMLElement | null;
+    expect(scroller, "the transcript's scroller rendered (a row is on it)").not.toBeNull();
+    expect(scroller!.className).not.toMatch(/\bpb-/);
+
+    const stack = (await screen.findByText("قرارداد با NAI تمدید شد")).closest(".absolute") as HTMLElement;
+    expect(stack.className).toMatch(/\btop-/);
+    expect(stack.className).not.toMatch(/\bbottom-/);
+    /* over the TRANSCRIPT, not the stage: the stack and the words share one
+       relative box, so the cards cannot land on the bar above */
+    expect(stack.parentElement).toBe(transcript.parentElement);
+    expect(stack.parentElement!.className).toContain("relative");
+  });
+});

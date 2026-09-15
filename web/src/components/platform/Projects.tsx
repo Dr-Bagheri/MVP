@@ -11,8 +11,8 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { notify, notifyError } from "@/lib/notify";
 import {
   BOARD_CARD, BOARD_CARDS, BOARD_CARD_SLOT, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
-  BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardSlot,
-  BoardTone,
+  BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardCardDelete,
+  BoardSlot, BoardTone,
 } from "./board/boardStyle";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -92,6 +92,11 @@ function progressOf(p: ProjectRecord): number | null {
 export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: boolean }) {
   const t = useTranslations("projects");
   const tTasks = useTranslations("tasks");
+  const tCommon = useTranslations("common");
+  /* the project about to be deleted from a card (2026-09-15) — the dialog
+     below is the only way from the icon to the write, and only an admin is
+     ever handed the icon (0191) */
+  const [condemned, setCondemned] = useState<ProjectRecord | null>(null);
   const locale = useLocale();
   const router = useRouter();
   /* ?project= deep link (R18): the panel has an address, the way ?task= does */
@@ -315,6 +320,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           isAdmin={isAdmin}
           onAdd={() => setCreating(true)}
           onMove={requestMove}
+          onDelete={isAdmin ? setCondemned : undefined}
         />
       ) : shown.length === 0 ? (
         /* the two nothings said apart: an organisation with no projects is
@@ -331,19 +337,42 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           ) : null}
         </div>
       ) : view === "list" ? (
-        <ProjectList projects={shown} cardsOf={cardsOf} people={people} locale={locale} />
+        <ProjectList projects={shown} cardsOf={cardsOf} people={people} locale={locale}
+          onDelete={isAdmin ? setCondemned : undefined} />
       ) : view === "calendar" ? (
         <ProjectCalendar projects={shown} cardsOf={cardsOf} locale={locale} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((p) => (
-            <ProjectCard key={p.id} project={p} people={people} locale={locale} />
+            <ProjectCard key={p.id} project={p} people={people} locale={locale}
+              onDelete={isAdmin ? () => setCondemned(p) : undefined} />
           ))}
         </div>
       )}
 
       {openId !== null ? (
         <ProjectDetail id={openId} meId={meId} isAdmin={isAdmin} onClose={() => router.replace("/projects")} />
+      ) : null}
+
+      {/* THE CARD'S DELETE, in the platform's one dialog, with the detail
+          panel's own words — the body names what STAYS (the folder on the
+          board, the room and its messages: 0191's doing, not this dialog's
+          promise). The list re-reads on success, so the card is gone the
+          moment the dialog is. */}
+      {condemned !== null ? (
+        <ConfirmDialog
+          danger
+          title={t("deleteTitle")}
+          body={t("deleteBody", { name: condemned.name })}
+          confirmLabel={tCommon("delete")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setCondemned(null)}
+          onConfirm={() => {
+            const target = condemned;
+            setCondemned(null);
+            void api.deleteProject(target.id).then(load).catch(() => notifyError(t("writeFailed")));
+          }}
+        />
       ) : null}
 
       {pendingMove !== null ? (
@@ -391,7 +420,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
  * tasks stay. The derived column then reads the target, which is what the
  * hand asked for.
  */
-function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd, onMove }: {
+function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd, onMove, onDelete }: {
   columns: TaskColumnRecord[];
   projects: ProjectRecord[];
   columnOf: (p: ProjectRecord) => string | null;
@@ -400,6 +429,8 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
   isAdmin: boolean;
   onAdd: () => void;
   onMove: (project: ProjectRecord, columnId: string) => void;
+  /** the card's delete, for an admin; absent for everybody else */
+  onDelete?: (project: ProjectRecord) => void;
 }) {
   const t = useTranslations("projects");
   /* R17 says this board and the task board are ONE board. That has to reach
@@ -466,6 +497,7 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
                     if (over !== null && over !== col.id) onMove(p, over);
                   }}
                   onCancel={() => setLifted(null)}
+                  onDelete={onDelete === undefined ? undefined : () => onDelete(p)}
                 />
               ))}
               {/* THE WAY IN LIVES IN THE COLUMN (user directive, 2026-09-05):
@@ -486,7 +518,7 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
 
 /** the kanban's card with a hand on it — one hook per card, which is why it
     is its own component rather than a loop body */
-function DraggableProjectCard({ project, people, locale, carried, onLift, onOver, onDrop, onCancel }: {
+function DraggableProjectCard({ project, people, locale, carried, onLift, onOver, onDrop, onCancel, onDelete }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
   locale: string;
@@ -495,19 +527,26 @@ function DraggableProjectCard({ project, people, locale, carried, onLift, onOver
   onOver: (columnId: string | null) => void;
   onDrop: (columnId: string | null) => void;
   onCancel: () => void;
+  onDelete?: () => void;
 }) {
   const drag = useHoldDrag({ onLift, onOver, onDrop, onCancel });
-  return <ProjectCard project={project} people={people} locale={locale} compact drag={drag} carried={carried} />;
+  return (
+    <ProjectCard project={project} people={people} locale={locale} compact drag={drag} carried={carried}
+      onDelete={onDelete} />
+  );
 }
 
 /** the board's list view, one row per project */
-function ProjectList({ projects, cardsOf, people, locale }: {
+function ProjectList({ projects, cardsOf, people, locale, onDelete }: {
   projects: ProjectRecord[];
   cardsOf: (p: ProjectRecord) => TaskCardRecord[];
   people: OrgPersonRecord[];
   locale: string;
+  /** the row's delete, for an admin; absent for everybody else */
+  onDelete?: (project: ProjectRecord) => void;
 }) {
   const t = useTranslations("projects");
+  const tCommon = useTranslations("common");
   return (
     <div className="flex flex-col gap-1.5">
       {projects.map((p) => {
@@ -546,6 +585,12 @@ function ProjectList({ projects, cardsOf, people, locale }: {
                 <Avatar key={m.id} name={personName(m, locale)} src={personPhoto(m)} size="xs" />
               ))}
             </span>
+            {/* the same control the board's card wears (2026-09-15): a
+                project is deleted from the thing that IS the project, in
+                every view that shows one */}
+            {onDelete !== undefined ? (
+              <BoardCardDelete label={tCommon("delete")} onClick={() => onDelete(p)} />
+            ) : null}
           </Link>
         );
       })}
@@ -647,10 +692,13 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
   );
 }
 
-function ProjectCard({ project, people, locale, compact = false, drag, carried = "no" }: {
+function ProjectCard({ project, people, locale, compact = false, drag, carried = "no", onDelete }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
   locale: string;
+  /** the card's own delete (BoardCardDelete), or nothing: an admin's act
+      (0191), and a control the server would refuse is worse than none */
+  onDelete?: () => void;
   /** on the kanban, where the card lives in a 288px column: the same card
       with less air, never a second card. Two drawings of one thing is the
       pair that stops matching the first time either gains a field. */
@@ -663,6 +711,7 @@ function ProjectCard({ project, people, locale, compact = false, drag, carried =
   carried?: "no" | "slot" | "away";
 }) {
   const t = useTranslations("projects");
+  const tCommon = useTranslations("common");
   const ratio = progressOf(project);
   const members = project.member_ids
     .map((id) => people.find((p) => p.id === id))
@@ -725,6 +774,12 @@ function ProjectCard({ project, people, locale, compact = false, drag, carried =
             </p>
           )}
         </div>
+        {/* the card's delete (2026-09-15) — `preventDefault` inside the
+            control, because this card is an anchor and a delete that also
+            opened the project would put the dialog under the panel */}
+        {onDelete !== undefined ? (
+          <BoardCardDelete label={tCommon("delete")} onClick={onDelete} />
+        ) : null}
       </div>
 
       {/* progress: the bar and the numbers, or a dash. A zero-width bar under

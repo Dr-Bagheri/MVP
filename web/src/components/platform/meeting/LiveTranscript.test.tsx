@@ -102,3 +102,33 @@ describe("LiveTranscript", () => {
     expect(fragment.className).toContain("text-fg-muted");
   });
 });
+
+describe("the newest line is the last thing in the box (2026-09-15)", () => {
+  /*
+   * User report: "when the record started [it] went to scroll mode and showed
+   * me the bottom of it and i didnt see the text". The follow pins the
+   * scroller to its bottom, so whatever is LAST in the scroller is what a
+   * pinned reader sees — and it has to be the words. This pins the structure:
+   * the interim (or the last row) is the scroller's final item, the follow
+   * watches exactly one wrapper, and nothing is reserved under it. The
+   * discriminating half — the floor the stage used to reserve — is asserted
+   * on the meeting page, where it was passed in.
+   */
+  it("puts the interim at the scroller's end, under one wrapper, with nothing reserved below", () => {
+    const { container } = render(
+      <LiveTranscript
+        rows={[row({ atMs: 5_000, text: "اول" }), row({ atMs: 9_000, text: "دوم" })]}
+        interim="و بعد" speakers={[]} lane="on" locale="fa"
+      />,
+    );
+    const scroller = container.querySelector(".overflow-y-auto") as HTMLElement | null;
+    expect(scroller, "the scroller rendered").not.toBeNull();
+    expect(scroller!.className).not.toMatch(/\bpb-/);
+    /* ONE child: the wrapper the follow observes — a sibling would grow the
+       box without the follow seeing it */
+    expect(scroller!.children).toHaveLength(1);
+    const items = scroller!.querySelectorAll("li");
+    expect(items).toHaveLength(3);
+    expect(items[2]!.textContent).toBe("و بعد");
+  });
+});
