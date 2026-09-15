@@ -115,7 +115,7 @@ describe("the top bar's search box", () => {
     expect(marks[0]).toHaveTextContent("دیتابیس");
   });
 
-  it("walks the rows with the arrows and opens the one under the cursor", async () => {
+  it("walks the rows with the arrows and opens the one under the cursor by CLICK", async () => {
     const user = userEvent.setup();
     render(<GlobalSearch />);
 
@@ -132,50 +132,94 @@ describe("the top bar's search box", () => {
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
 
     /* the cursor starts on the first row, so one press moves to the second —
-       the transcript hit, which is the group AFTER the title matches */
-    await user.keyboard("{ArrowDown}{Enter}");
+       the transcript hit, which is the group AFTER the title matches. The
+       press MOVES the highlight; opening is the click, because Enter does
+       nothing here now (see the two cases below). */
+    await user.keyboard("{ArrowDown}");
+    const rows = screen.getAllByRole("option");
+    expect(rows[1]).toHaveAttribute("aria-selected", "true");
+
+    await user.click(rows[1]!);
     expect(push).toHaveBeenCalledWith("/calls/c-line");
   });
 
-  it("draws the door to the page only ONCE there are rows behind it", async () => {
+  /**
+   * ENTER DOES NOTHING (user directive, 2026-09-15: "the search bar is
+   * searching when you type and it is enough, when you enter it does not need
+   * to do anything"), because the page it used to submit to is deleted.
+   *
+   * THE PAIR IS THE TEST, and the second half is the one that matters: "Enter
+   * navigates nowhere" is also true of a box whose Enter RELOADS THE PAGE —
+   * which is what a `<form>` does with no submit handler at all, and it would
+   * take the panel, the query and the rest of the screen with it. So the
+   * second case asserts the default was prevented, which is the only thing
+   * that tells the two apart in jsdom.
+   */
+  it("does NOTHING on Enter — no navigation, over rows or over nothing", async () => {
     const user = userEvent.setup();
-    /* a search that has not answered yet — the state the directive is about */
-    let land: (rows: SearchHit[]) => void = () => undefined;
-    search.mockReturnValue(new Promise<SearchHit[]>((resolve) => (land = resolve)));
-    render(<GlobalSearch />);
-
-    await user.click(field());
-    await user.keyboard("د");
-    /* under two characters: the hint, and no offer to open a page of results
-       for a query core has not even been asked */
-    expect(screen.queryByText(/همهٔ نتایج/)).not.toBeInTheDocument();
-
-    await user.keyboard("یتابیس");
-    await waitFor(() => expect(search).toHaveBeenCalled());
-    /* asked, not answered — still nothing to open */
-    expect(screen.queryByText(/همهٔ نتایج/)).not.toBeInTheDocument();
-
-    land(HITS);
-    expect(await screen.findByText("همهٔ نتایج برای «دیتابیس»")).toBeInTheDocument();
-  });
-
-  it("keeps NO door over an empty answer, and Enter still reaches the page", async () => {
-    const user = userEvent.setup();
-    search.mockResolvedValue([]);
     render(<GlobalSearch />);
 
     await user.click(field());
     await user.keyboard("دیتابیس");
-    await waitFor(() => expect(search).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
 
-    expect(screen.queryByText(/همهٔ نتایج/)).not.toBeInTheDocument();
-    /*
-     * The row is gone and the KEY is not: a press is not a claim on screen,
-     * and a reader who types a word and presses Enter means the search page —
-     * which is what this box did before it had a panel at all.
-     */
     await user.keyboard("{Enter}");
-    expect(push).toHaveBeenCalledWith({ pathname: "/search", query: { q: "دیتابیس" } });
+    expect(push, "Enter still went somewhere").not.toHaveBeenCalled();
+
+    /* and with the cursor moved onto a row, which is where the old Enter
+       opened a record — the directive is about the KEY, not about the query */
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(push).not.toHaveBeenCalled();
+
+    /* over an answer with nothing in it, which is where the old Enter left
+       for the results page */
+    search.mockResolvedValue([]);
+    await user.keyboard("تر");
+    await waitFor(() => expect(screen.queryAllByRole("option")).toHaveLength(0));
+    await user.keyboard("{Enter}");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("THE CONTROL: the submit is PREVENTED, not merely unhandled", () => {
+    render(<GlobalSearch />);
+    const form = screen.getByRole("search");
+
+    const submit = new Event("submit", { bubbles: true, cancelable: true });
+    form.dispatchEvent(submit);
+
+    expect(submit.defaultPrevented, "Enter would reload the page").toBe(true);
+  });
+
+  it("offers NO door to a results page — the page is gone", async () => {
+    const user = userEvent.setup();
+    render(<GlobalSearch />);
+
+    await user.click(field());
+    await user.keyboard("دیتابیس");
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
+
+    /*
+     * Asserted over a FULL answer, which is the only state the door was ever
+     * drawn in: over an empty one it was already absent, so a test there
+     * would pass against the version that still ships it.
+     *
+     * AND ASSERTED AS STRUCTURE, NOT AS WORDS. The first version of this
+     * looked for «همهٔ نتایج …» — the door's own label — and it could not
+     * have failed: that label came from `platform.searchAll`, which was
+     * deleted in the same change, so a door put back today renders
+     * `MISSING_MESSAGE` and the text query finds nothing either way. A test
+     * whose subject was removed alongside the thing it checks is the vacuous
+     * kind this repo keeps minting. The door was the panel's only BUTTON —
+     * every row is an `<li role="option">` — so counting buttons inside the
+     * panel is a question a restored door must answer wrongly, whatever it
+     * ends up saying.
+     */
+    const panel = screen.getByRole("listbox").parentElement!;
+    expect(
+      within(panel).queryAllByRole("button"),
+      "something is drawn under the rows again",
+    ).toHaveLength(0);
+    expect(panel.querySelector("kbd"), "a key badge is advertised again").toBeNull();
   });
 
   it("closes on Escape without losing what was typed", async () => {

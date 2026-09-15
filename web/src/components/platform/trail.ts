@@ -129,7 +129,9 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    * redirects to the same place for anyone holding an old link.
    */
   "/calls/[id]": { entity: true, parent: "/meetings" },
-  "/search": { label: "search.title" },
+  /* «/search» left this table on 2026-09-15 with the page itself (user:
+     "remove these previous pages … just the one that we have right now").
+     The top bar's box answers in place, so there is no address to name. */
 
   /* a root for the same reason as /echo — see the note there */
   "/management": { label: "platform.management" },

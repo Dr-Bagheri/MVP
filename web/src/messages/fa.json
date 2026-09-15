@@ -179,7 +179,6 @@
       "set_project_member": "کسی را به پروژه اضافه یا از آن جدا می‌کند",
       "set_record_scope": "دسترسی ضبط را تغییر می‌دهد",
       "set_role_permission": "دسترسی یک نقش را تغییر می‌دهد",
-      "set_search": "جست‌وجو را روی صفحه انجام می‌دهد",
       "set_task_label": "برچسب را روی تسک می‌گذارد یا برمی‌دارد",
       "schedule_workflow": "گردش‌کار را زمان‌بندی می‌کند",
       "set_workflow_enabled": "گردش‌کار را روشن یا خاموش می‌کند",
@@ -2099,10 +2098,8 @@
     "saveDoc": "دانلود سند",
     "savePdf": "ذخیره به‌صورت پی‌دی‌اف",
     "search": "جست‌وجو",
-    "searchAll": "همهٔ نتایج برای «{q}»",
     "searchBusy": "در حال جستجو…",
     "searchConversations": "جست‌وجوی گفتگوها",
-    "searchEnter": "اینتر",
     "searchEverything": "جستجو در رکوردها، گفتگوها، تسک‌ها…",
     "searchGroupCall": "رکوردها",
     "searchGroupSummary": "خلاصه‌ها",
@@ -2578,23 +2575,7 @@
     "you": "شما"
   },
   "search": {
-    "title": "جست‌وجو",
-    "placeholder": "جست‌وجو در رونوشت‌ها و خلاصه‌ها…",
-    "run": "جست‌وجو",
-    "results": "{count} نتیجه",
-    "empty": "نتیجه‌ای پیدا نشد.",
-    "colRecord": "رکورد",
-    "colWhere": "محل",
-    "colMatch": "متن یافته",
-    "colMoment": "لحظه",
-    "colDate": "تاریخ",
-    "openRecord": "باز کردن رکورد",
-    "copyText": "کپی متن یافته",
-    "copied": "کپی شد.",
-    "inTranscript": "در رونوشت",
-    "inSummary": "در خلاصه",
-    "scopeNote": "فقط در چیزهایی جست‌وجو می‌شود که اجازهٔ دیدنشان را دارید.",
-    "inTitle": "عنوان جلسه"
+    "empty": "نتیجه‌ای پیدا نشد."
   },
   "security": {
     "passwordLabel": "گذرواژه",

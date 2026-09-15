@@ -139,6 +139,17 @@ loosened rule — and the user's "except this part" is what puts one there.
   chip; the audit table lost its header row (`hideHeader`). Projects is the
   one page whose scope chips sit in ROW ONE, before «مهلت امروز» — the user's
   ruling for that page, not a loosening of the rule.
+  **2026-09-15 (user: "for the meeting table fix the sort as the second top
+  sub menu like the last image", the image being security's own row):** the
+  MEETINGS SORT is a chip row now — تاریخ · شرکت‌کنندگان · وضعیت, each with
+  its glyph — where it was a `w-[11rem]` dropdown in the toolbar line, two
+  presses to see three options and the one control on that page with a
+  silhouette nothing else shares. The DIRECTION key rides in the chip row's
+  `children` slot after a divider: the field and the direction are two
+  questions, and folding them into one strip means six chips that grow by two
+  with every sort field. Note for the next page that does this: the chip row
+  takes **no `FILTER_ROW_GAP`** where its parent is already `flex-col gap-3`
+  — wearing both puts 24px under a row the rest of the product sets at 12.
 
 - **Done on 2026-09-05:** the create button sits at the END of row 1 in one
   coat, `.btn btn-primary`, on every page that has one — workflows (it stood

@@ -7,7 +7,7 @@ import {
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import { api } from "@/api/client";
+import { api, BffError } from "@/api/client";
 import type { AssistantSession, ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { FloorChip } from "./FloorChip";
@@ -27,7 +27,7 @@ import {
   adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
   registerAssistantSurface, resetAssistantSession, stopAssistant, subscribeAssistant,
 } from "@/lib/assistantSession";
-import { liveConversation } from "@/lib/liveConversation";
+import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
 import {
   subscribeVoicePrefs, voicePrefs, voicePrefsServer,
 } from "@/lib/voicePrefs";
@@ -756,7 +756,35 @@ export function AssistantSidebar() {
          turn quietly became Echo's on any reload that forgot to. */
       const thread = await api.agentThread(id);
       adoptAssistantThread(id, thread.messages, thread.floor);
-    } catch {
+    } catch (cause) {
+      /*
+       * WHICH NOTHING (rule 12), and the user found this one.
+       *
+       * A 404 here is not a failure to read a conversation — it is a
+       * conversation that is NOT THERE: archived away by its owner, or one
+       * this identity cannot see, because `liveConversation` is a pointer
+       * held per TAB in `sessionStorage` and it outlives the session that
+       * minted it. The restore effect above re-asks for that pointer on
+       * every navigation, so one dead id produced one «این یکی کامل نشد.»
+       * per page change — on production, thirty-seven reads of a single id
+       * in a day, every one a 404, toasting at somebody who was looking at
+       * their meetings and had not opened the assistant at all.
+       *
+       * So a dead pointer is DROPPED, not reported: there is nothing for
+       * the person to do about it and nothing for them to lose. Anything
+       * else still speaks, because a transport failure is worth retrying
+       * and this is the one kind that never will be.
+       *
+       * Both clears are CONDITIONAL on the id still being the one in hand.
+       * A slow 404 landing after the person has opened another conversation
+       * must not take that one off the screen — the failure is about the id
+       * this call asked for, not about whatever is showing now.
+       */
+      if (cause instanceof BffError && cause.status === 404) {
+        if (liveConversation() === id) setLiveConversation(null);
+        if (assistantSnapshot().sessionId === id) resetAssistantSession();
+        return;
+      }
       notify(t("failed"), "warn");
     } finally {
       setLoadingThread(false);

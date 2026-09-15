@@ -21,7 +21,6 @@ export const SURFACE_TOOLS: readonly string[] = [
   "pause_recording",
   "resume_recording",
   "open_call",
-  "set_search",
   "finish_recording",
   "set_member_status",
   "set_member_role",
@@ -151,7 +150,7 @@ export const SURFACE_TOOLS: readonly string[] = [
  * members. A list nobody audits is the defect; the seven addresses were the
  * symptom.
  */
-export const NAVIGABLE = /^\/(assistant|meetings|tasks|projects|chat|integrations|profile|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
+export const NAVIGABLE = /^\/(assistant|meetings|tasks|projects|chat|integrations|profile|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?)?$/;
 
 /* the colleague resolver and its id shape live in one lib now
    (2026-09-08) so the meeting's action items and these tools agree on
@@ -508,12 +507,10 @@ export async function executeClientTool(
       surface.push(`/calls/${id}`);
       return { ok: true, detail: "call opened" };
     }
-    case "set_search": {
-      const query = typeof a.query === "string" ? a.query.trim().slice(0, 200) : "";
-      if (query.length < 2) return { ok: false, detail: "query too short" };
-      surface.push(`/search?q=${encodeURIComponent(query)}`);
-      return { ok: true, detail: "search opened" };
-    }
+    /* `set_search` is gone (2026-09-15) — it pushed `/search?q=`, and that
+       page was removed. The executor half goes with the tool rather than
+       staying as an unreachable case: a branch nothing can dispatch to is a
+       second place to believe the feature still exists. */
     case "set_language": {
       const language = a.language === "fa" || a.language === "en" ? a.language : null;
       if (!language) return { ok: false, detail: "language must be fa or en" };

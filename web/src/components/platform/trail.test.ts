@@ -81,16 +81,20 @@ describe("breadcrumb trail", () => {
     ]);
   });
 
-  it("gives search its own trail now that Echo is gone", () => {
+  it("names NO search page — the box in the top bar is the whole of it now", () => {
     /*
-     * Search used to hang under Echo, which is the reason this table exists
-     * at all — a path-derived trail renders "Home > Search" and teaches an IA
-     * the rest of the product contradicts. Echo was removed (user directive,
-     * 2026-09-04), and a crumb pointing at a deleted page is worse than a
-     * short trail: the step is there, it is labelled, and pressing it is a
-     * 404. So search begins its own.
+     * Search had its own root here, for the reason this table exists at all:
+     * a path-derived trail renders "Home > Search" and teaches an IA the rest
+     * of the product contradicts. The page itself is gone (user directive,
+     * 2026-09-15), so the crumb is gone with it — a step that is there, is
+     * labelled, and 404s when pressed is worse than no step, which is the
+     * same sentence this entry was written under when Echo was removed.
+     *
+     * Asserted as an ABSENCE because the version that kept the entry renders
+     * perfectly: `trailFor` would hand back a one-crumb trail naming a
+     * deleted address, and nothing else in the suite would notice.
      */
-    expect(trailFor("/search").map((c) => c.href)).toEqual(["/search"]);
+    expect(TRAIL["/search"]).toBeUndefined();
   });
 
   it("does NOT route a call through /calls, which is now only a redirect", () => {
@@ -186,11 +190,12 @@ describe("the trail's own assumptions", () => {
        joined it the same day as a rail entry, LEFT the rail on 2026-09-05
        (an admin's surface, reached from the board's first row) and on
        2026-09-06 the user asked for the trail to say so — «تسک‌ها /
-       پروژه‌ها» — so it is parented to /tasks below and is not a root */
+       پروژه‌ها» — so it is parented to /tasks below and is not a root.
+       «/search» left on 2026-09-15 with its page. */
     expect(roots).toEqual([
       "/", "/agents", "/assistant", "/chat", "/help", "/integrations",
       "/management", "/meetings", "/platform", "/profile",
-      "/search", "/settings", "/tasks", "/workflows",
+      "/settings", "/tasks", "/workflows",
     ]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));

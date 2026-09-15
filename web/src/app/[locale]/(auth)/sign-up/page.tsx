@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
-import { OAuthButtons } from "../OAuthButtons";
 import { PasswordInput } from "@/components/PasswordInput";
 import { notifyError } from "@/lib/notify";
 
@@ -133,16 +132,19 @@ export default function SignUpPage() {
         >
           {busy ? t("working") : t("signUp")}
         </button>
-        <OAuthButtons />
+        {/* off this screen too, and for the same one sentence — see the note
+            on the sign-in form */}
       </form>
 
       {/* Provider history, kept because it is this screen's origin story: the
           mock form's Google button pushed to /pending with no OAuth behind it
-          and was removed under the no-dead-buttons rule. The buttons above
-          returned only when both providers were ENABLED in Supabase and the
-          PKCE routes went live (2026-08-16) — an OAuth arrival lands as
+          and was removed under the no-dead-buttons rule. Real ones returned
+          only when both providers were ENABLED in Supabase and the PKCE
+          routes went live (2026-08-16) — an OAuth arrival lands as
           `unregistered` and register-on-first-sign-in gives them the org
-          step, so sign-up-via-provider needs no separate machinery. */}
+          step, so sign-up-via-provider needs no separate machinery. They are
+          off BOTH gates as of 2026-09-15 on the user's word, and everything
+          in this paragraph is still true of the machinery behind them. */}
 
       <p className="mt-4 text-center text-sm">
         <Link href="/sign-in" className="text-accent hover:underline">

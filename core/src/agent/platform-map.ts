@@ -29,7 +29,7 @@ export interface Area {
 }
 
 export const AREAS: readonly Area[] = [
-  { key: "navigate", heading: "SURFACES", stems: [/^navigate$/, /^set_language$/, /^set_search$/, /^read_window$/, /^whoami/, /^list_role_permissions$/, /^get_organization$/, /notification/, /^list_allowed_models$/, /^set_model_allowed$/] },
+  { key: "navigate", heading: "SURFACES", stems: [/^navigate$/, /^set_language$/, /^read_window$/, /^whoami/, /^list_role_permissions$/, /^get_organization$/, /notification/, /^list_allowed_models$/, /^set_model_allowed$/] },
   { key: "tasks", heading: "TASKS", stems: [/task/, /checklist/] },
   { key: "projects", heading: "PROJECTS", stems: [/project/] },
   { key: "meetings", heading: "MEETINGS", stems: [/meeting/, /minutes/, /join_code/] },

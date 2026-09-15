@@ -152,7 +152,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     icon: "pulse",
     tools: [
       "start_recording", "pause_recording", "resume_recording", "finish_recording",
-      "navigate", "open_call", "set_search", "set_language",
+      "navigate", "open_call", "set_language",
       "whoami_surface", "list_notifications", "mark_notification_read",
     ],
   },

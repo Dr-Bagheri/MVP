@@ -234,6 +234,47 @@ describe("Meetings", () => {
     await waitFor(() => expect(titles()).toEqual(["کهنه", "تازه"]));
   });
 
+  /**
+   * THE SORT IS THE SECOND SUB-MENU (user directive, 2026-09-15: "for the
+   * meeting table fix the sort as the second top sub menu like the last
+   * image" — the security page's chip row).
+   *
+   * Three assertions, and the ABSENCE is the one that makes the others mean
+   * something: chips that merely EXIST are equally true of a page that grew a
+   * chip row and kept the dropdown, which is two controls for one setting and
+   * the exact drift this move exists to end. The dropdown is asked for by its
+   * own label, so the topic dropdown one control away cannot answer for it.
+   */
+  it("sorts from a CHIP ROW, and the dropdown is gone", async () => {
+    LIST = [
+      meeting({ id: "m-crowd", title: "پرجمعیت", invitees: ["الف", "ب", "ج"] }),
+      meeting({ id: "m-alone", title: "تنها", invitees: [] }),
+    ];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("تنها")).toBeInTheDocument());
+
+    /* the row: three tabs, each naming its value for a test, «تاریخ» chosen */
+    const row = screen.getByRole("tablist", { name: "مرتب‌سازی" });
+    expect(within(row).getAllByRole("tab").map((c) => c.getAttribute("data-key")))
+      .toEqual(["date", "people", "status"]);
+    expect(within(row).getByRole("tab", { name: /تاریخ/ })).toHaveAttribute("aria-selected", "true");
+
+    /* it SORTS, rather than only lighting up: both meetings share a date, so
+       the headcount is the only thing that can order them */
+    await userEvent.click(within(row).getByRole("tab", { name: /شرکت‌کنندگان/ }));
+    const titles = () => screen.getAllByText(/^(پرجمعیت|تنها)$/).map((n) => n.textContent);
+    await waitFor(() => expect(titles()).toEqual(["پرجمعیت", "تنها"]));
+    expect(within(row).getByRole("tab", { name: /شرکت‌کنندگان/ })).toHaveAttribute("aria-selected", "true");
+
+    /* and the direction key came WITH the chips rather than staying behind */
+    expect(within(row).getByRole("button", { name: "تازه‌ترین اول" })).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("combobox", { name: "مرتب‌سازی" }),
+      "the sort dropdown is still on the page beside its chips",
+    ).toBeNull();
+  });
+
   it("a row opens the meeting's own page", async () => {
     LIST = [meeting({ id: "m-a", title: "جلسهٔ آینده" })];
     render(<Meetings />);

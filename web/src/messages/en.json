@@ -179,7 +179,6 @@
       "set_project_member": "Adds a colleague to a project or takes them off",
       "set_record_scope": "Changes who can see a record",
       "set_role_permission": "Changes what a role may do",
-      "set_search": "Runs a search on screen",
       "set_task_label": "Puts a label on a task, or takes it off",
       "schedule_workflow": "Puts a workflow on a schedule",
       "set_workflow_enabled": "Switches a workflow on or off",
@@ -2099,10 +2098,8 @@
     "saveDoc": "Download document",
     "savePdf": "Save as PDF",
     "search": "Search",
-    "searchAll": "All results for “{q}”",
     "searchBusy": "Searching…",
     "searchConversations": "Search conversations",
-    "searchEnter": "Enter",
     "searchEverything": "Search records, conversations, tasks…",
     "searchGroupCall": "Records",
     "searchGroupSummary": "Summaries",
@@ -2578,23 +2575,7 @@
     "you": "you"
   },
   "search": {
-    "title": "Search",
-    "placeholder": "Search transcripts and summaries…",
-    "run": "Search",
-    "results": "{count} results",
-    "empty": "No results.",
-    "colRecord": "Record",
-    "colWhere": "Where",
-    "colMatch": "Match",
-    "colMoment": "Moment",
-    "colDate": "Date",
-    "openRecord": "Open record",
-    "copyText": "Copy matched text",
-    "copied": "Copied.",
-    "inTranscript": "in transcript",
-    "inSummary": "in summary",
-    "scopeNote": "Only what you are allowed to see is searched.",
-    "inTitle": "Call title"
+    "empty": "No results."
   },
   "security": {
     "passwordLabel": "Password",

@@ -6,7 +6,6 @@ import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { Card, Field } from "@/components/ui";
-import { OAuthButtons } from "../OAuthButtons";
 import { PasswordInput } from "@/components/PasswordInput";
 
 /**
@@ -286,7 +285,11 @@ export default function SignInPage() {
           <button className="btn-primary w-full" disabled={busy || !email || !password}>
             {busy ? t("working") : t("signIn")}
           </button>
-          <OAuthButtons />
+          {/* THE PROVIDER BUTTONS ARE OFF THIS SCREEN (user directive,
+              2026-09-15: "remove these two button git hub and google for
+              now"). FOR NOW is the whole of it, so `OAuthButtons`, the
+              `/api/auth-methods` read, the PKCE routes and the copy all
+              stay where they are — bringing them back is this one line. */}
         </form>
       )}
 

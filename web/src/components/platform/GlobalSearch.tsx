@@ -11,12 +11,19 @@ import { formatClock, formatDate } from "@/lib/format";
 import { Snippet } from "./SearchSnippet";
 
 /**
- * THE TOP BAR'S SEARCH BOX, WHICH IS A COMMAND PALETTE.
+ * THE TOP BAR'S SEARCH BOX, WHICH IS THE SEARCH.
  *
  * What it replaces: a bare `<form>` that did nothing until Enter and then
  * left the page for `/search`. Every keystroke was a bet that the corpus had
  * the word, paid for with a navigation — and the answer to "is this record
  * even in here" is worth one round trip, not a page.
+ *
+ * **THE `/search` PAGE IS GONE** (user directive, 2026-09-15: "remove these
+ * previous pages, we dont need them anymore, just the one that we have right
+ * now"). So this is no longer a shortcut into a fuller surface — it is the
+ * whole feature, and the two things that pointed at the page went with it:
+ * Enter, which submitted, and the «همهٔ نتایج …» row at the foot of the panel.
+ * A door is a promise, and there is nothing behind this one any more.
  *
  * THREE THINGS THIS IS NOT, each of them a road already taken here:
  *
@@ -24,11 +31,12 @@ import { Snippet } from "./SearchSnippet";
  *    shape popover.guard.test.tsx bans by name, and for the reasons it lists:
  *    this bar is `overflow-visible` today and the first ancestor that is not
  *    would clip the panel to a sliver. It goes through `Popover`, portalled.
- *  · It is not a second search. `api.search` is the same call `/search` runs,
- *    and the `<mark>` whitelist is the page's own `Snippet`, imported. Two
+ *  · It is not a second search. `api.search` is the same call the deleted
+ *    page ran, and the `<mark>` whitelist is the shared `Snippet`. Two
  *    parsers for untrusted transcript text is one parser too many.
- *  · It is not the whole result set. Eight rows and a door to the page — a
- *    panel that scrolls forever is a page wearing a panel's clothes.
+ *  · It is not the whole result set. Eight rows, and the cost is stated
+ *    rather than hidden: with the page gone, a ninth match is not reachable
+ *    from here — narrowing the words is what reaches it.
  */
 
 /**
@@ -44,7 +52,7 @@ const GROUPS = [
   { kind: "summary", labelKey: "searchGroupSummary", Glyph: IconRows },
 ] as const;
 
-/** the panel shows a HANDFUL; the page shows the corpus */
+/** the strongest handful — see the note above on what is forfeited */
 const SHOWN = 8;
 
 /** core 400s below two characters — the box says so rather than asking */
@@ -76,38 +84,16 @@ export function GlobalSearch() {
   const trimmed = query.trim();
   const ready = trimmed.length >= MIN_QUERY;
 
-  /* the flat reading order the ARROWS walk: groups in the order above, then
-     the door to the page as the last stop. The panel renders these grouped;
-     the keyboard needs them as one line, and computing both from one array is
-     what keeps the highlight and the click on the same row. */
+  /* the flat reading order the ARROWS walk: groups in the order above. The
+     panel renders these grouped; the keyboard needs them as one line, and
+     computing both from one array is what keeps the highlight and the click
+     on the same row. */
   const ordered = useMemo(() => {
     const rows = hits ?? [];
     return GROUPS.flatMap((g) => rows.filter((h) => h.kind === g.kind)).slice(0, SHOWN);
   }, [hits]);
-  const allIndex = ordered.length;
-  /*
-   * THE DOOR TO THE PAGE IS DRAWN ONLY OVER AN ANSWER.
-   *
-   * It used to render from the first keystroke, under the hint and under the
-   * searching line — so «all results for «d»» sat beneath a panel that was
-   * telling the reader it had nothing yet, and offered to open a page of
-   * results for a query nobody had answered. A door is only worth drawing
-   * once there is a room behind it.
-   *
-   * ENTER STILL REACHES IT while the row is hidden, and that is deliberate
-   * rather than an oversight: a key press is not a claim on screen, and a
-   * reader who types a word and presses Enter means the search page — which
-   * is exactly what this box did before it had a panel at all.
-   *
-   * The condition is "ROWS ARE ON SCREEN", not "nothing is in flight". The
-   * two differ on the keystroke AFTER an answer: the panel keeps the rows it
-   * has while the next request runs, and a door tied to `busy` would blink
-   * out and back on every letter typed into a query that is already
-   * answering — a flicker on the one control the reader is aiming at.
-   */
-  const doorShown = ready && hits !== null && ordered.length > 0;
-  /** the last arrow stop: the door when it is drawn, else the last row */
-  const lastIndex = doorShown ? allIndex : Math.max(0, allIndex - 1);
+  /** the last arrow stop: the last row, because there is nothing after them */
+  const lastIndex = Math.max(0, ordered.length - 1);
 
   /*
    * DEBOUNCED, and the trailing edge is the point: search-as-you-type at one
@@ -144,27 +130,14 @@ export function GlobalSearch() {
     return () => clearTimeout(timer);
   }, [trimmed, ready]);
 
-  const goToPage = useCallback(() => {
-    if (!ready) return;
-    setOpen(false);
-    router.push({ pathname: "/search", query: { q: trimmed } });
-  }, [ready, router, trimmed]);
-
   const openHit = useCallback(
-    (hit: SearchHit) => {
+    (index: number) => {
+      const hit = ordered[index];
+      if (!hit) return;
       setOpen(false);
       router.push(`/calls/${hit.call_id}`);
     },
-    [router],
-  );
-
-  const activate = useCallback(
-    (index: number) => {
-      const hit = ordered[index];
-      if (hit) openHit(hit);
-      else goToPage();
-    },
-    [goToPage, openHit, ordered],
+    [ordered, router],
   );
 
   /*
@@ -215,10 +188,19 @@ export function GlobalSearch() {
           ref={formRef}
           role="search"
           className="input-sm hidden w-80 min-w-0 items-center gap-2 focus-within:border-accent lg:flex"
-          onSubmit={(e) => {
-            e.preventDefault();
-            activate(cursor);
-          }}
+          /*
+           * ENTER DOES NOTHING (user directive, 2026-09-15: "the search bar
+           * is searching when you type and it is enough, when you enter it
+           * does not need to do anything").
+           *
+           * It used to submit to `/search`, a results page that no longer
+           * exists — this box IS the search now. The handler stays because a
+           * `<form>` without one RELOADS THE PAGE on Enter, which is the
+           * loudest possible version of "does nothing": the panel, the query
+           * and whatever else was on screen all go. Preventing the default
+           * and stopping there is what makes the key inert.
+           */
+          onSubmit={(e) => e.preventDefault()}
         >
           <IconSearch width={14} height={14} className="shrink-0 text-fg-subtle" />
           <input
@@ -268,14 +250,11 @@ export function GlobalSearch() {
           cursor={cursor}
           setCursor={setCursor}
           ordered={ordered}
-          allIndex={allIndex}
-          doorShown={doorShown}
           hits={hits}
           busy={busy}
           ready={ready}
-          query={trimmed}
           locale={locale}
-          onPick={activate}
+          onPick={openHit}
           t={t}
           tSearch={tSearch}
         />
@@ -287,18 +266,15 @@ export function GlobalSearch() {
 type Translate = (key: string, values?: Record<string, string>) => string;
 
 function Results({
-  listId, cursor, setCursor, ordered, allIndex, doorShown, hits, busy, ready, query, locale, onPick, t, tSearch,
+  listId, cursor, setCursor, ordered, hits, busy, ready, locale, onPick, t, tSearch,
 }: {
   listId: string;
   cursor: number;
   setCursor: (index: number) => void;
   ordered: SearchHit[];
-  allIndex: number;
-  doorShown: boolean;
   hits: SearchHit[] | null;
   busy: boolean;
   ready: boolean;
-  query: string;
   locale: string;
   onPick: (index: number) => void;
   t: Translate;
@@ -360,32 +336,6 @@ function Results({
           })
         )}
       </ul>
-
-      {/* THE DOOR TO THE PAGE, drawn only once there is a room behind it —
-          the panel's last arrow stop while it is here. `doorShown` carries
-          the whole condition (a landed answer WITH rows in it) so the
-          keyboard's last index and this row cannot disagree about whether
-          it exists; the divider goes with the row, because a rule under
-          nothing is a line drawn for its own sake. */}
-      {doorShown ? (
-        <div className="border-t border-fg/[0.07] p-1.5">
-          <button
-            type="button"
-            id={`${listId}-${allIndex}`}
-            onMouseEnter={() => setCursor(allIndex)}
-            onClick={() => onPick(allIndex)}
-            className={`flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-xs transition-colors ${
-              cursor === allIndex ? "bg-fg/[0.06] text-fg" : "text-fg-muted"
-            }`}
-          >
-            <IconSearch width={14} height={14} className="shrink-0 opacity-60" />
-            <span className="min-w-0 flex-1 truncate">{t("searchAll", { q: query })}</span>
-            <kbd className="shrink-0 rounded bg-fg/[0.06] px-1.5 py-0.5 font-sans text-[10px] text-fg-subtle">
-              {t("searchEnter")}
-            </kbd>
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }

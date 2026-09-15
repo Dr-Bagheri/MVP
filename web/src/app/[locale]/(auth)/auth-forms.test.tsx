@@ -258,34 +258,39 @@ describe("the OAuth arrival (?oauth=ok)", () => {
   });
 });
 
-describe("the provider buttons are REAL links (the mock's dead Google button is this screen's origin story)", () => {
+/**
+ * NEITHER GATE OFFERS A PROVIDER (user directive, 2026-09-15: "remove these
+ * two button git hub and google for now").
+ *
+ * These cases used to assert the opposite — that both buttons were REAL links
+ * at the live PKCE routes, the mock form's dead Google button being this
+ * screen's origin story. The machinery is untouched and the component still
+ * exists; what changed is that no gate renders it.
+ *
+ * THE READ IS THE LOAD-BEARING HALF, and it took a red to find it: the
+ * `beforeEach` stub answers `/api/auth-methods` with BOTH providers enabled,
+ * so a missing link could always be a link still waiting for its fetch. It
+ * cannot be here, because the fetch never happens — nothing on either gate
+ * asks which providers are enabled any more. That is a fact about the
+ * COMPONENT being unmounted rather than about what it chose to draw, and it
+ * is what a re-added `<OAuthButtons />` fails first.
+ */
+describe("the provider buttons are off both gates (2026-09-15)", () => {
   it.each([
-    ["Google", "/api/auth/oauth/google"],
-    ["GitHub", "/api/auth/oauth/github"],
-  ])("sign-in offers %s pointing at the live PKCE route", async (name, href) => {
-    render(<SignInPage />);
-    // findBy: the buttons draw only after /api/auth-methods answers (0078)
-    const a = await screen.findByRole("link", { name: new RegExp(name) });
-    // the EXACT BFF path, un-locale-prefixed: a /fa/api/... href would 404,
-    // which is precisely a dead button wearing a live one's clothes
-    expect(a.getAttribute("href")).toBe(href);
-  });
+    ["sign-in", SignInPage],
+    ["sign-up", SignUpPage],
+  ])("%s offers neither Google nor GitHub, and asks nothing about them", async (_name, Page) => {
+    render(<Page />);
+    /* the form itself has landed — without this every absence below is
+       equally true of a screen that rendered nothing at all */
+    await screen.findByLabelText(/^رایانامه/);
 
-  it("sign-up offers both providers too", async () => {
-    render(<SignUpPage />);
-    expect((await screen.findByRole("link", { name: /Google/ })).getAttribute("href")).toBe("/api/auth/oauth/google");
-    expect((await screen.findByRole("link", { name: /GitHub/ })).getAttribute("href")).toBe("/api/auth/oauth/github");
-  });
-
-  it("a method an admin turned OFF is not offered (0078) — the negative is the feature", async () => {
-    vi.stubGlobal("fetch", vi.fn(() =>
-      Promise.resolve(new Response(JSON.stringify([
-        { provider: "google", enabled: false },
-        { provider: "github", enabled: true },
-      ]), { headers: { "content-type": "application/json" } }))));
-    render(<SignInPage />);
-    await screen.findByRole("link", { name: /GitHub/ });
+    expect(fetch, "something still asks which providers are enabled").not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: /Google/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /GitHub/ })).toBeNull();
+    /* the divider went with them: «یا ادامه با» over nothing is a heading
+       for an empty room */
+    expect(screen.queryByText(/یا ادامه با/)).toBeNull();
   });
 });
 

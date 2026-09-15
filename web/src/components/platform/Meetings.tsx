@@ -15,10 +15,11 @@ import { DateField, TimeField } from "@/components/DateTimeFields";
 import { stashUpload } from "@/lib/pendingUpload";
 import { audioContentType, readDurationSeconds, uploadRejection } from "@/components/echo/uploadRules";
 import {
-  IconArchive, IconArrowDown, IconArrowUp, IconCalendar, IconCheck, IconChevronRight,
-  IconClose, IconFolder, IconMic, IconPencil, IconPlus, IconRows, IconSearch,
-  IconTrash, IconUpload, IconVideo,
+  IconArchive, IconArrowDown, IconArrowUp, IconCalendar, IconCheck, IconCheckCircle,
+  IconChevronRight, IconClose, IconFolder, IconMic, IconPencil, IconPeople3, IconPlus,
+  IconRows, IconSearch, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
+import { FilterChips } from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/scaffold";
@@ -483,35 +484,7 @@ export function Meetings() {
             ]}
         />
 
-        {/* the FIELD and the DIRECTION are two questions, so they are two
-            controls: one dropdown that names what the order is by, one key
-            that flips it. A single list of six entries ("date, newest first",
-            "date, oldest first", …) is the same two answers multiplied out,
-            and it grows by two every time a sort field is added. */}
-        <div className="w-[11rem] shrink-0">
-          <Select
-            value={sort}
-            ariaLabel={t("sortBy")}
-            onChange={(next) => setSort(next as "date" | "people" | "status")}
-            options={[
-              { value: "date", label: t("sortDate") },
-              { value: "people", label: t("sortPeople") },
-              { value: "status", label: t("sortStatus") },
-            ]}
-          />
-        </div>
-        <button
-          type="button"
-          aria-label={descending ? t("sortDescending") : t("sortAscending")}
-          title={descending ? t("sortDescending") : t("sortAscending")}
-          aria-pressed={descending}
-          onClick={() => setDescending((v) => !v)}
-          className="btn btn-icon shrink-0 border border-border text-fg-muted hover:text-fg"
-        >
-          {descending
-            ? <IconArrowDown width={14} height={14} />
-            : <IconArrowUp width={14} height={14} />}
-        </button>
+        {/* THE SORT MOVED OUT OF THIS ROW — see the chip row below. */}
 
         {/*
           * THE VIEW SWITCH, AT THE FAR END OF THIS SAME LINE (user,
@@ -534,6 +507,54 @@ export function Meetings() {
           {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
         </div>
       </div>
+
+      {/*
+        * ── THE SORT, AS THE SECOND SUB-MENU ──────────────────────────────
+        *
+        * User, 2026-09-15: "for the meeting table fix the sort as the second
+        * top sub menu like the last image" — the image being the security
+        * page's «همه ۱۶ | آنلاین ۴ | آفلاین ۱۲».
+        *
+        * It was a `w-[11rem]` dropdown in the row above, which cost two
+        * presses to see three options and was the one control on the page
+        * with a silhouette nothing else shares. `FilterChips` is the shape
+        * every other second row in the product already wears (security, the
+        * audit log, the workflow shelf, both boards' strips), so this page
+        * stops being the exception rather than gaining a fourth dialect.
+        *
+        * NO `FILTER_ROW_GAP` HERE, and that is not an oversight: the class is
+        * `mb-3`, the parent is already `flex-col gap-3`, and wearing both
+        * would put 24px under a row the rest of the product sets at 12.
+        *
+        * THE DIRECTION STAYS A SEPARATE KEY, for the reason the dropdown's
+        * own note gave and this move does not change: the field and the
+        * direction are two questions, and folding them together means six
+        * chips that grow by two every time a sort field is added.
+        */}
+      <FilterChips
+        label={t("sortBy")}
+        active={sort}
+        onSelect={setSort}
+        chips={[
+          { key: "date", label: t("sortDate"), icon: <IconCalendar width={12} height={12} /> },
+          { key: "people", label: t("sortPeople"), icon: <IconPeople3 width={12} height={12} /> },
+          { key: "status", label: t("sortStatus"), icon: <IconCheckCircle width={12} height={12} /> },
+        ]}
+      >
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        <button
+          type="button"
+          aria-label={descending ? t("sortDescending") : t("sortAscending")}
+          title={descending ? t("sortDescending") : t("sortAscending")}
+          aria-pressed={descending}
+          onClick={() => setDescending((v) => !v)}
+          className="btn btn-icon shrink-0 border border-border text-fg-muted hover:text-fg"
+        >
+          {descending
+            ? <IconArrowDown width={14} height={14} />
+            : <IconArrowUp width={14} height={14} />}
+        </button>
+      </FilterChips>
 
       {rows === null ? (
         /* audit finding, 2026-09-02: while the list fetched, the column held a

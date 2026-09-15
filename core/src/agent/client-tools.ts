@@ -96,7 +96,6 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "minutes and decisions. This is where a meeting lives. "
       + "/tasks = the task board. "
       + "/conversations = past assistant conversations (history). "
-      + "/search = transcript search. "
       + "/workflows = workflows. /agents = the agents and their profiles. "
       + "/integrations = connected services (Google and the rest). "
       + "/profile = the signed-in person's own profile. "
@@ -130,7 +129,7 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
        */
       path: strEnum([
         "/", "/assistant", "/meetings", "/tasks", "/projects", "/chat",
-        "/conversations", "/search", "/workflows", "/agents", "/integrations",
+        "/conversations", "/workflows", "/agents", "/integrations",
         "/profile", "/management",
         "/management/users", "/management/speakers", "/management/skills",
         "/management/models", "/management/workflows", "/management/privileges",
@@ -172,13 +171,17 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     parameters: obj({ call_id: str() }, ["call_id"]),
     effect: "ui",
   },
-  {
-    name: "set_search",
-    label: { fa: "جست‌وجو در صفحه", en: "Searching" },
-    description: "Run a search in the product UI and show the results page.",
-    parameters: obj({ query: str() }, ["query"]),
-    effect: "ui",
-  },
+  /*
+   * `set_search` LEFT THE REGISTRY on 2026-09-15, with the page it opened.
+   *
+   * Its whole job was "show the results page", and the user removed that page
+   * («remove these previous pages, we dont need them anymore, just the one
+   * that we have right now») — the top bar's box answers in place now, and
+   * nothing can type into somebody else's box for them. A tool that navigates
+   * to a deleted address is not a degraded tool, it is a 404 the model is
+   * confident about. `search_transcripts` still reads the corpus and ANSWERS,
+   * which is what an agent was ever asked for here.
+   */
   {
     name: "set_language",
     label: { fa: "تغییر زبان", en: "Switching language" },

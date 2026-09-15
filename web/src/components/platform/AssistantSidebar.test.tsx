@@ -36,17 +36,42 @@ vi.mock("@/lib/assistantSession", async (importOriginal) => {
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
+/* every toast the panel raised. PARTIAL mock: components inside this tree read
+   other things from the module, and replacing it whole would break them for a
+   spy on one function. */
+const notified = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/notify", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/notify")>(),
+  notify: (text: string, kind?: string) => notified(text, kind),
+}));
 /* the identity read, per test: the default is a member, and two cases below
    answer slowly or answer "stranger" */
 const identity = vi.hoisted(() => vi.fn(async (): Promise<{ state: string }> => ({ state: "member" })));
 /* the stored conversations the header's menu lists; empty for every case that
    is not about the header */
 const sessions = vi.hoisted(() => vi.fn((): unknown[] => []));
+/**
+ * The thread read, and the refusal class it can fail with.
+ *
+ * `BffError` is EXPORTED BY THE MOCK because the component now tells a 404
+ * apart from every other failure, and `instanceof` against a mock that omits
+ * the class throws inside the catch — a component that handles the case
+ * correctly would fail here for a reason that is about the mock. The class is
+ * built once and shared, so an instance thrown below really is an instance of
+ * the thing the component imports.
+ */
+const Bff = vi.hoisted(() => class BffError extends Error {
+  constructor(readonly status: number, readonly kind?: string) { super(`bff ${status}`); }
+});
+const thread = vi.hoisted(() => vi.fn(
+  async (_id: string): Promise<{ messages: unknown[]; floor: string[] }> => ({ messages: [], floor: [] }),
+));
 vi.mock("@/api/client", () => ({
+  BffError: Bff,
   api: {
     identityState: () => identity(),
     models: async () => ({ models: [], preferred_model: null }),
-    agentThread: async () => ({ messages: [], floor: [] }),
+    agentThread: (id: string) => thread(id),
     /* the header's switcher reads this — on OPEN only, so every other case in
        this file never touches it (see the header describe at the foot) */
     agentSessions: async () => sessions(),
@@ -111,7 +136,10 @@ vi.mock("@/lib/voice", () => ({
 import { AssistantSidebar } from "./AssistantSidebar";
 import { SCAFFOLD } from "@/components/scaffold/constants";
 import { announceRecordingLive } from "@/lib/assistantBus";
-import { assistantSnapshot } from "@/lib/assistantSession";
+import { assistantSnapshot, resetAssistantSession } from "@/lib/assistantSession";
+import {
+  liveConversation, resetLiveConversationForTest, setLiveConversation,
+} from "@/lib/liveConversation";
 
 /**
  * **The failure this platform has already shipped once.**
@@ -608,5 +636,63 @@ describe("the assistant's header (2026-09-08)", () => {
     await waitFor(() => expect(assistantSnapshot().sessionId).toBe("s-1"));
     await waitFor(() => expect(screen.getByRole("button", { name: "تغییر گفت‌وگو" }).textContent)
       .toContain("قرارداد"));
+  });
+});
+
+/**
+ * A CONVERSATION THAT IS GONE IS NOT A CONVERSATION THAT FAILED
+ * (user report, 2026-09-15: «i get this error, check it» — the toast on the
+ * meetings page).
+ *
+ * The handoff pointer lives in `sessionStorage` and outlives the session that
+ * minted it, so a conversation its owner archived — or one belonging to an
+ * identity this tab no longer has — leaves an id that answers 404 forever.
+ * The restore effect re-asks on every navigation, so one dead id produced one
+ * «این یکی کامل نشد.» per page change, at somebody who had not opened the
+ * assistant at all. Production: thirty-seven reads of a single id in a day,
+ * every one a 404.
+ *
+ * THE PAIR IS THE TEST. "No toast on a 404" alone passes against a panel that
+ * stopped reporting failures altogether, which is the worse bug — so the
+ * control drives the OTHER failure through the same path and demands the
+ * toast, and demands the pointer SURVIVE, because a transport failure is the
+ * kind worth retrying on the next navigation.
+ */
+describe("a dead conversation pointer is dropped, not reported (2026-09-15)", () => {
+  beforeEach(() => {
+    /* the store first: resetting it clears the pointer, so seeding before
+       this would seed a pointer the reset then removes */
+    resetAssistantSession();
+    resetLiveConversationForTest();
+    /* the default implementation, restored by hand: `clearAllMocks` clears
+       what a mock RECORDED and leaves what it was told to DO, so one test's
+       rejection would be the next test's answer */
+    thread.mockImplementation(async () => ({ messages: [], floor: [] }));
+  });
+
+  it("drops a 404 pointer in silence, and leaves the panel usable", async () => {
+    setLiveConversation("s-gone");
+    thread.mockRejectedValue(new Bff(404));
+
+    await mount();
+
+    /* it really did ask for the stored one — without this the rest is true of
+       a panel that never restores anything */
+    await waitFor(() => expect(thread).toHaveBeenCalledWith("s-gone"));
+    await waitFor(() => expect(liveConversation(), "the dead id is still handed on").toBeNull());
+    expect(notified, "a conversation that is gone was reported as a failure").not.toHaveBeenCalled();
+    /* and the panel is on a FRESH conversation rather than half-holding a
+       dead one */
+    expect(assistantSnapshot().sessionId).toBeNull();
+  });
+
+  it("THE CONTROL: any other failure still speaks, and keeps the pointer", async () => {
+    setLiveConversation("s-live");
+    thread.mockRejectedValue(new Error("the network went away"));
+
+    await mount();
+
+    await waitFor(() => expect(notified).toHaveBeenCalledWith("این یکی کامل نشد.", "warn"));
+    expect(liveConversation(), "a retryable failure threw the conversation away").toBe("s-live");
   });
 });

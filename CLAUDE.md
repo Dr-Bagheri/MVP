@@ -6709,3 +6709,75 @@ sessions) for the cross-session narrative.
   write on the org's data (2026-09-06) — the user's next recording is the
   measurement.
   db 222 migrations · core 1575 tests · web 1574 tests + gate + sweep.
+
+- 2026-09-15 (night — A CONVERSATION THAT IS GONE IS NOT ONE THAT FAILED, THE
+  SEARCH BOX IS THE SEARCH, THE MEETINGS SORT JOINS THE SECOND ROW, AND THE
+  TWO PROVIDER BUTTONS STAND DOWN): five items from six screenshots.
+  **THE TOAST, and the log named it before any code was read.** «این یکی کامل
+  نشد.» on the meetings page — a page with no assistant open on it. The api
+  log answered in one reading: ONE conversation id read thirty-seven times in
+  a day, the first 200 and **every one after it a 404**. `liveConversation` is
+  a handoff pointer held per TAB in `sessionStorage`, so it outlives the
+  session that minted it; the sidebar's restore effect re-asks for it on every
+  navigation, and `loadSession` reported all failure as one word. A 404 there
+  is not a failure to READ a conversation, it is a conversation that is not
+  there — archived by its owner, or belonging to an identity this tab no
+  longer has. The dead pointer is dropped in silence now and everything else
+  still speaks, because a transport failure is the kind worth retrying and
+  this is the kind that never will be. Both clears are CONDITIONAL on the id
+  still being the one in hand: a slow 404 landing after somebody has opened
+  another conversation must not take that one off the screen.
+  **THE SEARCH PAGE IS GONE** ("the search bar is searching when you type and
+  it is enough, when you enter it does not need to do anything … remove these
+  previous pages"). Enter is inert — the handler STAYS, because a `<form>`
+  without one reloads the page on Enter, which is the loudest possible version
+  of "does nothing" — the «همهٔ نتایج …» door left the panel's foot, and with
+  it went the route, the trail entry and root, the `search` namespace down to
+  its one live key, two platform keys, `/search` from `NAVIGABLE` and from the
+  navigate tool's enum and description, and **`set_search` whole**: its only
+  job was opening that page, and a tool that navigates to a deleted address is
+  not a degraded tool, it is a 404 the model is confident about. Cost said out
+  loud in the component: with the page gone, a ninth match is not reachable
+  from the box — narrowing the words is what reaches it.
+  **Two of my own tests could not have failed, and one was caught only by the
+  mutation.** The door-absence check looked for «همهٔ نتایج …» — a label that
+  came from `platform.searchAll`, deleted in the same change — so a door put
+  back today renders `MISSING_MESSAGE` and the text query finds nothing either
+  way: **a test whose subject was removed alongside the thing it checks is
+  vacuous in a new way**, and the fix is structural (the door was the panel's
+  only BUTTON; every row is an `<li role="option">`). The auth absence check
+  waited for the `/api/auth-methods` read the buttons drew after — and that
+  read NEVER HAPPENS now, which is the stronger fact: nothing on either gate
+  asks which providers are enabled, which is about the component being
+  unmounted rather than about what it chose to draw.
+  **THE MEETINGS SORT** is R3's chip row (see the rulebook's amendment for the
+  `FILTER_ROW_GAP` trap). **THE PROVIDER BUTTONS** are off both gates on the
+  user's "for now" — component, `/api/auth-methods`, PKCE routes and copy all
+  untouched, so coming back is one line per gate.
+  **A guard caught the leftover I missed**: `toolCopy.guard` named `set_search`
+  as a capability group naming a tool nobody implements — the agents page
+  would have rendered a heading with one fewer line under it and said nothing
+  about why. Two catalogue sentences went with it.
+  Verify-red by mutation on all four items, eleven mutations, each red on its
+  own test with the control green first: the old catch-everything restored
+  (the 404 test), the status check dropped (the control), Enter opening a hit
+  again, the submit handler removed entirely, the door staged back, the chips
+  not writing the sort, the dropdown restored beside them, and both provider
+  buttons put back. The route guard earned its keep separately: `/search` put
+  back into `NAVIGABLE` alone fired «the executor would navigate here and the
+  app serves nothing».
+  Two tooling notes, both already in this file and both met again: deleting a
+  route after a dev server has run leaves `.next/dev/types` and
+  `.next-gate/types` naming the deleted module, so the typecheck reds name a
+  path nothing in the repo contains; and the build gate runs from PowerShell.
+  **NOT MINE, and pre-existing since the c39a8a3 merge** — proven by stashing
+  this batch's core changes and re-running: `core/test/history.test.ts` fails
+  on `U+200C survived`. The source says ZWNJ and ZWJ are DELIBERATELY KEPT
+  («می‌فرستم» would reach the carried block as «میفرستم») and its test says the
+  sweep was taken whole and asserts they are gone. Two sessions on two
+  machines decided opposite things and the merge kept both halves; the
+  trade-off — Persian orthography against a control strip with no hole in it —
+  is a decision, not a typo, and is left for one.
+  NOT proven live yet: nothing here has been deployed or opened on production.
+  db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
+  web 1576 tests + gate + sweep.

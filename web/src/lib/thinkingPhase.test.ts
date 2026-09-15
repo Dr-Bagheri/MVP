@@ -56,13 +56,19 @@ describe("the wait names its work", () => {
   });
 
   /**
-   * THE PAIR THE PREFIX ORDER EXISTS FOR. `set_search` changes a setting and
+   * THE PAIR THE PREFIX ORDER EXISTS FOR. `set_search` changed a setting and
    * `search_transcripts` searches; a checker that looked for the word
    * "search" anywhere would call both a search, and the line would tell the
    * reader the assistant was looking something up while it wrote to their
    * settings. Longest prefix wins, and this is the case that proves it.
+   *
+   * `set_search` itself LEFT THE REGISTRY on 2026-09-15 with the page it
+   * opened, and the case stays because this function takes a NAME, not a
+   * registered tool: the collision is a property of the two prefixes, and the
+   * next `set_*` whose tail is a verb meets it again. Kept as the mechanism's
+   * regression case, named as a former tool rather than a current one.
    */
-  it("reads set_search as an update, not a search", () => {
+  it("reads a set_-prefixed name as an update, not a search", () => {
     expect(thinkingPhase("set_search")).toBe("update");
     expect(thinkingPhase("search_transcripts")).toBe("search");
   });
