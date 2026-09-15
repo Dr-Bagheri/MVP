@@ -19,6 +19,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * itself) — **that the client method was CALLED, with what the user typed, and
  * that the destination came from the server's answer rather than from the
  * submit handler.**
+ *
+ * THE GATE IS ONE EMAIL FIELD NOW (M54, 2026-09-15): «Continue» asks for a
+ * code, the code screen verifies it, and the password form is one link away
+ * for whoever has one. The assertions above hold for all three; the sign-up
+ * page is a redirect and is asserted as one.
  */
 const push = vi.fn();
 vi.mock("@/i18n/routing", () => ({
@@ -28,7 +33,8 @@ vi.mock("@/i18n/routing", () => ({
 }));
 
 const signIn = vi.fn();
-const signUp = vi.fn();
+const requestEmailCode = vi.fn();
+const verifyEmailCode = vi.fn();
 const register = vi.fn();
 const identityState = vi.fn();
 const setPassword = vi.fn();
@@ -40,7 +46,8 @@ vi.mock("@/api/client", async (importOriginal) => {
     ...actual,
     api: {
       signIn: (...args: unknown[]) => signIn(...args),
-      signUp: (...args: unknown[]) => signUp(...args),
+      requestEmailCode: (...args: unknown[]) => requestEmailCode(...args),
+      verifyEmailCode: (...args: unknown[]) => verifyEmailCode(...args),
       register: (...args: unknown[]) => register(...args),
       identityState: () => identityState(),
       setPassword: (...args: unknown[]) => setPassword(...args),
@@ -50,26 +57,40 @@ vi.mock("@/api/client", async (importOriginal) => {
 });
 
 const { BffError } = await import("@/api/client");
-const { default: SignInPage } = await import("./sign-in/page");
-const { default: SignUpPage } = await import("./sign-up/page");
+const { default: SignInPage, landingFor } = await import("./sign-in/page");
 
 const type = (label: RegExp, value: string) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
+/** the gate's first press */
+const askForCode = (email = "person@example.com") => {
+  type(/^رایانامه/, email);
+  fireEvent.click(screen.getByRole("button", { name: "ادامه" }));
+};
+
+/** the secondary path: open the password form and fill it */
+const openPasswordForm = () => {
+  fireEvent.click(screen.getByRole("button", { name: "ورود با گذرواژه" }));
+};
+
 beforeEach(() => {
   push.mockReset();
   signIn.mockReset();
-  signUp.mockReset();
+  requestEmailCode.mockReset();
+  verifyEmailCode.mockReset();
   register.mockReset();
   identityState.mockReset();
   setPassword.mockReset();
   oauthPasswordEnrollment.mockReset();
   signIn.mockResolvedValue(undefined);
-  identityState.mockResolvedValue({ state: "member", me: {} });
+  requestEmailCode.mockResolvedValue(undefined);
+  verifyEmailCode.mockResolvedValue(undefined);
+  identityState.mockResolvedValue({ state: "member", me: { onboarding_completed_at: "2026-09-15T00:00:00Z" } });
   setPassword.mockResolvedValue(undefined);
   oauthPasswordEnrollment.mockResolvedValue({ required: false });
   // 0078: OAuthButtons asks /api/auth-methods before drawing anything —
-  // answer it with both enabled so the button assertions see the buttons
+  // answer it with both enabled so the absence assertions see the buttons
+  // if anything ever draws them again
   vi.stubGlobal("fetch", vi.fn(() =>
     Promise.resolve(new Response(JSON.stringify([
       { provider: "google", enabled: true },
@@ -79,16 +100,104 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
-describe("sign-in actually signs in", () => {
+describe("the email-code gate (M54)", () => {
+  it("«Continue» asks the server for a code, with the typed address", async () => {
+    render(<SignInPage />);
+    askForCode("person@example.com");
+    // THE assertion the old forms would have failed: a request left the browser
+    await waitFor(() => expect(requestEmailCode).toHaveBeenCalledWith("person@example.com"));
+    // and the screen moved to the code — naming the address the mail went to
+    expect(await screen.findByLabelText(/^کد شش‌رقمی/)).toBeTruthy();
+    expect(screen.getByText(/person@example\.com/)).toBeTruthy();
+  });
+
+  it("the typed code is verified against that address, and the SERVER decides the destination", async () => {
+    render(<SignInPage />);
+    askForCode();
+    const box = await screen.findByLabelText(/^کد شش‌رقمی/);
+    fireEvent.change(box, { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+    await waitFor(() => expect(verifyEmailCode).toHaveBeenCalledWith("person@example.com", "123456"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+  });
+
+  it("Persian digits typed into the code box reach the server as ASCII", async () => {
+    render(<SignInPage />);
+    askForCode();
+    const box = await screen.findByLabelText(/^کد شش‌رقمی/);
+    fireEvent.change(box, { target: { value: "۱۲۳۴۵۶" } });
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+    await waitFor(() => expect(verifyEmailCode).toHaveBeenCalledWith("person@example.com", "123456"));
+  });
+
+  it("a wrong code says so and navigates nowhere", async () => {
+    verifyEmailCode.mockRejectedValue(new BffError(401, "invalid", "Token has expired or is invalid"));
+    render(<SignInPage />);
+    askForCode();
+    const box = await screen.findByLabelText(/^کد شش‌رقمی/);
+    fireEvent.change(box, { target: { value: "000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/کد درست نیست/);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("a rate-limited request is named as one, not as a failure", async () => {
+    requestEmailCode.mockRejectedValue(new BffError(429, "rate_limited", "over_email_send_rate_limit"));
+    render(<SignInPage />);
+    askForCode();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/چند لحظه صبر کن/);
+    expect(screen.queryByLabelText(/^کد شش‌رقمی/)).toBeNull();
+  });
+
+  it("a brand-new person is registered with NO questions and lands on the first-time flow", async () => {
+    /* the code verified; the product has never heard of them (unregistered);
+       the bare register founds their workspace (db/0223) and the next identity
+       read says member with an unfinished flow */
+    identityState
+      .mockResolvedValueOnce({ state: "unregistered" })
+      .mockResolvedValue({ state: "member", me: { onboarding_completed_at: null } });
+    register.mockResolvedValue({ id: "u-1", status: "active", role: "owner" });
+    render(<SignInPage />);
+    askForCode("newcomer@example.com");
+    const box = await screen.findByLabelText(/^کد شش‌رقمی/);
+    fireEvent.change(box, { target: { value: "654321" } });
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding"));
+    // one call, no org named, and no form in between
+    expect(register).toHaveBeenCalledWith({ display_name: "newcomer" });
+    expect(screen.queryByLabelText(/^نام سازمان/)).toBeNull();
+  });
+
+  it("a member who has finished the flow lands home; one who has not lands on the flow", () => {
+    expect(landingFor({ onboarding_completed_at: "2026-09-15T00:00:00Z" })).toBe("/");
+    expect(landingFor({ onboarding_completed_at: null })).toBe("/onboarding");
+    /* ABSENT is a deployment without the flow — home, never a route that
+       cannot save */
+    expect(landingFor(undefined)).toBe("/");
+    expect(landingFor({} as { onboarding_completed_at?: string | null })).toBe("/");
+  });
+
+  it("«use a different email» goes back to the address, and the code is asked for again from there", async () => {
+    render(<SignInPage />);
+    askForCode("first@example.com");
+    await screen.findByLabelText(/^کد شش‌رقمی/);
+    fireEvent.click(screen.getByRole("button", { name: "رایانامهٔ دیگر" }));
+    expect(await screen.findByLabelText(/^رایانامه/)).toBeTruthy();
+    askForCode("second@example.com");
+    await waitFor(() => expect(requestEmailCode).toHaveBeenLastCalledWith("second@example.com"));
+  });
+});
+
+describe("the password path is one link away and still signs in", () => {
   it("sends the typed credentials to the server", async () => {
     render(<SignInPage />);
+    openPasswordForm();
     type(/^رایانامه/, "person@example.com");
     type(/^گذرواژه/, "hunter2");
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
-    // THE assertion the old form would have failed: a request left the browser
     await waitFor(() => expect(signIn).toHaveBeenCalledWith("person@example.com", "hunter2"));
   });
 
@@ -97,10 +206,10 @@ describe("sign-in actually signs in", () => {
     // you into the app exactly as a right one did
     signIn.mockRejectedValue(new BffError(401, "invalid", "Invalid login credentials"));
     render(<SignInPage />);
+    openPasswordForm();
     type(/^رایانامه/, "person@example.com");
     type(/^گذرواژه/, "wrong");
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid login credentials");
     expect(push).not.toHaveBeenCalled();
   });
@@ -117,96 +226,66 @@ describe("sign-in actually signs in", () => {
      * other at a vendor, and sending a suspended org to wait for an admin is
      * an instruction that cannot work.
      */
-    identityState.mockResolvedValue({ state, me: {} });
+    identityState.mockResolvedValue({ state, me: { onboarding_completed_at: "2026-09-15T00:00:00Z" } });
     render(<SignInPage />);
+    openPasswordForm();
     type(/^رایانامه/, "person@example.com");
     type(/^گذرواژه/, "hunter2");
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
     await waitFor(() => expect(push).toHaveBeenCalledWith(destination));
   });
 
-  /* NOTHING IS ASKED (user directive, 2026-09-02). `unregistered` is
-     authenticated-but-unknown-to-the-product — treated as signed-out, this
-     person retries their correct password forever. The old branch handed
-     them a form asking for the name of an organization nobody had told
-     them; db/0149 resolves it server-side and lands them pending. */
-  it("registers an unknown token with NO questions and routes to the waiting room", async () => {
-    identityState
-      .mockResolvedValueOnce({ state: "unregistered" })
-      .mockResolvedValue({ state: "pending" });
-    register.mockResolvedValue({ id: "u-1", status: "pending" });
-    render(<SignInPage />);
-    type(/^رایانامه/, "person@example.com");
-    type(/^گذرواژه/, "hunter2");
-    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/pending"));
-    // the whole point: one call, no org named, and no form in between
-    expect(register).toHaveBeenCalledWith({ display_name: "person" });
-    expect(screen.queryByLabelText(/^نام سازمان/)).toBeNull();
-  });
-
   it("says what the SERVER said when registration is refused", async () => {
-    /* `signups_closed` is a fact about the platform and `org_not_found`
-       about a name — neither is something this person can fix by typing,
-       and a generic "try again" would hide which one it is. */
+    /* `org_not_found` is a fact about a name and `no_organization` about the
+       platform — neither is something this person can fix by typing, and a
+       generic "try again" would hide which one it is. */
     identityState.mockResolvedValue({ state: "unregistered" });
     register.mockRejectedValue(
-      new BffError(400, "invalid", "this platform is not accepting new members yet"));
+      new BffError(400, "invalid", "this platform has no organization to join yet"));
     render(<SignInPage />);
+    openPasswordForm();
     type(/^رایانامه/, "person@example.com");
     type(/^گذرواژه/, "hunter2");
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
     expect(await screen.findByRole("alert"))
-      .toHaveTextContent("this platform is not accepting new members yet");
+      .toHaveTextContent("this platform has no organization to join yet");
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("an INVITED arrival never sees the org form — the bare register redeems and routes in (db/0060)", async () => {
+  it("an INVITED arrival never sees an org form — the bare register redeems and routes in (db/0060)", async () => {
     identityState
       .mockResolvedValueOnce({ state: "unregistered" })
-      .mockResolvedValue({ state: "member" });
-    // the probe succeeds: the platform emailed this person, the door opened
+      .mockResolvedValue({ state: "member", me: { onboarding_completed_at: "2026-09-15T00:00:00Z" } });
     register.mockResolvedValue({ id: "u-2", status: "active" });
     render(<SignInPage />);
+    openPasswordForm();
     type(/^رایانامه/, "invited@example.com");
     type(/^گذرواژه/, "hunter2");
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
     expect(register).toHaveBeenCalledWith({ display_name: "invited" });
   });
 });
 
 describe("the confirm-email landing (?confirmed=…)", () => {
-  afterEach(() => {
-    // the URL is ambient state; a leaked query would make later tests
-    // "arrive from a confirmation link" without meaning to
-    window.history.replaceState(null, "", "/");
-  });
-
-  it("?confirmed=1 SAYS the account is ready and routes with no password re-entry", async () => {
-    // /api/auth/confirm already wrote the session cookie; arriving here with
-    // the marker must (a) say the confirmation worked — a silent redirect
-    // reads as nothing happening — and (b) ask the server who we are and
-    // route: a fresh person is registered and lands in the waiting room, with
-    // no second password prompt two minutes after the first. Deleting the
-    // arrival effect leaves this red.
+  it("?confirmed=1 SAYS the account is ready and routes with no code re-entry", async () => {
+    // /api/auth/confirm already wrote the session cookie (the one-click link);
+    // arriving here with the marker must (a) say the confirmation worked and
+    // (b) ask the server who we are and route: a fresh person is registered
+    // and lands on the first-time flow. Deleting the arrival effect leaves
+    // this red.
     window.history.replaceState(null, "", "/?confirmed=1");
     identityState
       .mockResolvedValueOnce({ state: "unregistered" })
-      .mockResolvedValue({ state: "pending" });
-    register.mockResolvedValue({ id: "u-1", status: "pending" });
+      .mockResolvedValue({ state: "member", me: { onboarding_completed_at: null } });
+    register.mockResolvedValue({ id: "u-1", status: "active" });
     render(<SignInPage />);
     expect(await screen.findByRole("status")).toHaveTextContent(/حسابتان آماده است/);
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/pending"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding"));
   });
 
   it("?confirmed=1 with a registered identity goes straight in", async () => {
     window.history.replaceState(null, "", "/?confirmed=1");
-    identityState.mockResolvedValue({ state: "member" });
     render(<SignInPage />);
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
@@ -218,6 +297,13 @@ describe("the confirm-email landing (?confirmed=…)", () => {
     expect(identityState).not.toHaveBeenCalled();
   });
 
+  it("?confirmed=fragment tells the person to type the code — a link that carried its session in the fragment is refused (M1)", async () => {
+    window.history.replaceState(null, "", "/?confirmed=fragment");
+    render(<SignInPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/کد شش‌رقمی داخل نامه/);
+    expect(identityState).not.toHaveBeenCalled();
+  });
+
   it("?oauth=failed names the provider failure — not the email-link message", async () => {
     window.history.replaceState(null, "", "/?oauth=failed");
     render(<SignInPage />);
@@ -226,12 +312,9 @@ describe("the confirm-email landing (?confirmed=…)", () => {
 });
 
 describe("the OAuth arrival (?oauth=ok)", () => {
-  afterEach(() => window.history.replaceState(null, "", "/"));
-
   it("requires a first password before routing even an already registered member", async () => {
     window.history.replaceState(null, "", "/?oauth=ok");
     oauthPasswordEnrollment.mockResolvedValue({ required: true });
-    identityState.mockResolvedValue({ state: "member", me: {} });
     render(<SignInPage />);
 
     expect(await screen.findByLabelText(/^انتخاب گذرواژه/)).toBeTruthy();
@@ -249,9 +332,7 @@ describe("the OAuth arrival (?oauth=ok)", () => {
   it("does not interrupt a later OAuth arrival once its password exists", async () => {
     window.history.replaceState(null, "", "/?oauth=ok");
     oauthPasswordEnrollment.mockResolvedValue({ required: false });
-    identityState.mockResolvedValue({ state: "member", me: {} });
     render(<SignInPage />);
-
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
     expect(screen.queryByLabelText(/^انتخاب گذرواژه/)).toBeNull();
     expect(setPassword).not.toHaveBeenCalled();
@@ -262,86 +343,44 @@ describe("the OAuth arrival (?oauth=ok)", () => {
  * NEITHER GATE OFFERS A PROVIDER (user directive, 2026-09-15: "remove these
  * two button git hub and google for now").
  *
- * These cases used to assert the opposite — that both buttons were REAL links
- * at the live PKCE routes, the mock form's dead Google button being this
- * screen's origin story. The machinery is untouched and the component still
- * exists; what changed is that no gate renders it.
- *
- * THE READ IS THE LOAD-BEARING HALF, and it took a red to find it: the
- * `beforeEach` stub answers `/api/auth-methods` with BOTH providers enabled,
- * so a missing link could always be a link still waiting for its fetch. It
- * cannot be here, because the fetch never happens — nothing on either gate
- * asks which providers are enabled any more. That is a fact about the
- * COMPONENT being unmounted rather than about what it chose to draw, and it
- * is what a re-added `<OAuthButtons />` fails first.
+ * THE READ IS THE LOAD-BEARING HALF: the `beforeEach` stub answers
+ * `/api/auth-methods` with BOTH providers enabled, so a missing link could
+ * always be a link still waiting for its fetch. It cannot be here, because
+ * the fetch never happens — nothing on the gate asks which providers are
+ * enabled any more. That is a fact about the COMPONENT being unmounted rather
+ * than about what it chose to draw, and it is what a re-added
+ * `<OAuthButtons />` fails first.
  */
-describe("the provider buttons are off both gates (2026-09-15)", () => {
-  it.each([
-    ["sign-in", SignInPage],
-    ["sign-up", SignUpPage],
-  ])("%s offers neither Google nor GitHub, and asks nothing about them", async (_name, Page) => {
-    render(<Page />);
-    /* the form itself has landed — without this every absence below is
-       equally true of a screen that rendered nothing at all */
+describe("the provider buttons are off the gate (2026-09-15)", () => {
+  it("offers neither Google nor GitHub on any of the three screens, and asks nothing about them", async () => {
+    render(<SignInPage />);
     await screen.findByLabelText(/^رایانامه/);
-
     expect(fetch, "something still asks which providers are enabled").not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: /Google/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /GitHub/ })).toBeNull();
-    /* the divider went with them: «یا ادامه با» over nothing is a heading
-       for an empty room */
     expect(screen.queryByText(/یا ادامه با/)).toBeNull();
+
+    openPasswordForm();
+    await screen.findByLabelText(/^گذرواژه/);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: /Google/ })).toBeNull();
   });
 });
 
-describe("sign-up actually creates an account", () => {
-  const fill = () => {
-    type(/^رایانامه/, "person@example.com");
-    type(/^نام نمایشی/, "شخص");
-    type(/^گذرواژه/, "hunter2");
-  };
-
-  it("sends the form to the server", async () => {
-    signUp.mockResolvedValue({ confirmationRequired: false, member: { id: "u-1" } });
-    render(<SignUpPage />);
-    fill();
-    fireEvent.click(screen.getByRole("button", { name: "ثبت‌نام" }));
-
-    await waitFor(() =>
-      expect(signUp).toHaveBeenCalledWith({
-        email: "person@example.com",
-        password: "hunter2",
-        display_name: "شخص",
-      }),
-    );
-  });
-
-  it("shows the pending screen ONLY after the server created the account", async () => {
-    signUp.mockRejectedValue(new BffError(400, "invalid", "password is too short"));
-    render(<SignUpPage />);
-    fill();
-    fireEvent.click(screen.getByRole("button", { name: "ثبت‌نام" }));
-
-    /*
-     * The heart of it. The old form routed here on submit, so a person whose
-     * sign-up FAILED still saw "an admin will accept you shortly" — a screen
-     * whose entire job is to reassure, shown for an account that does not
-     * exist.
-     */
-    expect(await screen.findByRole("alert")).toHaveTextContent("password is too short");
-    expect(push).not.toHaveBeenCalled();
-  });
-
-  it("distinguishes confirm-your-email from you-are-in-the-queue", async () => {
-    // 202: identity created, product row NOT created. Showing the pending
-    // screen would claim a queue entry that does not exist, and the person
-    // would wait for an admin who can never see them.
-    signUp.mockResolvedValue({ confirmationRequired: true, member: null });
-    render(<SignUpPage />);
-    fill();
-    fireEvent.click(screen.getByRole("button", { name: "ثبت‌نام" }));
-
-    expect(await screen.findByText(/رایانامه‌تان را تأیید کنید/)).toBeTruthy();
-    expect(push).not.toHaveBeenCalled();
+/**
+ * SIGNING UP IS SIGNING IN. The old two-step form (Supabase identity, then
+ * core's /v1/signup) is gone; the address redirects to the gate. Asserted on
+ * the module rather than by rendering: a server redirect throws, and what
+ * matters is that it throws TOWARD /sign-in.
+ */
+describe("/sign-up is a redirect to the gate", () => {
+  it("redirects to /sign-in in the visitor's locale", async () => {
+    const redirect = vi.fn(() => { throw new Error("NEXT_REDIRECT"); });
+    vi.doMock("@/i18n/routing", () => ({ redirect }));
+    vi.resetModules();
+    const { default: SignUpRedirect } = await import("./sign-up/page");
+    await expect(SignUpRedirect({ params: Promise.resolve({ locale: "fa" }) })).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith({ href: "/sign-in", locale: "fa" });
+    vi.doUnmock("@/i18n/routing");
   });
 });

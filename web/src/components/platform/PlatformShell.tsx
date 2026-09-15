@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { hydratePreferences } from "@/lib/preferences";
@@ -59,6 +60,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
    */
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [platformRoot, setPlatformRoot] = useState(false);
+  const router = useRouter();
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();
 
@@ -78,6 +80,15 @@ export function PlatformShell({ children }: { children: ReactNode }) {
        * somewhere else entirely — vitest caught exactly that.
        */
       if (identity) hydratePreferences(identity);
+      /*
+       * THE FIRST-TIME FLOW IS NOT OPTIONAL BY URL (M54, db/0223). A member
+       * whose stamp is NULL has not finished it, and every shell page sends
+       * them there — the sign-in page routes there too, but a bookmark, a
+       * shared link or a second tab lands here first. `=== null` and not
+       * `!`: ABSENT means an un-migrated deployment, which has no flow to
+       * send anybody to (types.ts keeps the two apart for exactly this line).
+       */
+      if (identity && identity.onboarding_completed_at === null) router.replace("/onboarding");
     }).catch(() => {
       /* A root can intentionally arrive here while their own organization is
          suspended. The ordinary identity endpoint correctly refuses in that
@@ -85,6 +96,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
          unhandled shell error. */
       setMe(null);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one read, on mount; the router is stable
   }, []);
 
   useEffect(() => {

@@ -228,6 +228,18 @@ export interface User {
  */
 export interface Me extends User {
   locale: string;
+  /**
+   * db/0223 — the first-time flow (M54). THREE states, and the type keeps
+   * them apart: ABSENT = this deployment has no such flow (un-migrated; the
+   * shell must not route anywhere); `null` = not finished (the shell routes
+   * to /onboarding); a timestamp = done. Collapsing absent into null would
+   * send every member of an un-migrated deployment into a flow whose save
+   * route does not exist.
+   */
+  onboarding?: Record<string, unknown>;
+  onboarding_completed_at?: string | null;
+  /** db/0223 — personal (founded at arrival) or team. ABSENT before 0223. */
+  org_kind?: "personal" | "team";
   /** the workspace's display name — served to every member since core's
       me() joined the org row; typed late (the served-and-never-typed
       inverse of the stored-and-never-served family) */

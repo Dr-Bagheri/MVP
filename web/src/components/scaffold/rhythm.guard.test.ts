@@ -174,6 +174,10 @@ const SHELL_ALLOWED: Readonly<Record<string, string>> = {
     "the guest door (0158) renders outside PlatformShell — the person here has "
     + "no account, so every element of the shell would be a door that refuses "
     + "them; it owns its own document the way the auth screens do",
+  "components/onboarding/OnboardingFrame.tsx":
+    "the first-time flow (M54) renders outside PlatformShell — its own five-stage "
+    + "rail is its chrome, and every shell door would lead out of a flow that is "
+    + "walked once; it owns its document the way the guest door does",
 };
 
 describe("the shell scroll belongs to the shell", () => {

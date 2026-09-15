@@ -96,6 +96,10 @@ const ALLOWED: Record<string, string[]> = {
   "components/platform/ConnectDialog.tsx": ["privacyNote", "tokenHintTelegram", "tokenHintWhatsapp", "tokenHintMcp"],
   "components/platform/IntegrationDetail.tsx": ["privacyNote", "reconnectDriveHint"],
   "app/[locale]/management/connectors/_components/MintKeyDialog.tsx": ["allowAssistantHint"],
+  /* CONSTRAINT — the first-time flow's savings figure is an ESTIMATE and
+     the one line under it says so (M54): a number with no caveat beside it
+     is a claim, and this one is arithmetic on an assumed speed ratio */
+  "components/onboarding/SetupScreens.tsx": ["savingsNote"],
   // a keyboard hint beside a composer, and the help page, which IS prose
   "components/platform/tasks/TaskDetail.tsx": ["commentHint"],
   "app/[locale]/help/[[...section]]/page.tsx": ["githubNote"],

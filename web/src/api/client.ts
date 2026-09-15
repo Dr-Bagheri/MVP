@@ -504,6 +504,34 @@ export const api = {
    * "if that address has an account, the mail is on its way" and mean it
    * literally, not as a polite evasion of a fact it knows.
    */
+  /**
+   * **LIVE** — `POST /api/auth/otp`: "send me a code". M54's gate — the email
+   * that arrives carries a one-click link AND a six-digit code, and this one
+   * call is both signing up and signing in (GoTrue creates the identity if
+   * the address is new). Resolves for any well-formed address; a 429 and a
+   * refused address are the only refusals it surfaces.
+   */
+  async requestEmailCode(email: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/otp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
+   * **LIVE** — `POST /api/auth/otp/verify`: the typed code becomes a session
+   * cookie server-side; the browser gets `{ok:true}` and nothing else (M1).
+   * The caller then routes by `identityState()` exactly as after a password.
+   */
+  async verifyEmailCode(email: string, code: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+  },
+
   async requestPasswordRecovery(email: string): Promise<void> {
     await bff<{ ok: true }>("/api/auth/recover", {
       method: "POST",
@@ -854,6 +882,23 @@ export const api = {
    * nothing to clear; core/ refuses `null` with a named code. Accepting one
    * here would give the client a second spelling for the default.
    */
+  /**
+   * **LIVE** — `PATCH /api/me/onboarding` (db/0223): the first-time flow
+   * saves its answers as it goes (they MERGE server-side, so a step sends
+   * only its own keys) and stamps its end with `complete: true`, once.
+   * Returns the server's `Me`, which is how the shell learns the stamp landed.
+   */
+  async updateOnboarding(patch: {
+    answers?: Record<string, unknown>;
+    complete?: boolean;
+  }): Promise<Me> {
+    return bff<Me>("/api/me/onboarding", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  },
+
   async updatePreferences(patch: {
     calendar?: CalendarPreference;
     timezone?: string;

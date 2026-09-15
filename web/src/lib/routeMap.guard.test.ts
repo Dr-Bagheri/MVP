@@ -106,6 +106,7 @@ describe("where the agents may be sent", () => {
       "/help": "the help is a document, opened from the rail; the model answers questions itself",
       "/sign-in": "auth", "/sign-up": "auth", "/forgot": "auth", "/reset": "auth",
       "/pending": "auth state", "/suspended": "auth state",
+      "/onboarding": "the first-time flow (M54) — walked once, in order, by the person alone; an agent sending somebody back into it would be undoing their arrival",
     };
     const topLevel = [...realRoutes()]
       .filter((route) => route !== "/" && !route.includes("[") && route.split("/").length === 2);

@@ -7,6 +7,7 @@ import { Hub } from "@/components/platform/Hub";
 import { Workflows } from "@/components/platform/Workflows";
 import { PageContainer } from "@/components/scaffold";
 import { HomeConversationsSheet, HomeSidebar } from "./HomeSidebar";
+import { FirstRunDoor } from "@/components/onboarding/FirstRunDoor";
 import { HomeSnapshot } from "./HomeSnapshot";
 
 /**
@@ -63,6 +64,10 @@ export function Home() {
      */
     <div className="flex h-full min-h-0">
       <AssistantConversationProvider>
+        {/* the first-run door (M54): «how would you like to use NeurAI
+            first?», once, after the flow — it reads the identity the shell
+            already cached and renders nothing for everybody else */}
+        <FirstRunDoor />
         <HomeSidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* BELOW lg THE COLUMN IS A SLIDE-OVER (2026-09-08). The paragraph

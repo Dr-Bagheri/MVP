@@ -330,6 +330,43 @@ export function verifyRecoveryToken(
 }
 
 /**
+ * "Send me a code" — GoTrue `POST /otp` (M54's gate: one email field, one
+ * press, and the mail carries a LINK and a six-digit CODE).
+ *
+ * `create_user: true` is what makes signing up and signing in the same act:
+ * an address GoTrue has never seen gets an identity on this call, and the
+ * person registers into the product on their first successful verify exactly
+ * as a confirmed-email arrival does today (register-on-first-sign-in). There
+ * is no separate sign-up form to keep in step with this one.
+ *
+ * **Same answer whether or not the address exists** — GoTrue's own posture,
+ * and the recovery route's (no membership oracle). What DOES come back is a
+ * rate limit and a refused address, which are about the request rather than
+ * about who is registered.
+ *
+ * `redirectTo` rides the query string, which is where GoTrue reads it for
+ * this endpoint (supabase-js does the same). It only matters to a template
+ * that still uses `{{ .ConfirmationURL }}`; ours links straight at
+ * `/api/auth/confirm` with the token hash — see `verifySignupToken`.
+ */
+export function requestEmailCode(email: string, redirectTo: string): Promise<void> {
+  return gotrueVoid(`/otp?redirect_to=${encodeURIComponent(redirectTo)}`, {
+    method: "POST",
+    body: { email, create_user: true },
+  });
+}
+
+/**
+ * The six-digit code, typed — GoTrue `POST /verify` with `{type:"email", email,
+ * token}`. Returns the session; the caller puts it in the cookie (M1). A
+ * wrong or expired code is a 403 from GoTrue, which the route folds to 401
+ * `invalid` — the same word the password gate uses for a refused credential.
+ */
+export function verifyEmailCode(email: string, token: string): Promise<TokenSet> {
+  return gotrue("/verify", { type: "email", email, token });
+}
+
+/**
  * Turn a CONFIRM-SIGNUP link into a session, server-side — the signup twin of
  * `verifyRecoveryToken`, and M1-shaped for the same reason: the default
  * Supabase confirmation link bounces back with tokens in the URL fragment
@@ -341,7 +378,13 @@ export function verifyRecoveryToken(
  * `type` is "signup" for new-account confirmations; GoTrue also accepts
  * "email" for some confirmation shapes, so the route allow-lists both.
  */
-export function verifySignupToken(tokenHash: string, type: "signup" | "email"): Promise<TokenSet> {
+export function verifySignupToken(
+  tokenHash: string,
+  /* "magiclink" joined the pair with M54's gate: the one-click link in the
+     code email carries the same token-hash shape, verified on this side for
+     the same M1 reason */
+  type: "signup" | "email" | "magiclink",
+): Promise<TokenSet> {
   return gotrue("/verify", { type, token_hash: tokenHash });
 }
 

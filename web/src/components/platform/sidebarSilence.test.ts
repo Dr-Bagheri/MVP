@@ -35,6 +35,10 @@ describe("sidebarIsSilentOn", () => {
       "/en/forgot",
       "/fa/pending",
       "/en/suspended",
+      /* the first-time flow (M54): outside the shell, and the strip would
+         offer the assistant the flow is about to teach */
+      "/fa/onboarding",
+      "/en/onboarding",
       /* the guest join page: a stranger with a meeting code and no account.
          Every shell element there is a door that refuses, and offering doors
          that refuse is worse than offering none. */

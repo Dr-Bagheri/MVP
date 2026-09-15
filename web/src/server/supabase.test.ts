@@ -61,3 +61,48 @@ describe("OAuth password enrollment", () => {
     );
   });
 });
+
+/**
+ * THE CODE GATE'S TWO CALLS (M54), at the seam: the path and body GoTrue is
+ * handed. `create_user` is the flag that makes one field both sign-up and
+ * sign-in; `redirect_to` rides the QUERY STRING, where GoTrue reads it for
+ * this endpoint; the verify is the email-OTP shape, not the token-hash one.
+ */
+describe("the email code (M54)", () => {
+  it("asks /otp with create_user and the landing in the query string", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(response({}));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { requestEmailCode } = await import("./supabase");
+    await requestEmailCode("person@example.com", "https://app.neurai.pt/fa/sign-in?confirmed=fragment");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://project.supabase.co/auth/v1/otp?redirect_to=" + encodeURIComponent("https://app.neurai.pt/fa/sign-in?confirmed=fragment"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "person@example.com", create_user: true }),
+      }),
+    );
+  });
+
+  it("verifies the typed code as an email OTP and returns the session", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(response({ access_token: "a", refresh_token: "r", expires_in: 3600 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { verifyEmailCode } = await import("./supabase");
+    const tokens = await verifyEmailCode("person@example.com", "123456");
+    expect(tokens.access_token).toBe("a");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://project.supabase.co/auth/v1/verify",
+      expect.objectContaining({ body: JSON.stringify({ type: "email", email: "person@example.com", token: "123456" }) }),
+    );
+  });
+
+  it("a magic-link token hash is verified with its own type", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(response({ access_token: "a", refresh_token: "r", expires_in: 3600 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { verifySignupToken } = await import("./supabase");
+    await verifySignupToken("hash", "magiclink");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://project.supabase.co/auth/v1/verify",
+      expect.objectContaining({ body: JSON.stringify({ type: "magiclink", token_hash: "hash" }) }),
+    );
+  });
+});

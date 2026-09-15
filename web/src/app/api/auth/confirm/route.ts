@@ -31,8 +31,9 @@ export async function GET(request: Request) {
     return Response.redirect(dest, 303);
   };
 
-  // Anything but the two confirmation shapes is a link we never minted.
-  if (!tokenHash || (type !== "signup" && type !== "email")) return to("failed");
+  // Anything but the three confirmation shapes is a link we never minted.
+  // "magiclink" is M54's one-click sign-in (the same email carries the code).
+  if (!tokenHash || (type !== "signup" && type !== "email" && type !== "magiclink")) return to("failed");
 
   try {
     const tokens = await verifySignupToken(tokenHash, type);

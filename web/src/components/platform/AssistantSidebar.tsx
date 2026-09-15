@@ -247,6 +247,10 @@ export function sidebarIsSilentOn(pathname: string): boolean {
   if (/^\/assistant(\/|$)/.test(route)) return true;
   if (/^\/platform(\/|$)/.test(route)) return true;
   if (/^\/join(\/|$)/.test(route)) return true;
+  /* the first-time flow (M54) renders outside the shell too — and it is the
+     one screen where a strip offering the assistant would be offering the
+     thing the flow is about to teach, half a page early */
+  if (/^\/onboarding(\/|$)/.test(route)) return true;
   return /^\/(sign-in|sign-up|reset|forgot|pending|suspended)(\/|$)/.test(route);
 }
 

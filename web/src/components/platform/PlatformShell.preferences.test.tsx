@@ -28,6 +28,10 @@ const setCalendarPreference = (calendar: "auto" | "jalali" | "gregorian") =>
 vi.mock("@/api/client", () => ({
   api: { me: async () => null, platformAccess: async () => ({ platform_root: false }) },
 }));
+/* the shell asks the router to send an unfinished arrival to /onboarding (M54);
+   with nobody signed in it never does, but the hook itself needs a router
+   context that jsdom has no app router for — stubbed, not exercised, here */
+vi.mock("@/i18n/routing", () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 
 /*
  * The chrome is stubbed, not the shell: the rail, bar and bottom bar need

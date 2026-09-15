@@ -220,6 +220,14 @@ export const NO_TRAIL: Readonly<Record<string, string>> = {
    */
   "/suspended": "auth screens render outside the shell; and no 'up' exists while the org is suspended",
   "/forgot": "auth screens render outside the shell — reached while signed out, by someone who cannot get in",
+  /*
+   * THE FIRST-TIME FLOW (M54). Outside the shell like the auth screens, and
+   * for the same reason turned around: the person is IN, but every crumb
+   * would be a door out of a flow whose whole point is that it is walked
+   * once, in order — the rail across its top is the only "where am I" it
+   * needs, and «بعداً» is the only way out.
+   */
+  "/onboarding": "the first-time flow renders outside the shell; its stage rail is the trail and «later» is the way out",
   "/reset": "auth screens render outside the shell; reached from an emailed link, with no in-product ancestor",
   "/skills": "redirect-only (→ /management/skills); the destination carries the trail",
   "/connectors": "redirect-only (→ /management/connectors)",

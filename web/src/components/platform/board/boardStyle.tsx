@@ -103,6 +103,7 @@ export function BoardAddRow({ label, onClick }: { label: string; onClick: () => 
     <button
       type="button"
       onClick={onClick}
+      data-tour="board-add"
       className="btn btn-sm w-full justify-center gap-1.5 border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
     >
       <IconPlus width={12} height={12} />

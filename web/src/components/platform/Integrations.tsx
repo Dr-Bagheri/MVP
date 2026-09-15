@@ -493,7 +493,7 @@ export function Integrations() {
                 tile's own size hold the row (a shelf that appears whole after
                 the network makes everything under it jump, and an empty shelf
                 reads as "nothing to connect"). */}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4" data-tour="integrations-shelf">
               {connectors === null
                 ? INTEGRATIONS.map((entry) => (
                     <div key={entry.slug} className={TILE} aria-hidden>

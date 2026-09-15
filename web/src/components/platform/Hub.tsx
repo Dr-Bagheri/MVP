@@ -1558,6 +1558,7 @@ export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
           */}
           <textarea
             ref={promptRef}
+            data-tour="home-composer"
             rows={PROMPT_ROWS.min}
             className="scroll-quiet fade-scroll-tight w-full resize-none bg-transparent text-sm leading-6 text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
             placeholder={t("promptPlaceholder")}

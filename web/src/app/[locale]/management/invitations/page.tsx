@@ -231,6 +231,7 @@ export default function InvitationsPage() {
             />
             <button
               className="btn btn-primary"
+              data-tour="invite-people"
               disabled={busy || !inviteEmail.trim()}
               onClick={() => void issueInvitation()}
             >

@@ -311,6 +311,7 @@ export function Meetings() {
               type="button"
               onClick={() => setCreating(true)}
               className="btn btn-primary"
+              data-tour="meetings-new"
             >
               <IconPlus width={14} height={14} />
               {t("newMeeting")}
