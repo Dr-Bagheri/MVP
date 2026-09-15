@@ -230,6 +230,10 @@ describe("the integrations page", () => {
     await showConnected();
     const table = await screen.findByRole("table");
     const box = screen.getByPlaceholderText("جست‌وجو در اتصال‌ها");
+    /* the search is a tool on its row, at the END edge, in the compact
+       field (2026-09-15, the meetings page's shape everywhere) */
+    expect(box.className.split(/\s+/)).toContain("input-sm");
+    expect(box.closest("label")!.className.split(/\s+/)).toContain("ms-auto");
 
     await act(async () => {
       fireEvent.change(box, { target: { value: "تقویم" } });

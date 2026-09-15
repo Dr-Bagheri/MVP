@@ -218,6 +218,27 @@ describe("Meetings", () => {
     expect(screen.getByText("جلسهٔ محصول")).toBeInTheDocument();
   });
 
+  it("the search sits at the END of its row, in the compact field, beside the view switch (2026-09-15)", async () => {
+    /*
+     * "The search bar in meeting should be attached to the side like the
+     * buttons on top of it." Asserted as STRUCTURE: the field is inside the
+     * row's end group (`ms-auto` — the same edge «جلسه جدید» sits on in the
+     * row above), the view switch is in that same group, and the field is
+     * the row's size. A search that merely renders somewhere passes every
+     * filter test and can sit anywhere.
+     */
+    LIST = [meeting({ id: "m-a", title: "جلسهٔ فروش" })];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("جلسهٔ فروش")).toBeInTheDocument());
+
+    const box = screen.getByPlaceholderText("جست‌وجوی جلسه");
+    expect(box.className.split(/\s+/), "the search is not the compact field").toContain("input-sm");
+    const group = box.closest("label")!.parentElement!;
+    expect(group.className.split(/\s+/), "the search is not at the row's end").toContain("ms-auto");
+    /* the view switch shares the group — the two tools at the edge, together */
+    expect(group.contains(screen.getByRole("button", { name: "فهرست" }))).toBe(true);
+  });
+
   /* SORTING is a FIELD and a DIRECTION, two controls — so the direction key
      has to actually reverse the list, not merely light up */
   it("sorts by date, newest first, and the direction key reverses it", async () => {
