@@ -118,7 +118,9 @@ describe("AudioBar", () => {
     await screen.findByRole("slider");
     const key = screen.getByRole("button", { name: "audioSpeed" });
     const width = key.className;
-    expect(width).toMatch(/\bw-\[\d+px\]/);
+    /* a FIXED width, in rem since 2026-09-15 so it rides the fluid root — the
+       property under test is that it does not follow the label, not the unit */
+    expect(width).toMatch(/\bw-\[\d+(?:\.\d+)?(?:px|rem)\]/);
     fireEvent.click(key);
     /* the label changed and the geometry did not — the control, without
        which "it has a width" passes on a key that re-sizes anyway */

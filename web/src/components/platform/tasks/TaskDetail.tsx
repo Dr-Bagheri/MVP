@@ -141,7 +141,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               <Link href={task.meeting_id !== null ? `/meetings/${task.meeting_id}` : `/calls/${task.call_id}`}
                 className="btn btn-sm bg-accent-soft font-medium text-accent">
                 <IconVideo width={12} height={12} />
-                <span className="max-w-[280px] truncate">{task.meeting_title ?? task.call_title ?? t("recordGone")}</span>
+                <span className="max-w-[17.5rem] truncate">{task.meeting_title ?? task.call_title ?? t("recordGone")}</span>
               </Link>
             ) : null}
             {/* 2026-09-03: `.btn btn-sm`, the theme's compact control — the
@@ -255,7 +255,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             <ScheduleRow task={task} onChanged={onChanged} onFailed={fail} />
 
             {task.created_at !== "" ? (
-              <p className="pt-1 text-[10px] text-fg-subtle">
+              <p className="pt-1 text-micro text-fg-subtle">
                 {t("createdAt", { at: formatDate(task.created_at, locale) })}
               </p>
             ) : null}
@@ -286,7 +286,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-lg font-bold text-fg outline-none focus:border-accent"
               />
             ) : (
-              <h2 className={`text-[17px] font-bold ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
+              <h2 className={`text-[1.0625rem] font-bold ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
                 {task.title}
               </h2>
             )}
@@ -397,7 +397,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                      stands at the end of a field row. `.btn` owns the
                      disabled face, so the old `disabled:opacity-50` goes
                      with the geometry. */
-                  className="btn w-[38px] px-0 bg-accent text-on-accent"
+                  className="btn w-control px-0 bg-accent text-on-accent"
                 >
                   <IconPlus width={12} height={12} />
                 </button>
@@ -449,7 +449,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline gap-2">
                             <span className="text-xs font-semibold text-fg">{nameOf(entry.created_by)}</span>
-                            <span className="text-[11px] text-fg-subtle">
+                            <span className="text-caption text-fg-subtle">
                               {relativeTime(entry.created_at, locale, t as never)}
                             </span>
                           </span>
@@ -477,7 +477,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                     className="w-full resize-none bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
                   />
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-fg-subtle">{t("commentHint")}</span>
+                    <span className="text-micro text-fg-subtle">{t("commentHint")}</span>
                     <button
                       type="button"
                       disabled={comment.trim() === ""}
@@ -620,7 +620,7 @@ function ScheduleRow({ task, onChanged, onFailed }: {
         </button>
       ) : (
         <div className="well p-2.5">
-          <p className={`text-[11px] leading-5 ${schedule.active ? "text-fg" : "text-warning"}`}>
+          <p className={`text-caption leading-5 ${schedule.active ? "text-fg" : "text-warning"}`}>
             {schedule.active
               ? (schedule.until_date === null
                   ? t("scheduleSaysForever", { n: digits(schedule.gap_days, locale) })
@@ -631,7 +631,7 @@ function ScheduleRow({ task, onChanged, onFailed }: {
               : t("scheduleSpent")}
           </p>
           {schedule.renewed > 0 ? (
-            <p className="mt-0.5 text-[10px] text-fg-subtle">
+            <p className="mt-0.5 text-micro text-fg-subtle">
               {t("scheduleRenewedTimes", { n: digits(schedule.renewed, locale) })}
             </p>
           ) : null}

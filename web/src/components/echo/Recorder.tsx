@@ -663,7 +663,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
           ) : null}
         </div>
         {windowSpan >= 5_000 ? (
-          <div className="mt-1 flex select-none justify-between text-[10px] leading-none tabular-nums text-fg-subtle">
+          <div className="mt-1 flex select-none justify-between text-micro leading-none tabular-nums text-fg-subtle">
             {Array.from({ length: 5 }, (_, i) => {
               const ms = visibleStartMs + (windowSpan * i) / 4;
               return <span key={i}>{formatClock(Math.floor(ms / 1000), locale)}</span>;
@@ -1022,7 +1022,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
                                CENTRE, not on its own baseline — the theme
                                rule, after this badge rendered visibly low
                                (user report, 2026-08-26) */
-                            className={`badge-num mt-0.5 h-5 shrink-0 rounded-full border text-[10px] font-semibold ${
+                            className={`badge-num mt-0.5 h-5 shrink-0 rounded-full border text-micro font-semibold ${
                               named ? "px-1.5" : "w-5"
                             } ${tone}`}
                             title={named
@@ -1189,7 +1189,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
                         SPEAKER_TONE[i % SPEAKER_TONE.length]
                       }`}
                     >
-                      <span className="badge-num h-6 w-6 shrink-0 rounded-full bg-surface text-[10px]">
+                      <span className="badge-num h-6 w-6 shrink-0 rounded-full bg-surface text-micro">
                         {named ? initialsOf(named.display_name) : digits(label, locale)}
                       </span>
                       <span className="max-w-28 truncate text-fg">
@@ -1329,8 +1329,8 @@ function MicLevelFooter({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-[10px] text-fg-subtle">{label}</span>
-        <span className="flex h-2 flex-1 items-center gap-[2px]" aria-hidden>
+        <span className="shrink-0 text-micro text-fg-subtle">{label}</span>
+        <span className="flex h-2 flex-1 items-center gap-0.5" aria-hidden>
           {Array.from({ length: 16 }, (_, i) => (
             <span
               key={i}
@@ -1346,7 +1346,7 @@ function MicLevelFooter({
       {/* the sensitivity slider, moved here from the retired mic-test card
           (user directive, 2026-08-26): tune the meter where the meter is */}
       <label className="flex items-center gap-2">
-        <span className="shrink-0 text-[10px] text-fg-subtle">{gainLabel}</span>
+        <span className="shrink-0 text-micro text-fg-subtle">{gainLabel}</span>
         <input
           type="range"
           dir="ltr"
@@ -1361,7 +1361,7 @@ function MicLevelFooter({
       {/* the loudness enhance moved in from the retired device-check card
           (user directive, 2026-08-26) — everything about the mic in the
           mic's own menu */}
-      <label className="flex cursor-pointer items-start gap-1.5 text-[10px] leading-4 text-fg">
+      <label className="flex cursor-pointer items-start gap-1.5 text-micro leading-4 text-fg">
         <input
           type="checkbox"
           className="mt-0.5"
@@ -1378,7 +1378,7 @@ function MicLevelFooter({
           the constraint bound at getUserMedia, and an enabled box mid-take
           would claim an effect it cannot have (the hint carries the when). */}
       <label
-        className={`flex items-start gap-1.5 text-[10px] leading-4 text-fg ${
+        className={`flex items-start gap-1.5 text-micro leading-4 text-fg ${
           noiseLocked ? "opacity-60" : "cursor-pointer"
         }`}
       >

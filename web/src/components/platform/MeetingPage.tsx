@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionTabs } from "./sectionTabs";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
@@ -532,7 +533,7 @@ export function MeetingPage({ id }: { id: string }) {
             moves them to the record on its own when the host finishes.
           */}
           {!isHost && view === "live" ? (
-            <span className="rounded-xl bg-surface-2 px-2.5 py-1.5 text-[11px] font-medium text-fg-muted">
+            <span className="rounded-xl bg-surface-2 px-2.5 py-1.5 text-caption font-medium text-fg-muted">
               {t("hostOnlyRecord")}
             </span>
           ) : null}
@@ -852,22 +853,9 @@ function PostStage({ meeting, call, me, locale, onBackToMeetings }: {
           2026-09-02): every other surface switches sections with `btn btn-sm`
           pills, and this row was the one place still drawing a hairline with
           a 2px underline under the active word */}
-      <div role="tablist" aria-label={t("stage_post")} className="flex flex-wrap items-center gap-1">
-        {tabs.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === entry.key}
-            onClick={() => setTab(entry.key)}
-            className={`btn btn-sm font-medium ${
-              tab === entry.key ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      {/* THE KIT'S TRACK (2026-09-15): the same rail and pill every page's
+          first sub-menu wears, read from sectionTabs rather than drawn here */}
+      <SectionTabs label={t("stage_post")} tabs={tabs} active={tab} onSelect={setTab} />
 
       {/*
         THE ITEMS PANEL IS NOT GATED ON A RECORDING (0160). Everything else in
@@ -1016,7 +1004,7 @@ function NotesTab({ callId, locale }: { callId: string; locale: string }) {
             <li key={note.id} className="tile tile-row flex items-start gap-3 p-3.5">
               <span className="min-w-0 flex-1">
                 <span className="block whitespace-pre-wrap text-sm leading-6 text-fg">{note.body}</span>
-                <span className="mt-1 block text-[11px] text-fg-subtle">
+                <span className="mt-1 block text-caption text-fg-subtle">
                   {formatDate(note.created_at, locale)}
                   {note.at_ms !== null ? ` · ${formatDuration(Math.round(note.at_ms / 1000), locale)}` : ""}
                 </span>

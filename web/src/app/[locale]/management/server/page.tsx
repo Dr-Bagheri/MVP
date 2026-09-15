@@ -156,7 +156,7 @@ export default function ServerManagementPage() {
       </span>
       <span className="sr-only">{t("server.notMeasured")}</span>
       {reason ? (
-        <span className="ltr mt-1 block font-mono text-[11px] text-fg-muted/80">{reason}</span>
+        <span className="ltr mt-1 block font-mono text-caption text-fg-muted/80">{reason}</span>
       ) : null}
     </span>
   );
@@ -186,7 +186,7 @@ export default function ServerManagementPage() {
     loading ? (
       <Skeleton className="mt-2 h-3 w-40" />
     ) : at === null ? null : (
-      <p className="mt-2 text-[11px] text-fg-muted">
+      <p className="mt-2 text-caption text-fg-muted">
         {t("server.measuredAt", { time: formatTime(at, locale) })}
       </p>
     );

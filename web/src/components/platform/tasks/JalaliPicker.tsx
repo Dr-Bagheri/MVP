@@ -58,7 +58,7 @@ export function JalaliPicker({ value, onPick, onClose }: {
   );
 
   return (
-    <div className="w-[268px] glass-chrome rounded-2xl p-3 shadow-island">
+    <div className="w-[16.75rem] glass-chrome rounded-2xl p-3 shadow-island">
       <div className="mb-2 flex flex-wrap items-center justify-center gap-1.5">
         {preset(t("dueToday"), 0)}
         {preset(t("dueTomorrow"), 1)}
@@ -84,7 +84,7 @@ export function JalaliPicker({ value, onPick, onClose }: {
 
       <ul className="grid grid-cols-7 gap-0.5">
         {grid.weekdays.map((day, i) => (
-          <li key={i} className="py-1 text-center text-[10px] text-fg-subtle">{day}</li>
+          <li key={i} className="py-1 text-center text-micro text-fg-subtle">{day}</li>
         ))}
       </ul>
       <ul className="grid grid-cols-7 gap-0.5">
@@ -122,7 +122,7 @@ export function JalaliPicker({ value, onPick, onClose }: {
           );
         })}
       </ul>
-      <p className="mt-1 text-center text-[10px] text-fg-subtle">
+      <p className="mt-1 text-center text-micro text-fg-subtle">
         {digits(grid.cells.filter((c) => c.inMonth).length, locale)} {t("daysInMonth")}
       </p>
     </div>

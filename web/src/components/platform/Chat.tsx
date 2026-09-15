@@ -14,7 +14,7 @@ import { AgentAvatar } from "./AgentAvatar";
 import { KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold";
 import { IconCheck, IconClose, IconPeople3, IconPlus, IconTrash } from "@/components/icons";
-import { filterChipClass } from "./sectionTabs";
+import { TAB_TRACK, TOOLBAR_END, TOOLBAR_ROW, sectionTabClass } from "./sectionTabs";
 import { digits } from "@/lib/format";
 import { MessageRow } from "./chat/MessageRow";
 import { Composer } from "./chat/Composer";
@@ -250,8 +250,8 @@ export function Chat({ meId, isAdmin, people }: {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ── the rooms, as the top sub-menu ───────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label={t("channels")}>
+      <div className={TOOLBAR_ROW}>
+        <div className={TAB_TRACK} role="tablist" aria-label={t("channels")}>
           {channels === null ? (
             <span className="text-xs text-fg-subtle">{t("loadingRooms")}</span>
           ) : channels === "failed" ? (
@@ -269,14 +269,15 @@ export function Chat({ meId, isAdmin, people }: {
                 onClick={() => { dismissed.current = false; setCurrent(room.id); }}
                 /* the platform's filter chip (R3 row two) — the same class the
                    folder strips read, not a copy of it spelled here */
-                className={filterChipClass(room.id === current)}
+                /* ROW ONE'S pill: the rooms are this page's first sub-menu */
+                className={sectionTabClass(room.id === current)}
               >
                 <span aria-hidden className="text-fg-subtle">#</span>
                 {/* BOLD is the unread state — no dot beside it, because a bold
                     chip with a dot is a third state nobody can name */}
                 <bdi className={unread ? "font-bold text-fg" : ""}>{room.name}</bdi>
                 {room.mention_count > 0 ? (
-                  <span className="badge-num rounded-md bg-danger px-1.5 text-[10px] font-bold text-on-accent">
+                  <span className="badge-num rounded-md bg-danger px-1.5 text-micro font-bold text-on-accent">
                     {digits(room.mention_count, locale)}
                   </span>
                 ) : null}
@@ -285,7 +286,7 @@ export function Chat({ meId, isAdmin, people }: {
           })}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className={TOOLBAR_END}>
           {/* THE ROOM'S OWN CONTROLS LIVE ON THE ROW THAT NAMES IT (user
               directive, 2026-09-05: "in the chat box we have 3 عمومی — remove
               the 2 in the chat box top part"). The box had a header restating
@@ -296,7 +297,7 @@ export function Chat({ meId, isAdmin, people }: {
           {/* the delivery lane, named. "polling" is a real state a person can
               act on, and hiding it would make a working fallback look like a
               fault. */}
-          <span className={`badge-num rounded-lg px-2 py-1 text-[10px] ${
+          <span className={`badge-num rounded-lg px-2 py-1 text-micro ${
             live === "live" ? "bg-success/10 text-success"
               : live === "polling" ? "bg-warning/10 text-warning"
                 : "bg-surface-2 text-fg-subtle"
@@ -397,7 +398,7 @@ export function Chat({ meId, isAdmin, people }: {
               ))
             )}
             {typing !== null ? (
-              <p className="flex items-center gap-2 py-1.5 text-[11px] text-fg-muted">
+              <p className="flex items-center gap-2 py-1.5 text-caption text-fg-muted">
                 <AgentAvatar handle={typing} size="sm" />
                 {t("agentThinking", { name: typing })}
                 <span className="inline-flex gap-0.5" aria-hidden>
@@ -474,7 +475,7 @@ function NewChannelDialog({ onClose, onCreated }: {
             onChange={(e) => { setName(e.target.value); setTaken(false); }}
             placeholder={t("channelNamePlaceholder")} className="input w-full" />
           {taken ? (
-            <span role="alert" className="mt-1 block text-[11px] text-danger">{t("nameTaken")}</span>
+            <span role="alert" className="mt-1 block text-caption text-danger">{t("nameTaken")}</span>
           ) : null}
         </label>
         <label className="block">

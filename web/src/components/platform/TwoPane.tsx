@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { sectionTabClass } from "./sectionTabs";
+import { TAB_TRACK, TOOLBAR_END, TOOLBAR_ROW, TRACK_DIVIDER, sectionTabClass } from "./sectionTabs";
 import { Fragment } from "react";
 import { PageContainer } from "@/components/scaffold";
 import type { MenuGroup, MenuItem } from "@/components/scaffold";
@@ -112,11 +112,11 @@ export function TwoPane({
         its cards in one column with one gap, and so does this.
       */}
       <PageContainer width={width} className="!pb-0">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-        <nav aria-label={navLabel} className="flex flex-wrap items-center gap-1">
+        <div className={TOOLBAR_ROW}>
+        <nav aria-label={navLabel} className={TAB_TRACK}>
             {groups.map((group, index) => (
               <Fragment key={group.key}>
-                {index > 0 ? <span className="mx-1 h-5 w-px bg-border" aria-hidden /> : null}
+                {index > 0 ? <span className={TRACK_DIVIDER} aria-hidden /> : null}
                 {group.items.map((item) => {
                   /* active by SLUG when the caller knows it, and by path
                      otherwise — a cross-homed surface (Integrations lives at
@@ -142,7 +142,7 @@ export function TwoPane({
               </Fragment>
             ))}
         </nav>
-        {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
+        {actions ? <div className={TOOLBAR_END}>{actions}</div> : null}
         </div>
       </PageContainer>
       {/* pt-4, not the page's own top padding: the toolbar and the content it

@@ -72,7 +72,7 @@ export function tokenize(body: string, people: OrgPersonRecord[], locale: string
 /** The agent chip — a filled pill with a robot in it. */
 function AgentChip({ handle }: { handle: string }) {
   return (
-    <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-accent px-1.5 py-0.5 align-middle text-[11px] font-semibold text-on-accent">
+    <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-accent px-1.5 py-0.5 align-middle text-caption font-semibold text-on-accent">
       <IconRobot width={12} height={12} />
       <bdi>{handle}</bdi>
     </span>
@@ -82,7 +82,7 @@ function AgentChip({ handle }: { handle: string }) {
 /** The colleague chip — the same shape, the soft ground, no glyph. */
 function PersonChip({ label }: { label: string }) {
   return (
-    <span className="mx-0.5 inline-flex items-center rounded-md bg-accent-soft px-1.5 py-0.5 align-middle text-[11px] font-semibold text-accent">
+    <span className="mx-0.5 inline-flex items-center rounded-md bg-accent-soft px-1.5 py-0.5 align-middle text-caption font-semibold text-accent">
       <bdi>{label}</bdi>
     </span>
   );

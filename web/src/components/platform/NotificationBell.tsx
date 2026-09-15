@@ -262,7 +262,7 @@ export function NotificationBell() {
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
         {unread > 0 ? (
-          <span className="absolute -end-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white">
+          <span className="absolute -end-1 -top-1 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full bg-danger px-1 text-micro font-bold leading-none text-white">
             {/* digits with the LANGUAGE, like every other count in the
                 product. It read as a Latin numeral on a Persian screen —
                 pre-existing, and it now appears far more often because an
@@ -282,7 +282,7 @@ export function NotificationBell() {
               <div className="flex items-center justify-end border-b border-border pb-1.5">
                 <button
                   type="button"
-                  className="tap rounded-md px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  className="tap rounded-md px-2 py-1 text-caption text-fg-muted hover:bg-surface-2 hover:text-fg"
                   onClick={() => void clearAll()}
                 >
                   {t("bellClear")}
@@ -290,7 +290,7 @@ export function NotificationBell() {
               </div>
               {invites.length > 0 ? (
                 <div className="mb-1">
-                  <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellInvites")}</p>
+                  <p className="px-2 pb-1 pt-1 text-caption font-semibold text-fg-subtle">{t("bellInvites")}</p>
                   {invites.map((invite) => (
                     <div key={invite.id} className="rounded-lg px-2 py-1.5">
                       <p className="text-xs text-fg">
@@ -322,7 +322,7 @@ export function NotificationBell() {
               ) : null}
               {shownCards.length > 0 ? (
                 <div className="mb-1">
-                  <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellCards")}</p>
+                  <p className="px-2 pb-1 pt-1 text-caption font-semibold text-fg-subtle">{t("bellCards")}</p>
                   {shownCards.slice(0, 8).map((card) => (
                     <button
                       key={card.id}
@@ -344,7 +344,7 @@ export function NotificationBell() {
                       {card.kind === "meeting_commitment" && card.body !== "" ? (
                         <span className={`mt-0.5 block ${card.read ? "text-fg-muted" : "text-fg"}`}>{card.body}</span>
                       ) : null}
-                      <span className="mt-0.5 block text-[10px] text-fg-subtle">
+                      <span className="mt-0.5 block text-micro text-fg-subtle">
                         {/* who it came from, before when: a message is read as
                             "Sara said" and a digest as "last Monday" */}
                         {card.kind === "member_message" && card.from_name !== null
@@ -358,7 +358,7 @@ export function NotificationBell() {
               ) : null}
               {notices.length > 0 ? (
                 <div>
-                  <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellRecent")}</p>
+                  <p className="px-2 pb-1 pt-1 text-caption font-semibold text-fg-subtle">{t("bellRecent")}</p>
                   {notices.slice(0, 8).map((notice) => (
                     <p
                       key={notice.id}

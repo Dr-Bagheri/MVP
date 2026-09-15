@@ -1,5 +1,7 @@
 "use client";
 
+import { SectionTabs, TAB_TRACK, sectionTabClass } from "@/components/platform/sectionTabs";
+
 import {
   useCallback,
   useEffect,
@@ -739,7 +741,7 @@ export default function PlatformControlPage() {
     <div className="min-h-dvh bg-bg text-fg">
       {/* sticky operator bar */}
       <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-5 py-3">
+        <div className="flex w-full flex-wrap items-center gap-3 px-5 py-3">
           {/* found by running persianType.guard on this file (2026-09-02, and
               red before this pass — the line predates it): `uppercase
               tracking-wide` on «کنترل پلتفرم». Letter-spacing pulls joined
@@ -769,7 +771,7 @@ export default function PlatformControlPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-content px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page">
+      <main className="w-full px-page-inline pb-page-bottom pt-page-sm md:px-page-gutter md:pt-page">
         {/* overview */}
         <section aria-label={t("title")} className="mt-5 grid gap-3 sm:grid-cols-3">
           <StatCard
@@ -801,34 +803,18 @@ export default function PlatformControlPage() {
             its three sections with an underlined tab strip on a hairline — a
             control no other surface uses; every other surface switches with
             the pill toolbar */}
-        <nav className="mt-6 flex flex-wrap items-center gap-1" role="tablist" aria-label={t("title")}>
-          {(["organizations", "users", "audit", "demo"] as const).map((key) => (
-            <button
-              key={key}
-              role="tab"
-              aria-selected={tab === key}
-              className={`btn btn-sm gap-1.5 font-medium ${
-                tab === key
-                  ? "bg-accent text-on-accent"
-                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-              }`}
-              onClick={() => setTab(key)}
-            >
-              {t(key)}
-              {key === "organizations" || key === "users" ? (
-                /* audit finding, 2026-09-02: the count printed Latin digits in
-                   the Persian console — `badge-num` is the theme's numeral
-                   box (tabular figures), `digits()` the locale's numerals */
-                <span className="badge-num ms-2 rounded-md bg-surface-2 px-1.5 text-xs text-fg-muted">
-                  {digits(
-                    key === "organizations" ? overview.organizations.total : overview.users.total,
-                    locale,
-                  )}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
+        <SectionTabs
+          className="mt-6"
+          label={t("title")}
+          active={tab}
+          onSelect={setTab}
+          tabs={[
+            { key: "organizations", label: t("organizations"), count: overview.organizations.total },
+            { key: "users", label: t("users"), count: overview.users.total },
+            { key: "audit", label: t("audit") },
+            { key: "demo", label: t("demo") },
+          ]}
+        />
 
         {/* ORGANIZATIONS */}
         {tab === "organizations" ? (
@@ -1089,12 +1075,12 @@ export default function PlatformControlPage() {
                           {isTombstone(u) ? (
                             /* said on the row, because the empty menu above is
                                an absence and an absence explains nothing */
-                            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-fg-muted">
+                            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-caption text-fg-muted">
                               {t("finished")}
                             </span>
                           ) : null}
                           {u.is_platform_root ? (
-                            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
+                            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-caption font-semibold text-accent">
                               {u.id === overview.current_user_id ? t("selfBadge") : t("currentRoot")}
                             </span>
                           ) : null}
@@ -1103,7 +1089,7 @@ export default function PlatformControlPage() {
                           <span className="ltr">{u.email}</span> · {u.org_name} · {t("role")}: {u.role}
                           {u.username ? <> · @{u.username}</> : null}
                         </span>
-                        <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                        <span className="mt-0.5 block text-caption text-fg-subtle">
                           {t("lastSeen")}: {fmtDate(u.last_seen_at)} · {t("created")}: {fmtDate(u.created_at)}
                         </span>
                       </span>
@@ -1388,18 +1374,14 @@ function Chips({
   options: { value: string; label: string }[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className={TAB_TRACK}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`btn btn-sm gap-1.5 font-medium ${
-            value === o.value
-              ? "bg-accent text-on-accent"
-              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-          }`}
+          className={sectionTabClass(value === o.value)}
         >
           {o.label}
         </button>
@@ -1466,18 +1448,14 @@ function ViewToggle({
        meetings toolbar uses — pills are for chips and badges, and a button
        that borrows their shape is why one row of this console had three
        button families in it. */
-    <div className="flex items-center gap-1">
+    <div className={TAB_TRACK}>
       {([false, true] as const).map((v) => (
         <button
           key={String(v)}
           type="button"
           aria-pressed={trash === v}
           onClick={() => onChange(v)}
-          className={`btn btn-sm font-medium ${
-            trash === v
-              ? "bg-accent text-on-accent"
-              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-          }`}
+          className={sectionTabClass(trash === v)}
         >
           {v ? labels.deleted : labels.current}
         </button>
@@ -1617,7 +1595,7 @@ function EditDialog({
               maxLength={500}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="input mt-1 min-h-[80px] w-full resize-y py-2"
+              className="input mt-1 min-h-20 w-full resize-y py-2"
               aria-describedby="ef-reason-hint"
             />
             <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
@@ -1734,7 +1712,7 @@ function ActionDialog({
             maxLength={500}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="input mt-1 min-h-[80px] w-full resize-y py-2"
+            className="input mt-1 min-h-20 w-full resize-y py-2"
             aria-describedby="pa-reason-hint"
           />
           <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">

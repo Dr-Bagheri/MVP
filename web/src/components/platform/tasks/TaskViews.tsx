@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { TaskCardRecord, TaskColumnRecord, TaskLabelRecord } from "@/api/types";
 import { PRIORITY_CHIP, TONE_CHIP, TONE_DOT } from "./TaskDialogs";
-import { TAB_BAR } from "./panelStyle";
+import { TAB_BAR, tabClass } from "./panelStyle";
 import { IconCheck, IconChevronRight, IconVideo } from "@/components/icons";
 import { dayKeyOf, digits, monthGridAt, weekRangeLabel, weekStrip } from "@/lib/format";
 import { useSeededName } from "@/lib/seededNames";
@@ -61,7 +61,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
       type="button"
       onClick={() => onOpen(task.id)}
       title={task.title}
-      className={`block w-full truncate rounded-md px-1.5 py-0.5 text-start text-[10px] leading-4 ${
+      className={`block w-full truncate rounded-md px-1.5 py-0.5 text-start text-micro leading-4 ${
         task.done ? "bg-surface-2 text-fg-subtle line-through" : "bg-accent-soft text-accent"
       }`}
     >
@@ -114,9 +114,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
               role="tab"
               aria-selected={scale === option}
               onClick={() => { setScale(option); setOffset(0); }}
-              className={`btn btn-sm font-medium ${
-                scale === option ? "bg-accent text-on-accent" : "text-fg-muted hover:text-fg"
-              }`}
+              className={tabClass(scale === option)}
             >
               {t(`scale_${option}`)}
             </button>
@@ -138,7 +136,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
               <span className="text-xs text-fg-subtle">{t("noUndated")}</span>
             ) : undated.map((task) => (
               <button key={task.id} type="button" onClick={() => onOpen(task.id)}
-                className="tap rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-fg hover:bg-border">
+                className="tap rounded-lg bg-surface-2 px-2 py-1 text-caption text-fg hover:bg-border">
                 {task.title}
               </button>
             ))}
@@ -151,7 +149,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
         <>
           <ul className="grid grid-cols-7 gap-1.5 pb-1">
             {month.weekdays.map((day, i) => (
-              <li key={i} className="text-center text-[10px] text-fg-subtle">{day}</li>
+              <li key={i} className="text-center text-micro text-fg-subtle">{day}</li>
             ))}
           </ul>
           <ul className="scroll-quiet grid min-h-0 flex-1 grid-cols-7 gap-1.5 overflow-y-auto">
@@ -190,7 +188,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
               <div className={`border-b px-1 py-1.5 text-center ${
                 cell.today ? "border-accent/20" : "border-border/60"
               }`}>
-                <span className={`block truncate text-[10px] ${cell.today ? "text-accent" : "text-fg-muted"}`}>
+                <span className={`block truncate text-micro ${cell.today ? "text-accent" : "text-fg-muted"}`}>
                   {cell.weekday}
                 </span>
                 {/* the week's own day NUMBER — the same round well as the month
@@ -268,14 +266,14 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
       >
         {task.done ? <IconCheck width={12} height={12} /> : null}
       </button>
-      <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${PRIORITY_CHIP[task.priority]}`}>
+      <span className={`shrink-0 rounded-md px-2 py-0.5 text-caption font-medium ${PRIORITY_CHIP[task.priority]}`}>
         {t(`priority_${task.priority}`)}
       </span>
       <span className="min-w-0 flex-1">
         <span className={`block truncate text-sm font-semibold ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
           {task.title}
         </span>
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-fg-subtle">
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-fg-subtle">
           {task.checklist_total > 0 ? (
             <span className="ltr">{digits(task.checklist_done, locale)}/{digits(task.checklist_total, locale)}</span>
           ) : null}
@@ -293,7 +291,7 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
         </span>
       </span>
       {column !== null ? (
-        <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-fg-muted">
+        <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 text-caption text-fg-muted">
           <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[column.tone] ?? TONE_DOT.grey!}`} aria-hidden />
           {seededName(column.name)}
         </span>

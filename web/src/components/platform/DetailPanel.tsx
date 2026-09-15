@@ -18,13 +18,13 @@ import { PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
  *
  * The frame is the reference's task modal, measured (panelStyle.ts,
  * 2026-09-05): one card with the panel corner, a top bar carrying the close and
- * the acts, then a body and a 283px rail with a hairline between them and NO
+ * the acts, then a body and a 17.6875rem rail with a hairline between them and NO
  * tinted ground on the rail — so the eye reads one card with two columns
  * rather than two panels sitting beside each other.
  *
  * SLOTS rather than a prop per button: `start` is the cluster beside the close
  * (the ⋯ menu, the edit toggle), `end` is the context acts on the other side
- * (a link out, the panel's one primary act), `rail` is the 283px column. What
+ * (a link out, the panel's one primary act), `rail` is the 17.6875rem column. What
  * a panel SAYS is its own; where it says it is this file's.
  *
  * THE `notice` SLOT IS GONE (2026-09-08). It held one thing — the red line a

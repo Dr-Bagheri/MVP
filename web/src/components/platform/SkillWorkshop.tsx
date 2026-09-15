@@ -45,10 +45,10 @@ export function SkillHistory({ skillId, onRestore }: {
 
   if (versions === null) return <Skeleton className="h-20 w-full" />;
   if (versions === "unreadable") {
-    return <p className="text-[12.5px] text-fg-muted">{t("historyUnreadable")}</p>;
+    return <p className="text-detail text-fg-muted">{t("historyUnreadable")}</p>;
   }
   if (versions.length === 0) {
-    return <p className="text-[12.5px] text-fg-muted">{t("historyEmpty")}</p>;
+    return <p className="text-detail text-fg-muted">{t("historyEmpty")}</p>;
   }
 
   return (
@@ -56,18 +56,18 @@ export function SkillHistory({ skillId, onRestore }: {
       {versions.map((v, index) => (
         <li key={v.id} className="py-2.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[12.5px] font-semibold text-fg">
+            <span className="text-detail font-semibold text-fg">
               {t("versionN", { n: digits(v.version, locale) })}
             </span>
             {/* the CURRENT one is named, because a list of wordings with no
                 mark for which is live is the one thing it must not be */}
             {index === 0 ? (
-              <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent">
+              <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-caption text-accent">
                 {t("versionCurrent")}
               </span>
             ) : null}
-            <span className="text-[11px] text-fg-subtle">{formatDate(v.created_at, locale)}</span>
-            <span className="text-[11px] text-fg-subtle">
+            <span className="text-caption text-fg-subtle">{formatDate(v.created_at, locale)}</span>
+            <span className="text-caption text-fg-subtle">
               {/* null = a migration wrote it: a shipped skill's first wording.
                   Naming a person there would put somebody on a row they never
                   touched. */}
@@ -88,7 +88,7 @@ export function SkillHistory({ skillId, onRestore }: {
             </span>
           </div>
           {open === v.id ? (
-            <pre className="well mt-2 whitespace-pre-wrap break-words text-[12.5px] leading-[1.9] text-fg">
+            <pre className="well mt-2 whitespace-pre-wrap break-words text-detail leading-[1.9] text-fg">
               {v.prompt}
             </pre>
           ) : null}
@@ -133,7 +133,7 @@ export function SkillDryRun({ prompt, model }: { prompt: string; model: string }
     <div className="space-y-3">
       {/* a CONSTRAINT, R21's kept kind: it says what this can and cannot do
           before it is pressed, and there is nowhere else to learn it */}
-      <p className="text-[12.5px] leading-[1.9] text-fg-muted">{t("dryRunNote")}</p>
+      <p className="text-detail leading-[1.9] text-fg-muted">{t("dryRunNote")}</p>
       <div className="flex flex-wrap gap-2">
         <input
           className="input min-w-0 flex-1"
@@ -148,10 +148,10 @@ export function SkillDryRun({ prompt, model }: { prompt: string; model: string }
         </button>
       </div>
       {failed !== null ? (
-        <p className="text-[12.5px] leading-[1.9] text-danger">{failed}</p>
+        <p className="text-detail leading-[1.9] text-danger">{failed}</p>
       ) : null}
       {answer !== null ? (
-        <pre className="well whitespace-pre-wrap break-words text-[12.5px] leading-[1.9] text-fg">
+        <pre className="well whitespace-pre-wrap break-words text-detail leading-[1.9] text-fg">
           {answer}
         </pre>
       ) : null}

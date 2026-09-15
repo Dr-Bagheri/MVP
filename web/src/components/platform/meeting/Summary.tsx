@@ -287,7 +287,7 @@ export function SummaryTab({ meeting, callId }: {
           the fold of a document as long as its meeting. */}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {rerunNote !== null ? (
-          <span className="me-auto text-[11px] text-fg-muted">{rerunNote}</span>
+          <span className="me-auto text-caption text-fg-muted">{rerunNote}</span>
         ) : null}
         {/*
           «تولید دوباره» — THE SAME BUTTON, A DIFFERENT EXTRACTOR.
@@ -363,7 +363,7 @@ export function SummaryTab({ meeting, callId }: {
       <article className="tile p-6" aria-label={t("tabSummary")}>
         <header className="border-b border-border pb-3 text-center">
           <h2 className="text-lg font-bold text-fg">{t("summaryDocTitle", { title: meeting.title })}</h2>
-          <p className="mt-1 text-[11px] text-fg-subtle">
+          <p className="mt-1 text-caption text-fg-subtle">
             <span className="badge-num" dir="ltr">MTG-{meeting.id.slice(0, 8)}</span>
             {" · "}
             {t("minutesDate")}: {formatDate(meeting.scheduled_at, locale)}
@@ -459,7 +459,7 @@ export function SummaryTab({ meeting, callId }: {
                 <ol className="mt-1.5 space-y-1.5">
                   {decisions.map((item, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm leading-6 text-fg">
-                      <span className="badge-num mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-accent-soft text-[11px] text-accent">
+                      <span className="badge-num mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-accent-soft text-caption text-accent">
                         {digits(i + 1, locale)}
                       </span>
                       {item}

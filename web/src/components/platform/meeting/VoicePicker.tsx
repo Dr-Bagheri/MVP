@@ -200,7 +200,7 @@ export function VoicePicker({
         )}
       />
       {forgot ? (
-        <span role="status" className="text-[11px] text-warning">{t("voiceNotRemembered")}</span>
+        <span role="status" className="text-caption text-warning">{t("voiceNotRemembered")}</span>
       ) : null}
     </>
   );

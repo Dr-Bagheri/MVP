@@ -35,9 +35,9 @@ import { glyphOffsetEm } from "@/lib/glyphCentre";
 
 const SIZE = {
   /** inside a chip — an assignee pill, a compact row */
-  xs: { box: "h-5 w-5", text: "text-[10px]" },
+  xs: { box: "h-5 w-5", text: "text-micro" },
   /** a list row, a menu row */
-  sm: { box: "h-7 w-7", text: "text-[11px]" },
+  sm: { box: "h-7 w-7", text: "text-caption" },
   /** the roster's, and the default */
   md: { box: "h-9 w-9", text: "text-xs" },
   /** a detail header */

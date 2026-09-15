@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  TAB_TRACK, TOOLBAR_GROUPS, TOOLBAR_ROW, sectionTabClass, toggleClass,
+} from "./sectionTabs";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
@@ -233,49 +237,49 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`btn btn-sm gap-1.5 font-medium ${
-        active ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-      }`}
+      className={sectionTabClass(active)}
     >
       {label}
-      {count !== undefined ? <span className="badge-num text-[10px] opacity-70">{count}</span> : null}
+      {count !== undefined ? <span className="badge-num text-micro opacity-70">{count}</span> : null}
     </button>
   );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* ── row one: the board's toolbar, chip for chip ───────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1">
-          {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
-          {chip(view === "list", tTasks("viewList"), () => setView("list"))}
-          {chip(view === "calendar", tTasks("viewCalendar"), () => setView("calendar"))}
-          {chip(view === "archive", tTasks("viewArchive"), () => setView("archive"))}
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-          {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
-          {chip(sort === "name", t("sortName"), () => setSort("name"))}
-          {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+      {/* ── ROW ONE: the kit's tracks (2026-09-15) — the views, the sorts,
+             whose projects, and the one toggle; the same rails as the task
+             board, because a person who has learned one has learned both. ── */}
+      <div className={TOOLBAR_ROW}>
+        <div className={TOOLBAR_GROUPS}>
+          <div className={TAB_TRACK}>
+            {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
+            {chip(view === "list", tTasks("viewList"), () => setView("list"))}
+            {chip(view === "calendar", tTasks("viewCalendar"), () => setView("calendar"))}
+            {chip(view === "archive", tTasks("viewArchive"), () => setView("archive"))}
+          </div>
+          <div className={TAB_TRACK}>
+            {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
+            {chip(sort === "name", t("sortName"), () => setSort("name"))}
+            {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
+          </div>
           {/* WHOSE PROJECTS, IN ROW ONE (user directive, 2026-09-05: "in
               projects put my projects in the first sub menu top before Due
-              today"). It was the board's second row; here it wears row one's
-              tab like the chips beside it, and «همه» keeps the count. */}
-          {chip(scope === "mine", t("scopeMine"), () => setScope("mine"))}
-          {chip(scope === "all", t("scopeAll"), () => setScope("all"), digits(Array.isArray(rows) ? rows.length : 0, locale))}
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-          {/* the board's own «مهلت امروز», the same box with a border for the
-              on state — a state, never a second geometry */}
-          <button
-            type="button"
-            aria-pressed={dueToday}
-            onClick={() => setDueToday((v) => !v)}
-            className={`btn btn-sm gap-1.5 border font-medium ${
-              dueToday ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
-            }`}
-          >
-            <IconClock width={12} height={12} />
-            {tTasks("dueTodayFilter")}
-          </button>
+              today"); «همه» keeps the count. */}
+          <div className={TAB_TRACK}>
+            {chip(scope === "mine", t("scopeMine"), () => setScope("mine"))}
+            {chip(scope === "all", t("scopeAll"), () => setScope("all"), digits(Array.isArray(rows) ? rows.length : 0, locale))}
+          </div>
+          <div className={TAB_TRACK}>
+            <button
+              type="button"
+              aria-pressed={dueToday}
+              onClick={() => setDueToday((v) => !v)}
+              className={toggleClass(dueToday)}
+            >
+              <IconClock width={12} height={12} />
+              {tTasks("dueTodayFilter")}
+            </button>
+          </div>
         </div>
         {/* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
             the add new project on top and add it like tasks in the column").
@@ -506,7 +510,7 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
               {isAdmin ? (
                 <BoardAddRow label={t("addProject")} onClick={onAdd} />
               ) : here.length === 0 ? (
-                <p className="px-1 py-4 text-center text-[11px] text-fg-subtle">{t("noneHere")}</p>
+                <p className="px-1 py-4 text-center text-caption text-fg-subtle">{t("noneHere")}</p>
               ) : null}
             </div>
           </section>
@@ -573,13 +577,13 @@ function ProjectList({ projects, cardsOf, people, locale, onDelete }: {
             <span className="min-w-0 flex-1">
               <bdi className="block truncate text-sm font-medium text-fg">{p.name}</bdi>
               {p.summary === "" ? null : (
-                <bdi className="block truncate text-[11px] text-fg-muted">{p.summary}</bdi>
+                <bdi className="block truncate text-caption text-fg-muted">{p.summary}</bdi>
               )}
             </span>
-            <span className="badge-num shrink-0 text-[11px] text-fg-subtle">
+            <span className="badge-num shrink-0 text-caption text-fg-subtle">
               {t("openCount", { n: digits(open, locale) })}
             </span>
-            <span className="badge-num shrink-0 text-[11px] text-fg-muted">
+            <span className="badge-num shrink-0 text-caption text-fg-muted">
               {p.task_total === 0 ? "—" : t("doneOf", {
                 done: digits(p.task_done, locale), total: digits(p.task_total, locale),
               })}
@@ -662,7 +666,7 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
         <span className="text-sm font-semibold text-fg">{month.title}</span>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-fg-subtle">
+      <div className="grid grid-cols-7 gap-1 text-center text-micro text-fg-subtle">
         {month.weekdays.map((d) => <span key={d}>{d}</span>)}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-7 gap-1">
@@ -674,20 +678,20 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
                 : cell.weekend ? "border-border bg-surface-2/40" : "border-border bg-surface"
             } ${cell.inMonth ? "" : "opacity-40"}`}
           >
-            <span className="badge-num block text-[10px] text-fg-subtle">{cell.label}</span>
+            <span className="badge-num block text-micro text-fg-subtle">{cell.label}</span>
             <div className="mt-0.5 flex flex-col gap-0.5">
               {(byDay.get(cell.key) ?? []).slice(0, 3).map(({ project, n }) => (
                 <Link
                   key={project.id}
                   href={`/projects?project=${project.id}`}
-                  className={`tap flex items-center gap-1 rounded px-1 py-0.5 text-[10px] ${TONE_CHIP[project.tone] ?? TONE_CHIP.grey!}`}
+                  className={`tap flex items-center gap-1 rounded px-1 py-0.5 text-micro ${TONE_CHIP[project.tone] ?? TONE_CHIP.grey!}`}
                 >
                   <bdi className="min-w-0 flex-1 truncate">{project.name}</bdi>
                   <span className="badge-num">{digits(n, locale)}</span>
                 </Link>
               ))}
               {(byDay.get(cell.key) ?? []).length > 3 ? (
-                <span className="px-1 text-[10px] text-fg-subtle">
+                <span className="px-1 text-micro text-fg-subtle">
                   {t("more", { n: digits((byDay.get(cell.key) ?? []).length - 3, locale) })}
                 </span>
               ) : null}
@@ -770,7 +774,7 @@ function ProjectCard({ project, people, locale, compact = false, drag, carried =
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
             <h3 className="truncate text-sm font-semibold text-fg">{project.name}</h3>
             {project.archived_at !== null ? (
-              <span className="badge-num shrink-0 rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
+              <span className="badge-num shrink-0 rounded-md bg-surface-2 px-1.5 text-micro text-fg-muted">
                 {t("archived")}
               </span>
             ) : null}
@@ -798,7 +802,7 @@ function ProjectCard({ project, people, locale, compact = false, drag, carried =
             <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(ratio * 100)}%` }} />
           )}
         </div>
-        <span className="badge-num shrink-0 text-[11px] text-fg-muted">
+        <span className="badge-num shrink-0 text-caption text-fg-muted">
           {ratio === null
             ? "—"
             : t("progress", {
@@ -820,18 +824,18 @@ function ProjectCard({ project, people, locale, compact = false, drag, carried =
             <Avatar key={m.id} name={personName(m, locale)} src={personPhoto(m)} size="xs" ring="surface" />
           ))}
           {members.length > 4 ? (
-            <span className="badge-num ms-1 text-[11px] text-fg-muted">
+            <span className="badge-num ms-1 text-caption text-fg-muted">
               +{digits(members.length - 4, locale)}
             </span>
           ) : null}
           {members.length === 0 ? (
-            <span className="flex items-center gap-1 text-[11px] text-fg-subtle">
+            <span className="flex items-center gap-1 text-caption text-fg-subtle">
               <IconPeople3 width={12} height={12} />
               {t("noMembers")}
             </span>
           ) : null}
         </div>
-        <span className="badge-num text-[11px] text-fg-subtle">
+        <span className="badge-num text-caption text-fg-subtle">
           {formatDate(project.created_at, locale)}
         </span>
       </div>

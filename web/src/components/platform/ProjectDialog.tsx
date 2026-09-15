@@ -114,7 +114,7 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
   return (
     <Overlay onClose={onClose} label={title} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
-        <h2 className="text-[15px] font-bold text-fg">{title}</h2>
+        <h2 className="text-lg font-bold text-fg">{title}</h2>
         <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
           <IconClose width={14} height={14} />
         </button>
@@ -197,7 +197,7 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
                 >
                   <Avatar name={personName(person, locale)} src={personPhoto(person)} size="xs" />
                   <span className="min-w-0 flex-1 truncate">{personName(person, locale)}</span>
-                  {person.id === meId ? <span className="text-[10px]">{t("you")}</span> : null}
+                  {person.id === meId ? <span className="text-micro">{t("you")}</span> : null}
                   {on ? <IconCheck width={12} height={12} /> : null}
                 </button>
               );

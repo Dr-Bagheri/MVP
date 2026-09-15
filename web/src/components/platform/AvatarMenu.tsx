@@ -210,7 +210,7 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
 
             <div className="mt-1 space-y-2">
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-fg-muted">{t("calendar")}</span>
+                  <span className="mb-1 block text-caption text-fg-muted">{t("calendar")}</span>
                   <Select
                     value={calendar}
                     ariaLabel={t("calendar")}
@@ -228,7 +228,7 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
                 </label>
 
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-fg-muted">{t("timezone")}</span>
+                  <span className="mb-1 block text-caption text-fg-muted">{t("timezone")}</span>
                   <Select
                     value={timezone}
                     ariaLabel={t("timezone")}

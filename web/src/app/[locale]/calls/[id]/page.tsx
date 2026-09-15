@@ -1,5 +1,7 @@
 "use client";
 
+import { TAB_TRACK, sectionTabClass, toggleClass } from "@/components/platform/sectionTabs";
+
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { speakerNaming } from "@/lib/speakerNaming";
@@ -973,7 +975,7 @@ export default function CallDetailPage({
      while the record is fetched and the frame that stands after it are the
      same object — a second copy is the one that stops matching. */
   const sectionMenu = (
-    <nav aria-label={t("docSections")} className="flex flex-wrap items-center gap-1">
+    <nav aria-label={t("docSections")} className={TAB_TRACK}>
       {([
         { slug: "summary", label: t("summary"), icon: <IconFileText width={14} height={14} /> },
         { slug: "transcript", label: t("transcript"), icon: <IconRows width={14} height={14} /> },
@@ -985,9 +987,7 @@ export default function CallDetailPage({
           type="button"
           aria-current={section === item.slug ? "page" : undefined}
           onClick={() => setSection(item.slug)}
-          className={`btn btn-sm gap-1.5 font-medium ${
-            section === item.slug ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-          }`}
+          className={sectionTabClass(section === item.slug)}
         >
           {item.icon}
           {item.label}
@@ -1633,11 +1633,7 @@ export default function CallDetailPage({
                   type="button"
                   aria-pressed={compareOpen}
                   onClick={() => setCompareOpen((v) => !v)}
-                  className={`btn btn-sm font-medium ${
-                    compareOpen
-                      ? "bg-accent text-on-accent"
-                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                  }`}
+                  className={toggleClass(compareOpen)}
                 >
                   {t("compare")}
                 </button>
@@ -2071,7 +2067,7 @@ export default function CallDetailPage({
                   <span className="text-xs font-bold text-fg">
                     {chapter.body.split("\n")[0]}
                   </span>
-                  <span className="ms-2 text-[11px] text-fg-subtle ltr">
+                  <span className="ms-2 text-caption text-fg-subtle ltr">
                     {formatClock((chapter.at_ms ?? 0) / 1000, locale)}
                   </span>
                 </li>
@@ -2182,7 +2178,7 @@ export default function CallDetailPage({
                             /* the directory link is the OWNER's act (M11 +
                                0093) — say so instead of rendering a select
                                the wall would refuse */
-                            <span className="mt-2 block text-[11px] leading-5 text-fg-muted">
+                            <span className="mt-2 block text-caption leading-5 text-fg-muted">
                               {t("linkOwnerOnly")}
                             </span>
                           )}
@@ -2198,7 +2194,7 @@ export default function CallDetailPage({
                             </button>
                             <Link
                               href="/management/speakers"
-                              className="text-[11px] text-fg-muted underline-offset-2 hover:underline"
+                              className="text-caption text-fg-muted underline-offset-2 hover:underline"
                             >
                               {t("manageSpeakers")}
                             </Link>
@@ -2209,7 +2205,7 @@ export default function CallDetailPage({
                     {row.channel !== null ? (
                       /* audit finding, 2026-09-02: digits follow the language
                          here too — a channel number is still a number. */
-                      <span className="text-[11px] text-fg-muted ltr">ch{digits(row.channel + 1, locale)}</span>
+                      <span className="text-caption text-fg-muted ltr">ch{digits(row.channel + 1, locale)}</span>
                     ) : null}
                     {row.edited ? (
                       <span className="chip bg-surface-2 text-fg-muted">{t("edited")}</span>
@@ -2412,7 +2408,7 @@ export default function CallDetailPage({
                       <li key={i} className="flex gap-2 text-sm leading-7 text-fg">
                         <span
                           aria-hidden
-                          className="badge-num mt-1 h-5 w-5 shrink-0 rounded-full bg-accent-soft text-[11px] font-semibold text-accent"
+                          className="badge-num mt-1 h-5 w-5 shrink-0 rounded-full bg-accent-soft text-caption font-semibold text-accent"
                         >
                           {digits(i + 1, locale)}
                         </span>
@@ -2475,7 +2471,7 @@ export default function CallDetailPage({
                       : "—"}
                   </span>
                   {note.kind === "chapter" ? (
-                    <span className="mt-0.5 shrink-0 rounded bg-accent-soft px-1 py-0.5 text-[10px] font-semibold text-accent">
+                    <span className="mt-0.5 shrink-0 rounded bg-accent-soft px-1 py-0.5 text-micro font-semibold text-accent">
                       {t("chapterChip")}
                     </span>
                   ) : null}
@@ -2771,7 +2767,7 @@ export default function CallDetailPage({
                     {/* the guess says it is a guess — an unmarked pre-fill
                         would read as something the record already knew */}
                     {speaker.person_id === null && (bulkDraft[speaker.id] ?? "") !== "" ? (
-                      <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent">
+                      <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-caption text-accent">
                         {t("bulkSuggested")}
                       </span>
                     ) : null}

@@ -184,6 +184,9 @@ const config: Config = {
         "menu-item": [rem(SCAFFOLD.fontSize.menuItem), "1.7"],
         detail: [rem(SCAFFOLD.fontSize.detail), "1.7"],
         "group-label": [rem(SCAFFOLD.fontSize.groupLabel), "1.5"],
+        /* the two small roles — see SCAFFOLD.fontSize.caption */
+        caption: [rem(SCAFFOLD.fontSize.caption), "1.5"],
+        micro: [rem(SCAFFOLD.fontSize.micro), "1.4"],
       },
       /* One optical line box for text inside controls. This is a theme token,
          not an AvatarMenu exception: centered controls need the same glyph
@@ -201,6 +204,11 @@ const config: Config = {
         "page-inline-md": rem(SCAFFOLD.page.inlineMd),
         "page-bottom": rem(SCAFFOLD.page.bottom),
         "page-menu": rem(SCAFFOLD.page.menuTop),
+        /* THE PERCENTAGE GUTTERS (2026-09-15) — a share of the column with the
+           desktop gutter as the floor, so the page fills the screen at every
+           width; see SCAFFOLD.page.gutterPct for the measurement that ruled it */
+        "page-gutter": `max(${rem(SCAFFOLD.page.inlineMd)}, ${SCAFFOLD.page.gutterPct}%)`,
+        "page-gutter-reading": `max(${rem(SCAFFOLD.page.inlineMd)}, ${SCAFFOLD.page.readingGutterPct}%)`,
         /**
          * WHERE A FIELD'S TEXT BEGINS (2026-09-03).
          *

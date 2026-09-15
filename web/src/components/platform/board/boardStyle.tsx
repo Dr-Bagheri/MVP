@@ -39,13 +39,22 @@ import { TONE_DOT } from "../tasks/TaskDialogs";
 export const BOARD_LANE = "scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2";
 
 export const BOARD_COLUMN =
-  "glass flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
+  /* A SHARE OF THE LANE, NOT 300 PIXELS (user ruling, 2026-09-15: "it must
+     be in percentage for all sizes … everything must be fitted to the
+     screen"). Measured before: four fixed columns spanned 1232px inside an
+     816px column on a 1280 laptop with the assistant open, so the board
+     scrolled sideways on the screen most people work at, and on a 1920
+     monitor the same four columns left a third of the lane empty. Each
+     column takes an equal share of the lane now, with a 14rem floor under
+     which the lane scrolls — a phone gets the scroll, a laptop gets four
+     columns that fit, a monitor gets four columns that fill. */
+  "glass flex min-w-[14rem] flex-1 basis-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
 
 export const BOARD_HEADER = "flex items-center justify-between gap-1 px-1 py-1";
 export const BOARD_HEADER_START = "flex min-w-0 items-center gap-1";
 export const BOARD_HEADER_END = "flex shrink-0 items-center gap-1";
 export const BOARD_TITLE = "truncate text-sm font-semibold text-fg";
-export const BOARD_COUNT = "badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle";
+export const BOARD_COUNT = "badge-num rounded-md bg-surface-2 px-1.5 text-caption text-fg-subtle";
 
 export const BOARD_CARDS = "scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1";
 /** the board's card is the theme's list card (R7) — pressable, so the cursor says so */
@@ -69,7 +78,7 @@ export const BOARD_CARD_SLOT =
 /** the add-COLUMN placeholder at the end of the lane: a narrower dashed column
     with the same floor, so it stands in the row as a column and not a strip */
 export const BOARD_ADD_COLUMN =
-  "tap flex w-[220px] shrink-0 items-start justify-center gap-2 self-stretch rounded-2xl border border-dashed border-border pt-4 text-sm text-fg-muted hover:border-border-strong hover:text-fg min-h-[70vh]";
+  "tap flex w-[13.75rem] shrink-0 items-start justify-center gap-2 self-stretch rounded-2xl border border-dashed border-border pt-4 text-sm text-fg-muted hover:border-border-strong hover:text-fg min-h-[70vh]";
 
 /** the dashed row at the foot of a column that makes a new thing where it will live */
 export function BoardAddRow({ label, onClick }: { label: string; onClick: () => void }) {

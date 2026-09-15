@@ -118,7 +118,7 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded
                     {/* the take's own clock, not the wall's — the same reading
                         the record's transcript shows, so a line found here is
                         findable there */}
-                    <span className="text-[11px] tabular-nums text-fg-subtle" dir="ltr">
+                    <span className="text-caption tabular-nums text-fg-subtle" dir="ltr">
                       {formatClock(Math.floor(row.atMs / 1000), locale)}
                     </span>
                   </div>
@@ -157,7 +157,7 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded
           {t("liveTranscript")}
         </h3>
         {rows.length > 0 ? (
-          <span className="text-[11px] text-fg-subtle">
+          <span className="text-caption text-fg-subtle">
             {t("transcriptCount", { n: digits(rows.length, locale) })}
           </span>
         ) : null}

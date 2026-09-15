@@ -185,7 +185,7 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
                 <bdi className="font-medium">{c.label}</bdi>
                 <bdi className="text-fg-subtle">@{c.handle}</bdi>
                 {c.agent ? (
-                  <span className="ms-auto text-[9px] text-fg-subtle">{t("agentTag")}</span>
+                  <span className="ms-auto text-[0.5625rem] text-fg-subtle">{t("agentTag")}</span>
                 ) : null}
               </button>
             </li>
@@ -198,7 +198,7 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
            only in state, with nothing on screen, is a message that answers
            something for reasons only the sender knows. */
         <div className="mb-1.5 flex items-center gap-2 rounded-lg border-s-2 border-accent bg-surface-2 px-2 py-1">
-          <span className="min-w-0 flex-1 truncate text-[11px] text-fg-muted">
+          <span className="min-w-0 flex-1 truncate text-caption text-fg-muted">
             {t("replyingTo")}: {replyTo.body ?? t("removedMessage")}
           </span>
           <button type="button" onClick={onCancelReply}

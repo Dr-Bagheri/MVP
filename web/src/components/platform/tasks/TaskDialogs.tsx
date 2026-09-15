@@ -382,7 +382,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
            exactly the height of the assignee chips it stands in a row with
            (those are `.btn btn-sm`). The dashed edge stays — that is what
            says "add another"; only the invented 32px circle went. */
-        className="btn btn-sm w-[34px] px-0 border border-dashed border-border text-fg-muted hover:text-fg"
+        className="btn btn-sm w-control-sm px-0 border border-dashed border-border text-fg-muted hover:text-fg"
       >
         <IconPlus width={12} height={12} />
       </button>
@@ -417,7 +417,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
                             <span className="block truncate text-xs font-medium text-fg">
                               {personName(person, locale)}
                             </span>
-                            <span className="block text-[10px] text-fg-subtle">{t(`role_${person.role}`)}</span>
+                            <span className="block text-micro text-fg-subtle">{t(`role_${person.role}`)}</span>
                           </span>
                           {selected.includes(person.id)
                             ? <IconCheck width={12} height={12} className="text-accent" /> : null}
@@ -564,7 +564,7 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
     <Overlay onClose={onClose} label={t("newTask")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-bold text-fg">{t("newTask")}</h2>
+          <h2 className="text-lg font-bold text-fg">{t("newTask")}</h2>
         </div>
         {/* 2026-09-03: `.btn btn-icon`, the one icon-only shape in the theme
             — the same control the task screen's close and every kebab in the
@@ -760,7 +760,7 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
       ) : (
         <span className="block text-xs font-medium text-fg">{t("scheduleRepeats")}</span>
       )}
-      <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("scheduleExplain")}</p>
+      <p className="mt-1 text-caption leading-5 text-fg-muted">{t("scheduleExplain")}</p>
 
       {repeats ? (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -789,7 +789,7 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
               value={until}
               onPick={(iso) => onUntil(iso === null ? null : calendarDay(iso))}
             />
-            <span className="mt-1 block text-[11px] text-fg-subtle">
+            <span className="mt-1 block text-caption text-fg-subtle">
               {until === null ? t("scheduleForever") : t("scheduleUntilHint")}
             </span>
           </div>

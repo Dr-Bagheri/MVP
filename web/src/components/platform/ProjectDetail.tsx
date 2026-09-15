@@ -308,7 +308,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
             ))}
           </div>
         ) : (
-          <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_CHIP[project.priority]}`}>
+          <span className={`inline-block rounded px-1.5 py-0.5 text-micro font-medium ${PRIORITY_CHIP[project.priority]}`}>
             {t(`priority_${project.priority}`)}
           </span>
         )}
@@ -382,7 +382,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
                   {personName(person, locale)}
                 </span>
                 {person.id === meId ? (
-                  <span className="text-[10px] text-fg-subtle">{t("you")}</span>
+                  <span className="text-micro text-fg-subtle">{t("you")}</span>
                 ) : null}
               </li>
             ))}
@@ -556,12 +556,12 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
                 className={`${PANEL_INPUT} flex-1`}
               />
             ) : (
-              <h2 className={`truncate text-[17px] font-bold ${project.archived_at === null ? "text-fg" : "text-fg-subtle"}`}>
+              <h2 className={`truncate text-[1.0625rem] font-bold ${project.archived_at === null ? "text-fg" : "text-fg-subtle"}`}>
                 {project.name}
               </h2>
             )}
             {project.archived_at !== null ? (
-              <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
+              <span className="badge-num rounded-md bg-surface-2 px-1.5 text-micro text-fg-muted">
                 {t("archived")}
               </span>
             ) : null}
@@ -572,7 +572,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
               was a line in the dialog that is gone; it belongs beside the
               field that causes it. */}
           {editing && name.trim() !== project.name && name.trim() !== "" ? (
-            <p className="well mt-2 text-[11px] text-fg-muted">{t("renameNote")}</p>
+            <p className="well mt-2 text-caption text-fg-muted">{t("renameNote")}</p>
           ) : null}
 
           {editing ? (
@@ -596,7 +596,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         <section aria-label={t("work")}>
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className={BODY_HEADING}>{t("work")}</h3>
-            <span className="badge-num text-[11px] text-fg-muted">
+            <span className="badge-num text-caption text-fg-muted">
               {mine.length === 0
                 ? "—"
                 : t("progress", { done: digits(done, locale), total: digits(mine.length, locale) })}
@@ -629,18 +629,18 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
                         <IconRetry width={12} height={12} className="shrink-0 text-fg-subtle"
                           aria-label={t("repeats")} />
                       ) : null}
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_CHIP[task.priority]}`}>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-micro font-medium ${PRIORITY_CHIP[task.priority]}`}>
                         {t(`priority_${task.priority}`)}
                       </span>
                       {column !== undefined ? (
-                        <span className="shrink-0 text-[10px] text-fg-subtle">{seededName(column.name)}</span>
+                        <span className="shrink-0 text-micro text-fg-subtle">{seededName(column.name)}</span>
                       ) : null}
                     </Link>
                   </li>
                 );
               })}
               {mine.length > 12 ? (
-                <li className="pt-1 text-center text-[11px] text-fg-subtle">
+                <li className="pt-1 text-center text-caption text-fg-subtle">
                   {t("andMore", { n: digits(mine.length - 12, locale) })}
                 </li>
               ) : null}
@@ -837,9 +837,9 @@ function Workload({ rows, people, members, locale, meId }: {
                     {person === null ? t("unknownPerson") : personName(person, locale)}
                   </span>
                   {userId === meId ? (
-                    <span className="text-[10px] text-fg-subtle">{t("you")}</span>
+                    <span className="text-micro text-fg-subtle">{t("you")}</span>
                   ) : null}
-                  <span className="badge-num shrink-0 text-[11px] text-fg-muted">
+                  <span className="badge-num shrink-0 text-caption text-fg-muted">
                     {row.assigned === 0
                       ? t("carriesNothing")
                       : t("progress", {
@@ -855,11 +855,11 @@ function Workload({ rows, people, members, locale, meId }: {
           {unassigned !== undefined ? (
             <li className="border-t border-border pt-2.5">
               <div className="mb-1 flex items-center gap-2">
-                <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-warning/10 text-[10px] text-warning">
+                <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-warning/10 text-micro text-warning">
                   ?
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-warning">{t("nobodyAssigned")}</span>
-                <span className="badge-num shrink-0 text-[11px] text-warning">
+                <span className="badge-num shrink-0 text-caption text-warning">
                   {digits(unassigned.assigned, locale)}
                 </span>
               </div>

@@ -101,10 +101,10 @@ export function MeetingTasksBoard({ callId }: {
             .sort((a, b) => a.position - b.position);
           return (
             <section key={col.id} aria-label={seededName(col.name)}
-              className="card flex w-[260px] shrink-0 flex-col p-2.5">
+              className="card flex w-[16.25rem] shrink-0 flex-col p-2.5">
               <header className="flex items-center justify-between px-1 py-1">
                 <span className="text-sm font-semibold text-fg">{seededName(col.name)}</span>
-                <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle">
+                <span className="badge-num rounded-md bg-surface-2 px-1.5 text-caption text-fg-subtle">
                   {digits(cards.length, locale)}
                 </span>
               </header>
@@ -136,7 +136,7 @@ export function MeetingTasksBoard({ callId }: {
                         {task.title}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                    <div className="mt-2 flex items-center justify-between text-caption">
                       <span className="text-fg-subtle">{tTasks(`priority_${task.priority}`)}</span>
                       {task.checklist_total > 0 ? (
                         <span className="ltr text-fg-subtle">{task.checklist_done}/{task.checklist_total}</span>

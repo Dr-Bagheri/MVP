@@ -14,6 +14,7 @@ import {
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold/Skeleton";
+import { SIDE_MENU_COLUMN, sideMenuRowClass } from "@/components/scaffold/sideMenu";
 import { digits, formatDate, formatTimeAgo } from "@/lib/format";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { untitledNumbers } from "@/lib/sessionTitles";
@@ -271,9 +272,7 @@ export function HomeSidebar({ sheet = false, onLeave }: {
       /* NO fixed height: the row takes it from its own padding, exactly as the
          conversation rows do, so the two halves of this column keep one
          rhythm without either of them naming a number. */
-      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-[13px] font-medium transition-colors ${
-        active ? "bg-surface-2 text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-      }`}
+      className={sideMenuRowClass(active)}
     >
       {/* the icon gutter is always the same width, so the three labels line up
           with each other whatever glyph sits beside them */}
@@ -333,7 +332,11 @@ export function HomeSidebar({ sheet = false, onLeave }: {
        */
       className={sheet
         ? "flex h-full w-full min-w-0 flex-col overflow-hidden px-2 py-3"
-        : "glass-soft hidden h-full w-64 shrink-0 flex-col overflow-hidden border-e border-fg/[.07] px-2 py-3 lg:flex"}
+        /* THE SIDE MENU'S ONE FACE (2026-09-15): the column reads its tokens
+           from scaffold/sideMenu.ts, so the next page that grows a menu beside
+           it wears this one. `hidden … lg:flex` is this page's own decision
+           about WHEN the column is on screen, not part of its face. */
+        : `${SIDE_MENU_COLUMN} hidden lg:flex`}
     >
       {/* ── the three ─────────────────────────────────────────────────────
           New conversation RESETS an already-started thread and is a harmless
@@ -370,7 +373,7 @@ export function HomeSidebar({ sheet = false, onLeave }: {
       {sessions === null ? (
         <SkeletonLines lines={5} className="px-2" />
       ) : sessions.length === 0 ? (
-        <p className="px-2 py-1 text-[11px] text-fg-subtle">{tPlatform("noConversations")}</p>
+        <p className="px-2 py-1 text-caption text-fg-subtle">{tPlatform("noConversations")}</p>
       ) : (
         <>
           {sessions.map((s) => {
@@ -426,7 +429,7 @@ export function HomeSidebar({ sheet = false, onLeave }: {
                    * text: `truncate` on the link clipped the whole flex line,
                    * so the dot and the ellipsis competed for the same edge.
                    */
-                  className={`flex items-center gap-2 rounded-lg py-1.5 pe-2 ps-2 text-[13px] transition-[color,background-color,padding] group-hover/row:pe-28 ${
+                  className={`flex items-center gap-2 rounded-lg py-1.5 pe-2 ps-2 text-sm transition-[color,background-color,padding] group-hover/row:pe-28 ${
                     active ? "bg-surface-2 text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
                   }`}
                 >
@@ -473,7 +476,7 @@ export function HomeSidebar({ sheet = false, onLeave }: {
                   cannot swallow a press meant for the row underneath it.
                 */}
                 <span className="pointer-events-none absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100">
-                  <span className="badge-num whitespace-nowrap text-[10px] text-fg-subtle">
+                  <span className="badge-num whitespace-nowrap text-micro text-fg-subtle">
                     {formatTimeAgo(stamp, locale)}
                   </span>
                   <KebabMenu
@@ -518,7 +521,7 @@ export function HomeSidebar({ sheet = false, onLeave }: {
               type="button"
               disabled={paging}
               onClick={() => { void showMore(); }}
-              className="rounded-lg px-2 py-1 text-start text-[11px] text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-60"
+              className="rounded-lg px-2 py-1 text-start text-caption text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-60"
             >
               {paging ? tCommon("loading") : t("showMore")}
             </button>

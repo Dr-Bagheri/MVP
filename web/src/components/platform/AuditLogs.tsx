@@ -277,7 +277,7 @@ export function AuditLogs() {
             `verify-pairs.mjs` asserts subtle-recedes-from-muted in both
             themes. A hand-rolled alpha is a fourth tone nothing measures,
             and it drifts the moment either token moves. */}
-        <span className="ltr block font-mono text-[11px] text-fg-subtle">
+        <span className="ltr block font-mono text-caption text-fg-subtle">
           {entry.actor_id.slice(0, 8)}
         </span>
       </span>
@@ -299,7 +299,7 @@ export function AuditLogs() {
       )}
       {/* `--fg-subtle` here too — see actorCell */}
       {entry.target_id ? (
-        <span className="ltr block font-mono text-[11px] text-fg-subtle">
+        <span className="ltr block font-mono text-caption text-fg-subtle">
           {entry.target_id.slice(0, 8)}
         </span>
       ) : null}
@@ -458,7 +458,7 @@ export function AuditLogs() {
                       ) : (
                         <span title={t("unknownSourceNote")}>
                           <Chip tone="warning">{t("unknownSource")}</Chip>
-                          <span className="ltr mt-1 block font-mono text-[11px] text-fg-muted">
+                          <span className="ltr mt-1 block font-mono text-caption text-fg-muted">
                             {entry.source}
                           </span>
                         </span>

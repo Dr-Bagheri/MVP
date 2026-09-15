@@ -19,11 +19,15 @@ commits, and UI copy.
    **LOCKED (user, 2026-08-12)** — binding on every session. Deviations go to
    the steward first and are amended in the document BEFORE code.
 3. **[design-system/neurai-platform/RULEBOOK.md](design-system/neurai-platform/RULEBOOK.md)**
-   — HOW IT LOOKS: every front-end shape as a numbered rule (R1–R20) with its
-   status (PROPOSED → APPROVED → FIXED → SOLID), measured on production
-   2026-09-05. A screen is built from these shapes; a new shape is a rule
-   first ("except this part" is the user's word, recorded as an allow-list
-   entry with its reason, never a loosened rule).
+   — HOW IT LOOKS, as THE KIT (user ruling 2026-09-15: "remove the rules and
+   get what we have right now to become solid and unified … first and for
+   the last time"). There are no numbered rules to check any more: the
+   design is a small set of components and class strings, each written in
+   ONE file and refused everywhere else by a guard in `pnpm test`. A screen
+   is built out of the kit; a new shape is added to the kit first (a
+   component and its guard) and only then used. The old R1–R24 and their
+   measurements are in git history; the decisions live as comments beside
+   the code they govern.
 
 ## Rules for every session
 
@@ -6812,3 +6816,81 @@ sessions) for the cross-session narrative.
   control the corrected probe is indistinguishable from the broken one.
   db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
   web 1576 tests + gate + sweep.
+
+- 2026-09-15 (late — THE RULES BECOME THE KIT: one toolbar, one side menu,
+  a page that is a share of the screen, and every size in rem): user ruling,
+  "remove the rules and get what we have right now to become solid and
+  unified, not for an upcoming section to check all the rules and have
+  problems mid-task — first and for the last time." Then the shape of it:
+  the main menu, the home side menu, the top bar and the assistant are each
+  ONE design to be followed; inside a page the two sub-menus "must look like
+  the meeting top menu" with the second "a little different colour but the
+  same design"; tables and buttons unified; and the page's content "in
+  percentage for all sizes so it fits the screen" — phone and tablet with
+  their own designs, desktop and laptop by scaling everything with the
+  screen.
+  **MEASURED FIRST, and the instrument had to be built.** The browser
+  extension's `resize_window` cannot leave this laptop's 1280px screen: every
+  "1920 / 768 / 430" reading came back at vw 1280 — a probe with no subject,
+  reported as a finding twice before the `winW: 0` gave it away. A
+  same-origin IFRAME sized to the target width lays the app out at that
+  width inside the real window, and that discriminated (root 14px and the
+  bottom bar at 430; 17.5px and the rail at 1920). What it said: at 1920 the
+  page column was 1138px inside an 1831px main and at 2560 it was 1268 in
+  2472 — over a thousand pixels of margin on a monitor; at 1280 with the
+  assistant open the column was 816 and the board's four fixed 300px columns
+  spanned 1232 inside it; at 768 the open panel was RESERVED and the page
+  got 415 of 768. All one defect: a width in pixels is right at one width.
+  **THE KIT.** `platform/sectionTabs.tsx` is the two sub-menus: `TAB_TRACK`
+  + `sectionTabClass` (the meetings rail — recessed ground, the chosen entry
+  lifted as a pill in the surface tone with the card shadow) and
+  `FILTER_TRACK` + `filterChipClass` (the SAME rail and the SAME pill on the
+  accent's soft tint, accent ink — the geometry shared token for token,
+  asserted as such). A track never wraps (it scrolls; a folded rail is not a
+  rail); a `Toolbar` row wraps its tracks as units; dividers live inside a
+  track; an on/off filter is `toggleClass` with `aria-pressed`. Eighteen
+  hand-composed rows moved onto it — tasks (three tracks: views, priorities,
+  the toggles with the projects LINK in the pill's clothes), projects (four),
+  meetings (row one; the sort track moved UP into row two beside the search,
+  the topic and a view switch that is the tinted track), chat's rooms, the
+  console's sections and both of its filter segments, the call page's
+  section menu and its compare toggle, the assistant menu, the meeting page's
+  post tabs, the items panel, `TwoPane`'s route menus (Settings, Management,
+  Profile, Help — a menu of addresses in the same track), and the panels'
+  `TAB_BAR`/`tabClass`, which are now the kit's. `scaffold/sideMenu.ts`
+  holds Home's column and row as tokens; `SectionMenu` reads the row, so a
+  vertical menu has one face wherever it stands. `PageContainer` dropped
+  `mx-auto max-w-content`: the column is the whole width between the menus,
+  a NORMAL page with a 2% gutter and a SMALL one with 7%, the desktop gutter
+  as the floor (`SCAFFOLD.page.gutterPct`, emitted as
+  `md:px-page-gutter[-reading]`). The shell reserves the assistant's width
+  only from `lg` and the closed strip from `md`. Board columns are equal
+  shares of the lane with a 14rem floor. And the sweep: 205 px font sizes
+  and every px box over 3px became tokens (`text-caption` 11, `text-micro`
+  10 — new SCAFFOLD roles) or rem, so they ride the fluid root.
+  **THE GUARDS ARE THE RULES NOW.** `toolbar.guard`: a `role="tab"` in a
+  file that does not import the kit is refused, and so are the two retired
+  recipes by their EXACT spelling (the filled accent pair, the rail by
+  hand); its first tree run found three real sub-menus the grep had missed —
+  the call page's section menu, the console's two filter segments, the
+  assistant menu — and one false positive: the first pattern caught every
+  filled compact button (a send key, a live toggle), so it was narrowed to
+  the retired pair itself. `fluid.guard`: no px font size anywhere, no px
+  box over the hairline threshold (44 stays, units.guard's own ruling), and
+  the page column may not name a max-width. `filterChips.test` holds the two
+  rows to one geometry. Six mutations, six reds by name (a tab without the
+  kit, the rail by hand, a px size and a px width, the column in pixels,
+  row two wrapping, the outlined chip back), the restored tree green.
+  `board.guard` and `AudioBar.test` followed the literal they pinned to its
+  new unit — a test that pinned `w-[52px]` was asserting the FIXEDNESS, and
+  now says so in either unit.
+  **The rulebook is replaced**, not amended: RULEBOOK.md is THE KIT — the
+  shell's four fixtures, the page's width and two rows, the one table / one
+  button / three surfaces / one dialog, sizing, the three breakpoints — a
+  table of files and guards with no numbers a page could copy; R1–R24 and
+  their measurements are in git (`cc57f81`). The project guide's source-of-
+  truth line says the same.
+  Verified: typecheck, 1587 web tests in 222 files (three guards and a kit
+  test new), the build gate, the token verifier, the encoding sweep.
+  db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
+  web 1587 tests + gate + sweep.

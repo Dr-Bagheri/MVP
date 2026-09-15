@@ -306,7 +306,7 @@ export function OrgFields() {
               <Skeleton className="h-12 w-12 rounded-lg" />
               <Skeleton className="h-8 w-28" />
             </span>
-            <span className="text-[11px] leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
+            <span className="text-caption leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
           </span>
         </FormRow>
         <FormRow label={t("orgEmail")}>{field}</FormRow>
@@ -449,7 +449,7 @@ export function OrgFields() {
         {/* the hint sits UNDER the control, not under the label (user
             directive, 2026-09-02): it describes the file the button
             accepts, so it belongs beside the button that accepts it */}
-        <span className="text-[11px] leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
+        <span className="text-caption leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
         </span>
       </FormRow>
 

@@ -172,7 +172,7 @@ export function DemoSeedModal({
   return (
     <Overlay onClose={dismiss} label={title} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
-        <h2 className="text-[15px] font-bold text-fg" data-testid="demo-seed-title">
+        <h2 className="text-lg font-bold text-fg" data-testid="demo-seed-title">
           {phase.status === "done" && kind === "create" ? t("demoReadyTitle") : title}
         </h2>
         {running ? (

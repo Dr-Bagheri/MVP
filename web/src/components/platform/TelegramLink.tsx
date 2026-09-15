@@ -101,7 +101,7 @@ export function TelegramLink() {
     return (
       <FormPanel>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-[12.5px] leading-[1.9] text-fg-muted">{t("telegramUnreadable")}</p>
+          <p className="text-detail leading-[1.9] text-fg-muted">{t("telegramUnreadable")}</p>
           <button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>
             {t("telegramRetry")}
           </button>
@@ -124,7 +124,7 @@ export function TelegramLink() {
             {/* a CONSEQUENCE, which is the kind of sentence R21 keeps: it says
                 what pressing the button lets happen, before it is pressed, and
                 there is nowhere else the person could learn it */}
-            <p className="text-[12.5px] leading-[1.9] text-fg-muted">
+            <p className="text-detail leading-[1.9] text-fg-muted">
               {link.bot_username !== null
                 ? t("telegramHowTo", { bot: `@${link.bot_username}` })
                 : t("telegramHowToNoBot")}
@@ -134,7 +134,7 @@ export function TelegramLink() {
                 {/* LTR and monospaced: the code is Latin letters and digits,
                     and on a Persian page a bidi-neutral run reorders them */}
                 <code dir="ltr" className="font-mono text-lg tracking-[0.25em] text-fg">{code}</code>
-                <span className="text-[11px] text-fg-subtle">
+                <span className="text-caption text-fg-subtle">
                   {t("telegramCodeExpires", { minutes: digits(15, locale) })}
                 </span>
               </div>

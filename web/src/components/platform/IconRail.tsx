@@ -103,7 +103,7 @@ export function IconRail() {
           full name — a two-line label is a reminder, the accessible name is
           the contract.
         */}
-        <span className="line-clamp-2 w-full text-center text-[10px] leading-[1.15] [hyphens:auto] [overflow-wrap:anywhere]">
+        <span className="line-clamp-2 w-full text-center text-micro leading-[1.15] [hyphens:auto] [overflow-wrap:anywhere]">
           {label}
         </span>
       </>

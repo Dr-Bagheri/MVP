@@ -62,7 +62,10 @@ describe("Avatar", () => {
     expect(cls("md")).toContain("h-9 w-9");
     expect(cls("lg")).toContain("h-12 w-12");
     /* a 10px letter in a 48px circle is what mixing the two by hand produces */
-    expect(cls("xs")).toContain("text-[10px]");
+    /* the smallest role is a TOKEN now (2026-09-15), so it rides the fluid
+       root like every other size rather than staying 10 physical pixels on
+       every screen */
+    expect(cls("xs")).toContain("text-micro");
     expect(cls("lg")).toContain("text-base");
   });
 });

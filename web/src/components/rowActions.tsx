@@ -700,7 +700,7 @@ export function SelectMenu({
             </button>
           </PopoverTrigger>
           <span
-            className="w-full truncate text-center text-[11px] leading-4 text-fg-muted"
+            className="w-full truncate text-center text-caption leading-4 text-fg-muted"
             title={current?.label}
           >
             {current?.label ?? ""}
@@ -780,7 +780,7 @@ export function SelectMenu({
         className={`w-auto rounded-lg border-border bg-surface p-0 py-1 shadow-xl ${panelWidth} ${panelCeiling}`}
       >
         {panelHeading ? (
-          <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-accent">
+          <p className="px-3 pb-1 pt-1.5 text-caption font-semibold text-accent">
             {panelHeading}
           </p>
         ) : null}
@@ -805,7 +805,7 @@ export function SelectMenu({
             >
               {/* the check LEADS and its gutter is always spent —
                   one scannable column of marks, labels aligned */}
-              <span aria-hidden className="grid w-4 shrink-0 place-items-center text-[10px] text-accent">
+              <span aria-hidden className="grid w-4 shrink-0 place-items-center text-micro text-accent">
                 {o.value === value ? "✓" : ""}
               </span>
               <span className="min-w-0 flex-1 truncate">{o.label}</span>
@@ -835,7 +835,7 @@ export function SelectMenu({
               <button
                 type="button"
                 aria-label={`${o.label} ✕`}
-                className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
+                className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-micro text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
                   dismiss();

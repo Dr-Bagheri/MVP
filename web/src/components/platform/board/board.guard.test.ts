@@ -59,7 +59,9 @@ const MODULE = "components/platform/board/boardStyle.tsx";
 
 /** the shape, in the words a copy would have to use */
 const LITERALS = [
-  "w-[300px]",
+  /* a SHARE of the lane since 2026-09-15 — the literal moved with the
+     decision, and a board that spells it is still a board that copied it */
+  "min-w-[14rem] flex-1 basis-0",
   "min-h-[70vh]",
   "scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2",
   "scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1",

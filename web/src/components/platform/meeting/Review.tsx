@@ -87,10 +87,10 @@ export function ProcessingCard({ call, title, locale }: {
                 <span className={`block text-sm font-medium ${state === "pending" ? "text-fg-subtle" : "text-fg"}`}>
                   {t(`step_${key}`)}
                 </span>
-                <span className="block text-[11px] text-fg-muted">{t(`step_${key}_sub`)}</span>
+                <span className="block text-caption text-fg-muted">{t(`step_${key}_sub`)}</span>
               </span>
-              {state === "done" ? <span className="shrink-0 text-[11px] text-accent">{t("stepDone")}</span>
-                : state === "active" ? <span className="shrink-0 text-[11px] text-accent">{t("stepActive")}</span>
+              {state === "done" ? <span className="shrink-0 text-caption text-accent">{t("stepDone")}</span>
+                : state === "active" ? <span className="shrink-0 text-caption text-accent">{t("stepActive")}</span>
                   : null}
             </li>
           );
@@ -100,7 +100,7 @@ export function ProcessingCard({ call, title, locale }: {
         <div className="h-full rounded-full bg-accent transition-all duration-700"
           style={{ width: `${Math.round(((at + 0.5) / STEP_KEYS.length) * 100)}%` }} />
       </div>
-      <p className="mt-3 text-center text-[11px] leading-5 text-fg-subtle">{t("processingNote")}</p>
+      <p className="mt-3 text-center text-caption leading-5 text-fg-subtle">{t("processingNote")}</p>
     </div>
   );
 }
@@ -394,7 +394,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null, title = ""
         type="button"
         aria-label={playing ? t("audioPause") : t("audioPlay")}
         onClick={toggle}
-        className="btn btn-sm w-[34px] shrink-0 px-0 bg-accent text-on-accent"
+        className="btn btn-sm w-control-sm shrink-0 px-0 bg-accent text-on-accent"
       >
         {playing ? <IconPause width={14} height={14} /> : <IconPlay width={14} height={14} />}
       </button>
@@ -452,7 +452,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null, title = ""
         disabled={saving}
         aria-label={t("audioDownload")}
         title={t("audioDownload")}
-        className="btn btn-sm w-[34px] shrink-0 border border-border px-0 text-fg"
+        className="btn btn-sm w-control-sm shrink-0 border border-border px-0 text-fg"
       >
         <IconDownload width={14} height={14} />
       </button>
@@ -469,7 +469,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null, title = ""
         type="button"
         onClick={nextSpeed}
         aria-label={t("audioSpeed")}
-        className="btn btn-sm badge-num w-[52px] shrink-0 border border-border px-0 font-semibold text-fg"
+        className="btn btn-sm badge-num w-[3.25rem] shrink-0 border border-border px-0 font-semibold text-fg"
       >
         ×{digits(speed, locale)}
       </button>
@@ -594,7 +594,7 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
     <section aria-label={t("transcriptTitle")} className="tile flex min-h-0 flex-col p-4">
       <header className="mb-3 flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-fg">{t("transcriptTitle")}</h3>
-        <span className="text-[11px] text-fg-subtle">
+        <span className="text-caption text-fg-subtle">
           {t("transcriptCount", { n: digits(segments.length, locale) })}
         </span>
       </header>
@@ -682,7 +682,7 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
                   <button
                     type="button"
                     onClick={() => onSeek(seg.start_ms)}
-                    className="badge-num text-[11px] text-fg-subtle hover:text-accent"
+                    className="badge-num text-caption text-fg-subtle hover:text-accent"
                     title={t("playFromHere")}
                     dir="ltr"
                   >

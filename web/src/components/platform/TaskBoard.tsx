@@ -21,7 +21,9 @@ import {
 } from "./board/boardStyle";
 import { ProjectDialog } from "./ProjectDialog";
 import { TopicNameBox } from "./TopicNameBox";
-import { filterChipClass } from "./sectionTabs";
+import {
+  FILTER_TRACK, TAB_TRACK, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass, toggleClass,
+} from "./sectionTabs";
 import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
@@ -284,9 +286,7 @@ export function TaskBoard() {
   const topicChip = (entry: TaskTopicRecord, glyph: React.ReactNode, items: Parameters<typeof KebabMenu>[0]["items"]) => (
     <span
       key={entry.id}
-      className={`btn btn-sm inline-flex cursor-default items-center gap-1.5 border pe-1 font-medium ${
-        topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted"
-      }`}
+      className={`${filterChipClass(topic === entry.id)} cursor-default pe-1`}
     >
       <button
         type="button"
@@ -296,7 +296,7 @@ export function TaskBoard() {
       >
         {glyph}
         {entry.name}
-        <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+        <span className="badge-num rounded-md bg-surface-2 px-1 text-micro">
           {digits(board.tasks.filter((x) => x.topic_id === entry.id).length, locale)}
         </span>
       </button>
@@ -315,9 +315,7 @@ export function TaskBoard() {
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`btn btn-sm gap-1.5 font-medium ${
-        active ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-      }`}
+      className={sectionTabClass(active)}
     >
       {label}
     </button>
@@ -325,55 +323,42 @@ export function TaskBoard() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {/* ── ONE toolbar row, in the reference's order ─────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1">
+      {/* ── ROW ONE: the kit's tracks (2026-09-15) — the views, the priorities,
+             and the toggles, each a rail the row wraps as a unit. The chip is
+             the meetings page's pill, read from sectionTabs. ── */}
+      <Toolbar>
+        <div className={TAB_TRACK}>
           {chip(view === "kanban", t("viewKanban"), () => setView("kanban"))}
           {chip(view === "list", t("viewList"), () => setView("list"))}
           {chip(view === "calendar", t("viewCalendar"), () => setView("calendar"))}
           {chip(view === "archive", t("viewArchive"), () => setView("archive"))}
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        </div>
+        <div className={TAB_TRACK}>
           {chip(priority === "all", t("all"), () => setPriority("all"))}
           {PRIORITY_ORDER.map((level) =>
             chip(priority === level, t(`priority_${level}`), () => setPriority(level)))}
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        </div>
+        <div className={TAB_TRACK}>
           {/*
-           * THE WAY TO THE PROJECTS PAGE (user directive, 2026-09-05: "for
-           * admins there must be a new button in the first sub menu before
-           * only-my-tasks with the name projects, that when you press it will
-           * navigate you to the project page so you can manage projects").
-           *
-           * Before «مال من», in the position the directive names. It is a
-           * LINK and not a chip: the chips beside it change what this screen
-           * shows and this one leaves it, so it never wears the pressed state
-           * that would claim it is a filter. (It carried an arrow for that
-           * until 2026-09-05 — "remove > icon from the projects" — the folder
-           * glyph says enough.)
-           *
-           * Admin-only because managing projects is (0186) — and because the
-           * rail entry was removed in the same directive, this is now the
-           * door. A member reaches a project through its card on this board.
+           * THE WAY TO THE PROJECTS PAGE (user directive, 2026-09-05): before
+           * «مال من», admin-only (0186) because the rail entry left the same
+           * day and this is the door. A LINK in the pill's clothes — it leaves
+           * the page rather than filtering it, so it never wears the pressed
+           * state; the folder glyph says where it goes.
            */}
           {isAdmin ? (
-            <Link
-              href="/projects"
-              className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg"
-            >
+            <Link href="/projects" className={sectionTabClass(false)}>
               <IconFolder width={12} height={12} />
               {t("projectsLink")}
             </Link>
           ) : null}
-          {/* 2026-09-03: the same compact control as the chips beside them —
-              these two were the same 36px box with a border added, which is
-              a STATE (this filter is on), never a second geometry. `.btn` and
-              `.btn-sm` draw no border of their own, so `border` stays. */}
+          {/* the two on/off filters: the same pill, lifted on its own —
+              `aria-pressed` rather than `aria-selected`, since both can be on */}
           <button
             type="button"
             aria-pressed={mineOnly}
             onClick={() => setMineOnly((v) => !v)}
-            className={`btn btn-sm gap-1.5 border font-medium ${
-              mineOnly ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
-            }`}
+            className={toggleClass(mineOnly)}
           >
             <IconUser width={12} height={12} />
             {t("justMine")}
@@ -382,20 +367,18 @@ export function TaskBoard() {
             type="button"
             aria-pressed={dueToday}
             onClick={() => setDueToday((v) => !v)}
-            className={`btn btn-sm gap-1.5 border font-medium ${
-              dueToday ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
-            }`}
+            className={toggleClass(dueToday)}
           >
             <IconClock width={12} height={12} />
             {t("dueTodayFilter")}
           </button>
         </div>
-      </div>
+      </Toolbar>
 
       {/* ── the folder row: the board's folders, then its projects, each with
              its own + (user, 2026-09-05). «بدون موضوع» left the strip the same
              day — "in no folder" is a card's own fact, read on the card. */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className={FILTER_TRACK}>
         {/* 2026-09-03: the theme's control. This row and the toolbar row above
             it are the same kind of chip and were TWO different boxes — h-9 /
             rounded-xl up there, h-8 / rounded-lg down here — eight pixels
@@ -408,7 +391,7 @@ export function TaskBoard() {
         >
           <IconFolder width={12} height={12} />
           {t("allTasks")}
-          <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+          <span className="badge-num rounded-md bg-surface-2 px-1 text-micro">
             {digits(board.tasks.length, locale)}
           </span>
         </button>
@@ -474,7 +457,7 @@ export function TaskBoard() {
           </button>
         )}
 
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        <span className={TRACK_DIVIDER} aria-hidden />
 
         {/* PROJECTS: the folders that are a project's category (0181). The chip
             is the same chip; its menu opens the project, because the project
@@ -485,7 +468,7 @@ export function TaskBoard() {
           return topicChip(
             entry,
             project.icon !== null
-              ? <span className="text-[13px] leading-none" aria-hidden>{project.icon}</span>
+              ? <span className="text-sm leading-none" aria-hidden>{project.icon}</span>
               : <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />,
             [{
               key: "open",
@@ -959,7 +942,7 @@ function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel,
         <div className="mt-2 flex flex-wrap gap-1">
           {worn.map((label) => (
             <span key={label.id}
-              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${TONE_CHIP[label.color] ?? TONE_CHIP.grey!}`}>
+              className={`rounded px-1.5 py-0.5 text-micro font-medium ${TONE_CHIP[label.color] ?? TONE_CHIP.grey!}`}>
               {label.name}
             </span>
           ))}
@@ -973,7 +956,7 @@ function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel,
         <Link
           href={task.meeting_id !== null ? `/meetings/${task.meeting_id}` : `/calls/${task.call_id}`}
           onClick={(e) => e.stopPropagation()}
-          className="mt-2 flex items-center gap-1 truncate rounded-md bg-accent-soft px-1.5 py-1 text-[11px] text-accent hover:underline"
+          className="mt-2 flex items-center gap-1 truncate rounded-md bg-accent-soft px-1.5 py-1 text-caption text-accent hover:underline"
         >
           <IconVideo width={12} height={12} />
           {t("fromRecord")}: {task.meeting_title ?? task.call_title ?? t("recordGone")}
@@ -981,10 +964,10 @@ function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel,
       ) : null}
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${PRIORITY_CHIP[task.priority]}`}>
+        <span className={`rounded-md px-1.5 py-0.5 text-caption font-medium ${PRIORITY_CHIP[task.priority]}`}>
           {t(`priority_${task.priority}`)}
         </span>
-        <span className="flex min-w-0 items-center gap-2 text-[11px] text-fg-subtle">
+        <span className="flex min-w-0 items-center gap-2 text-caption text-fg-subtle">
           {assigned.length > 0 || unnamed > 0 ? (
             <span className="flex min-w-0 items-center gap-1" title={
               [...assigned.map((p) => personName(p, locale)),
@@ -1059,7 +1042,7 @@ function AddColumnInline({ onAdded, onRefused }: {
     );
   }
   return (
-    <div className="card w-[220px] shrink-0 border-accent p-2">
+    <div className="card w-[13.75rem] shrink-0 border-accent p-2">
       {/* NOT `.input-sm` (2026-09-03): the CARD is the box — border, ground and
           corner are the column-shaped panel this composer becomes — so a themed
           field would draw a second one inside it. Same shape as the topic

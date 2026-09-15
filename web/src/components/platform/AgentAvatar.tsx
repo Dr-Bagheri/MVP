@@ -104,8 +104,8 @@ const PORTRAIT: Readonly<Record<string, string>> = {
 };
 
 const SIZES = {
-  sm: { box: "h-5 w-5", text: "text-[10px]" },
-  md: { box: "h-6 w-6", text: "text-[11px]" },
+  sm: { box: "h-5 w-5", text: "text-micro" },
+  md: { box: "h-6 w-6", text: "text-caption" },
   lg: { box: "h-8 w-8", text: "text-sm" },
   /* the roster's big card and the detail page's header — the two places an
      agent is the SUBJECT rather than the author of a line */

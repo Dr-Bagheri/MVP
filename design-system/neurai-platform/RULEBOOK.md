@@ -1,857 +1,131 @@
-# The front-end rulebook
+# NeurAI Platform — THE KIT
+
+**This file replaced the rulebook on 2026-09-15**, on the user's word: "I want
+to remove the rules and get what we have right now to become solid and unified,
+not for an upcoming section to check all the rules and have problems mid-task.
+We are doing this first and for the last time."
+
+So there are no rules to check any more. There is a KIT — a small set of
+components and class strings that ARE the design — and one instruction:
+
+> **Build a screen out of the kit. Never draw a shape the kit already has.**
+
+Every shape below is written in exactly one file, every page reads it from
+there, and a guard in `pnpm test` refuses the spelling that goes round it. That
+is what "solid" means here: the wrong shape has no spelling, so nobody has to
+remember not to write it. The previous rulebook's twenty-four numbered rules,
+their statuses and their measurements live in git (`git show cc57f81:design-
+system/neurai-platform/RULEBOOK.md`); the decisions they recorded are now the
+comments beside the code they govern.
+
+---
+
+## 1. The shell — four fixtures, one face each
+
+| Fixture | Where it lives | To add one more |
+|---|---|---|
+| **Main menu** (the icon rail, home / meetings / tasks …) | `platform/IconRail.tsx`, entries in `platform/nav.ts` (`NAV_PRIMARY`, `NAV_UTILITY`), glyphs in `platform/icons.tsx` (`NAV_ICON`) | one entry in `nav.ts` + one glyph in `NAV_ICON`. `navLabels.guard` and `nav.test` refuse an entry with no label or no icon. |
+| **Top bar** (trail, search, bell, chat, theme, locale) | `platform/TopBar.tsx` | it is one component; a page never draws its own bar. |
+| **Side sub-menu** (Home's conversations column) | tokens in `scaffold/sideMenu.ts`: `SIDE_MENU_COLUMN`, `sideMenuRowClass(active, "row" \| "sub")` | a page that grows a menu beside it renders those two strings. `SectionMenu` (the scaffold's vertical menu) reads the same row, so a vertical menu has one face wherever it stands. |
+| **Assistant** (every page but Home) | `platform/AssistantSidebar.tsx` | nothing — it is the shell's. |
+
+Below `md` the rail becomes the bottom bar, the assistant becomes a sheet
+behind the door in the top bar, and Home's column becomes a slide-over. Between
+`md` and `lg` the assistant floats over the page; from `lg` the shell reserves
+its width (`PlatformShell`: `md:pe-assistant lg:pe-[var(--assistant-rail)]`).
+
+## 2. The page — a share of the screen, and two sub-menus
+
+**Width.** `PageContainer` (`scaffold/Page.tsx`) is the column and it is the
+whole width between the menus. A `normal` surface (a list, a board) keeps a
+2 % gutter; a `small` one (a form, a reading page) a 7 % gutter — both with the
+desktop gutter (28px) as the floor (`SCAFFOLD.page.gutterPct`). Nothing in a
+page names a max-width in pixels.
+
+**The two sub-menus** are `platform/sectionTabs.tsx`, and they are one design in
+two colours — the meetings page's track:
+
+```
+row one   TAB_TRACK     + sectionTabClass(active)   recessed rail, lifted pill, fg ink
+row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent tint, accent ink
+```
+
+- `<SectionTabs tabs active onSelect />` renders row one; `<FilterChips chips
+  active onSelect />` renders row two (each chip carries an icon, a label and
+  optionally a count).
+- A track never wraps — it scrolls; a row (`<Toolbar end={…}>` or
+  `TOOLBAR_ROW` + `TOOLBAR_GROUPS`) wraps its tracks as units. Dividers go
+  inside a track (`TRACK_DIVIDER`). The row's own actions (the create button,
+  a view switch) sit in `end`.
+- An on/off filter is `toggleClass(on)` with `aria-pressed` — the same pill,
+  lifting on its own.
+- A menu of ROUTES (Settings, Management, Profile, Help) is the same track:
+  `TwoPane` renders its links with `sectionTabClass`.
+- A tab strip inside a dialog is the same track: `panelStyle.TAB_BAR` is
+  `TAB_TRACK`, `tabClass` is `sectionTabClass` plus `flex-1`.
+
+`toolbar.guard` refuses a `role="tab"` in a file that does not import the kit,
+and refuses the two recipes the kit retired (the filled accent tab, the rail
+spelled by hand).
+
+## 3. The content — one of each
+
+| Thing | The one spelling | Guard |
+|---|---|---|
+| Table | `DataTable` (`components/DataTable.tsx`) — header, rows, skeleton, pager, menu, selection all inside it | `loading.guard`, `confirm.guard` |
+| Button | `.btn` / `.btn-primary` / `.btn-secondary` at 38 · `.btn-sm` at 34 · `.btn-icon` at 28 · `.btn-icon-sm` at 34 (`globals.css`) — a height, min-height or text size written beside `btn` is a defect | `control.guard`, `units.guard` |
+| Field | `.input` / `.input-sm`, `Field`, `FormRow` | `select.guard` |
+| Card | `.card` (a page block) · `.card-row` (a card in a list) · `.well` (a row inside a card) · `.tile` is a card; a row of tiles says `tile-row` | `surface.guard`, `tileRow.guard` |
+| Dialog / detail | `Overlay`, `ConfirmDialog`, `DetailPanel`; body rhythm from `panelStyle` (`DIALOG_BODY`, `PANEL_SECTIONS`, `RAIL_SECTIONS`) | `dialogSections.guard`, `detailPanel.guard`, `nativeDialog.guard` |
+| Board | `board/boardStyle.tsx` — columns are equal shares of the lane with a 14rem floor | `board.guard` |
+| Menu | `KebabMenu` / `ContextMenu` (`components/rowActions.tsx`) | `submenu.guard` |
+| Icon | `components/icons.tsx`, 12 / 14 / 16 / 18 | `icons.guard` |
+| Copy under a title | none — a name, and at most one sentence when it matters | `copy.guard` |
+
+## 4. Sizing — everything rides the screen
+
+The root font-size is fluid (`globals.css`: 15.5px at 1280, 16 at 1440, 17.5
+at 1920, 20 at 2560), so a size written in **rem** scales with the monitor and a
+size written in **px** does not. Every size in the tree is a token or a rem:
+
+- Type: `text-page-title` 16 · `text-section-title` 15 · `text-pane-title` 14 ·
+  `text-menu-item` 13.5 · `text-sm` 13 · `text-detail` 12.5 · `text-caption` 11 ·
+  `text-micro` 10 (`SCAFFOLD.fontSize` → `tailwind.config.ts`).
+- Controls: `h-control` 38 · `h-control-sm` 34 · `h-control-icon` 28 ·
+  `h-field` 40.
+- Widths: a share (`%`, `flex-1`), a token, or a rem. Never `w-[300px]`.
+
+`fluid.guard` refuses a px font size anywhere and a px box size over 3px
+(the 44px touch floor is the one exception, and `units.guard` keeps THAT px on
+purpose: a finger does not scale with the type).
+
+## 5. Phone and tablet — the shell changes shape, the page does not
 
-**One shape per thing, written down once, enforced by something that runs.**
+- `< md` (768): rail → bottom bar; assistant → sheet; Home's column → slide-over;
+  every `.btn` grows a 44px hit area (`.tap`); tracks scroll sideways; the
+  detail panel's rail stacks under its body; dialogs take the viewport minus
+  2rem.
+- `md`–`lg`: the rail is back; the assistant floats over the page when open.
+- `≥ lg` (1024): the full desktop shell; the assistant reserves its width.
 
-Started 2026-09-05 on the user's directive: *"make the front end solid and
-always follow it until I say 'except this part' … give me the frontend shapes
-we have right now as rules, one by one, and make them solid — we fix and make
-them a rule one at a time."*
+A page adds a breakpoint only for its own content (a grid that becomes one
+column). It never re-implements a shell decision.
 
-Everything below was **measured on production** (app.neurai.pt, signed in, the
-user's own Chrome, 1920×855 with the assistant docked; computed styles, not
-screenshots) and **counted in the source** (`web/src`, 2026-09-05). A number
-here is a recorded observation with its conditions; the rule beside it is what
-the platform does from now on. The root font is fluid — 16px at 1440, 17.5px at
-1920 — so a measured 37px is the token's 34, and a measured 42 is the token's 38.
+## 6. Colour and direction — settled, not here
 
-## How a rule becomes solid
+Tokens in `tailwind.config.ts` / `globals.css`, verified by
+`design-system/neurai-platform/verify-pairs.mjs` (contrast floors, the dark
+ladder in L\*, the glass composites). Direction is the document's (`dir`),
+Radix reads it through `DirectionProvider`, and a physical corner (`left`,
+`right`, `rounded-tl`) is written only where a control is pinned `dir="ltr"`
+and a test says why.
 
-| status | meaning |
-|---|---|
-| **PROPOSED** | written here from the measurement; the user has not ruled |
-| **APPROVED** | the user said yes (or amended); the sweep may start |
-| **FIXED** | every deviation swept, re-measured on production |
-| **SOLID** | a guard in `npm test` fails when the rule is broken, verified red first |
+---
 
-A rule is worked **one at a time**, top to bottom in the order the user picks.
-Exceptions are entries with reasons in the guard's allow-list — never a
-loosened rule — and the user's "except this part" is what puts one there.
+### How this file stays true
 
-## Rulings on record
-
-**2026-09-05 (the user, after reading the first draft):**
-
-1. **The template is the tasks page and the meetings page** — for pages,
-   buttons, dropdowns, tables, margins, spacing, dividers, everything. Where a
-   rule below needs a reference shape, it is the one those two pages use.
-2. **A create button sits in the same row as the first sub-menu** (row 1 of the
-   toolbar), the way tasks and meetings do. Every page.
-3. **The two kanban boards (tasks, projects) are the same board.** One
-   component; today they differ.
-4. **Same table or same button on two pages = same size.** Dividers placed the
-   same way, text the same style and size.
-5. **The Persian font must read well and render sharp** — a type decision to be
-   made under R6, with candidates shown, not slipped in.
-6. **Every rule applies to every page.** The only two surfaces allowed a
-   different STRUCTURE are the AI assistant and the dashboard — same theme,
-   different anatomy. (`/platform` and `/join` stay outside the shell as
-   before; their controls still follow the family.)
-7. **R4 = option (a): one control family, three sizes.**
-
-**2026-09-08 (the user, with a reference shot):**
-
-8. **Glassmorphic, and no layout borders** — translucent panels over a page
-   that has something in it, and none of the hairlines that draw the app as a
-   set of panes. Recorded as R23; a field keeps its edge, which is the one
-   exception and the reason is WCAG, not taste.
-
-**2026-09-05, later (eleven screenshots):**
-
-8. **No explanations under titles and headers.** "Just the name — and
-   sometimes, if it's too important, one sentence." → R21.
-9. **A thing in a list opens as a POP-UP over the list, not as a page.**
-   Projects first ("this problem is systematic") → R18.
-10. **Projects carry most of the problems**: the board must be the tasks
-    board, the detail must be the task detail's pop-up.
-
-**2026-09-05, evening (fifteen items, twelve screenshots):**
-
-11. **Sections in every pop-up are DIVIDED** — "add divider between different
-    sections in all pop-up windows; they all seem connected; even if they
-    don't have information in them, put empty space for the parts that need
-    it, give the structure." → R8 (dialogs) and R18 (the detail's body and
-    rail), one rhythm in `panelStyle`.
-12. **The main menu opens COMPACT by default, in both locales**, and never
-    flashes open on a navigation; in Persian the expand chevron is `<`. → R1.
-13. **The assistant strip is part of the skeleton** — present on the first
-    frame of every reload, never after the identity read. → R1.
-14. **Row two's gap to its content is the board's 12** (`FILTER_ROW_GAP`); the
-    audit log's table drops its header row; member privileges get a row two
-    (اعضا | مدیران); projects' scope chips move UP to row one, before «مهلت
-    امروز» (a ruling for that page — row two stays the rule elsewhere). → R3.
-15. **A row inside a card is a row, not a box** (assistant settings). → R7.
-16. **The mic hotkey is PUSH-TO-TALK**: hold to listen, release to stop, one
-    microphone per key.
-
-## The shapes, as they stand
-
-### R1 · The shell — SOLID
-
-- **Today:** rail 248 on the reading-start side with its labels and the
-  «دستیار» button; top bar 62 with the trail, the clock and search on the
-  rail's side and theme / locale / bell / chat / avatar on the other; the
-  assistant docks as a 30% pane (min 320); the document never scrolls
-  (`h-dvh` root — a page scrolls inside its own column).
-- **Deviations:** none inside the shell. `/platform` (vendor console) and
-  `/join/[code]` (guest door) render outside it by design; the console's
-  controls are off-family (see R4/R20).
-- **Enforced by:** `rhythm.guard` ("the shell scroll belongs to the shell"),
-  `trail` coverage, nav-icon coverage, `IconRail.test` (the width on the
-  first frame), `AssistantSidebar.test` (the strip before the network).
-- **2026-09-05 (rulings 12–13):** the rail opens COMPACT by default in both
-  locales and reads its width from a store (`lib/railCompact.ts`) on the
-  first render of every mount — it remounts per page, and the `useState` +
-  effect version flashed open and slid shut on every navigation. Expand
-  points at the content (inline-end: `>` en / `<` fa), collapse at the wall.
-  The assistant strip renders for an unanswered identity (`member ===
-  undefined`) and leaves only on "not a member"; its width is published in a
-  layout effect, so the page is centred between the two menus from the first
-  frame rather than stepping sideways when `/api/me` lands.
-
-### R2 · The page column — SOLID
-
-- **Today:** `PageContainer` — `small` 1040 for reading/forms, `normal` 1240
-  for lists and boards; padding 26 top / 28 inline / 40 bottom from
-  `SCAFFOLD.page`; **no page-title block** — the breadcrumb names the page.
-  Measured: 28.4 / 30.6 at 1920 (= 26 / 28).
-- **Deviations:** none in the column itself. What varies is what pages put
-  INSIDE it (R3, R7).
-- **Enforced by:** `rhythm.guard` (named steps only, no copied literals,
-  nobody re-implements the column).
-
-### R3 · The toolbar and the primary action — FIXED for the create button (2026-09-05), the one-component half PROPOSED
-
-- **Row two = filter chips (SOLID, user ruling 2026-09-05: "the style for the
-  second sub menu of the top is different — fill with icon like in meetings;
-  make it a rule, add it in the theme and apply it for all the platform").**
-  Row one is the plain tab (`sectionTabClass`, accent-filled when active); the
-  row under it is the FILTER CHIP (`filterChipClass` / `FilterChips` in
-  `sectionTabs.tsx`): outlined, an ICON at the start, the label, a count
-  where one exists, soft-filled in the accent when active — the chip the
-  tasks and meetings folder strips drew first. Applied to security
-  (all | online | offline with counts), the audit log (a glyph per source)
-  and the workflow shelf's kinds; tasks, meetings and projects already wore
-  it. A second row that wears the row-one tab is a defect.
-  **2026-09-05, evening:** the gap under row two is the board's own 12
-  (`FILTER_ROW_GAP` — audit, security, workflows, privileges); member
-  privileges got its row two (اعضا | مدیران, counts, one card under it);
-  the speakers directory's view/team row and the chat's room chips wear the
-  chip; the audit table lost its header row (`hideHeader`). Projects is the
-  one page whose scope chips sit in ROW ONE, before «مهلت امروز» — the user's
-  ruling for that page, not a loosening of the rule.
-  **2026-09-15 (user: "for the meeting table fix the sort as the second top
-  sub menu like the last image", the image being security's own row):** the
-  MEETINGS SORT is a chip row now — تاریخ · شرکت‌کنندگان · وضعیت, each with
-  its glyph — where it was a `w-[11rem]` dropdown in the toolbar line, two
-  presses to see three options and the one control on that page with a
-  silhouette nothing else shares. The DIRECTION key rides in the chip row's
-  `children` slot after a divider: the field and the direction are two
-  questions, and folding them into one strip means six chips that grow by two
-  with every sort field. Note for the next page that does this: the chip row
-  takes **no `FILTER_ROW_GAP`** where its parent is already `flex-col gap-3`
-  — wearing both puts 24px under a row the rest of the product sets at 12.
-
-- **Done on 2026-09-05:** the create button sits at the END of row 1 in one
-  coat, `.btn btn-primary`, on every page that has one — workflows (it stood
-  in its own row above the tabs), models (it stood under the menu, beside the
-  count), agents (beside a sentence, now gone), chat («اتاق تازه» was a compact
-  green), meetings (was an outline green). `TwoPane` grew an `actions` slot so
-  a section page hands its button to the menu row instead of drawing a row.
-- **Still to do:** one `Toolbar` component that every list page renders (tabs ·
-  divider · filters · primary at END; row 2 scope), replacing the eight
-  hand-composed rows, with a guard against `role="tablist"` outside it.
-
-- **Today:** row 1 = section/view chips (`sectionTabClass` = `.btn btn-sm`,
-  active = accent fill, groups split by a 1px divider); row 2 = scope chips
-  (همه / بدون موضوع / +). `TwoPane` renders it for settings, management,
-  profile, help; `ToolbarShell` for exactly ONE route (`/calls/[id]`).
-  Everything else composes its own row.
-- **Deviations (six dialects on nine pages):**
-  - tasks / projects — two rows, no primary action (in-column add rows);
-  - meetings — primary «+ جلسه جدید» as an OUTLINE `.btn` (42h) at the END of
-    row 1;
-  - workflows — primary «ساخت گردش‌کار» in its OWN ROW above; the two chips sit
-    right-aligned in a second row;
-  - agents — no chips; a sentence with a `btn-sm` «+ عامل تازه» after it;
-  - chat — room chips, then TWO `btn-sm` buttons («افزودن اعضا», solid
-    «اتاق تازه») at the end of the same row;
-  - conversations — a text link «+ گفتگوی تازه» at the START, no button;
-  - forms (profile, management/general) — a SOLID green `.btn-primary` in the
-    card's footer; profile also has a full-width danger bar «خروج از حساب».
-  Source: `role="tablist"` / `sectionTabClass` is built in 8 components
-  outside `TwoPane`/`SectionTabs`.
-- **Proposed rule:** every list surface renders ONE toolbar component:
-  row 1 = tabs · divider · filters · **the page's primary action at the END,
-  one shape** (`.btn btn-primary`, solid); row 2 = scope. A page never writes
-  its own row; a page with no primary action renders none (never a text link
-  in its place).
-- **Solid =** `Toolbar` component + a guard: no `role="tablist"` and no
-  `btn-primary` inside a page body outside the toolbar/footers.
-
-- **2026-09-05, night — the gap under the toolbar is ONE number.** Measured
-  on production at 1920 (root 17.5): tasks / meetings / projects / chat sat
-  13 px under row one (`gap-3`); integrations and workflows 22 (`mb-5`);
-  agents 18 (`mt-4`); every TwoPane page — settings, management, profile,
-  help — 17.5 (`!pt-4`). Now `SECTION_ROW_GAP = "mb-3"` (sectionTabs.tsx)
-  beside `FILTER_ROW_GAP`, TwoPane's container `!pt-3`, agents `mt-3`: the
-  board's own 12 (× the root) under row one on every page, and the same
-  under row two where there is one. Solid = when the one-`Toolbar` component
-  owns the row, the gap goes with it and a page cannot spell its own.
-
-### R4 · The control family — SOLID (ruled (a) 2026-09-05; swept, guarded, re-measured)
-
-- **The rule:** **three control sizes and no fourth** — `.btn` 38 (r11,
-  12.5/600) · `.btn-sm` 34 (r8, 12.5/600) · `.btn-icon` 28×28 (r8) — with the
-  coats primary / secondary / ghost / danger, and `.tap` for 44 below md.
-  **A height, a min-height override or a text size written beside `btn` is
-  a defect.** A glyph inside a control (an emoji, a count) sizes ITSELF on a
-  child span; the control does not.
-- **What was measured (before):** `.btn` carries `min-h-control`, and
-  min-height beats any smaller height written beside it, so every control
-  that tried to be smaller by writing `h-[…]` on a `.btn` rendered at 38 (42
-  at 1920): the panel chips (`h-[34px]`) measured **42**; the panel tabs
-  (`h-[32px]` in a 42 bar) measured **42**, edge to edge; `TOP_BUTTON
-  h-[30px]` and the 40/42 footer the same. The numbers measured off the
-  reference and asserted by `panelStyle.test` never reached the screen — the
-  test read the string. Twenty more sites had re-sized a themed control with
-  `h-7…h-10 min-h-0 text-xs/sm` (five heights), and twelve icon buttons carried
-  a text size for the emoji inside them.
-- **The sweep:** `panelStyle` chips, tabs and top button → `btn-sm`; the
-  footer → `.btn` / `.btn-primary`; the tab bar lost its `h-[42px]` and is now
-  the tabs plus 4px of padding (34 + 8 = 42, and it grows with the root as the
-  tabs do); the reference's 9px chip corner rounds to the family's 8. Twenty
-  static sites → `btn`, `btn-sm`, `btn-primary btn-sm`, `btn-secondary
-  btn-sm`. Emoji wells keep `btn btn-icon` and size the glyph on a span.
-- **Solid =** `control.guard` R4 check: on any pressable element wearing
-  `btn`, a fixed height, `min-h-*` or a text utility fails the suite — no
-  worklist, zero entries. Its first run found the twelve emoji wells the grep
-  had missed (a true positive before any green); the pattern is proven both
-  ways on synthetic tags (six caught, seven ignored). `panelStyle.test` asserts
-  the family classes and the ABSENCE of any hand size.
-- **Re-measured on production (2026-09-05, 1920 wide, root 17.5):** new-task
-  chips **37** (= the 34 token; were 42), detail tabs **37** inside a **48**
-  bar (34 + padding + border; were 42 in 42), footer primary **42** (= 38),
-  `btn-sm` corners 8. The dialog itself still rounds at 12 — that is R8.
-- **Still open under this rule:** the board's column names are unstyled 23px
-  buttons (rename-in-place text, not chrome) — decided with R17.
-
-### R5 · Fields — PROPOSED · two label styles
-
-- **Today:** `.input` 40 (44 below md), r11, the recessed `--field` ground,
-  13px; `.input-sm` 34; Select / DateField / TimeField are the platform's own
-  (Radix) — `select.guard`. Measured: 44 (= 40) everywhere, r11, field ground.
-- **Deviations:** two LABEL styles — page forms (profile, management/general)
-  label at 13/400 in `fg`; dialogs and panels label at 11.5/600 in
-  `fg-subtle` (`FIELD_LABEL`). Same product, two forms.
-- **Proposed rule:** one `Field` (label 11.5/600 subtle above the control, the
-  reference's) in pages and dialogs alike; helper text 11 subtle under it;
-  error under the field, never at the top.
-- **Solid =** `ui.field` renders the label; a guard forbids a bare `<label>`
-  around an `.input` outside `ui/`.
-
-### R6 · The type scale — PROPOSED · 212 raw sizes
-
-- **Today (`SCAFFOLD.fontSize`, all rem):** page 16 · section 15 · pane/card
-  title 14/700 · menu 13.5 · body 13 · detail 12.5 · group-label 11.
-  Tailwind's `text-sm`/`text-xs` are re-pointed at the scale. The root is
-  fluid (`clamp(14px, 11.5px + 0.3125vw, 20px)`).
-- **Deviations:**
-  - **212 raw px sizes in 47 files** — `text-[11px]` ×128, `text-[10px]` ×75,
-    9/12/13/15/17 the rest. A px size does not scale with the root, so at 1920
-    the tokens grow 9% and these do not: the page's proportions change with
-    the window.
-  - row and card TITLES sit at 16 (17.5 measured) where the scale says card
-    title 14/700: users table names 17.5/500, meeting rows 17.5/400, task
-    cards 17.5/400, workflow hero titles 17.5/600.
-  - the meeting page's section headings are 13/600 — body size.
-- **Proposed rule:** only the scale's classes; a row/card title is
-  `text-pane-title font-bold`; a section heading is `text-section`.
-- **Solid =** guard: no `text-[Npx]` in components outside an allow-list with
-  reasons (badge digits, HUD-like marks); a render test on DataTable/tile
-  rows asserts the title class.
-
-### R7 · Surfaces — SOLID (2026-09-05): three surfaces and nothing else
-
-- **The rule.** Three surfaces, each a class in `globals.css`; an inline
-  recipe is a defect.
-  - **`.card`** — a PAGE BLOCK: 18 (`rounded-2xl` = `radius.modal`), hairline
-    border, the surface, 16px inset, the ambient `shadow-card`.
-  - **`.card-row`** — a card in a LIST (a board card, a meeting in its list, a
-    record in a column): 16 (`rounded-xl` = `radius.tile`), the surface, 12px
-    inset, `shadow-card`, a stronger edge under the pointer.
-  - **`.well`** — a row INSIDE a card: 16, recessed one step
-    (`bg-surface-2/40`), NO shadow — a shadow inside a shadowed card is mud.
-  - `.tile` IS a card: 18 (was 20) on `shadow-card` (was `shadow-island`, the
-    dialog's). `.tile-row` and `.table-cards` rows keep 16.
-  - Floating layers — menus, popovers, dialog panels — are not this rule's:
-    they wear the island shadow and belong to R8/R10.
-- **What was found.** 74 hand-rolled recipes in 32 files by the guard's own
-  count (the first grep said 70) against 15 `.card` uses: two corners (18 and
-  20), five grounds (`bg-surface`, `bg-surface-2`, `/40`, `/50`, a tint),
-  insets from `p-2` to `p-7`, and shadow by accident — workflow and agent
-  cards carried none, settings cards and board columns did. Nobody was
-  careless: the theme offered ONE class and screens needed three shapes, so
-  every screen drew the other two.
-- **The sweep (30 files, 50 recipes).** → `card`: agent and workflow cards
-  (`p-7` gone), Skeleton, FormPanel, MailDraftCard, the whiteboard canvas, the
-  live Stage, MiniTasks' column, Review, TaskViews' pane, CreateOrg, the error
-  page, the platform console's warning card, the board's add-column editor,
-  the workflow page's three blocks. → `card-row`: ItemsPanel rows, MiniTasks
-  rows, the meeting's live pill, the speakers list. → `well`: Recorder ×4,
-  AgentDetail, IntegrationDetail, Integrations, MailDraftCard's quote,
-  MeetingPage ×4, the meetings composer, ProjectDetail's note, TaskDetail ×2,
-  TaskDialogs, WorkflowBuilder ×2, the workflow page ×3. **The board's card is
-  the theme's list card**: `BOARD_CARD = "card-row cursor-pointer"`
-  (board.guard's literal updated). TaskViews' segmented box was R4's
-  `TAB_BAR` wearing a card recipe and now reads the constant.
-- **Kept, as entries WITH reasons** (24, in `surface.guard.test.ts`): ten
-  floating layers in eight files (date/time popovers, the Select listbox, the
-  account menu, the bell, the emoji panel, the tone popover, the Jalali
-  picker, the whiteboard's two toolbars) → R10; seven dialog panels (Overlay,
-  the confirm dialog, SetMemberPassword, TourOverlay, WorkflowBuilder,
-  WorkflowRunDialog, the platform console) → R8's second pass; four fields
-  wearing a card's corner (the task title and description editors, the label
-  field and its popover) → R5; the one detail frame (R18), the rail (R1), the
-  assistant's composer (a structural exception by ruling).
-- **Solid =** `surface.guard.test.ts`: (1) over every `.tsx` outside `ui/`, a
-  className carrying a card corner AND a border AND a surface ground is a
-  hand-rolled card, and each file's count must EQUAL its entry — more is a
-  regression, fewer is a stale entry — with synthetic controls for chips,
-  inputs and the three classes; (2) `.tile`'s literal radius ==
-  `SCAFFOLD.radius.modal` and its shadow == `--shadow-card`, read from the
-  rule body, not the comment beside it; (3) `.card-row` and `.well` exist;
-  (4) `tileRow.guard.test.ts` (2026-09-15): a `.tile` that is a ROW says
-  `tile-row` — `.tile` declares `flex-direction: column` for the dashboard's
-  cards, and a `tile flex items-center` list row reads as a row in a diff
-  and renders as a centred stack (the projects list row shipped so). Tokens
-  never substrings, `flex-col` the one exclusion, first red = that row.
-  Verified red three ways: on the un-swept tree (32 files named, tile
-  20/island), on a recipe staged back into Skeleton, and on a stale count
-  (Overlay recorded as 2) — each fired on exactly its own line.
-- **Re-measured on production (2026-09-05, 1920 × 855, root 17.5px):**
-  `.card` on the settings FormPanel, the workflow cards and the workflow
-  page's blocks — corner 18, inset 17.5 (= 1rem; the workflow card had been
-  30.6 at `p-7`), shadow `0 2px 10px rgba(0,0,0,.34)`; `.card-row` on the
-  task board — 16, inset 13.1, the same shadow; `.well` on the workflow page
-  (seven of them) — 16, ground `rgba(39,44,50,.4)`, no shadow; the meeting
-  row (`tile tile-row`) — shadow from the island's `0 6px 28px .46` to the
-  card's `0 2px 10px .34`, corner 16 by the row override; the loaded `.tile`
-  rule reads `border-radius: 18px; box-shadow: var(--shadow-card)`. No plain
-  tile stood on a page I could reach (`/fa/dashboard` is not a route), so the
-  18 is a stylesheet reading, not a computed one.
-
-- **2026-09-05, evening (ruling 15):** a row inside a card is a row divided
-  by a hairline, never a `.well`/bordered box inside the card — the assistant
-  settings' switches and the agent dialog's web switch lost their boxes.
-
-### R8 · Dialogs and panels — SOLID (2026-09-05)
-
-- **Fixed:** `ui/dialog.tsx` and `ui/alert-dialog.tsx` carried `sm:rounded-lg`
-  in their base class list; it is the panel token (`rounded-2xl`, 18) now, so
-  `Overlay` and `ConfirmDialog` render the corner they declare.
-- **Solid =** `dialog.radius.test.tsx` renders both and asserts the class list
-  carries the token and NO responsive corner that could outrank it — red
-  against the shipped base (`sm:rounded-lg` beside `rounded-2xl`), green after.
-- **Re-measured on production (2026-09-05):** the new-task and new-meeting
-  dialogs at **18** (were 12); the project panel at 18 with its 283 rail.
-- **SECTIONS DIVIDED (ruling 11, 2026-09-05 evening):** every dialog body is
-  `DIALOG_BODY` (panelStyle) — each field a section, a hairline between them
-  drawn by the container, the same air on both sides — and a dialog that is
-  one block (a search over a list) is an entry WITH ITS REASON in
-  `dialogSections.guard.test.ts`, which fails a new `<Overlay` that reads
-  neither. Footers carry the hairline above them everywhere. An empty
-  section keeps its room (`SECTION_EMPTY`): «موردی ندارد» sits where the
-  items would.
-
-#### The record of the defect
-
-- **Today:** `Overlay` (sm/md/lg = max-w-md/lg/3xl, `rounded-2xl`,
-  `shadow-island`, title 15/700 + subtitle 12); the task detail panel
-  1120×760 with a 283 rail, title 17/700, body headings 11.5/700, tab bar 42.
-- **THE DEFECT:** `ui/dialog.tsx`'s `DialogContent` carries **`sm:rounded-lg`**,
-  which beats `rounded-2xl` from 640px up — **every Overlay dialog renders at
-  radius 12, not 18** (new-task dialog measured 12; the detail panel, which
-  does not pass through it, measured 18). The markup reads as satisfied.
-- **Proposed rule:** one dialog corner (18), one header (title 15/700,
-  subtitle 12 subtle, close at the END), one footer (cancel `.btn` +
-  primary `.btn-primary`, right-aligned in LTR terms = END).
-- **Solid =** remove the base radius from `DialogContent`; a render test
-  asserts Overlay's element carries no `sm:rounded-*` and does carry the
-  token class; `SCAFFOLD.radius.modal` stays the one number.
-
-### R9 · Tables — SOLID (one open item, see R6)
-
-- **2026-09-05, evening:** the audit log and the security page's sessions
-  tables render with NO header row (`hideHeader`; the `<thead>` stays
-  sr-only) — the user's ruling for tables whose cells read without column
-  names. Not a general rule: a table whose columns need naming keeps its row.
-- **2026-09-06:** the first row sits AT THE GAP. `border-spacing` also paints
-  its band above the first row, and a headless table carried its sr-only
-  header row inside the layout as well — every table page measured 30 px from
-  its toolbar to the first row against the board's 13. `.table-cards` takes
-  one band back, `.table-headless` two (globals.css; `DataTable.gap.test`).
-  Re-measured on production after the deploy: 13.1 under the toolbar on
-  users, security, models and the audit log — the board's own number.
-
-- **Today:** `DataTable` is the one table — rows are `.table-cards` (16,
-  border painted on the cells with logical corners), head `text-group-label`
-  600 muted, **ten rows then the pager**, skeleton rows while loading, a named
-  empty state. Measured: row 72, head 12 (= 11), cell radius 16.
-- **Deviations:** row names at 16 (R6).
-- **Enforced by:** `Pagination.test`, `loading.guard`, DataTable tests.
-
-### R10 · Menus — SOLID
-
-- **Today:** `KebabMenu` / `ContextMenu` / `AvatarMenu` on Radix — panel r12,
-  surface, 4px padding, items 38h at 12.5px with a 13px inset, icon gutter
-  always spent, red items last, opens on pointerdown. Measured: 236 wide,
-  r12, item 38 / 12.58px.
-- **Enforced by:** `popover.guard`, `select.guard`, `rowActions.menu.test`.
-
-### R11 · Feedback and consent — SOLID
-
-- Destructive controls confirm in the one `ConfirmDialog` (`confirm.guard`);
-  no native `alert/prompt/confirm` (`nativeDialog.guard`); a save/delete/change
-  reports through `notify` — never a timed toast, the one exception being
-  clipboard acks (`notifyRule.guard`); a failed run is an annotation, never a
-  bubble (thread tests).
-
-### R12 · Loading and empty — PARTIAL
-
-- **Today:** `Skeleton` / `SkeletonLines` / `SkeletonCards`, `DataTable
-  loading`, three-state identity (loading ≠ nobody), «—» never «0»;
-  `loading.guard` holds a worklist.
-- **Deviations:** empty states are ad-hoc sentences in ad-hoc places (chat:
-  centred 13px muted inside the box; board: the dashed add-card row; lists:
-  DataTable's own). Each names its nothing — good — but none share a shape.
-- **Proposed rule:** one `Empty` shape (sentence at 13 muted, optional
-  action as `btn-sm`, centred in the surface that would hold the rows).
-- **Fixed inside panels (2026-09-05 evening):** an empty section of a detail
-  keeps the height its items would take (`SECTION_EMPTY`), so the structure
-  the dividers draw does not collapse around a missing answer.
-
-### R13 · Icons — SOLID
-
-- One registry (`components/icons.tsx`), 16px inside controls, nav icons
-  derived from the nav; `icons.guard`.
-
-### R14 · Colour — SOLID at the tokens, PROPOSED at the primary
-
-- **Today:** tokens only (bg / surface / surface-2 / field / border /
-  border-strong / fg / fg-muted / fg-subtle / accent / on-accent / primary /
-  on-primary / status ×4 with 12% chips), `verify-pairs.mjs` holds every
-  contrast floor, dark-first, both themes derived together.
-- **Deviation:** the "main thing to press" comes in three coats — solid green
-  (`btn-primary` in forms, «اتاق تازه»), outline green («جلسه جدید»,
-  «ساخت گردش‌کار»), and the accent chip fill of an active tab. One primary
-  coat (with R3).
-
-### R15 · Direction — SOLID
-
-- Logical properties by default; physical ONLY where the thing is pinned or
-  pointer-anchored (composer row `dir="ltr"`, sign-in eye, context-menu
-  anchor); `DirectionProvider` wraps the tree. `direction.guard`,
-  `tile-direction.guard`, the composer's side test.
-- **Typed digits follow the language (user, 2026-09-05):** in fa, digits a
-  person types into an RTL text field become Persian as they type
-  (`PersianDigitsTyping`, one capture-phase listener in the locale layout,
-  rewriting through the native setter so React stores the converted value);
-  fields pinned `dir="ltr"`, emails, numbers and passwords keep ASCII, and
-  Arabic-Indic digits become Persian too. `PersianDigitsTyping.test` — each
-  positive case beside a control that must not convert.
-
-### R16 · Motion — PROSE
-
-- Controls 150ms; a message arrives with a 6px rise over 420ms; dialogs zoom
-  from 98% over 150ms; `prefers-reduced-motion` stops all of it. No guard;
-  `units.guard` covers the units.
-
-### R17 · Boards — SOLID (2026-09-05): one board, one module
-
-- **The rule:** the tasks board and the projects board are ONE shape, read
-  from `components/platform/board/boardStyle.tsx` — lane, column (300 · r18 ·
-  surface · card shadow · 10px inset · 70vh floor), header (tone well · title
-  13/600 · count · acts), cards box, card (r16 · surface · 12px inset · card
-  shadow), add row (the dashed compact control). A literal from that list in
-  either board file is a defect.
-- **What was measured:** the projects board had been written from the task
-  board's numbers the day before and had already drifted — a 12px column
-  title against 13, the count badge in a different corner, cards in a
-  different box (`.tile` at r20 against the board's r16 card), no tone on the
-  column.
-- **Solid =** `board.guard.test.ts`: both boards import the module, neither
-  spells the six literals, and the module still says them (the control).
-- **The card's delete, and the column's none** (user ruling 2026-09-15:
-  "remove the delete button for the columns so you have solid columns
-  always, and add the small delete icon on the tasks cards and projects
-  cards"): a column is STRUCTURE and its header carries no delete; a card is
-  a THING and carries `BoardCardDelete` from the same module — the theme's
-  `.btn-icon`, subtle until the pointer reaches it and red under it, opening
-  the platform's one confirm dialog and never the write. Rendered only for a
-  reader the door admits (a task: its creator or an admin, db/0162; a
-  project: an admin, db/0191) — a control the server would refuse is worse
-  than none. Pinned by `TaskBoard.test` and `Projects.test` as the PAIR:
-  header without, card with; a member with their own and without a
-  colleague's. The archive door for a column stays on the server.
-- **Open under this rule:** the column name is still an unstyled rename-in-
-  place button; the header's acts on projects are read-only by design (a
-  column is edited on the board that owns it).
-
-### R18 · Detail surfaces — SOLID for the frame (2026-09-05); the remaining pages PROPOSED
-
-- **The rule (user, 2026-09-05):** a thing in a list opens as a POP-UP over the
-  list, in ONE frame — `DetailPanel`: the fixed backdrop, the card at the panel
-  corner, a top bar (close · ⋯ · edit at the start, the context acts at the
-  end), a body and a 283px rail. It keeps an address (`?task=`, `?project=`)
-  so a link still lands on the thing.
-- **Done:** the task detail's frame was EXTRACTED to `DetailPanel` and the
-  task detail re-reads it; the project detail — a page yesterday, wearing the
-  same anatomy drawn a second time — is the panel's content now, opened from
-  the board, the list and the calendar via `/projects?project=<id>`;
-  `/projects/<id>` redirects there. Its acts match the task's: ⋯ holds
-  archive/restore and the red delete, «ویرایش» beside it, the board link and
-  «واگذاری کار» at the end.
-- **Solid =** `detailPanel.guard.test.ts`: the frame's first line exists in
-  exactly one file, and both details render `<DetailPanel>`.
-- **2026-09-05, evening (ruling 11):** the frame divides its body and its
-  rail (`PANEL_SECTIONS` / `RAIL_SECTIONS`) — each child a section with a
-  hairline between; the task detail's tab bar and its content became one
-  section so the line does not cut between them, and the project detail's
-  title and summary one block.
-- **Still pages, to rule on one by one:** agent (`/agents/[handle]`),
-  workflow (`/workflows/[handle]`), meeting (`/meetings/[id]` — it runs the
-  recorder and the stages, which may be the one that stays a page), member
-  (`MemberDetail`), integration (`/integrations/[slug]`). Each opens as the
-  panel unless the user says "except this part".
-
-### R19 · Composers — PROPOSED · two
-
-- **Today:** the room composer (two fixed lines, `dir="ltr"` row, @ / mic /
-  emoji at the left, outline send at the right) and the assistant composer
-  (growing textarea, «+», mic, send). Two composers, two shapes, one mic hook.
-- **Proposed rule:** one `Composer` with slots; the mic tone from `micTone`.
-
-### R20 · Surfaces outside the shell — PROPOSED
-
-- `/platform` (vendor) and `/join/[code]` (guest) own their documents by
-  design; their CONTROLS are still the family's. Today the console uses pill
-  chips and its own header buttons.
-
-### R21 · No explanations under titles and headers — SOLID (ruled and swept 2026-09-05)
-
-- **The rule (user):** a title is the name. At most one sentence, and only
-  when leaving it out would cost something — which turned out to mean four
-  kinds and nothing else: a STATE (what a screen says instead of its content:
-  the admin-only refusal, the pending screen, a record still processing, an
-  empty canvas), an ARRIVAL (a stranger's first screen), a CONSEQUENCE (what a
-  press does that its name cannot carry: a rename that reaches the board, a
-  schedule that comes back, what deleting a member does), a CONSTRAINT (the
-  logo's format, what a connection reads, what a key's permission grants).
-- **Swept:** ~40 paragraphs — a sentence under every settings card title, a
-  paragraph under every notification toggle (the auto-draft row keeps its one
-  consent sentence: "nothing is sent without you pressing send"), the intro
-  above the agents grid, the subtitles under the new-task and new-meeting
-  dialog titles, the privacy note above the audit table, section notes on
-  skills/security/sessions, the workflow builder's field hints, the
-  whiteboard's and the meeting page's overlays (two of which came BACK as
-  state and consequence — the first sweep took them and the guard's kinds
-  put them where they belong). `Section` lost its `description` prop
-  entirely, so a new page cannot grow one and typecheck.
-- **Solid =** `copy.guard.test.ts`: a `<p>` or block `<span>` whose whole
-  content is a translated key named as an explanation (`…Hint`, `…Note`,
-  `…Desc`, `…Subtitle`, `intro`) fails the suite unless it is an entry with
-  its kind and reason; the control test makes the pattern answer NO to a
-  field's own hint slot, an empty state, a value and a heading. A hint that
-  IS important goes in the control's own slot (`Field hint=`), which the
-  guard does not read.
-
-### R22 · The integrations shelf: same-size app tiles, four to a row — APPROVED (user directive 2026-09-06)
-
-- **Rule.** The available integrations are an app store: one `.card-row`
-  tile per integration, four to a row from `md` up (two below), every tile
-  the same shape — the provider's OWN mark (inline SVG in
-  `platform/brandMarks.tsx`; no remote brand asset under the CSP), the name
-  on one line, and its status in THIS platform as a `StatusDot` — and
-  nothing else: no description, no provider line, no button inside the
-  tile. The tile IS the control: not connected → the connect briefing;
-  expired or revoked → the reconnect briefing; a scope upgrade (Drive, or
-  drafting) → the re-consent directly; connected → the integration's own
-  page; not configured on the server → not a control at all, and the chip
-  says so. The accessible name is the action WITH the integration's name
-  («اتصال جی‌میل»), never the provider's.
-- **Measured.** Built 2026-09-06 in place of two-per-row cards that carried
-  a description and a button. Re-measure on production after deploy: four
-  tiles across at 1240, equal heights, the mark at 40.
-- **Solid =** `Integrations.test.tsx` pins the grid classes, the four
-  accessible names, the chip per state, each tile's own `data-brand` mark,
-  one class string for all four, and the ABSENCE of the description in the
-  shelf; a tile that grows a sentence also fails R21's `copy.guard`.
-
-### R23 · Glass, and no layout borders — APPROVED
-
-> "make it glassmorphic look and no border layout like in this example"
-
-The directive arrived with a reference shot of a work-item list whose panes do
-not announce themselves: no rule under the top bar, no hairline down the side
-menu, no outline round a row. Two halves, and they are the same decision.
-
-**The sheet.** A surface is a translucent panel over the page ground, and three
-things are required for that to read as anything at all:
-
-1. **The ground has to have something in it.** Blurring one flat colour returns
-   that colour, so glass over a flat page is arithmetically the page — the
-   first pass turned every panel translucent and the screens came back
-   IDENTICAL. `--wash-1..3` put three very slow radials (all under 14 %) into
-   `body`, `background-attachment: fixed` so the light source belongs to the
-   window rather than to whichever scroller moved last.
-2. **The edge is light, not ink.** `--shadow-glass` is an inset highlight on
-   the panel's top lip plus an ambient drop. That is the whole reason the
-   border could go: the panel still has a boundary, and the boundary is not a
-   rectangle drawn round it.
-3. **Saturation, not just blur.** `saturate()` in `--glass-filter` is the
-   difference between "frosted" and "smeared".
-
-`.glass` is the recipe (content: cards, tiles, rows); `.glass-chrome` is the
-same sheet without lip or drop, for STRUCTURE — the top bar, the assistant
-column, every menu, popover and dialog; `.glass-raised` is a row inside a
-panel. `.card`, `.card-row`, `.well`, `.tile` and `.table-cards`' rows are all
-that recipe, so R7's three surfaces are unchanged in number and changed in
-material.
-
-**No layout borders.** The seams are gone at the site of each one: the rail's
-`border-e`, the top bar's `border-b`, the section menu's `md:border-e` and its
-closed strip, HOME's sidebar column, every card outline, every table-cell edge,
-and `border` on the four shadcn floating bases (which was
-`borderColor.DEFAULT`, not even a token). The pointer response moved with them
-— a sheet with no border cannot darken one, so a row RISES
-(`--shadow-glass-hover`) or becomes less transparent.
-
-Four columns of the shell each carried the same three classes, and all four are
-asserted the same way: the width KEPT, `border-e` / `border-border` /
-`bg-surface` gone. Each of the three is insufficient alone — an opaque column
-with no border is the same two-pane picture with a softer join, a transparent
-one that kept its hairline is a line drawn on the page, and a column that lost
-its width along with its seam passes every absence check while taking the menu
-with it.
-
-**THREE SHELL TONES, CALIBRATED ON THE RENDERED SCREEN.** The first pass took
-each column's whole class list — hairline AND ground — and left it
-transparent, which removed the seam and removed the CHROME with it. The user
-sent it back twice, and the two corrections are different tones for different
-jobs:
-
-- the RAIL and the TOP BAR wear `glass-chrome` ("the rail … should be the
-  same as the top header"). They frame the window, they meet at its corner,
-  and they carry ONE class rather than two tones chosen to match — which is
-  the only form in which "the same colour" survives an edit to either.
-- HOME's sidebar wears `glass-soft` ("different, and more similar to the
-  background of the chat but a bit glass morphicly looking"): the same tone and
-  the same blur at a third of the alpha, so it composites a few values above
-  the ground. It stands INSIDE the page beside a thread, where the bar's white
-  reads as a second header. No lip and no drop on it — what separates it from
-  the conversation is meant to be the tone, not an edge.
-
-`--glass-soft-alpha` is asserted as a RELATIONSHIP (quieter than the chrome, in
-both themes), never as a number: the requirement is that it sits between the
-page and the chrome, and a literal goes stale the first time either end moves.
-
-**THE APP'S TOP EDGE IS TWO ELEMENTS.** "Make the corner of the rail and the
-top header corner rounded" — so the rail owns `rounded-ss-2xl` and the bar
-owns `rounded-se-2xl`, each asserted where it lives, each with the ABSENCE of
-the other's and of a blanket `rounded-2xl`. Rounding either alone leaves a
-square corner at the other end of the same line; the logical corners are
-mandatory, since `rounded-tl` looks correct in English and puts the curve on
-the wrong end of the window in Persian.
-
-**Two proportions, from the rendered screen rather than the reference.** The
-rail's entries sit on `gap-1.5` and `py-2` ("space the rail a bit") — taken
-VERTICALLY only, because this rail's own note records that «Integrations»
-already clears the ~52px a 72px column leaves once both paddings are spent, so
-inline padding is the one axis that cannot give without costing the label a
-line. And `topBarHeight` is **50, not the 62 measured off the reference** — the
-bar is deliberately shallower than the reference, and 50 is 34 (the R4 compact
-control the bar is full of) plus 8 above and below.
-
-**What KEEPS its border, and this is the distinction the rule preserves:** a
-FIELD. The token comment has drawn it since the palette was derived — a card's
-edge is decorative and WCAG asks nothing of it; an input's is a control
-boundary and owes 3:1. On a translucent panel the ground inside an unbordered
-field is the ground behind it, so `.input`, the two task editors, the label
-field and the assistant's composer are translucent AND edged. In-panel
-hairlines stay too (`PanelHeader`'s divider is a standing rule from 2026-09-02,
-the section menu's group rules, `FormPanel`'s `divide-y`): those
-separate things INSIDE one surface and are not what "no border layout" names.
-
-**The opt-out is one token.** `prefers-reduced-transparency: reduce` sets
-`--glass-filter: none` and the alphas to 1 in a single block, so every sheet in
-the product becomes an opaque panel without a per-class edit — and the alphas
-go with the blur, because a translucent panel with the blur removed is the
-worst of both.
-
-**THE DARK LADDER, RE-STEPPED (observed 2026-09-08: dark-theme contrast was
-too low, the shell reading as one flat sheet).** This rule replaced
-every border with a lip and a drop, and in DARK all three separating
-mechanisms were near zero at the same time:
-
-| mechanism | light | dark, as shipped |
-| --- | --- | --- |
-| tone | white sheet on a cream ground | panel **3.5 L\*** above the page |
-| drop | dark ink under a light panel — reads | black on near-black — nothing |
-| lip | white at .9 | white at .07, and `.glass-chrome` has none by design |
-
-So light kept its structure on the drop alone and dark lost all of it, which is
-why the dark screen had no shell in it. In dark the TONE has to carry it,
-and the ladder is now `--bg` → `--surface` **7 L\*** → `--surface-2` +4.7, with
-`--field` stepping DOWN from the panel (a field is a well inside a card) and 4
-above the page so an input on the bare ground is still a shape.
-
-Three things are worth carrying forward from it:
-
-- **WCAG contrast ratio is the wrong instrument for two adjacent near-black
-  surfaces.** The page and the panel read 1.28:1 before the change and 1.42:1
-  after — the denominator is tiny down there and every step looks like "about
-  1.3". `verify-pairs` measures these in **CIE L\***, where ~4 is the step at
-  which two dark surfaces stop looking like one, at either end of the scale.
-- **Nothing had ever asked whether a surface could be SEEN.** Every floor in
-  that file is about text ON a surface, so the flat shell passed all of them on
-  the day it was found. The separation checks are asserted for dark
-  only, and the reason is a mechanism rather than a preference: in light the
-  drop separates the sheet by itself, so the tone is free to be a whisper.
-  Light's numbers are printed beside them so the asymmetry stays visible.
-- **The sheet and the panel are ONE colour, asserted as such.** 256 sites paint
-  `bg-surface` against 46 wearing `.glass`; the sheet's tone is not picked, it
-  is whatever composites to the token at its own alpha (2 L\* tolerance, not
-  equality — three rounds of 8-bit rounding cannot land exactly in both
-  themes). Its first run caught light's `.glass-raised` at 6.6: **white at 50 %
-  over a white panel is white**, so a raised row had been raised in dark only
-  ever since this rule shipped, and no contrast check could see it — a chip
-  that is exactly its own panel is perfectly legible and simply not there.
-
-Two more the change surfaced, both of the artifact-reads-as-satisfied class:
-the reduced-transparency block above held a hand-written COPY of the opaque
-pair, so anyone with that setting on kept the exact reported screen (it reads
-`var(--surface)` / `var(--surface-2)` now — at alpha 1 the sheet IS the panel,
-so it should be the panel's token); and `--assistant-rail` was declared inside
-a nested `:root { }`, which compiles to the descendant selector `:root :root`
-and matches nothing, so that variable had never been set at all.
-
-- **Measured.** Verified on a dev render in both themes: light card
-  `rgba(255,255,255,.72)` / `blur(18px) saturate(1.4)` / border `0px` / the lit
-  lip at `rgba(255,255,255,.9) 0 1px 0 inset`; dark card `rgba(26,30,34,.58)` /
-  `blur(18px) saturate(1.6)` / border `0px` / lip at `rgba(255,255,255,.07)`;
-  `body` carrying the three radials in both. Re-measure on production after
-  deploy. Dark re-measured 2026-09-08 on a real load with a PERSISTED
-  preference (a runtime `data-theme` flip measures nothing): `--surface`
-  `27 32 37`, `--surface-2` `36 42 48`, `--field` `22 26 30`, card
-  `rgba(36,43,50,.58)` with `blur(18px) saturate(1.6)`, border `0px`, lip and
-  drop intact; L* steps 7.0 / 4.7 / 4.0.
-**AND THE SAME RULE BELOW `md`, WHICH THE FIRST SWEEP DID NOT REACH**
-(2026-09-08, measured at 375 on a dev render). Three things stopped at the
-breakpoint, and each was invisible from a desktop:
-
-- the BOTTOM BAR and its «More» sheet still wore `border-t border-border
-  bg-surface` — so the one surface a phone always has on screen was the last
-  opaque pane in the product, carrying the last hairline that draws the app as
-  a stack of panes. Both wear `glass-chrome` now, the rail's own class: the bar
-  is the rail's counterpart below `md`, the two are never on screen together,
-  and one spelling is the only form in which they cannot disagree about the
-  chrome's colour. The safe-area padding stays — translucent is not absent.
-- the TOP BAR'S CORNER was unqualified. `rounded-se-2xl` is one half of the
-  app's top edge and the rail's `rounded-ss-2xl` is the other; below `md` the
-  rail is not drawn, so the class curved ONE end of a full-width strip and left
-  the other square — the asymmetry the two-element rule exists to prevent,
-  arrived from the other direction. `md:rounded-se-2xl` now, the gate the
-  `.chrome-notch` already carried for the same reason.
-- and the PAGE HAD NO NAME. R2 retired the page-title block because «the
-  breadcrumb names the page», which held while the rail stood beside it with
-  the section lit. The rail is `md:flex`; the trail returned `null` for a
-  one-crumb path for want of a parent to point at — so /meetings on a phone was
-  a bar holding one bell over a page holding no title. The compact trail
-  renders the LEAF now, with chevron+parent before it when there is one; the
-  hub stays silent, and the test is the ROOT rather than the length, because
-  «one crumb» meant both the hub and every rail destination since the
-  2026-09-02 ruling made them roots.
-
-**Two shapes of the new shell had no phone at all** (same pass, same directive
-— «fix mobile view according to our new design»):
-
-- HOME'S SIDEBAR is `lg:flex` for a good reason (a rail, a 256px column and a
-  readable conversation do not fit at once), and what that left below `lg` was
-  a Home with no door to any of it: New conversation, Workflows, Agents and
-  every stored conversation live in that column and nowhere else, and
-  `/workflows` and `/agents` REDIRECT into the pane beside it. Below `lg` the
-  same component renders inside a slide-over at the inline-START, closing when
-  a row inside it navigates. The SAME component, because a conversations list
-  written for small screens is a second list to keep in step, and the first
-  thing to drift would be which conversation is open.
-- THE BOTTOM BAR'S CONTENTS. `inBar` was flagged against a rail that has since
-  lost workflows, agents, chat and the assistant, so the four-slot bar filled
-  TWO of them while Meetings and Tasks — the day's work — sat behind «More».
-  Home · Meetings · Tasks · More now; Management keeps its rail tile, its
-  territory and its place in the sheet. The ceiling is a limit, not a target.
-
-- **Solid =** `surface.guard` reads `.tile`'s rule body for the glass shadow,
-  the glass filter and the ABSENCE of `border:`, and asserts `.glass` /
-  `.glass-chrome` exist; `IconRail.test`, `TopBar.test` and
-  `home/HomeSidebar.test` assert the shell's chrome surfaces keep their width
-  and carry none of the seam — each as a PAIR for the reason above;
-  `BottomBar.test`, `Breadcrumbs.test` and `home/HomeSidebar.test`'s slide-over
-  block carry the mobile half (the sheet AND the absent seam; the bar's four
-  rendered slots; «More» still listing every destination the bar omits; the
-  leaf rendered on a root section; the hub still silent). Every one
-  verified red against the pre-R23 classes, and the two column checks were
-  verified red a second time against the control (the width removed).
-  The dark ladder is asserted in `verify-pairs.mjs` (in `pnpm test`): three L*
-  steps, both composite-equals-token pairs, and the quiet sheet's position as a
-  relationship — verified red by restoring the shipped values, which fails 3
-  pairs and exits 1, each naming its own defect.
-
-### R24 · Audio bars — the player and the recorder are ONE row — FIXED (2026-09-15), pinned
-
-- **The rule:** wherever a take is heard or made, it is a single `.card`
-  row: `flex items-center gap-3 px-3 py-2`, `dir="ltr"` (time runs
-  left-to-right in both locales), a 32px strip filling the width, the time
-  inline at the strip's end as `badge-num` tabular digits. The record page's
-  player (Review.tsx: play · label · strip · time · download · speed) and
-  the live stage's recorder (MeetingPage.tsx: strip · clock, the scope in
-  its `.wave-scope-strip` form — no tint, no vignette, the bar's own corner)
-  wear it. NO HALL: the scope stood as a 112px letterbox over a 30px clock
-  and the transcript got what was left, which on a laptop was three lines.
-- **What was measured:** the user's own screenshots, 2026-09-15 — the
-  player bar ("something small and clean") beside the recording stage ("the
-  recording bar … i dont like").
-- **Pinned by:** `MeetingPage.test` ("draws the take as ONE bar") and
-  `meeting/AudioBar.test`; a `text-3xl` clock or an `h-28` scope on the
-  stage is red.
-- **With it, the words:** the live transcript reserves NO floor under its
-  last line (the follow pins to the bottom, so the bottom must be the
-  words); the recall cards float over the transcript's TOP-END corner in a
-  320px stack, over the lines a listener has already read. Pinned by the
-  same file ("reserves NO floor …") and `LiveTranscript.test`.
-- **Open under this rule:** the calls page's player (calls/[id]) is the same
-  family and was not re-measured this round.
-
-## Bugs found while measuring (not rules — fixes)
-
-1. `/fa/settings/<unknown-slug>` renders the GENERAL pane under a breadcrumb
-   that reads the raw key `settings.section.<slug>` — an unknown section must
-   404 or land on `/settings`, and the trail must never print a key.
-2. `.btn` min-height (R4) and the dialog radius (R8) — real, measured,
-   invisible in the source.
-3. **Speed (measured on production, 2026-09-05 evening):** one dashboard load
-   asked `/api/meetings` nine times and `/api/tasks/board` twice; every page
-   fetched its data twice (the page remounts when the display preferences
-   hydrate with `/api/me`); and every BFF call ran in Vercel's `iad1` on its
-   way to a server in Germany (`x-vercel-id: cdg1::iad1`, ~500–700 ms a
-   call). Fixed with a 5-second burst tier in the client's read cache and
-   `web/vercel.json` → `fra1`; re-measured after deploy.
-
-## Order proposed
-
-R4 ✓ → R8 ✓ → R7 ✓ → R6 → R3's one-`Toolbar` half (+R14's primary coat) → R5
-→ R17 ✓ → R18 ✓ (frame; pages remain) → R19 → R12 → R20 → R16. The first two
-were pure defects with a one-file cause; the next three are the sweeps that
-make pages stop looking hand-made; the rest are compositions the user should
-see before they are drawn. **Next: R6** — 212 raw px sizes in 47 files, row
-titles at 16 vs the reference's 14/700, and the Persian font decision (three
-candidates shown before one is chosen).
+It names files and guards, never numbers a page might copy. When a shape
+changes, change it in its one file and this table keeps pointing at it. When a
+new shape is needed, it is added to the kit FIRST — a component and a guard —
+and only then used on a page. The guards are the part that runs; this file is
+the part a person reads to find them.

@@ -25,10 +25,15 @@ describe("the reference's measurements", () => {
   it("keeps the type scale the reference actually uses", () => {
     /* the four sizes that carry the panels, in the order they nest:
        body heading 11.5 · rail label 11 · rail value 12.5 · body text 12.5 */
-    expect(FIELD_LABEL).toContain("text-[11.5px]");
-    expect(RAIL_LABEL).toContain("text-[11px]");
-    expect(RAIL_VALUE).toContain("text-[12.5px]");
-    expect(BODY_TEXT).toContain("text-[12.5px]");
+    /* IN REM AND TOKENS NOW (2026-09-15): the reference's numbers are the
+       same numbers at the 16px root, and they ride the fluid root everywhere
+       else — 11.5 is 0.71875rem, 11 is the caption role, 12.5 the detail
+       role. A px literal here was the one size on the panel that did not
+       grow with the screen. */
+    expect(FIELD_LABEL).toContain("text-[0.71875rem]");
+    expect(RAIL_LABEL).toContain("text-caption");
+    expect(RAIL_VALUE).toContain("text-detail");
+    expect(BODY_TEXT).toContain("text-detail");
     /* and the WEIGHTS, which are what separate a section from a field: the
        body heading is 700 and the field label is 600, measured */
     expect(BODY_HEADING).toContain("font-bold");
@@ -42,7 +47,7 @@ describe("the reference's measurements", () => {
      * a task is filled in, which is the kind of movement nobody reports and
      * everybody feels.
      */
-    const size = (c: string) => c.match(/text-\[[\d.]+px\]/)?.[0];
+    const size = (c: string) => c.match(/text-(?:detail|caption|micro|sm|xs|\[[\d.]+rem\])/)?.[0];
     const weight = (c: string) => c.match(/font-\w+/)?.[0];
     expect(size(RAIL_EMPTY)).toBe(size(RAIL_VALUE));
     expect(weight(RAIL_EMPTY)).toBe(weight(RAIL_VALUE));
@@ -137,7 +142,11 @@ describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
     expect(TAB_BAR).toContain("p-1");
     expect(TAB_BAR).not.toMatch(/(?<![\w-])h-/);
     /* and its corner is the control token, not a hand-typed 11 */
-    expect(TAB_BAR).toContain("rounded-md");
+    /* the kit's rail (2026-09-15): rounded-xl on the recessed ground, no
+       border — the same strip every page's first sub-menu wears */
+    expect(TAB_BAR).toContain("rounded-xl");
+    expect(TAB_BAR).toContain("bg-surface-2");
+    expect(TAB_BAR).not.toMatch(/(?<![\w-])border(?![\w-])/);
     expect(TAB_BAR).not.toMatch(/rounded-\[/);
   });
 });

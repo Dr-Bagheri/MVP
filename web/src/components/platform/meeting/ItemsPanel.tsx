@@ -7,6 +7,7 @@ import { MEETING_ITEM_KINDS, type MeetingItem, type MeetingItemKind } from "@/ap
 import { IconCheck, IconClose, IconPencil, IconPlus, IconSparkle, IconTrash, IconUser } from "@/components/icons";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Skeleton } from "@/components/scaffold";
+import { TAB_TRACK, sectionTabClass } from "@/components/platform/sectionTabs";
 import { digits, formatClock, formatDate, personName } from "@/lib/format";
 import type { OrgPersonRecord } from "@/api/types";
 import { resolveColleague } from "@/lib/resolveColleague";
@@ -296,7 +297,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
         keeps its line and SCROLLS when the width runs out, which is the one
         overflow that never changes the height of what is under it.
       */}
-      <div role="tablist" className="scroll-quiet mb-3 flex items-center gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1">
+      <div role="tablist" className={`${TAB_TRACK} mb-3`}>
         {MEETING_ITEM_KINDS.map((k) => (
           <button
             key={k}
@@ -314,13 +315,11 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
             /* `shrink-0` is what makes the scroll real: without it flexbox
                squeezes five tabs into the panel and truncates the labels
                instead, which is the wrap's problem wearing a narrower hat. */
-            className={`btn btn-sm shrink-0 rounded-xl px-2.5 font-medium ${
-              kind === k ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
-            }`}
+            className={sectionTabClass(kind === k)}
           >
             {t(`item_${k}`)}
             {buckets[k].length > 0 ? (
-              <span className="badge-num ms-1.5 text-[10px] text-fg-subtle">
+              <span className="badge-num ms-1.5 text-micro text-fg-subtle">
                 {digits(buckets[k].length, locale)}
               </span>
             ) : null}
@@ -397,7 +396,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                 )}
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   {row.source === "ai" ? (
-                    <span className="flex items-center gap-1 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                    <span className="flex items-center gap-1 rounded-md bg-accent-soft px-1.5 py-0.5 text-micro font-medium text-accent">
                       <IconSparkle width={12} height={12} />
                       {t("itemByAssistant")}
                     </span>
@@ -410,7 +409,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       would lose the only record that anybody was named.
                   */}
                   {row.owner_id !== null || row.owner !== null ? (
-                    <span className="flex items-center gap-1 text-[10px] text-fg-subtle">
+                    <span className="flex items-center gap-1 text-micro text-fg-subtle">
                       <IconUser width={12} height={12} />
                       {ownerName(row, people, locale)}
                     </span>
@@ -419,7 +418,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       like every other date here — a commitment «تا شنبه» is a
                       Jalali Saturday to a Persian reader. */}
                   {row.due_on !== null ? (
-                    <span className={`badge-num text-[10px] ${
+                    <span className={`badge-num text-micro ${
                       overdue(row) ? "text-danger" : "text-fg-subtle"
                     }`}>
                       {t("itemDue", { day: formatDate(dayAsInstant(row.due_on), locale) })}
@@ -430,7 +429,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       record, and a ledger whose reader cannot see what changed
                       answers today's question with last quarter's decision. */}
                   {row.status !== "standing" ? (
-                    <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-muted">
+                    <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-micro text-fg-muted">
                       {t(`itemStatus_${row.status}`)}
                     </span>
                   ) : null}
@@ -438,7 +437,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       token (tailwind.config), so the old spelling compiled to
                       nothing and the hint rendered in the body colour */}
                   {unresolved[row.id] !== undefined ? (
-                    <span className="text-[10px] text-warning" role="note">
+                    <span className="text-micro text-warning" role="note">
                       {t("itemOwnerUnresolved", { owner: unresolved[row.id] ?? "" })}
                     </span>
                   ) : null}
@@ -446,7 +445,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                     <button
                       type="button"
                       onClick={() => { if (row.at_ms !== null) onSeek(row.at_ms); }}
-                      className="badge-num text-[10px] text-fg-subtle hover:text-accent"
+                      className="badge-num text-micro text-fg-subtle hover:text-accent"
                       title={t("playFromHere")}
                       dir="ltr"
                     >
@@ -506,7 +505,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
         {composing ? (
           <div className="well border-accent bg-surface p-2">
             <textarea
-              className="input min-h-[64px] resize-none py-2 text-sm"
+              className="input min-h-16 resize-none py-2 text-sm"
               placeholder={t(`itemAdd_${kind}`)}
               aria-label={t(`itemAdd_${kind}`)}
               value={draft}

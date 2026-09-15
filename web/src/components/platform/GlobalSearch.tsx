@@ -370,9 +370,9 @@ function Row({
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-xs font-medium text-fg">{title}</span>
-        <Snippet text={snippet} className="truncate text-[11px] leading-4 text-fg-subtle" />
+        <Snippet text={snippet} className="truncate text-caption leading-4 text-fg-subtle" />
       </span>
-      {meta !== "" ? <span className="ltr shrink-0 text-[10px] text-fg-subtle">{meta}</span> : null}
+      {meta !== "" ? <span className="ltr shrink-0 text-micro text-fg-subtle">{meta}</span> : null}
     </li>
   );
 }

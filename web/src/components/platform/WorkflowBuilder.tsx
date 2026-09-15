@@ -371,7 +371,7 @@ export function WorkflowBuilder({
 
   const label = (text: string, children: ReactNode) => (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-medium text-fg-subtle">{text}</span>
+      <span className="mb-1 block text-caption font-medium text-fg-subtle">{text}</span>
       {children}
     </label>
   );
@@ -429,7 +429,7 @@ export function WorkflowBuilder({
     return (
       <div className="rounded-lg border border-border bg-surface-2/40 p-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium text-fg">{t("toolsLabel")}</span>
+          <span className="text-caption font-medium text-fg">{t("toolsLabel")}</span>
           <button
             type="button"
             aria-label={t("toolsLabel")}
@@ -487,7 +487,7 @@ export function WorkflowBuilder({
           />
         ))}
         {composed ? (
-          <p dir="ltr" className="font-mono text-[11px] text-fg-subtle sm:col-span-2">{composed}</p>
+          <p dir="ltr" className="font-mono text-caption text-fg-subtle sm:col-span-2">{composed}</p>
         ) : null}
       </div>
     );
@@ -533,7 +533,7 @@ export function WorkflowBuilder({
           <>
             {label(t("f_instruction"), (
               <textarea
-                className="input min-h-[88px] py-2 text-xs"
+                className="input min-h-[5.5rem] py-2 text-xs"
                 placeholder={t("instructionHint")}
                 value={String(step.instruction ?? "")}
                 onChange={(changeEvent) => patchStep(index, "instruction", changeEvent.target.value)}
@@ -547,7 +547,7 @@ export function WorkflowBuilder({
                 so the control exists on exactly one kind of card. */}
             <div className="rounded-lg border border-border bg-surface-2/40 p-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium text-fg">{t("webLabel")}</span>
+                <span className="text-caption font-medium text-fg">{t("webLabel")}</span>
                 <button
                   type="button"
                   /* named by WHAT it toggles: a pressed button whose only
@@ -578,7 +578,7 @@ export function WorkflowBuilder({
             {toolsField(index)}
             {label(t("f_instruction"), (
               <textarea
-                className="input min-h-[64px] py-2 text-xs"
+                className="input min-h-16 py-2 text-xs"
                 placeholder={t("instructionHint")}
                 value={String(step.instruction ?? "")}
                 onChange={(changeEvent) => patchStep(index, "instruction", changeEvent.target.value)}
@@ -650,7 +650,7 @@ export function WorkflowBuilder({
                 />
               ))}
             </div>
-            <p className="text-[11px] leading-5 text-fg-muted">
+            <p className="text-caption leading-5 text-fg-muted">
               {body ? t("doDerived") : t("doMissing")}
             </p>
           </>
@@ -685,7 +685,7 @@ export function WorkflowBuilder({
       case "apply": {
         const proposals = steps.slice(0, index).filter((earlier) => earlier.kind === "propose");
         return proposals.length === 0
-          ? <p className="text-[11px] leading-5 text-fg-muted">{t("applyNone")}</p>
+          ? <p className="text-caption leading-5 text-fg-muted">{t("applyNone")}</p>
           : select(index, "from", t("f_applyFrom"), [
             { value: "", label: t("branchNone") },
             ...proposals.map((earlier) => ({
@@ -701,7 +701,7 @@ export function WorkflowBuilder({
         ));
       case "wait":
         return (
-          <p className="text-[11px] leading-5 text-fg-muted">{t("wait_decision")}</p>
+          <p className="text-caption leading-5 text-fg-muted">{t("wait_decision")}</p>
         );
       default:
         return null;
@@ -869,7 +869,7 @@ export function WorkflowBuilder({
                 </div>
               ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium text-fg">{t("enabledLabel")}</span>
+                <span className="text-caption font-medium text-fg">{t("enabledLabel")}</span>
                 <button
                   type="button"
                   aria-label={t("enabledLabel")}
@@ -895,7 +895,7 @@ export function WorkflowBuilder({
             {steps.length === 0 ? (
               <button
                 type="button"
-                className="ms-auto text-[11px] text-fg-muted underline-offset-2 hover:text-accent hover:underline"
+                className="ms-auto text-caption text-fg-muted underline-offset-2 hover:text-accent hover:underline"
                 onClick={() => setSteps(starterSteps())}
               >
                 {t("starter")}
@@ -935,7 +935,7 @@ export function WorkflowBuilder({
                           because the ordinals have to line up down the
                           column, and a `.chip` would grow with the digit and
                           shift the row the moment a workflow reached ۱۰. */}
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-[11px] text-fg-subtle">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-caption text-fg-subtle">
                         {digits(index + 1, locale)}
                       </span>
                       <input
@@ -993,11 +993,11 @@ export function WorkflowBuilder({
                         </button>
                       </div>
                     </div>
-                    <p className="mt-1 text-[11px] leading-5 text-fg-muted">
+                    <p className="mt-1 text-caption leading-5 text-fg-muted">
                       {t(`kindHint_${step.kind}`)}
                     </p>
                     {RUNNABLE.has(step.kind) ? null : (
-                      <p className="mt-2 rounded-md bg-warning/10 px-2 py-1.5 text-[11px] leading-5 text-warning">
+                      <p className="mt-2 rounded-md bg-warning/10 px-2 py-1.5 text-caption leading-5 text-warning">
                         {t("notRunnable")}
                       </p>
                     )}

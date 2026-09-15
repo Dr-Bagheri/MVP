@@ -33,6 +33,9 @@ const SCAFFOLD = join(WEB, "components", "scaffold");
 /** Named steps: theirs to write, nobody else's. */
 const RHYTHM = [
   "px-page-inline", "px-page-inline-md",
+  /* the percentage gutters (2026-09-15) — a page that spells one of these
+     by hand is the copied column coming back in a new unit */
+  "px-page-gutter", "px-page-gutter-reading",
   "pt-page", "pt-page-sm", "pt-page-menu",
   "pb-page-bottom",
   /* the SECTION SCROLL's height (2026-08-29). Same rule for the same reason:

@@ -143,7 +143,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
           role="separator"
           aria-label={formatDate(message.created_at, locale)}
           title={formatDate(message.created_at, locale)}
-          className="my-3 flex items-center gap-3 text-[11px] text-fg-subtle"
+          className="my-3 flex items-center gap-3 text-caption text-fg-subtle"
         >
           <span className="h-px flex-1 bg-border" aria-hidden />
           <span>{formatRelativeDate(message.created_at, locale)}</span>
@@ -165,7 +165,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
 
       {/* THE QUOTE, above the words it answers */}
       {message.reply_to !== null ? (
-        <div className="mb-0.5 ms-7 flex items-center gap-1.5 border-s-2 border-border ps-2 text-[11px] text-fg-subtle">
+        <div className="mb-0.5 ms-7 flex items-center gap-1.5 border-s-2 border-border ps-2 text-caption text-fg-subtle">
           <bdi className="font-medium">
             {nameOf(message.reply_to.author_id, message.reply_to.author_kind, message.reply_to.agent_handle)}
           </bdi>
@@ -185,13 +185,13 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
               the wrong end of the line */}
           <bdi className="text-xs font-semibold text-fg">{name}</bdi>
           {message.author_kind === "agent" ? (
-            <span className="badge-num rounded bg-surface-2 px-1 text-[9px] text-fg-subtle">
+            <span className="badge-num rounded bg-surface-2 px-1 text-[0.5625rem] text-fg-subtle">
               {t("agentTag")}
             </span>
           ) : null}
           {/* the resolved zone and the page's digits — every other clock on the
               platform goes through formatTime; this one asked the browser */}
-          <time className="badge-num text-[10px] text-fg-subtle" dateTime={message.created_at}>
+          <time className="badge-num text-micro text-fg-subtle" dateTime={message.created_at}>
             {formatTime(message.created_at, locale)}
           </time>
         </div>
@@ -226,7 +226,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
             />
           )}
         {message.edited_at !== null && !message.deleted ? (
-          <span className="ms-1 text-[10px] text-fg-subtle">{t("edited")}</span>
+          <span className="ms-1 text-micro text-fg-subtle">{t("edited")}</span>
         ) : null}
       </div>
 
@@ -240,7 +240,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
               type="button"
               onClick={() => onReact(message, r.emoji, !r.mine)}
               aria-pressed={r.mine}
-              className={`tap inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] ${
+              className={`tap inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-caption ${
                 r.mine
                   ? "border-accent bg-accent-soft text-accent"
                   : "border-border bg-surface-2 text-fg-muted hover:text-fg"

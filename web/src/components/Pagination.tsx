@@ -83,12 +83,12 @@ export function pageWindow(page: number, pageCount: number): (number | "gap")[] 
  *
  * `.btn` brings the centring, the type, the transition, the 44px tap area and
  * the disabled face; all that is left to say is that this one is SQUARE at
- * `.btn-sm`'s own height, which is what `w-[34px] px-0` says. The two arrows
+ * `.btn-sm`'s own height, which is what `w-control-sm px-0` says. The two arrows
  * are one control pointing opposite ways, so they read from one string — the
  * second copy is the one that drifts, which is the argument this file's own
  * header makes about the pager itself.
  */
-const STEP_CLASS = "btn btn-sm w-[34px] px-0 text-fg-muted hover:bg-surface-2 hover:text-fg";
+const STEP_CLASS = "btn btn-sm w-control-sm px-0 text-fg-muted hover:bg-surface-2 hover:text-fg";
 
 export function Pagination({
   page,
@@ -136,13 +136,13 @@ export function Pagination({
             aria-label={t("goToPage", { page: digits(entry, locale) })}
             aria-current={entry === page ? "page" : undefined}
             /* 2026-09-03: the same theme control as the arrows beside it.
-               `min-w-[34px]` — not a width — is all the number adds: it squares
+               `min-w-[2.125rem]` — not a width — is all the number adds: it squares
                a single digit at `.btn-sm`'s own height while «۱۰» stays free to
                be wider. `font-semibold` and the type size left with the
                geometry; `.btn` already says both, and restating them is how one
                row of buttons ends up in two weights. `tabular-nums` stays: that
                is about the DIGITS lining up, not about the box. */
-            className={`btn btn-sm min-w-[34px] tabular-nums ${
+            className={`btn btn-sm min-w-[2.125rem] tabular-nums ${
               entry === page
                 ? "bg-accent-soft text-accent"
                 : "text-fg-muted hover:bg-surface-2 hover:text-fg"

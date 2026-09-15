@@ -210,7 +210,15 @@ export function PlatformShell({ children }: { children: ReactNode }) {
           */}
           <main
             key={`${calendar}|${timezone}`}
-            className="scroll-quiet min-h-0 flex-1 overflow-y-auto md:pe-[var(--assistant-rail)]"
+            /* THE RESERVATION IS A DESKTOP FACT (2026-09-15). From `md` the
+               shell steps aside by the closed STRIP (48px); only from `lg`
+               does it step aside by the assistant's actual width. Measured on
+               a 768px tablet before the change: the open panel's
+               `max(20rem, 30vw)` was reserved and the page got 415px — a
+               third of the screen for the page on a device whose whole point
+               is the page. Between md and lg the open panel floats OVER the
+               page with its shadow, the way it does on a phone. */
+            className="scroll-quiet min-h-0 flex-1 overflow-y-auto md:pe-assistant lg:pe-[var(--assistant-rail)]"
           >
             {children}
           </main>

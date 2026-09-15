@@ -175,6 +175,16 @@ export const SCAFFOLD = {
     menuItem: 13.5, // custom: text-menu-item — measured EXACTLY at theirs
     detail: 12.5, // custom: text-detail — row descriptions, segmented tabs
     groupLabel: 11, // custom: text-group-label — group labels, table headers
+    /*
+     * THE TWO SMALL ROLES (2026-09-15). 205 sites wrote `text-caption` and
+     * `text-micro` by hand — a px literal, which is the one unit in this
+     * product that does NOT ride the fluid root, so every caption and every
+     * count badge stayed the same size on a 13" laptop and a 32" monitor
+     * while everything around them scaled. Named here, emitted in rem, and
+     * the sweep that retired the literals is guarded by units.guard.
+     */
+    caption: 11, // custom: text-caption — captions, metadata lines, rail labels
+    micro: 10, // custom: text-micro — count badges, the smallest legible role
   },
 
   /** Shape. Radii are GLOBAL theme values (one scale, no per-page radii). */
@@ -230,7 +240,27 @@ export const SCAFFOLD = {
     top: 26,        // desktop: the title's distance from the top bar
     topSm: 20,      // below md, where vertical space is scarcer
     inline: 16,     // below md
-    inlineMd: 28,   // desktop gutter
+    inlineMd: 28,   // desktop gutter — the FLOOR of the two percentages below
+    /*
+     * THE PAGE IS A SHARE OF THE SCREEN, NOT A NUMBER OF PIXELS (user ruling,
+     * 2026-09-15: "the size of the pages' content — in some screens it fits
+     * and some it doesn't; it should be more adjustable, in percentage for
+     * all sizes, so it fits the size of the page based on the screen").
+     * Measured before the change, in the user's own Chrome: at 1920 the
+     * page column was 1138px inside an 1831px main, and at 2560 it was 1268
+     * inside 2472 — over a thousand pixels of margin on a big monitor, while
+     * on a 1280 laptop with the assistant open the same column was 816 and
+     * the task board scrolled inside it. Both are the same defect: a column
+     * sized in pixels can only be right at one width.
+     * So `contentMaxWidth` / `contentMaxWidthSmall` are NOT read by the page
+     * any more. The column is the whole width between the two menus, and
+     * what distinguishes a NORMAL surface (a list, a board) from a SMALL one
+     * (a form, a reading page) is the GUTTER, taken as a share of the column
+     * with `inlineMd` as its floor: 2% of a 1800px main is 36px of air, 7%
+     * is 126 — proportions that hold at every width instead of at one.
+     */
+    gutterPct: 2,
+    readingGutterPct: 7,
     bottom: 40,     // room under the last section
     /* the menu heading's own top — it has to land on the page title's line,
        so it moves WITH `top` and keeps the optical offset between a 14px
@@ -247,7 +277,7 @@ export const SCAFFOLD = {
    * Everything else still rides the STANDARD 4px Tailwind scale — section
    * rhythm 24 = py-6, title→subtitle 4 = mt-1, section title→panel 16 =
    * mb-4, panel row 16x20 = py-4 px-5, panel footer 16x20 = py-4 px-5, menu
-   * pill 5x12 = py-[5px] px-3. Those live inside the scaffold components
+   * pill 5x12 = py-[0.3125rem] px-3. Those live inside the scaffold components
    * that own them, which is the same rule as above: one place each.
    *
    * audit finding, 2026-09-03: the two panel numbers read 24x32 / 16x32 here

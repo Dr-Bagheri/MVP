@@ -1,5 +1,7 @@
 "use client";
 
+import { TAB_TRACK, sectionTabClass } from "./sectionTabs";
+
 import { useTranslations } from "next-intl";
 import { PageContainer } from "@/components/scaffold";
 import { IconHistory, IconPlus } from "@/components/icons";
@@ -60,7 +62,7 @@ export function AssistantMenu({
      * as a menu of features.
      */
     <PageContainer width={width} className="!pb-0">
-      <nav aria-label={t("assistantMenuLabel")} className="flex flex-wrap items-center gap-1">
+      <nav aria-label={t("assistantMenuLabel")} className={TAB_TRACK}>
         <button
           type="button"
           /* on the HUB it resets an already-started thread and is a no-op on a
@@ -71,11 +73,7 @@ export function AssistantMenu({
             if (!isHub) { router.push("/"); return; }
             if (started) startNewConversation();
           }}
-          className={`btn btn-sm gap-1.5 font-medium ${
-            isHub && !started
-              ? "bg-accent text-on-accent"
-              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-          }`}
+          className={sectionTabClass(isHub && !started)}
         >
           <IconPlus width={12} height={12} />
           {t("newConversation")}
@@ -93,7 +91,7 @@ export function AssistantMenu({
         {activeSlug === "history" ? null : (
           <Link
             href="/conversations"
-            className="btn btn-sm gap-1.5 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
+            className={sectionTabClass(false)}
           >
             <IconHistory width={12} height={12} />
             {tConversations("title")}

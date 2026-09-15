@@ -70,7 +70,7 @@ export function BottomBar() {
                  the sheet read as a stack of tiles rather than a menu, the
                  same mistake IconRail's comment records at its own rows */
               const cls =
-                "flex min-h-[48px] items-center gap-3 rounded-lg px-3 text-sm text-fg hover:bg-surface-2";
+                "flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm text-fg hover:bg-surface-2";
               return external ? (
                 <a key={nav.key} href={nav.href} target="_blank" rel="noreferrer noopener" className={cls}>
                   {inner}
@@ -112,7 +112,7 @@ export function BottomBar() {
               key={nav.key}
               href={nav.href}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-center text-[11px] leading-control transition-colors ${
+              className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-center text-caption leading-control transition-colors ${
                 active ? "text-accent" : "text-fg-muted"
               }`}
             >
@@ -125,7 +125,7 @@ export function BottomBar() {
           type="button"
           onClick={() => setMoreOpen(true)}
           aria-expanded={moreOpen}
-          className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-center text-[11px] leading-control text-fg-muted"
+          className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-center text-caption leading-control text-fg-muted"
         >
           <MoreIcon width={19} height={19} />
           <span>{t("more")}</span>

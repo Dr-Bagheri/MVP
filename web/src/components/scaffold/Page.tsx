@@ -75,7 +75,17 @@ export function PageContainer({
   fill?: boolean;
   children: ReactNode;
 }) {
-  const max = width === "normal" ? "max-w-content" : "max-w-content-small";
+  /*
+   * THE COLUMN IS THE SCREEN (user ruling, 2026-09-15). `mx-auto max-w-content`
+   * stood here and centred a pixel-sized column that was right at exactly one
+   * width — see SCAFFOLD.page.gutterPct for the numbers measured on
+   * production. A NORMAL surface takes the whole width between the menus
+   * with a 2% gutter; a SMALL one (a form, a reading page) keeps its air as
+   * a 7% gutter, so it is still a share of the screen and never a number of
+   * pixels. Everything above about the two sizes is history now; the two
+   * WORDS survive because the difference between them is real.
+   */
+  const gutter = width === "normal" ? "md:px-page-gutter" : "md:px-page-gutter-reading";
   /*
    * THE PAGE'S RHYTHM, from the theme (user directives: 2026-08-26 "add a
    * margin from the top, just a little, for all pages, and add this to the
@@ -90,7 +100,7 @@ export function PageContainer({
    */
   return (
     <div
-      className={`${className} mx-auto w-full ${max} px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page${
+      className={`${className} w-full px-page-inline pb-page-bottom pt-page-sm ${gutter} md:pt-page${
         fill ? " flex h-full min-h-0 flex-col" : ""
       }`}
     >

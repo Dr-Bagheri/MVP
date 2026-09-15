@@ -144,7 +144,7 @@ export function HomeSnapshot() {
             the number of rows, which on a two-row list is most of the panel. */}
         <Link
           href={href}
-          className="flex shrink-0 items-center gap-0.5 rounded-lg px-1.5 py-0.5 text-[11px] text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+          className="flex shrink-0 items-center gap-0.5 rounded-lg px-1.5 py-0.5 text-caption text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
         >
           {t("loadMore")}
           <IconChevronRight width={12} height={12} className="rtl:-scale-x-100" />
@@ -158,7 +158,7 @@ export function HomeSnapshot() {
      different nothing from an empty list, and only one of them is about the
      person's week) */
   const nothing = (word: string) => (
-    <p className="py-3 text-center text-[12.5px] text-fg-subtle">{word}</p>
+    <p className="py-3 text-center text-detail text-fg-subtle">{word}</p>
   );
 
   return (
@@ -205,13 +205,13 @@ export function HomeSnapshot() {
                             <span className="badge-num block text-base font-bold leading-5 text-fg">
                               {formatDayMonth(m.scheduled_at, locale).day}
                             </span>
-                            <span className="block text-[10px] leading-3 text-fg-subtle">
+                            <span className="block text-micro leading-3 text-fg-subtle">
                               {formatDayMonth(m.scheduled_at, locale).month}
                             </span>
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] text-fg" title={m.title}>{m.title}</span>
-                            <span className="badge-num mt-0.5 block text-[10px] text-fg-subtle">
+                            <span className="block truncate text-sm text-fg" title={m.title}>{m.title}</span>
+                            <span className="badge-num mt-0.5 block text-micro text-fg-subtle">
                               {formatTime(m.scheduled_at, locale)}
                             </span>
                           </span>
@@ -250,15 +250,15 @@ export function HomeSnapshot() {
                           <span
                             aria-label={t2(`priority_${task.priority}`)}
                             title={t2(`priority_${task.priority}`)}
-                            className={`badge-num shrink-0 rounded px-1 py-0.5 text-[10px] font-bold leading-none ring-1 ring-inset ${PRIORITY_BADGE[task.priority]}`}
+                            className={`badge-num shrink-0 rounded px-1 py-0.5 text-micro font-bold leading-none ring-1 ring-inset ${PRIORITY_BADGE[task.priority]}`}
                           >
                             {PRIORITY_CODE[task.priority]}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-[13px] text-fg" title={task.title}>
+                          <span className="min-w-0 flex-1 truncate text-sm text-fg" title={task.title}>
                             {task.title}
                           </span>
                           {task.due_at !== null ? (
-                            <span className="badge-num shrink-0 text-[10px] text-fg-subtle">
+                            <span className="badge-num shrink-0 text-micro text-fg-subtle">
                               {formatDayMonth(task.due_at, locale).day} {formatDayMonth(task.due_at, locale).month}
                             </span>
                           ) : null}

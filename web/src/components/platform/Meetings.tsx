@@ -19,7 +19,9 @@ import {
   IconChevronRight, IconClose, IconFolder, IconMic, IconPencil, IconPeople3, IconPlus,
   IconRows, IconSearch, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
-import { FilterChips } from "./sectionTabs";
+import {
+  FILTER_TRACK, FilterChips, TAB_TRACK, TOOLBAR_GROUPS, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass,
+} from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/scaffold";
@@ -262,9 +264,7 @@ export function Meetings() {
       title={label}
       aria-pressed={view === mode}
       onClick={() => setView(mode)}
-      className={`btn btn-icon rounded-full ${
-        view === mode ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-      }`}
+      className={`${filterChipClass(view === mode)} px-2`}
     >
       {icon}
     </button>
@@ -284,9 +284,7 @@ export function Meetings() {
       aria-selected={active}
       aria-pressed={active}
       onClick={onClick}
-      className={`btn btn-sm gap-1.5 rounded-xl font-medium ${
-        active ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
-      }`}
+      className={sectionTabClass(active)}
     >
       {label}
     </button>
@@ -294,40 +292,38 @@ export function Meetings() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* ── the toolbar ──────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="tablist" className="flex flex-wrap items-center gap-1 rounded-xl bg-surface-2 p-1">
+      {/* ── ROW ONE: the kit's track, and the two actions at its end ── */}
+      <Toolbar
+        end={(
+          <>
+            {/* GREY, and grey is the whole point: this is the secondary of the
+                two — a row on a list — beside a primary that opens a
+                microphone. `.btn-secondary` is the theme's own grey. */}
+            <button
+              type="button"
+              onClick={() => setScheduling(true)}
+              className="btn-secondary"
+            >
+              <IconCalendar width={14} height={14} />
+              {t("scheduleMeeting")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="btn btn-primary"
+            >
+              <IconPlus width={14} height={14} />
+              {t("newMeeting")}
+            </button>
+          </>
+        )}
+      >
+        <div role="tablist" className={TAB_TRACK}>
           {chip(filter === "past", t("filterPast"), () => setFilter("past"))}
           {chip(filter === "ahead", t("filterAhead"), () => setFilter("ahead"))}
           {chip(filter === "archived", t("filterArchived"), () => setFilter("archived"))}
         </div>
-        {/* the view switch used to stand here. It moved down to the far end
-            of the toolbar line; this row is the
-            two things that are not a view of the list — which slice of it,
-            and the one action that makes a new one. */}
-        <div className="flex items-center gap-2">
-          {/* GREY, and grey is the whole point: this is the secondary of the
-              two — a row on a list — beside a primary that opens a
-              microphone. `.btn-secondary` is the theme's own grey (surface-2
-              on the same 38px/11px body as the green), not a hand-mixed one. */}
-          <button
-            type="button"
-            onClick={() => setScheduling(true)}
-            className="btn-secondary"
-          >
-            <IconCalendar width={14} height={14} />
-            {t("scheduleMeeting")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="btn btn-primary"
-          >
-            <IconPlus width={14} height={14} />
-            {t("newMeeting")}
-          </button>
-        </div>
-      </div>
+      </Toolbar>
 
       {/*
         * ── ONE TOOLBAR ROW ───────────────────────────────────────
@@ -350,7 +346,54 @@ export function Meetings() {
         * its direction key. `flex-wrap` is kept for the narrow viewport,
         * where wrapping is the correct answer rather than the accident.
         */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={TOOLBAR_GROUPS}>
+      {/*
+        * ── THE SORT, AS THE SECOND SUB-MENU ──────────────────────────────
+        *
+        * User, 2026-09-15: "for the meeting table fix the sort as the second
+        * top sub menu like the last image" — the image being the security
+        * page's «همه ۱۶ | آنلاین ۴ | آفلاین ۱۲».
+        *
+        * It was a `w-[11rem]` dropdown in the row above, which cost two
+        * presses to see three options and was the one control on the page
+        * with a silhouette nothing else shares. `FilterChips` is the shape
+        * every other second row in the product already wears (security, the
+        * audit log, the workflow shelf, both boards' strips), so this page
+        * stops being the exception rather than gaining a fourth dialect.
+        *
+        * NO `FILTER_ROW_GAP` HERE, and that is not an oversight: the class is
+        * `mb-3`, the parent is already `flex-col gap-3`, and wearing both
+        * would put 24px under a row the rest of the product sets at 12.
+        *
+        * THE DIRECTION STAYS A SEPARATE KEY, for the reason the dropdown's
+        * own note gave and this move does not change: the field and the
+        * direction are two questions, and folding them together means six
+        * chips that grow by two every time a sort field is added.
+        */}
+      <FilterChips
+        label={t("sortBy")}
+        active={sort}
+        onSelect={setSort}
+        chips={[
+          { key: "date", label: t("sortDate"), icon: <IconCalendar width={12} height={12} /> },
+          { key: "people", label: t("sortPeople"), icon: <IconPeople3 width={12} height={12} /> },
+          { key: "status", label: t("sortStatus"), icon: <IconCheckCircle width={12} height={12} /> },
+        ]}
+      >
+        <span className={TRACK_DIVIDER} aria-hidden />
+        <button
+          type="button"
+          aria-label={descending ? t("sortDescending") : t("sortAscending")}
+          title={descending ? t("sortDescending") : t("sortAscending")}
+          aria-pressed={descending}
+          onClick={() => setDescending((v) => !v)}
+          className={filterChipClass(false)}
+        >
+          {descending
+            ? <IconArrowDown width={14} height={14} />
+            : <IconArrowUp width={14} height={14} />}
+        </button>
+      </FilterChips>
         <label className="relative w-full sm:w-[18rem]">
           <span className="sr-only">{t("searchMeetings")}</span>
           <input
@@ -502,59 +545,12 @@ export function Meetings() {
           * a utility and `.btn-icon` a component class, so the utility layer
           * wins on its own and no `!` is needed.
           */}
-        <div className="ms-auto flex items-center gap-1 rounded-full border border-border p-0.5">
+        <div className={`${FILTER_TRACK} ms-auto`}>
           {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
           {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
         </div>
       </div>
 
-      {/*
-        * ── THE SORT, AS THE SECOND SUB-MENU ──────────────────────────────
-        *
-        * User, 2026-09-15: "for the meeting table fix the sort as the second
-        * top sub menu like the last image" — the image being the security
-        * page's «همه ۱۶ | آنلاین ۴ | آفلاین ۱۲».
-        *
-        * It was a `w-[11rem]` dropdown in the row above, which cost two
-        * presses to see three options and was the one control on the page
-        * with a silhouette nothing else shares. `FilterChips` is the shape
-        * every other second row in the product already wears (security, the
-        * audit log, the workflow shelf, both boards' strips), so this page
-        * stops being the exception rather than gaining a fourth dialect.
-        *
-        * NO `FILTER_ROW_GAP` HERE, and that is not an oversight: the class is
-        * `mb-3`, the parent is already `flex-col gap-3`, and wearing both
-        * would put 24px under a row the rest of the product sets at 12.
-        *
-        * THE DIRECTION STAYS A SEPARATE KEY, for the reason the dropdown's
-        * own note gave and this move does not change: the field and the
-        * direction are two questions, and folding them together means six
-        * chips that grow by two every time a sort field is added.
-        */}
-      <FilterChips
-        label={t("sortBy")}
-        active={sort}
-        onSelect={setSort}
-        chips={[
-          { key: "date", label: t("sortDate"), icon: <IconCalendar width={12} height={12} /> },
-          { key: "people", label: t("sortPeople"), icon: <IconPeople3 width={12} height={12} /> },
-          { key: "status", label: t("sortStatus"), icon: <IconCheckCircle width={12} height={12} /> },
-        ]}
-      >
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-        <button
-          type="button"
-          aria-label={descending ? t("sortDescending") : t("sortAscending")}
-          title={descending ? t("sortDescending") : t("sortAscending")}
-          aria-pressed={descending}
-          onClick={() => setDescending((v) => !v)}
-          className="btn btn-icon shrink-0 border border-border text-fg-muted hover:text-fg"
-        >
-          {descending
-            ? <IconArrowDown width={14} height={14} />
-            : <IconArrowUp width={14} height={14} />}
-        </button>
-      </FilterChips>
 
       {rows === null ? (
         /* audit finding, 2026-09-02: while the list fetched, the column held a
@@ -624,7 +620,7 @@ export function Meetings() {
                   */}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-fg">{m.title}</span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-fg-subtle">
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-fg-subtle">
                     <span>
                       {formatDate(m.scheduled_at, locale)}
                       {t("dateAtTime", { time: formatTime(m.scheduled_at, locale) })}
@@ -654,7 +650,7 @@ export function Meetings() {
                 {(() => {
                   const status = meetingStatus(m);
                   return (
-                    <span className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
+                    <span className={`shrink-0 rounded-lg px-2 py-1 text-caption font-medium ${
                       status === "done" ? "bg-success/10 text-success"
                         : status === "ongoing" ? "bg-danger/10 text-danger"
                           : status === "processing" ? "bg-accent-soft text-accent"
@@ -860,7 +856,7 @@ function PeopleStack({ meeting, locale, photos }: {
         ))}
       </span>
       {hidden > 0 ? (
-        <span className="badge-num ms-1.5 text-[11px] text-fg-subtle">
+        <span className="badge-num ms-1.5 text-caption text-fg-subtle">
           {t("peopleMore", { n: digits(hidden, locale) })}
         </span>
       ) : null}
@@ -910,7 +906,7 @@ function MeetingCalendar({ meetings, locale, onOpen }: {
       </div>
       <ul className="grid grid-cols-7 gap-1.5 pb-1">
         {grid.weekdays.map((day, i) => (
-          <li key={i} className="text-center text-[10px] text-fg-subtle">{day}</li>
+          <li key={i} className="text-center text-micro text-fg-subtle">{day}</li>
         ))}
       </ul>
       <ul className="scroll-quiet grid min-h-0 flex-1 grid-cols-7 gap-1.5 overflow-y-auto">
@@ -931,7 +927,7 @@ function MeetingCalendar({ meetings, locale, onOpen }: {
             <div className="min-h-0 flex-1 space-y-1">
               {(byDay.get(cell.key) ?? []).map((m) => (
                 <button key={m.id} type="button" onClick={() => onOpen(m.id)} title={m.title}
-                  className="block w-full truncate rounded-md bg-accent-soft px-1.5 py-0.5 text-start text-[10px] leading-4 text-accent">
+                  className="block w-full truncate rounded-md bg-accent-soft px-1.5 py-0.5 text-start text-micro leading-4 text-accent">
                   {formatTime(m.scheduled_at, locale)} {m.title}
                 </button>
               ))}
@@ -1470,7 +1466,7 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
     >
       <IconUpload width={18} height={18} />
       <span className="text-xs font-medium">{t("dropAudio")}</span>
-      <span className="text-[11px] text-fg-subtle">{t("dropAudioBrowse")}</span>
+      <span className="text-caption text-fg-subtle">{t("dropAudioBrowse")}</span>
       <input
         ref={input}
         type="file"

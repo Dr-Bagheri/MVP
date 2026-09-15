@@ -454,7 +454,7 @@ function SkillsPageContent() {
                 <p className="mt-2 text-xs text-fg-muted ltr">/{s.slug}</p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {s.tools.map((tool) => (
-                    <span key={tool} className="chip bg-surface-2 text-[11px] text-fg-muted ltr">
+                    <span key={tool} className="chip bg-surface-2 text-caption text-fg-muted ltr">
                       {tool}
                     </span>
                   ))}

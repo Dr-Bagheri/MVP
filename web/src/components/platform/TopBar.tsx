@@ -120,7 +120,7 @@ export function TopBar({
       <span
         aria-hidden
         data-platform-corner
-        className="chrome-notch pointer-events-none absolute start-0 top-full hidden h-[18px] w-[18px] md:block"
+        className="chrome-notch pointer-events-none absolute start-0 top-full hidden h-[1.125rem] w-[1.125rem] md:block"
       />
       {/*
         THE CORNER IS THE RAIL'S NEIGHBOUR, SO IT IS `md` ONLY (2026-09-08).

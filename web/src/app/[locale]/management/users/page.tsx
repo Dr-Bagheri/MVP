@@ -424,7 +424,7 @@ export default function UsersPage() {
                       <span className="block truncate font-medium text-fg">
                         {personName(u, locale)}
                       </span>
-                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
+                      <span className="mt-0.5 flex items-center gap-1.5 text-caption text-fg-muted">
                         {/* the namespace's own spelling — `role_owner` was an
                             invented key that rendered raw on production,
                             because a computed key skips the parity check */}

@@ -1477,7 +1477,7 @@ export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
                     >
                       <Icon name="video" size="sm" className="shrink-0 text-fg-subtle" />
                       <bdi className="min-w-0 flex-1 truncate font-medium">{hit.call_title}</bdi>
-                      <span className="shrink-0 text-[11px] text-fg-subtle">{formatDate(hit.call_date, locale)}</span>
+                      <span className="shrink-0 text-caption text-fg-subtle">{formatDate(hit.call_date, locale)}</span>
                     </button>
                   </li>
                 ))

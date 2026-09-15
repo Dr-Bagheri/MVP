@@ -328,7 +328,7 @@ export default function ProfilePage({
                   <dd>
                     <Skeleton className="mx-auto h-6 w-8" />
                   </dd>
-                  <dt className="text-[11px] text-fg-muted">{t(key)}</dt>
+                  <dt className="text-caption text-fg-muted">{t(key)}</dt>
                 </div>
               ))}
             </dl>
@@ -425,7 +425,7 @@ export default function ProfilePage({
                 <dd className="badge-num text-xl font-bold text-fg">
                   {value === undefined ? "—" : digits(value, locale)}
                 </dd>
-                <dt className="text-[11px] text-fg-muted">{t(key)}</dt>
+                <dt className="text-caption text-fg-muted">{t(key)}</dt>
               </div>
             ))}
           </dl>

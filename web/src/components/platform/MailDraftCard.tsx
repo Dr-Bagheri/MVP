@@ -155,7 +155,7 @@ export function MailDraftCard({
               {state.to_address}
             </span>
           </div>
-          <h4 className="mt-2 text-[15px] font-semibold leading-6 text-fg">{state.subject}</h4>
+          <h4 className="mt-2 text-lg font-semibold leading-6 text-fg">{state.subject}</h4>
         </div>
 
         <p className="whitespace-pre-wrap px-4 pb-4 pt-2 text-sm leading-7 text-fg-muted">{state.body}</p>
@@ -267,10 +267,10 @@ function SourcePanel({ message, locale }: { message: MailSourceMessage; locale: 
       >
         <SourceMark />
         <span className="text-xs font-medium text-fg-muted">{t("sources")}</span>
-        <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-fg-subtle">
+        <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-caption font-medium tabular-nums text-fg-subtle">
           {digits(sources.length, locale)}
         </span>
-        <span className="ms-auto text-[11px] text-fg-subtle">{open ? t("hideSource") : t("showSource")}</span>
+        <span className="ms-auto text-caption text-fg-subtle">{open ? t("hideSource") : t("showSource")}</span>
         <Chevron open={open} />
       </button>
 
@@ -281,7 +281,7 @@ function SourcePanel({ message, locale }: { message: MailSourceMessage; locale: 
               <span className="truncate text-sm font-medium text-fg">{source.subject}</span>
             ) : null}
             {source.occurred_at ? (
-              <span className="text-[11px] text-fg-subtle">
+              <span className="text-caption text-fg-subtle">
                 {`${formatRelativeDate(source.occurred_at, locale)} ${formatTime(source.occurred_at, locale)}`}
               </span>
             ) : null}

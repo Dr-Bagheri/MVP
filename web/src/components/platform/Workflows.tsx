@@ -9,7 +9,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
-import { FilterChips, FILTER_ROW_GAP, SECTION_ROW_GAP, SectionTabs } from "./sectionTabs";
+import { FilterChips, FILTER_ROW_GAP, SECTION_ROW_GAP, SectionTabs, TOOLBAR_ROW } from "./sectionTabs";
 import { IconCalendar, IconFileText, IconMail, IconMic, IconPlay, IconRows } from "@/components/icons";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
@@ -179,7 +179,7 @@ export function Workflows() {
           {/* ROW 1 (R3, user ruling 2026-09-05): the section tabs, and the
               page's one create button at the END of the same row — the tasks
               and meetings pages' shape. It stood in its own row above. */}
-          <div className={`${SECTION_ROW_GAP} flex flex-wrap items-center justify-between gap-2`}>
+          <div className={`${SECTION_ROW_GAP} ${TOOLBAR_ROW}`}>
             <SectionTabs
               label={t("sectionsLabel")}
               active={tab}

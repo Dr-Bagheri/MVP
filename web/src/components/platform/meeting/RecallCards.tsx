@@ -51,13 +51,13 @@ export function RecallCards({ cards, onDismiss }: {
             <IconSparkle width={14} height={14} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[11.5px] font-semibold text-fg-muted">
+            <p className="text-[0.71875rem] font-semibold text-fg-muted">
               {t("recallHeading")}
             </p>
             {/* the decision's own words. `line-clamp-2`: a long one must not
                 grow into the stage it is sitting on */}
-            <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-[1.8] text-fg">{card.body}</p>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-fg-subtle">
+            <p className="mt-0.5 line-clamp-2 text-detail leading-[1.8] text-fg">{card.body}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-fg-subtle">
               <Link href={`/meetings/${card.meeting_id}`} className="underline-offset-2 hover:underline">
                 {card.meeting_title ?? t("recallUntitled")}
               </Link>

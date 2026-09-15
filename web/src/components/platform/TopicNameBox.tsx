@@ -41,7 +41,7 @@ export function TopicNameBox({ initial, placeholder, cancelLabel, onCancel, onSu
           if (e.key === "Escape") onCancel();
         }}
         placeholder={placeholder}
-        className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+        className="h-[1.875rem] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
       />
       <button
         type="button"

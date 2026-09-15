@@ -42,7 +42,7 @@ import { HELP_GROUPS, HELP_SECTIONS, type HelpSlug } from "../sections";
 
 /** Simple, theme-drawn sketches — one per section. Decorative only. */
 function HelpArt({ slug }: { slug: HelpSlug }) {
-  const cls = "w-full max-w-[420px] text-fg-muted";
+  const cls = "w-full max-w-[26.25rem] text-fg-muted";
   const common = {
     fill: "none",
     stroke: "currentColor",

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { MENU_PANEL, ResizablePanel } from "./Resizable";
+import { sideMenuRowClass } from "./sideMenu";
 import { IconChevronRight } from "@/components/icons";
 
 /**
@@ -149,15 +150,15 @@ export function SectionMenu({
               const trailing = item.trailing === undefined
                 ? []
                 : Array.isArray(item.trailing) ? item.trailing : [item.trailing];
-              const itemClass = `tap my-px flex w-full items-center justify-between rounded-lg py-[5px] transition-colors ${
-                item.sub ? "ps-8 pe-3 text-xs" : "px-3 text-menu-item"
-              } ${
+              /* THE ROW IS THE HOME SIDE MENU'S (2026-09-15, scaffold/sideMenu.ts):
+                 one face for a vertical menu wherever it stands; this menu adds
+                 only what a menu of ROUTES needs — the hit area, the indent of a
+                 sub-item, and a disabled entry's greyed face. */
+              const itemClass = `${
                 item.disabled
-                  ? "cursor-not-allowed bg-surface-2 text-fg-muted opacity-55"
-                  : active
-                    ? "bg-surface-2 font-semibold text-fg"
-                    : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-              }`;
+                  ? `${sideMenuRowClass(false, item.sub ? "sub" : "row")} cursor-not-allowed bg-surface-2 opacity-55`
+                  : sideMenuRowClass(active, item.sub ? "sub" : "row")
+              } tap my-px justify-between`;
               return (
                 <li key={item.slug}>
                   {item.disabled ? (
@@ -167,7 +168,7 @@ export function SectionMenu({
                         <span className="truncate">{item.label}</span>
                       </span>
                       {item.badge ? (
-                        <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
+                        <span className="chip bg-surface-2 text-micro text-fg-muted">{item.badge}</span>
                       ) : null}
                     </button>
                   ) : (
@@ -189,7 +190,7 @@ export function SectionMenu({
                           <span className="truncate">{item.label}</span>
                         </span>
                         {item.badge ? (
-                          <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
+                          <span className="chip bg-surface-2 text-micro text-fg-muted">{item.badge}</span>
                         ) : null}
                       </Link>
                       {trailing.map((tr, i) =>

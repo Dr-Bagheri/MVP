@@ -95,7 +95,7 @@ export function FormRow({
      * a monitor. Below md the two still stack.
      */
     <div className="flex flex-col gap-2 px-5 py-4 md:flex-row md:items-start md:gap-6">
-      <div className="shrink-0 md:w-[160px] md:pt-2">
+      <div className="shrink-0 md:w-40 md:pt-2">
         {htmlFor ? (
           <label htmlFor={htmlFor} className="block text-sm text-fg">
             {label}
@@ -111,7 +111,7 @@ export function FormRow({
       </div>
       <div
         className={`flex w-full min-w-0 items-center gap-2 ${
-          controlAtEnd ? "md:flex-1 md:justify-end" : "md:max-w-[380px]"
+          controlAtEnd ? "md:flex-1 md:justify-end" : "md:max-w-[23.75rem]"
         }`}
       >
         {control}

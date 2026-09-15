@@ -1,3 +1,5 @@
+import { TAB_TRACK, sectionTabClass } from "../sectionTabs";
+
 /**
  * THE REFERENCE'S TASK PANELS, MEASURED (2026-09-05).
  *
@@ -56,38 +58,38 @@
 
 /** the label above a control in a dialog */
 export const FIELD_LABEL =
-  "mb-[7px] block text-[11.5px] font-semibold text-fg-subtle";
+  "mb-[7px] block text-[0.71875rem] font-semibold text-fg-subtle";
 
 /** the label above a value in the detail's rail */
 export const RAIL_LABEL =
-  "mb-[7px] block text-[11px] font-semibold text-fg-subtle";
+  "mb-[7px] block text-caption font-semibold text-fg-subtle";
 
 /** a rail value that is SET */
-export const RAIL_VALUE = "text-[12.5px] font-semibold text-fg";
+export const RAIL_VALUE = "text-detail font-semibold text-fg";
 
 /** a rail value that is empty — the same size, receded, so the row still
     reads as a row rather than disappearing */
-export const RAIL_EMPTY = "text-[12.5px] font-semibold text-fg-subtle";
+export const RAIL_EMPTY = "text-detail font-semibold text-fg-subtle";
 
 /** a section heading inside the detail's body — 700, one step heavier than
     the dialog's field labels, which is what separates a SECTION from a field */
-export const BODY_HEADING = "text-[11.5px] font-bold text-fg-subtle";
+export const BODY_HEADING = "text-[0.71875rem] font-bold text-fg-subtle";
 
 /** prose inside the detail — the 1.9 line-height is measured, not chosen */
-export const BODY_TEXT = "text-[12.5px] leading-[1.9] text-fg-muted";
+export const BODY_TEXT = "text-detail leading-[1.9] text-fg-muted";
 
 /** the 45px field. `.input` carries the ground, the border and the corner;
     only the height and the type size are the reference's own. */
-export const PANEL_INPUT = "input h-[45px] w-full text-[13.5px]";
+export const PANEL_INPUT = "input h-[2.8125rem] w-full text-menu-item";
 
 /** the same field grown for prose */
-export const PANEL_TEXTAREA = "input min-h-[73px] w-full resize-y py-[11px] text-[13.5px]";
+export const PANEL_TEXTAREA = "input min-h-[4.5625rem] w-full resize-y py-[0.6875rem] text-menu-item";
 
 /*
  * ── THE CONTROLS TAKE THE FAMILY (R4, user ruling 2026-09-05: "go with a") ──
  *
  * The first version of this file wrote the reference's control heights by
- * hand — `h-[34px]` on the chips, `h-[32px]` on the tabs, `h-[30px]` on the
+ * hand — `h-[34px]` on the chips, `h-[32px]` on the tabs, `h-[1.875rem]` on the
  * top-bar button, 42/40 on the footer — and NOT ONE OF THEM REACHED THE
  * SCREEN. `.btn` carries `min-h-control` (38, 41.6 at 1920), and min-height
  * beats a smaller height written beside it, so every one of these rendered at
@@ -124,15 +126,24 @@ export const FOOTER_PRIMARY = "btn-primary";
 /** the two-tab strip under the body. The bar has NO height of its own: it is
     the compact control plus 4px of padding on each side (34 + 8 = 42, the
     reference's bar), so it grows with the root exactly as the tabs do. */
-export const TAB_BAR = "flex items-center gap-1 rounded-md border border-border bg-field p-1";
-export const tabClass = (on: boolean): string =>
-  `btn btn-sm flex-1 ${on ? "bg-surface text-fg" : "text-fg-subtle hover:text-fg"}`;
+/*
+ * THE KIT'S TRACK, INSIDE A PANEL TOO (2026-09-15). This bar was the
+ * reference's own — a bordered field-ground strip on the control corner —
+ * and the user's ruling that every sub-menu wears the meetings track makes
+ * a tab strip inside a dialog no exception: a reader who has learned the
+ * pill on the page finds the same pill in the panel. The two consumers
+ * (TaskDetail's comments/history, TaskViews' month/week/day) keep `flex-1`
+ * because their strips fill a row rather than sit in one.
+ */
+export const TAB_BAR = TAB_TRACK;
+export const tabClass = (on: boolean): string => `${sectionTabClass(on)} flex-1`;
 
-/** the panel itself — 580 for the dialog, 980 for the detail */
-export const DIALOG_WIDTH = "w-[580px] max-w-[calc(100vw-2rem)]";
-export const DETAIL_WIDTH = "w-[980px] max-w-[calc(100vw-2rem)]";
+/** the panel itself — 580 for the dialog, 980 for the detail, in rem so
+    both grow with the root the way every other size here does */
+export const DIALOG_WIDTH = "w-[36.25rem] max-w-[calc(100vw-2rem)]";
+export const DETAIL_WIDTH = "w-[61.25rem] max-w-[calc(100vw-2rem)]";
 /** the detail's rail */
-export const DETAIL_RAIL = "w-[283px] shrink-0";
+export const DETAIL_RAIL = "w-[17.6875rem] shrink-0";
 /** the inset the reference gives a panel's body */
 export const PANEL_INSET = "px-6";
 

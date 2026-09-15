@@ -298,7 +298,14 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     expect(row).not.toContain("pe-");
 
     /* and `main` steps aside by the published width — the centring half */
-    expect(shell).toContain('md:pe-[var(--assistant-rail)]');
+    /* FROM lg, not md (2026-09-15): between md and lg the open panel floats
+       over the page, and the shell steps aside only by the closed strip —
+       measured on a 768 tablet before the change, the reservation left the
+       page 415px of 768. Both halves asserted, since either alone passes
+       against a shell that reserves the wrong thing at one of the widths. */
+    expect(shell).toContain('lg:pe-[var(--assistant-rail)]');
+    expect(shell).toContain('md:pe-assistant');
+    expect(shell).not.toContain('md:pe-[var(--assistant-rail)]');
 
     /* the producer's side: somebody has to write what main reads */
     const sidebar = readFileSync(

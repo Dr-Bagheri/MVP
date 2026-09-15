@@ -117,7 +117,7 @@ export function DateField({ value, onChange, id }: {
           </div>
           <div className="grid grid-cols-7 gap-0.5 text-center">
             {grid.weekdays.map((w, i) => (
-              <span key={`${w}-${i}`} className="py-1 text-[10px] text-fg-subtle">{w}</span>
+              <span key={`${w}-${i}`} className="py-1 text-micro text-fg-subtle">{w}</span>
             ))}
             {grid.cells.map((cell) => {
               /* the cell's key is a UTC-midnight stamp of the day it stands
@@ -179,7 +179,7 @@ export function TimeField({ value, onChange, id }: {
 
   const column = (label: string, values: number[], current: number, pick: (v: number) => void) => (
     <div className="flex min-w-0 flex-1 flex-col">
-      <span className="mb-1 text-center text-[10px] text-fg-subtle">{label}</span>
+      <span className="mb-1 text-center text-micro text-fg-subtle">{label}</span>
       <div className="scroll-quiet h-40 overflow-y-auto">
         {values.map((v) => (
           <button

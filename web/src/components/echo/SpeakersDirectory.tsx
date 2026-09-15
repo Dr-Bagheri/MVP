@@ -12,7 +12,7 @@ import { DataTable, StatusDot } from "@/components/DataTable";
 import {
   IconMicOff, IconMicPlus, IconPencil, IconTeam, IconTrash,
 } from "@/components/icons";
-import { filterChipClass } from "@/components/platform/sectionTabs";
+import { FILTER_TRACK, filterChipClass } from "@/components/platform/sectionTabs";
 import { digits, personName } from "@/lib/format";
 
 /** 2026-08-24 cleanup: popup-confirmed deletes; the ledger's fixed line. */
@@ -506,7 +506,7 @@ export function SpeakersDirectory({ addSignal = 0, onCanAdd }: {
           them.
         */}
         {person.voice_enrolled_at ? (
-          <p className="text-[11px] leading-5 text-fg-muted">{t("voiceAnotherRoom")}</p>
+          <p className="text-caption leading-5 text-fg-muted">{t("voiceAnotherRoom")}</p>
         ) : null}
         {/*
           WHAT THE MICROPHONE IS HEARING, while there is still time to fix it.
@@ -528,7 +528,7 @@ export function SpeakersDirectory({ addSignal = 0, onCanAdd }: {
                 }`}
               />
             </div>
-            <p className={`text-[11px] ${heard ? "text-fg-muted" : "text-warning"}`}>
+            <p className={`text-caption ${heard ? "text-fg-muted" : "text-warning"}`}>
               {heard ? t("voiceHearing") : t("voiceNoSound")}
             </p>
           </div>
@@ -602,7 +602,7 @@ export function SpeakersDirectory({ addSignal = 0, onCanAdd }: {
           icon, so a filter here and a filter on the task board are the same
           control. */}
       {people !== null && teamsAvailable && teams.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className={FILTER_TRACK}>
           {[null, ...teams].map((team) => (
             <button
               key={team ?? "__all"}
