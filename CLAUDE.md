@@ -6778,6 +6778,37 @@ sessions) for the cross-session narrative.
   machines decided opposite things and the merge kept both halves; the
   trade-off — Persian orthography against a control strip with no hole in it —
   is a decision, not a typo, and is left for one.
-  NOT proven live yet: nothing here has been deployed or opened on production.
+  **DEPLOYED AND PROVEN ON PRODUCTION**, in the user's own Chrome. Core went
+  up WITH the web rather than after it, and the ordering is the point: the web
+  had already lost `set_search`'s executor, so a core still advertising the
+  tool would have been offering the model a hand the browser could not run —
+  13½'s seam, in the direction that had already bitten once this week (the web
+  ahead of the server on 2026-09-15). Archive hashes matched end to end, both
+  entrypoints parse under strip-types, both units active, health `{"ok":true}`,
+  no level≥40 lines, and the altitude probe reads 401 on `/v1/me` and on the
+  thread route against 404 on `/v1/nonsense`.
+  The four readings: the meetings page carries a SECOND tablist «مرتب‌سازی»
+  with `data-key` date · people · status, «تاریخ» selected, the direction key
+  «تازه‌ترین اول» inside the row, 12px under it, and the page's only
+  comboboxes are the search box and the topic folder — the sort dropdown is
+  gone. The search box answered «جلسه» with eight rows, ZERO buttons and ZERO
+  `<kbd>` in the panel; a REAL Return on the focused field left the address,
+  the typed query and the eight rows exactly as they were (a form with no
+  handler would have reloaded the page and cleared all three), and
+  `/fa/search?q=test` answers 404 beside an invented path's 404. A dead
+  pointer seeded into `sessionStorage` was asked for ONCE, and the pointer was
+  DROPPED with no toast — the positive fact is the drop, because the old code
+  left it set and re-asked forever. Sign-in draws two links, neither a
+  provider, and read the provider list ZERO times while making one other BFF
+  call.
+  **AND THE LIVE PROBE LIED FIRST, in this file's own recorded shape.** The
+  toast check read `document.body.textContent` and reported TOAST SHOWN — the
+  one hit was inside `self.__next_f.push(...)`, Next's serialized flight
+  payload, which carries the whole message catalogue in every document. That
+  is the 2026-08-13 finding met again three years of entries later, and the
+  fix is the same one: walk RENDERED text with SCRIPT/STYLE/TEMPLATE rejected,
+  and carry both controls — an on-screen word found (1) and a string that
+  exists in the catalogue but is not rendered found (0). Without the second
+  control the corrected probe is indistinguishable from the broken one.
   db 222 migrations · core 1858 tests (1 pre-existing red, above) ·
   web 1576 tests + gate + sweep.

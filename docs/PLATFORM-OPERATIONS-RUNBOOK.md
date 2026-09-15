@@ -400,6 +400,33 @@ as a no-such-feature nothing from a browser.
 Not done here, on purpose: the demo seed itself was not pressed (it writes
 an organisation into production — the operator's button).
 
+## 7g. Deployment record — 2026-09-15, evening (6a36862, core only)
+
+No migration in this release, so §5 does not apply and §3 ran straight
+through. Archive 24 587 280 bytes, sha256 `4e88c6ae…`, **compared on both
+ends before extracting** — the cheap half of "verify the artifact, not the
+command that made it". `pnpm install --frozen-lockfile` reported the lockfile
+up to date and nothing to do (this release touches no dependency), both
+entrypoints passed `--experimental-strip-types --check`, then
+`systemctl restart neurai-api.service neurai-worker.service`. ml was not
+rebuilt: nothing under `ml/` changed.
+
+**Markers checked on disk before restarting**, because an extract that lands
+in the wrong tree restarts cleanly and changes nothing (the 2026-09-06
+`/opt/neurai` vs `/opt/neurai/app/core` lesson): the navigate enum has zero
+occurrences of `"/search"`, and `client-tools.ts` carries the new comment.
+
+After: both units `active`, `/health` `{"ok":true}`, no level≥40 journal lines
+in the minute after the restart, and the pair at the server altitude —
+`/v1/me` **401**, `/v1/assistant/sessions/<uuid>/messages` **401**,
+`/v1/nonsense` **404**.
+
+**Order note worth keeping:** this release REMOVES a client tool
+(`set_search`) whose executor the web had already dropped. Core was deployed
+as soon as Vercel's build went green rather than left for later — a core still
+advertising a tool the browser cannot run is the same seam as a web ahead of
+its server, pointed the other way, and the model would have called it.
+
 ---
 
 ## 8. What never goes in this file (or any log)
