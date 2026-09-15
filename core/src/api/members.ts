@@ -20,7 +20,8 @@ import {
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
 import {
-  hasAgentsWeb, hasAssistantPrefs, hasAutonomyColumn, hasProfileContext, PINNED_AUTONOMY,
+  hasAgentsWeb, hasAssistantPrefs, hasAutonomyColumn, hasOnboarding, hasOrgKind,
+  hasProfileContext, PINNED_AUTONOMY,
 } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -205,6 +206,19 @@ export interface MeRecord extends MemberRecord {
    * that saves and does nothing.
    */
   agents_web?: boolean;
+  /**
+   * db/0223 — the first-time flow. `onboarding` is what the person told it
+   * (merged, never read by a wall); `onboarding_completed_at` NULL means the
+   * flow has not been finished and the shell routes there. Both ABSENT on a
+   * deployment without the migration — and that is the third state the web
+   * keeps apart from "not finished": a shell that read an absent stamp as
+   * null would send every member of an un-migrated deployment into a flow
+   * whose save route does not exist.
+   */
+  onboarding?: Record<string, unknown>;
+  onboarding_completed_at?: string | null;
+  /** db/0223 — personal (founded at arrival) or team. ABSENT before 0223. */
+  org_kind?: "personal" | "team";
 }
 
 /**
@@ -612,6 +626,8 @@ export function createMembersRepo(db: Db) {
       const withAssistant = await hasAssistantPrefs(db);
       const withProfileCtx = await hasProfileContext(db);
       const withAgentsWeb = await hasAgentsWeb(db);
+      const withOnboarding = await hasOnboarding(db);
+      const withOrgKind = await hasOrgKind(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // The org join is LEFT for the same reason resolveIdentity's is: an
@@ -635,6 +651,8 @@ export function createMembersRepo(db: Db) {
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   ${withAgentsWeb ? "u.agents_web," : ""}
+                  ${withOnboarding ? "u.onboarding, u.onboarding_completed_at," : ""}
+                  ${withOrgKind ? "o.kind as org_kind," : ""}
                   o.name as org_name
              from echo.app_user u
              left join echo.org o on o.id = u.org_id
@@ -696,7 +714,68 @@ export function createMembersRepo(db: Db) {
            such switch", and the screen says so rather than drawing an
            off toggle nobody can turn on. */
         ...(withAgentsWeb ? { agents_web: Boolean(row.agents_web) } : {}),
+        /* db/0223 — served together, absent together: the stamp is the fact
+           the shell routes on, and the answers are what the flow resumes from */
+        ...(withOnboarding
+          ? {
+              onboarding: (row.onboarding as Record<string, unknown> | null) ?? {},
+              onboarding_completed_at: isoOrNull(row.onboarding_completed_at),
+            }
+          : {}),
+        ...(withOrgKind
+          ? { org_kind: row.org_kind === "personal" ? "personal" as const : "team" as const }
+          : {}),
       };
+    },
+
+    /**
+     * The first-time flow writes as it goes (db/0223).
+     *
+     * ANSWERS MERGE: a step saves its own keys and leaves the others alone,
+     * so a reload resumes with everything said so far and a later step cannot
+     * erase an earlier one by sending a partial object. `complete` stamps the
+     * timestamp ONCE — a second completion (the flow re-entered from a stale
+     * tab) keeps the first stamp, because "when did this person finish" is a
+     * fact and not a counter.
+     *
+     * Bounded, because a jsonb column with no bound is a place a client can
+     * write anything at all: forty keys, eight kilobytes. The answers gate
+     * nothing and are never read by a policy, so the bound is about the row,
+     * not about safety.
+     */
+    async updateOnboarding(
+      identity: Identity,
+      patch: { answers?: Record<string, unknown> | undefined; complete?: boolean | undefined },
+    ): Promise<MeRecord> {
+      if (!(await hasOnboarding(db))) {
+        throw new ValidationError(
+          "onboarding is not available on this deployment yet (db/0223 pending)",
+          { code: "not_migrated" });
+      }
+      const answers = patch.answers ?? {};
+      if (typeof answers !== "object" || answers === null || Array.isArray(answers)) {
+        throw new ValidationError("answers must be an object");
+      }
+      const keys = Object.keys(answers);
+      if (keys.length > 40) {
+        throw new ValidationError("answers carries too many keys", { code: "answers_too_many" });
+      }
+      const encoded = JSON.stringify(answers);
+      if (encoded.length > 8192) {
+        throw new ValidationError("answers is too large", { code: "answers_too_large" });
+      }
+      if (keys.length === 0 && patch.complete !== true) return this.me(identity);
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `update echo.app_user
+              set onboarding = onboarding || $2::text::jsonb,
+                  onboarding_completed_at = case
+                    when $3::boolean then coalesce(onboarding_completed_at, now())
+                    else onboarding_completed_at end
+            where id = $1`,
+          [identity.userId, encoded, patch.complete === true],
+        ));
+      return this.me(identity);
     },
 
     /**

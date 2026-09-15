@@ -12,29 +12,37 @@
 -- because register_account can no longer produce one — which is itself the
 -- fact 0056 exists to assert.
 
--- --- founding by SIGNUP is gone (0082): orgs are born in the console -------
+-- --- founding by SIGNUP is back, in one shape (0223, M54) ------------------
 reset role;
 insert into auth.users (id, email)
 values ('0f000000-0000-4000-8000-00000000000f', 'founder@example.com');
 
+-- the org count is read at OWNER altitude on both sides (echo_app with no
+-- actor sees zero orgs before and after — a count there agrees with itself)
+select set_config('t.orgs_before', (select count(*)::text from echo.org), true);
 set local role echo_app;
--- 0150 lets the bare registration through; what it must NOT do is make an
--- org or an owner, which is the whole of 0082's ruling. Asserting the
--- refusal instead would pin the MECHANISM, which goes red the day the
--- mechanism changes — so assert the two facts the ruling is about.
+-- With no org marked as intake, a bare registration founds a PERSONAL
+-- workspace and the arrival is its active owner — 0056's own sentence, back
+-- in the one branch where it is safe (nothing anybody else could leak into).
+-- 0082's wall on NAMES is untouched and asserted below.
 select t.ok(
-  (select count(*)::int from echo.org) = (
-    with before as (select count(*)::int as n from echo.org),
-         made as (select echo.register_account(
-           '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار'))
-    select n from before, made),
-  '0150: signing up founds no organization (0082 unchanged)');
+  (select role::text || '/' || status::text from echo.register_account(
+     '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار')) = 'owner/active',
+  '0223: signing up with nothing marked makes the arrival an ACTIVE OWNER');
 -- owner altitude to READ: app_user is behind RLS and this role has no actor
 reset role;
 select t.ok(
-  (select role::text from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f') = 'member',
-  '0150: and mints no owner — owners are made in the console');
-delete from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f';
+  (select count(*)::int from echo.org) = current_setting('t.orgs_before')::int + 1,
+  '0223: and founds exactly ONE organization');
+select t.ok(
+  (select o.kind from echo.org o join echo.app_user u on u.org_id = o.id
+    where u.id = '0f000000-0000-4000-8000-00000000000f') = 'personal',
+  '0223: the founded workspace is PERSONAL — a team is what it becomes by inviting');
+-- back to the fixture's shape for the rest of the file (the founded
+-- workspace goes with its agent seats)
+delete from echo.app_user where org_id = (
+  select org_id from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f');
+delete from echo.org where kind = 'personal' and name = 'بنیان‌گذار';
 set local role echo_app;
 
 -- Hand-seed 0f as an ACTIVE OWNER of a fresh org, at owner altitude — the

@@ -952,6 +952,34 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /**
+   * db/0223 — the first-time flow saves as it goes and ends once. The body is
+   * `{ answers?, complete? }`; anything else is a 400 rather than a silent
+   * drop, for the reason PATCH /v1/me refuses unknown fields.
+   */
+  app.patch("/v1/me/onboarding", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const unknown = Object.keys(body).filter((key) => key !== "answers" && key !== "complete");
+    if (unknown.length > 0) {
+      throw new ValidationError(
+        `unknown field${unknown.length > 1 ? "s" : ""}: ${unknown.sort().join(", ")}`,
+        { code: "unknown_fields", params: { fields: unknown.sort().join(",") } },
+      );
+    }
+    if (body.complete !== undefined && typeof body.complete !== "boolean") {
+      throw new ValidationError("complete must be true or false");
+    }
+    if (body.answers !== undefined
+        && (typeof body.answers !== "object" || body.answers === null || Array.isArray(body.answers))) {
+      throw new ValidationError("answers must be an object");
+    }
+    return reply.send(await members.updateOnboarding(identity, {
+      answers: body.answers as Record<string, unknown> | undefined,
+      complete: body.complete as boolean | undefined,
+    }));
+  });
+
+  /**
    * Security (db/0112): the caller's OWN auth sessions - device, ip,
    * times. The door's select list is the wall; no token column can leave
    * it. Sign-in HISTORY is deliberately not served: auth.audit_log_entries

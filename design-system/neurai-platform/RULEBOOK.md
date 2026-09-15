@@ -34,6 +34,19 @@ behind the door in the top bar, and Home's column becomes a slide-over. Between
 `md` and `lg` the assistant floats over the page; from `lg` the shell reserves
 its width (`PlatformShell`: `md:pe-assistant lg:pe-[var(--assistant-rail)]`).
 
+### 1a. Three surfaces stand OUTSIDE the shell, and each says why
+
+| Surface | Why no shell | Its own chrome |
+|---|---|---|
+| the gate (`/sign-in`, `/forgot`, `/reset`, `/pending`, `/suspended`) | there is no session yet | one `.card` in the middle of the page |
+| the guest door (`/join/[code]`) | the person has no account; every shell element would be a door that refuses | one `.card`, then the room |
+| the first-time flow (`/onboarding`, M54) | the person is in, but the flow is walked once, in order; every shell door leads out of it | `onboarding/OnboardingFrame`: the five-stage rail, its progress bar, the language pair; three layouts (split / centred / reveal) |
+
+Their controls are the kit's (`.btn`, `.card`, `.well`, `Select`, the
+icons); what they draw for themselves is only the chrome named above. The
+trail's `NO_TRAIL` and the assistant's silence list carry each with its
+reason.
+
 ## 2. The page — a share of the screen, and two sub-menus
 
 **Width.** `PageContainer` (`scaffold/Page.tsx`) is the column and it is the

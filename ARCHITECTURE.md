@@ -629,6 +629,19 @@ rate limiting · device revocation · agent long-term memory · billing wiring
 
 ## M15 — Monetization & access [user rulings, revised round 3]
 
+**[AMENDED 2026-09-15, user directive — B2C FIRST, db/0223, see M54]:** a
+bare arrival (no invitation, no organisation named, and NO org marked
+`accepts_signups`) FOUNDS a workspace of their own — `org.kind = 'personal'`,
+the arrival its ACTIVE OWNER, the confirmed email the acceptance (0056's own
+sentence, in the one branch where it is safe: a workspace of one contains
+nothing anybody else could leak into). The 2026-08-23 join-only ruling below
+is narrowed, not repealed: a NAME still joins pending, an invitation is still
+the instant door, and marking one org `accepts_signups` still routes every
+bare arrival there pending — that flag is now the switch between managed
+intake and the B2C default. 0150's "oldest active org" fallback is gone.
+The gate is one email field (a one-click link and a six-digit code, both
+exchanged server-side); `/sign-up` redirects to it.
+
 **[AMENDED 2026-08-23, user ruling — JOIN-ONLY SIGNUP, db/0082]:**
 signup FOUNDS nothing any more. The flow: anyone may authenticate
 (email+password or Google/GitHub OAuth — an OAuth arrival sets a
@@ -2688,3 +2701,57 @@ file, plus a generator run); seeding a demo into an EXISTING organisation
 non-null); and whether a demo organisation should expire on its own, which is
 a scheduled deletion and therefore a named operation with an explicit actor,
 never a silent background writer (D12).
+
+## M54 — B2C first: a person arrives into their own workspace, and a team is what a workspace becomes [user directive 2026-09-15: "we mostly built it for B2B but we need it for B2C as well — start with B2C and then if they want they can make it a B2B platform; a first-time user must have a good experience — the login and the site take their hints from Wispr Flow, on the web, the same way"]
+
+**The structure.** M2 already says an individual is an org-of-one; what
+changes is the DOOR. Three doors, one rule:
+
+1. **Invited** (0060) — unchanged: address-matched, active on arrival with
+   the granted role.
+2. **Managed intake** — unchanged when an operator chose it: mark ONE org
+   `accepts_signups` (0149's setter, in the console) and every bare arrival
+   pends there for the console to place (0156). This is the switch that turns
+   a deployment back into the B2B behaviour of 2026-09-02.
+3. **A workspace of their own** (db/0223) — nothing marked, no name, no
+   invitation → a new org of `kind = 'personal'`, named after the person, and
+   the person is its ACTIVE OWNER. The confirmed email is the acceptance
+   (0056). 0150's "oldest active org" fallback is gone.
+
+The rule: **a name never becomes a membership** — typing an existing
+organisation's name still joins it PENDING (0082's wall, untouched).
+
+**Personal → team.** `org.kind` flips `personal → team` by the act of
+INVITING — a `before insert` trigger on `echo.invitation`
+(`tg_invitation_makes_a_team`, SECURITY DEFINER, idempotent) — so no state
+exists where a personal workspace holds an invitation, and it never flips
+back (`tg_org_kind_one_way`). Every org that existed before 0223 is a team.
+No wall reads `kind`; it is a word for the shell, copy and (LATER) billing.
+
+**The gate.** One email field. GoTrue `/otp` with `create_user` (signing up
+and signing in are one act); the mail carries a token-hash LINK to
+`/api/auth/confirm?type=magiclink` and a six-digit CODE verified through
+`/verify {type:"email"}` — both exchanged server-side into the httpOnly
+cookie (M1). The password path stays, one link away. `/sign-up` redirects.
+Register-on-first-sign-in is unchanged in mechanism and lands the person in
+their workspace, then on `/onboarding`.
+
+**The first-time flow** (docs/ONBOARDING.md): `app_user.onboarding jsonb` +
+`onboarding_completed_at` (0223); `PATCH /v1/me/onboarding` merges answers
+and stamps the end once; `/v1/me` serves both plus `org_kind`, all
+capability-gated (an un-migrated deployment omits them, and the web treats
+ABSENT and NULL as different facts — only NULL routes to the flow). The shell
+sends any member with a NULL stamp to `/onboarding`; the flow writes as it
+goes and resumes; a first-run door on Home (once) starts one of five lessons
+on the real controls (`data-tour` targets). Every member active before 0223
+is backfilled as onboarded.
+
+**Operator step, unavoidable:** the Supabase Magic Link template must link
+to `/api/auth/confirm` with `{{ .TokenHash }}` and print `{{ .Token }}` —
+the default template lands the session in the URL fragment (M1's forbidden
+shape) and carries no code. Until it is changed, the gate is correct in code
+and unreachable in configuration (the 2026-08-15 shape).
+
+**Deliberately not decided here** (docs/B2C-STRUCTURE.md §4): billing per
+person vs per seat, self-serve deletion of a personal workspace, the Google
+button's return, the lesson videos.

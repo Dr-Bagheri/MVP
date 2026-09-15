@@ -79,6 +79,19 @@ export async function hasProfileContext(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "about");
 }
 
+/**
+ * db/0223: the first-time flow's answers and its stamp. One column answers
+ * for both (they land in one migration), the hasProfileContext pattern.
+ */
+export async function hasOnboarding(db: Db): Promise<boolean> {
+  return hasColumn(db, "app_user", "onboarding_completed_at");
+}
+
+/** db/0223: personal or team — the word the shell reads off the org row. */
+export async function hasOrgKind(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "kind");
+}
+
 /** db/0081 (voice enrollment): the person voiceprint columns. */
 export async function hasVoiceprints(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "voiceprint");

@@ -141,8 +141,12 @@ draft for review; nothing is sent automatically.
 
 ### Sign-up & access
 Anyone can create an account — username + password, or one-click Google
-sign-up — but the account is **pending until an admin accepts it**; nothing is
-accessible before acceptance. No trials.
+sign-up. **[AMENDED 2026-09-15, M54]** A person who arrives on their own
+lands ACTIVE in a workspace of their own (an org-of-one, M2) — the confirmed
+email is the acceptance; a person joining an EXISTING organisation by its name
+is **pending until that organisation's admin accepts them**, and an invited
+person arrives active. A deployment may mark one organisation as the intake
+for all bare arrivals (managed mode), in which case they pend there. No trials.
 
 ### Settings & admin
 Profile: display name, avatar, interface language. Admins: members list

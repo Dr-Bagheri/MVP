@@ -31,6 +31,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/me", "M1 — the browser never sees the token, so the shell cannot self-identify"],
   ["PATCH", "/v1/me", "M24 round 1 — the caller edits their own names (display_name, display_name_en, username)"],
   ["PATCH", "/v1/me/assistant", "db/0112 — the person's standing assistant voice (Settings·Assistant)"],
+  ["PATCH", "/v1/me/onboarding", "db/0223 — the first-time flow saves its answers as it goes and stamps its end once (M54)"],
   ["GET", "/v1/me/sessions", "db/0112 — the caller's own devices (Security 43)"],
   ["GET", "/v1/admin/sessions", "db/0135 — the ORG's live sessions, admin/owner"],
   ["DELETE", "/v1/admin/sessions/:userId/:handle", "db/0135 — end a session you outrank"],
