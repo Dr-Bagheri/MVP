@@ -1,17 +1,22 @@
 /**
- * The mini recorder's two homes (user directive, 2026-08-23): docked into
- * the top bar's anchor when a bar is present, floating otherwise. The
- * discriminating assertion is CONTAINMENT — the docked pill must render
- * inside the anchor element (a portal that silently fell back to the body
- * would keep every class-based check green while the bar slot stays empty).
+ * The mini recorder's ONE home. It used to dock into the top bar's anchor and
+ * fall back to
+ * floating; the bar's centred search layer crosses that cluster, so the pill
+ * now floats over the assistant column on every screen. The discriminating
+ * assertions are the SHEET (`.glass`, not a plain surface — over the
+ * assistant's own glass that is what makes it read as above rather than as a
+ * patch cut into it) and the click's DESTINATION, which is the take's own
+ * screen and not the meetings list.
  */
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-let pathname = "/echo/records";
+let pathname = "/tasks";
+const push = vi.fn();
 vi.mock("@/i18n/routing", () => ({
   usePathname: () => pathname,
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
 }));
 vi.mock("next-intl", () => ({
   useLocale: () => "en",
@@ -22,7 +27,12 @@ vi.mock("@/lib/format", () => ({ formatClock: () => "0:26" }));
 // the snapshot must be REFERENTIALLY stable between calls (like the real
 // engine's cached snapshot) — a fresh object per call spins
 // useSyncExternalStore into an infinite re-render
-let snapshot = { phase: "recording", title: "Meeting 2", recordedMs: 26_000 };
+let snapshot: Record<string, unknown> = {
+  phase: "recording",
+  title: "Meeting 2",
+  recordedMs: 26_000,
+  returnPath: "/meetings/m1",
+};
 vi.mock("@/lib/recordingEngine", () => ({
   subscribeRecorder: () => () => undefined,
   recorderSnapshot: () => snapshot,
@@ -32,79 +42,64 @@ vi.mock("@/lib/recordingEngine", () => ({
 }));
 
 import { FloatingRecorder } from "./FloatingRecorder";
-import { registerRecorderAnchor } from "@/components/platform/recorderAnchor";
-
-let releaseAnchor: (() => void) | null = null;
 
 beforeEach(() => {
-  pathname = "/echo/records";
-  snapshot = { phase: "recording", title: "Meeting 2", recordedMs: 26_000 };
-});
-
-afterEach(() => {
-  releaseAnchor?.();
-  releaseAnchor = null;
-});
-
-function anchorInDom(): HTMLElement {
-  const anchor = document.createElement("div");
-  anchor.id = "neurai-topbar-recorder";
-  document.body.appendChild(anchor);
-  const unregister = registerRecorderAnchor(anchor);
-  releaseAnchor = () => {
-    unregister();
-    anchor.remove();
+  pathname = "/tasks";
+  push.mockClear();
+  snapshot = {
+    phase: "recording",
+    title: "Meeting 2",
+    recordedMs: 26_000,
+    returnPath: "/meetings/m1",
   };
-  return anchor;
-}
+});
 
 describe("FloatingRecorder placement", () => {
-  it("docks INTO the registered top-bar anchor — bar styling, not fixed", () => {
-    const anchor = anchorInDom();
-    render(<FloatingRecorder />);
-    const pill = screen.getByText("pause").closest("div")!;
-    expect(anchor.contains(pill)).toBe(true);
-    expect(pill.className).toContain("h-9");
-    expect(pill.className).not.toContain("fixed");
-  });
-
-  it("floats when no bar offered an anchor — a live mic is never invisible", () => {
+  it("floats as its own glass sheet over the assistant column", () => {
     render(<FloatingRecorder />);
     const pill = screen.getByText("pause").closest("div")!;
     expect(pill.className).toContain("fixed");
-    // and it is NOT inside some stale anchor id left in the document
+    expect(pill.className).toContain("glass");
+    // z-40 clears the assistant's z-30 — the bug was the pill UNDER something
+    expect(pill.className).toContain("z-40");
+    // and it is NOT inside the bar's retired anchor
     expect(pill.closest("#neurai-topbar-recorder")).toBeNull();
   });
 
   it("shows on every ordinary screen — there is no recorder page to defer to", () => {
-    /*
-     * These two tests pinned the pill standing down on `/echo` and its capture
-     * aliases, because that page drew the full controls itself and two
-     * renderings of one rolling microphone are two things to keep in step.
-     * The Echo surface was removed (user directive, 2026-09-04), so those
-     * paths are not screens any more and the condition they guarded is gone
-     * with them.
-     *
-     * What replaces them is the property that still matters: ANYWHERE ELSE,
-     * the pill is what says a microphone is open. The meeting page is the one
-     * exception and has its own test below.
-     */
-    const anchor = anchorInDom();
     for (const p of ["/tasks", "/meetings", "/assistant", "/calls/abc"]) {
       pathname = p;
       const { unmount } = render(<FloatingRecorder />);
       expect(screen.queryByText("pause"), p).not.toBeNull();
       unmount();
     }
-    expect(anchor).toBeTruthy();
   });
 
-
-  it("renders nothing at all when no take is rolling", () => {
-    anchorInDom();
-    snapshot = { phase: "idle", title: "", recordedMs: 0 };
+  it("stands down on the meeting's own page — that screen draws the take", () => {
+    pathname = "/meetings/m1";
     render(<FloatingRecorder />);
     expect(screen.queryByText("pause")).toBeNull();
-    expect(screen.queryByText("finish")).toBeNull();
+  });
+
+  it("renders nothing at all when no take is rolling", () => {
+    snapshot = { phase: "idle", title: "", recordedMs: 0, returnPath: null };
+    render(<FloatingRecorder />);
+    expect(screen.queryByText("pause")).toBeNull();
+    expect(screen.queryByText("finishShort")).toBeNull();
+  });
+});
+
+describe("FloatingRecorder destination", () => {
+  it("opens the RECORDING screen the take was started on", async () => {
+    render(<FloatingRecorder />);
+    await userEvent.click(screen.getByLabelText("pillOpen"));
+    expect(push).toHaveBeenCalledWith("/meetings/m1");
+  });
+
+  it("falls back to the meetings list for a take with no screen of its own", async () => {
+    snapshot = { ...snapshot, returnPath: null };
+    render(<FloatingRecorder />);
+    await userEvent.click(screen.getByLabelText("pillOpen"));
+    expect(push).toHaveBeenCalledWith("/meetings");
   });
 });

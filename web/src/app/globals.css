@@ -37,7 +37,7 @@
  *    is decorative and WCAG asks nothing of it; the edge of an INPUT is a
  *    control boundary and owes 3:1. The previous system shipped one token at
  *    1.28:1 doing both.
- *  - `--accent-soft` is a COMPUTED 12% tint of `--accent` over `--surface`,
+ *  - `--accent-soft` is a COMPUTED 10% tint of `--accent` over `--surface`,
  *    not a hand-picked colour. Hand-picking is what produced the 4.42 chip.
  */
 @layer base {
@@ -46,27 +46,40 @@
      read by PlatformShell's `main` so the page centres between the two fixed
      menus. 0 by default: the auth pages and the guest door render no
      assistant, and a page there must not hold a gutter open for a column
-     that is not coming. */
-  :root {
+     that is not coming.
+
+     It is a DECLARATION and not a nested `:root { }` — the nested form
+     compiles to the descendant selector `:root :root`, which matches
+     nothing, so this variable was never set and `--assistant-rail` resolved
+     to the empty string on every page. */
     --assistant-rail: 0px;
-  }
     /* DARK — the reference product's own dark palette (user directive,
        2026-08-31: "i want our to get this theme so get all of it and
        correct ours"). A deep blue-grey ground with a GREEN primary; every
        value mirrors design-system/neurai-platform/verify-pairs.mjs — edit
        THERE first, run it, then copy; a hex that exists only here is a
        fifth place for the numbers to disagree. */
+    /* THE LADDER RE-STEPPED (2026-09-08: dark-theme contrast was too low).
+       R23 took every border away and made a panel's boundary its lip and its
+       drop. In dark all three mechanisms were near zero at once — the panel
+       sat 3.5 L* above the page, a black drop on a near-black ground is
+       arithmetically nothing, and `.glass-chrome` carries no lip at all — so
+       the shell read as one flat sheet. The tone carries it alone now: the
+       panel is 7 L* above the page, the raised tone 4.7 above the panel, and
+       verify-pairs asserts both (it asserted only TEXT ON these surfaces
+       before, which is why the flat version passed every check in the file). */
     --bg: 15 17 19;               /* #0F1113 — the ground */
-    --surface: 22 25 28;          /* #16191C — panels sit above it */
-    --surface-2: 39 44 50;        /* #272C32 — chips, hovered rows */
+    --surface: 27 32 37;          /* #1B2025 — panels sit above it */
+    --surface-2: 36 42 48;        /* #242A30 — chips, hovered rows */
     /* THE FIELD'S GROUND (2026-09-02 measurement). The reference gives an
        input its own tone, a shade off the card rather than the chip grey:
        an input that shares the chip's colour reads as a chip, and one that
        shares the card's reads as nothing at all and has to be found by its
-       border. In dark the same job wants the raised tone, so this equals
-       surface-2 here — one token, two theme answers. */
-    --field: 29 33 38;            /* #1D2126 — measured 2026-09-05; its own ground, not the raised tone */
-    --border: 43 46 49;           /* #2B2E31 — hairline, decorative */
+       border. In dark it steps DOWN from the panel rather than up: a field is
+       a well inside a card, and with R23's borders gone the tone is what says
+       so. */
+    --field: 22 26 30;            /* #161A1E — its own ground; a well INSIDE the panel, still a shape on the bare page */
+    --border: 51 58 65;           /* #333A41 — the glass hairline, decorative */
     --border-strong: 114 121 130; /* #727982 — control edges, 3:1+ */
     --fg: 242 244 246;            /* #F2F4F6 */
     --fg-muted: 197 202 209;      /* #C5CAD1 */
@@ -79,7 +92,7 @@
     /* the reference's own ink-on-green: near-black, because the green is a
        bright surface in this theme */
     --on-accent: 11 20 8;         /* #0B1408 */
-    --accent-soft: 21 42 36;      /* #152A24 — computed 12% tint over surface */
+    --accent-soft: 26 46 43;      /* #1A2E2B — computed 10% tint over surface */
     --success: 52 211 153;
     --warning: 251 191 36;
     --danger: 251 113 133;
@@ -94,13 +107,76 @@
     --on-primary: 11 20 8;
     --on-danger: 0 0 0;
     --secondary: 91 155 232;
-    --muted: 39 44 50;
+    --muted: 36 42 48;
     /* soft depth, the reference's own shadow scale */
     --shadow-card: 0 2px 10px rgba(0,0,0,.34);
     --shadow-island: 0 6px 28px rgba(0,0,0,.46);
     --shadow-accent: 0 3px 12px rgba(0,0,0,.4), 0 0 0 1px rgba(15,168,93,.1);
+    /*
+     * ── GLASS ────────
+     *
+     * A panel is a translucent SHEET over the ground, not an opaque box with
+     * an outline drawn round it. Three things make that read, and all three
+     * are required — two of them shipped alone once and looked like nothing:
+     *
+     *  1. THE GROUND HAS TO HAVE SOMETHING IN IT. Glass over a flat fill is
+     *     algebraically the same flat fill: blurring one colour returns that
+     *     colour. `--wash-*` below puts a slow, very low-amplitude tint in
+     *     the page so the blur has something to sample and the panel edge
+     *     becomes visible as a change in the ground rather than as a line.
+     *  2. THE EDGE IS LIGHT, NOT INK. Real glass catches the light on its top
+     *     lip; it does not get outlined. `--shadow-glass` is that inset
+     *     highlight plus an ambient drop, which is the whole reason the
+     *     border can go and the panel still has a boundary.
+     *  3. SATURATION, NOT JUST BLUR. `saturate()` in the filter is what keeps
+     *     a translucent panel from greying out the colour behind it — the
+     *     difference between "frosted" and "smeared".
+     *
+     * `--glass` is its own tone rather than `--surface` reused: the sheet is
+     * painted at 58% and has to land ON the surface value once composited,
+     * so the token is a step lighter than the opaque one it replaces.
+     *
+     * ONE FILTER TOKEN, because `prefers-reduced-transparency` has to be able
+     * to switch the whole platform off in one place — a per-class `blur()`
+     * is a per-class thing to remember, and the class written next month is
+     * the one that forgets.
+     */
+    --glass: 36 43 50;            /* #242B32 — the sheet's tone, painted at --glass-alpha */
+    --glass-alpha: .58;
+    /* THE CHROME IS A STOP LIGHTER THAN THE PANELS (observed 2026-09-09: the
+       rail and the top bar read with too little contrast against the view
+       pane). The rail, the top bar and the bottom bar were painted
+       at the panel alpha, so the frame of the window composited to within a
+       few values of the ground it frames — chrome that is nearly the page is
+       chrome you have to look for. This is the SAME tone at a higher alpha,
+       so the shell reads as the lit surface the content sits on, and the
+       family stays one colour with one number to change. */
+    --glass-chrome-alpha: .86;
+    /* THE SAME SHEET, NEARLY AT PAGE TONE (the home sidebar). A column that is
+       CHROME by
+       position and PAGE by tone: composited it lands a few values above the
+       ground rather than at the bar's white, so it separates from the thread
+       without becoming a second header. One alpha, not a second colour — a
+       hand-picked tone here would be a fourth spelling of the chrome. */
+    --glass-soft-alpha: .32;
+    --glass-2: 57 65 74;          /* #39414A — the raised sheet, a row inside a panel */
+    --glass-2-alpha: .3;
+    --glass-edge: 255 255 255;    /* the light on the lip, never an outline */
+    --glass-edge-alpha: .07;
+    --glass-filter: blur(18px) saturate(1.6);
+    --shadow-glass:
+      inset 0 1px 0 0 rgb(var(--glass-edge) / var(--glass-edge-alpha)),
+      0 10px 30px -18px rgb(0 0 0 / .78);
+    --shadow-glass-hover:
+      inset 0 1px 0 0 rgb(var(--glass-edge) / .12),
+      0 16px 40px -20px rgb(0 0 0 / .85);
+    /* the ground's wash — three slow tints, deliberately under 14% so this
+       reads as depth and never as decoration */
+    --wash-1: rgb(var(--accent) / .13);
+    --wash-2: rgb(var(--info) / .10);
+    --wash-3: rgb(var(--secondary) / .07);
     /* retained for the Echo shell until its interior re-derives */
-    --sidebar: 22 25 28;
+    --sidebar: 27 32 37;
     --sidebar-fg: 242 244 246;
     --brand-mark-image: url("/brand/neurai-mark.png");
   }
@@ -147,7 +223,7 @@
     --surface: 255 255 255;
     --surface-2: 237 234 227;     /* #EDEAE3 — chips, hovered rows */
     --field: 251 250 247;         /* #FBFAF7 — measured off the reference */
-    --border: 225 224 219;        /* #E1E0DB */
+    --border: 232 231 226;        /* #E8E7E2 — the glass hairline */
     --border-strong: 143 139 128; /* #8F8B80 — 3.4:1 control edges */
     --fg: 28 26 22;               /* #1C1A16 */
     --fg-muted: 71 68 61;         /* #47443D */
@@ -156,7 +232,7 @@
     /* the reference's #018146, one step darker so its own chip passes */
     --accent: 1 116 63;           /* #01743F */
     --on-accent: 255 255 255;
-    --accent-soft: 225 238 232;   /* #E1EEE8 — computed 12% tint */
+    --accent-soft: 230 241 236;   /* #E6F1EC — computed 10% tint */
     --success: 11 122 82;
     --warning: 143 93 8;
     --danger: 201 38 74;
@@ -170,6 +246,44 @@
     --shadow-card: 0 2px 10px rgba(33,30,20,.06);
     --shadow-island: 0 6px 24px rgba(33,30,20,.1);
     --shadow-accent: 0 4px 14px rgba(1,116,63,.22);
+    /* GLASS, light. The sheet is WHITE here and the lip's highlight is nearly
+       opaque white — on a cream ground the light catches the top of the panel
+       the same way it does in dark, but the value that reads as "lit" on a
+       near-black page is invisible on a near-white one. Same three
+       mechanisms, different numbers. */
+    --glass: 255 255 255;
+    --glass-alpha: .72;
+    /* light: the chrome is WHITE, flat out. The cream ground is close enough
+       to white that .72 of white over it lands at #FCFCFB — a difference of
+       three values from the page, which is a seam's worth of contrast doing a
+       frame's job. At 1 the rail and the bar are the one plainly white
+       surface on the screen and the view pane reads as inset in them. */
+    --glass-chrome-alpha: 1;
+    /* light: white at .34 over the cream ground lands about #F9F8F5 — a
+       whisper above the page, which is what "similar but a bit glass" asks
+       for. The chrome's own .72 lands at #FCFCFB, and the two are distinct */
+    --glass-soft-alpha: .34;
+    /* NOT white (2026-09-08). This was #FFFFFF at 50% over a WHITE panel,
+       which is white — so `.glass-raised` in the light theme had been
+       painting the surface it sits on ever since R23, and a raised row was
+       raised in dark only. No contrast check could see it: a chip that is
+       exactly its own panel is perfectly legible and simply not there. This
+       is the cream at the alpha that paints --surface-2, the same rule the
+       dark tone follows, asserted in verify-pairs. */
+    --glass-2: 219 213 199;       /* #DBD5C7 */
+    --glass-2-alpha: .5;
+    --glass-edge: 255 255 255;
+    --glass-edge-alpha: .9;
+    --glass-filter: blur(18px) saturate(1.4);
+    --shadow-glass:
+      inset 0 1px 0 0 rgb(var(--glass-edge) / var(--glass-edge-alpha)),
+      0 10px 28px -20px rgb(33 30 20 / .3);
+    --shadow-glass-hover:
+      inset 0 1px 0 0 rgb(var(--glass-edge) / 1),
+      0 16px 36px -22px rgb(33 30 20 / .38);
+    --wash-1: rgb(var(--accent) / .09);
+    --wash-2: rgb(var(--info) / .07);
+    --wash-3: rgb(var(--secondary) / .05);
     --sidebar: 255 255 255;
     --sidebar-fg: 28 26 22;
     --brand-mark-image: url("/brand/neurai-mark-light-transparent.png");
@@ -207,6 +321,28 @@
 
   body {
     @apply bg-bg text-fg antialiased;
+    /*
+     * THE WASH IS PART OF THE GLASS, not decoration on top of it.
+     *
+     * The first pass of the glassmorphic change turned every panel
+     * translucent and blurred and the screens came back looking IDENTICAL —
+     * which is correct and was the useful failure: blurring one flat colour
+     * returns that colour, so a translucent sheet over a flat page is
+     * arithmetically the page. The panels only became panels once the ground
+     * underneath them stopped being uniform.
+     *
+     * Three very slow radials, all under 14%, all composited over tokens so
+     * both themes resolve as a set. `fixed` so the wash belongs to the
+     * WINDOW: any inner scroller that moved it would drag the light source
+     * around behind the glass, which reads as the panel sliding rather than
+     * the content.
+     */
+    background-image:
+      radial-gradient(1200px 680px at 8% -12%, var(--wash-1), transparent 62%),
+      radial-gradient(1000px 620px at 104% -4%, var(--wash-2), transparent 58%),
+      radial-gradient(900px 720px at 46% 118%, var(--wash-3), transparent 60%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     /*
      * NOTE: do NOT enable Vazirmatn's "ss01" here. That stylistic set swaps
      * Latin digit glyphs for Persian ones at the FONT level, which silently
@@ -438,19 +574,137 @@
 
 @layer components {
   /*
+   * ── THE SHEET (2026-09-08) ────────────────────────────────────────────
+   *
+   * `.glass` is the one recipe every surface in the platform now wears, and
+   * `.glass-chrome` is the same sheet for the SHELL — the rail, the top bar,
+   * the menu column — which are structure rather than content and therefore
+   * carry no lip and no drop.
+   *
+   * It is one class and not four copies of three declarations because the
+   * survey that produced R7 found seventy hand-rolled cards; a look that
+   * lives in a class can be changed, and a look that lives in seventy
+   * className strings can only be re-litigated.
+   *
+   * NO BORDER, deliberately, and this is the "no border layout" half of the
+   * directive. The boundary is the inset highlight in `--shadow-glass`: it
+   * marks the top lip the way light does on a real sheet, and it disappears
+   * on the other three sides, which is exactly why a screen of these does
+   * not read as a grid of boxes. A 1px outline round each one puts the grid
+   * straight back, whatever the fill behind it.
+   */
+  .glass {
+    background-color: rgb(var(--glass) / var(--glass-alpha));
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    box-shadow: var(--shadow-glass);
+  }
+  .glass-chrome {
+    background-color: rgb(var(--glass) / var(--glass-chrome-alpha));
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+  /*
+   * THE SOLID SHEET — the sheet for anything that sits OVER the scrim.
+   *
+   * A modal is the one surface whose backdrop is deliberately darkened, and
+   * translucency there does not read as glass: it reads as the page's dark
+   * ground bleeding up through the form, dimming the fields and the labels
+   * the dialog exists to show. So the dialog keeps the sheet's tone and drops
+   * its alpha — same family, nothing behind it.
+   *
+   * 2026-09-09, on a screenshot of the model picker: this was the rule and
+   * only three panels obeyed it — every Radix dialog, every hand-rolled one,
+   * the phone's More sheet, the mobile drawer and the tour card were still
+   * wearing `.glass-chrome`, so a white sheet at .72 over a black/80 scrim
+   * composited to grey and the dialog looked switched off. The rule is now
+   * MECHANICAL rather than per-panel judgement: if a scrim is drawn behind
+   * it, the panel is `.glass-solid`. `.glass-chrome` is for the shell — the
+   * rail, the top bar, the bottom bar — which never has a scrim behind it.
+   *
+   * The blur stays for the sub-pixel edge under the corner radius; with the
+   * fill opaque it costs nothing visually and keeps the corner clean.
+   */
+  .glass-solid {
+    background-color: rgb(var(--glass));
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+  /*
+   * THE INNER CORNER.
+   *
+   * The rail owns the window's top-START corner and the bar owns its top-END
+   * one, so the OUTSIDE of the chrome already curves. What stayed square was
+   * the corner on the inside of that L — where the rail's edge meets the
+   * bar's underside and the page begins — and a right angle there is the one
+   * corner in the shell that still reads as two panes butted together.
+   *
+   * It cannot be a `border-radius`: the page is what the corner belongs to,
+   * and the page is the HOLE between two elements, not an element. So the
+   * chrome grows a 18px square into the notch and a radial mask eats the
+   * quarter-disc nearest the page — the chrome curves AROUND the corner, and
+   * the page's top-start corner is round without anything being drawn for it.
+   *
+   * Same fill and same blur as `.glass-chrome`, by copy rather than by
+   * composition, because a masked element cannot inherit its own mask from a
+   * class it also needs the background of — but the two are read together, so
+   * a change to the chrome's tone belongs in both.
+   *
+   * 99%/100% rather than a hard stop: an antialiased edge on a curve this
+   * small is the difference between a corner and a staircase.
+   */
+  .chrome-notch {
+    background-color: rgb(var(--glass) / var(--glass-chrome-alpha));
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    -webkit-mask-image: radial-gradient(var(--chrome-notch, 18px) at 100% 100%, transparent 99%, #000 100%);
+    mask-image: radial-gradient(var(--chrome-notch, 18px) at 100% 100%, transparent 99%, #000 100%);
+  }
+  /* the notch is PHYSICAL once placed: in RTL the rail is the right edge, so
+     the disc the mask removes sits at the bottom-left of the same square. */
+  [dir="rtl"] .chrome-notch {
+    -webkit-mask-image: radial-gradient(var(--chrome-notch, 18px) at 0% 100%, transparent 99%, #000 100%);
+    mask-image: radial-gradient(var(--chrome-notch, 18px) at 0% 100%, transparent 99%, #000 100%);
+  }
+  /*
+   * THE QUIET SHEET — a column that is chrome by POSITION and page by TONE.
+   *
+   * `.glass-chrome` is right for the two surfaces that frame the window (the
+   * rail and the top bar); it is wrong for a column standing INSIDE the page
+   * beside a thread, where the bar's white reads as a second header. This is
+   * the same blur and the same tone at a much lower alpha, so it composites a
+   * few values above the ground: visibly its own column, not its own pane.
+   *
+   * No drop and no lip: both would put it back in the chrome's family, and
+   * what separates it from the thread is meant to be the tone, not an edge.
+   */
+  .glass-soft {
+    background-color: rgb(var(--glass) / var(--glass-soft-alpha));
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+
+  /* the raised sheet: a row INSIDE a panel. No drop — a shadow inside a
+     shadowed panel is mud (the note `.well` has carried since R7). */
+  .glass-raised {
+    background-color: rgb(var(--glass-2) / var(--glass-2-alpha));
+    box-shadow: inset 0 1px 0 0 rgb(var(--glass-edge) / calc(var(--glass-edge-alpha) * 0.7));
+  }
+
+  /*
    * Card discipline: the border is always visible so a card never floats
    * white-on-white, and the shadow is a HOVER affordance rather than ambient
    * decoration. Padding is one notch tighter than before — this is a working
    * tool, and dashboard density is the point (verdict item 4).
    */
   .card {
-    /* the reference's card, measured (18 since 2026-09-05, the token): hairline border, and an
-       AMBIENT shadow rather than a hover-only one — a card that only lifts
-       under the pointer reads as flat paper next to one that always sits
-       slightly above the page, which is most of why our screens looked
-       plainer than theirs at identical colours */
-    @apply rounded-2xl border border-border bg-surface p-4 shadow-card
-           transition-shadow duration-200;
+    /* the reference's card, measured (18 since 2026-09-05, the token). GLASS
+       since 2026-09-08: the hairline border and the opaque surface both went,
+       and the AMBIENT depth stayed — a card that only lifts under the pointer
+       reads as flat paper next to one that always sits slightly above the
+       page, which was most of why our screens looked plainer than theirs at
+       identical colours, and is still true of a sheet. */
+    @apply glass rounded-2xl p-4 transition-shadow duration-200;
   }
   /*
    * R7 — THREE SURFACES AND NOTHING ELSE (user, 2026-09-05: same table or
@@ -470,12 +724,14 @@
    * island shadow and belong to R8/R10. surface.guard keeps the recipe out
    * of the component tree.
    */
+  /* the pointer response moved from the EDGE to the DEPTH with the glass:
+     `hover:border-border-strong` was the affordance on a bordered card, and
+     a sheet with no border cannot darken one. It rises instead. */
   .card-row {
-    @apply rounded-xl border border-border bg-surface p-3 shadow-card
-           transition-colors hover:border-border-strong;
+    @apply glass rounded-xl p-3 transition-shadow hover:shadow-glass-hover;
   }
   .well {
-    @apply rounded-xl border border-border bg-surface-2/40 px-3 py-2;
+    @apply glass-raised rounded-xl px-3 py-2;
   }
 
   /*
@@ -647,6 +903,28 @@
   .btn-icon-sm {
     @apply h-control-sm min-h-control-sm w-control-sm rounded-[8px] px-0;
   }
+  /*
+   * THE FULL-SIZE SQUARE.
+   *
+   * Third member of the same argument `.btn-icon-sm` records: the family had
+   * a dense square (28) and a compact one (34) and nothing that matched the
+   * REGULAR button, so an icon-only act standing beside a worded one — pause
+   * beside «پایان و پردازش» — read as a smaller class of control than the
+   * thing it sits next to. `.btn`'s own height, `.btn`'s own corner.
+   *
+   * It is NOT a fourth size: it is the size `.btn` already has, made square,
+   * which is why its width is the same token as its height (two literals is
+   * how a square stops being one).
+   */
+  .btn-icon-lg {
+    /* the corner is NOT re-spelled here: `.btn`'s own `rounded-md` reads the
+       radius token, and a literal beside it is how a button and the input
+       next to it drift apart (that class's own note). Only the two things
+       that make it a square are said — `.btn` pins a MINIMUM height, which a
+       glyph with no label would otherwise leave at exactly that minimum
+       while the width followed the glyph. */
+    @apply h-control w-control px-0;
+  }
 
   /*
    * Inputs are replaced-adjacent: `.tap` renders no ::after on them, so their
@@ -664,8 +942,16 @@
        proportions. A hit-area floor is an ABSOLUTE: 44 means 44 physical
        pixels on a finger, not 44 scaled by a type ramp. `.tap`'s own ::after
        is `h-11 w-11` for exactly this reason and was already right. */
-    @apply min-h-[44px] w-full rounded-md border border-border bg-field px-[13px]
-           text-detail leading-tight text-fg transition-colors duration-150
+    /* GLASS, AND IT KEEPS ITS BORDER (2026-09-08). Every other surface in the
+       product dropped its outline for the sheet's lit lip; a FIELD did not,
+       and the distinction is the one this file's own token comment draws: a
+       card's edge is decorative and WCAG asks nothing of it, an input's is a
+       CONTROL BOUNDARY. Take it away and a text box on a translucent panel is
+       found by nothing at all — the ground it sits on is the ground behind it.
+       So the field is translucent like everything else and still has an edge,
+       which is also what the reference does. */
+    @apply min-h-[44px] w-full rounded-md border border-border bg-field/70 px-[13px]
+           text-detail leading-tight text-fg backdrop-blur-sm transition-colors duration-150
            placeholder:text-fg-subtle focus:border-accent md:min-h-field;
   }
 
@@ -876,39 +1162,182 @@
    caret: a blinking cursor says "typing", and the honest state here is
    "thinking" — nothing has been written yet. */
 @keyframes thinking-spin {
-  to { transform: rotate(360deg); }
+  to { rotate: 360deg; }
 }
+/*
+ * THE CENTRE IS A NUMBER IN THE DRAWING, NOT A BOX THE BROWSER WORKS OUT.
+ *
+ * This class goes on a <g> INSIDE the mark, and that is the whole fix. Three
+ * earlier versions put the rotation on a layout box — the <svg> root, then an
+ * `inline-flex` span, then a `block` span — and each time "the middle" was
+ * whatever Chrome derived for that box from the surrounding line, which is
+ * not the middle of the ring. The mark orbited instead of spinning, and it
+ * kept doing so through two fixes that each measured clean, because a box can
+ * pivot perfectly about its own centre while the picture drawn inside it does
+ * not: `getBoundingClientRect` reported zero drift on a mark that visibly
+ * wobbled, and `transform-origin` computed to a plausible pixel pair in every
+ * broken version. Neither instrument could see the defect.
+ *
+ * `transform-box: view-box` makes the reference box the SVG's own viewBox, so
+ * `transform-origin: 10px 10px` is 10 USER UNITS — the exact point the circles
+ * are drawn around (cx=10 cy=10). It cannot drift with the font size, the
+ * line height, the display type or the element's place in a flex row, because
+ * none of those is an input any more. The ring is rendered at any size and
+ * the pivot stays the ring's own centre.
+ *
+ * It still composites: a <g> carrying an animated `rotate` is promoted, which
+ * is what keeps the mark turning while the main thread is busy with the very
+ * stream this element exists to announce — ten to thirty array replacements a
+ * second plus `parseAnswerBlocks` over the whole answer. That was the FIRST
+ * defect here, and the note it replaced had named it correctly and prescribed
+ * `will-change: transform` on the <svg> root, which does not promote it.
+ */
 .thinking-spin {
+  transform-box: view-box;
+  transform-origin: 10px 10px;
   animation: thinking-spin 0.9s linear infinite;
+  will-change: rotate;
 }
 @media (prefers-reduced-motion: reduce) {
-  .thinking-spin { animation-duration: 2.4s; }
+  .thinking-spin { animation-duration: 2.4s; will-change: auto; }
 }
 
-/* notifications EMERGE from the BELL (user directive, 2026-08-22,
-   superseding pop-from-the-orb): each toast drops out of the top-bar
-   bell's corner — small at the bell, settling into place below it.
-   Direction-aware: the bell sits at inline-end. */
-@keyframes toast-from-bell {
-  0% { opacity: 0; transform: translate(8px, -14px) scale(0.6); }
-  70% { opacity: 1; }
-  100% { opacity: 1; transform: translate(0, 0) scale(1); }
+/* THE OTHER WAIT: mid-sentence, where the next character will be.
+   Taken from 21st.dev's `stream-caret` (beautifului.dev), which is a drawn
+   BAR rather than a glyph and blinks on `step-end`.
+
+   Both halves of that matter. The `▍` this replaces was a text character, so
+   its width, height and baseline were whatever the loaded font decided —
+   Vazirmatn and the Latin fallback disagree, so the caret changed shape with
+   the script it followed. A 2px box sized in `em` is the same caret in both.
+
+   And `step-end` is the blink a real caret has: hard on, hard off. The
+   `animate-pulse` it replaces eased between full and half opacity, which
+   reads as breathing — a thing that is idle — where a caret should read as a
+   thing that is about to write. */
+@keyframes stream-caret-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
 }
-@keyframes toast-from-bell-rtl {
-  0% { opacity: 0; transform: translate(-8px, -14px) scale(0.6); }
-  70% { opacity: 1; }
-  100% { opacity: 1; transform: translate(0, 0) scale(1); }
-}
-.toast-from-bell {
-  animation: toast-from-bell 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15);
-  transform-origin: 100% -40%;
-}
-[dir="rtl"] .toast-from-bell {
-  animation-name: toast-from-bell-rtl;
-  transform-origin: 0% -40%;
+.stream-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-inline-start: 1.5px;
+  vertical-align: text-bottom;
+  translate: 0 -0.5px;
+  border-radius: 1px;
+  background: rgb(var(--fg-muted));
+  animation: stream-caret-blink 1s step-end infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .toast-from-bell {
+  /* held on, not slowed: a caret that fades on a long cycle is a caret that
+     looks broken. Steady at full ink still marks the insertion point. */
+  .stream-caret { animation: none; }
+}
+
+/* THE SAME WAIT, SAID ON THE WORDS — a highlight travelling across the label
+   (21st.dev's Agent Elements pending state; see components/ui/text-shimmer).
+   A spinner turns identically beside every sentence; this is alive on the
+   sentence itself, so a label that CHANGES is the thing the reader watches.
+
+   Both colours are theme tokens, so the label clears its contrast floor at
+   every frame of the sweep rather than at the one a screenshot caught.
+
+   THE FALLBACK IS THE LOAD-BEARING PART: `background-clip: text` only shows
+   through `color: transparent`, and a browser without it would paint the
+   label INVISIBLE — a loading line that is invisible is indistinguishable
+   from nothing happening, which is the exact failure this element exists to
+   prevent. So the plain muted label is the base and the effect is layered on
+   inside @supports. */
+@keyframes text-shimmer {
+  from { background-position: calc(0% - var(--shimmer-spread)) 0; }
+  to   { background-position: calc(100% + var(--shimmer-spread)) 0; }
+}
+.text-shimmer {
+  --shimmer-duration: 2s;
+  --shimmer-spread: 60px;
+  color: rgb(var(--fg-muted));
+}
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .text-shimmer {
+    background-color: rgb(var(--fg-subtle));
+    background-image: linear-gradient(
+      90deg,
+      transparent calc(50% - var(--shimmer-spread)),
+      rgb(var(--fg)) 50%,
+      transparent calc(50% + var(--shimmer-spread))
+    );
+    background-repeat: no-repeat;
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: text-shimmer var(--shimmer-duration) linear infinite;
+  }
+}
+/* the highlight travels the way the page reads — one gradient, reversed,
+   rather than a second one written by hand for the other direction */
+[dir="rtl"] .text-shimmer { animation-direction: reverse; }
+@media (prefers-reduced-motion: reduce) {
+  /* STOPPED, not slowed: a sweep across text is read as the text changing,
+     and the turning mark beside it still carries "this is running". The
+     label falls back to its readable muted ink rather than to a frozen
+     gradient, which would leave half of it at `transparent`. */
+  .text-shimmer {
+    animation: none;
+    background-image: none;
+    color: rgb(var(--fg-muted));
+  }
+}
+
+/* notifications RISE IN THE MIDDLE, superseding the
+   drop-out-of-the-bell of 2026-08-22 and the pop-from-the-orb before it.
+
+   The card starts a little BELOW where it lands and comes up into place. Up
+   rather than down because these toasts are now the only report of a
+   failure — the red line under the button went with them — so the motion has
+   to draw the eye toward the reading position rather than away from it.
+
+   NO DIRECTION-AWARE TWIN this time. The old pair existed because the stack
+   was anchored to the bell, which sits at inline-end and therefore mirrors;
+   a centred stack is the same in both directions, and a second keyframe
+   that differs from the first only in a sign is a second thing to keep in
+   step for no gain. */
+@keyframes toast-rise {
+  0% { opacity: 0; transform: translateY(14px) scale(0.96); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.toast-rise {
+  animation: toast-rise 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.12);
+}
+
+/*
+ * THE TOAST'S CARD — OPAQUE, OUTLINED, AND LIFTED, which is the one place
+ * on the platform where R23's translucent no-border sheet is the wrong
+ * answer.
+ *
+ * R23 took the outline off every panel because a screen of bordered panels
+ * reads as a grid of boxes, and it made them glass because a panel sits on
+ * the page's own ground, which is a known colour a few values below it. A
+ * toast is neither: it sits over WHATEVER happens to be underneath —  a
+ * table, a photograph, a dialog, or (this is what caught it) a sign-in card
+ * whose ground is the same off-white the glass is tinted with. Drawn as
+ * glass on that page it was legible text on no visible card at all.
+ *
+ * So: `--surface` at full opacity, the theme's hairline, and a drop deep
+ * enough to read as floating. All three flip with the theme, so this is the
+ * reference's card in light and its counterpart in dark rather than a white
+ * rectangle that survives one of them.
+ */
+.toast-card {
+  background-color: rgb(var(--surface));
+  border: 1px solid rgb(var(--border));
+  box-shadow: 0 14px 34px -12px rgb(33 30 20 / 0.34);
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-rise {
     animation: none;
   }
 }
@@ -926,18 +1355,57 @@
  * tokens do the work, so it lands correctly in both themes: on the dark
  * ground it reads as lifted glass, on the light one as a soft card.
  */
+/* The dashboard's bento pre-dates the platform-wide sheet by a fortnight and
+   had its own numbers — 0.72 / blur(10) / a 4% lip — which is how one product
+   ends up with two glasses. Both names survive because screens reference them;
+   both now resolve to the ONE recipe. */
 .glass-card {
-  background: rgb(var(--surface) / 0.72);
-  border: 1px solid rgb(var(--border) / 0.9);
-  backdrop-filter: blur(10px) saturate(1.1);
-  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+  background: rgb(var(--glass) / var(--glass-alpha));
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--shadow-glass);
 }
 .glass-tile {
-  background: rgb(var(--surface-2) / 0.5);
-  border: 1px solid rgb(var(--border) / 0.7);
+  background: rgb(var(--glass-2) / var(--glass-2-alpha));
+  box-shadow: inset 0 1px 0 0 rgb(var(--glass-edge) / calc(var(--glass-edge-alpha) * 0.7));
 }
+
+/*
+ * ── THE OPT-OUT ────────────────────────────────────────────────────────
+ *
+ * `prefers-reduced-transparency` is a real accessibility setting and this is
+ * the ONE place the platform answers it, which is why `--glass-filter` is a
+ * token: switching it to `none` here turns every sheet in the product back
+ * into an opaque panel without a per-class edit, and without any class
+ * needing to remember that the setting exists.
+ *
+ * The alphas go to 1 with it. A translucent panel with the blur removed is
+ * the worst of both — the ground shows through UNSOFTENED, which is less
+ * legible than either glass or a flat card.
+ */
 @media (prefers-reduced-transparency: reduce) {
-  .glass-card { background: rgb(var(--surface)); backdrop-filter: none; }
+  :root,
+  [data-theme="light"] {
+    --glass-filter: none;
+    --glass-alpha: 1;
+    --glass-chrome-alpha: 1;
+    --glass-2-alpha: 1;
+    /* the quiet sheet becomes the PAGE, not an opaque panel: its whole job is
+       to sit a few values above the ground, and at alpha 1 the only honest
+       answer is the ground itself */
+    --glass-soft-alpha: 0;
+  }
+  /* At alpha 1 the sheet IS the panel, so it is the panel's token and not a
+     copy of its value. It was a copy until 2026-09-08, and the copy is what
+     copies do: the dark ladder was re-stepped for contrast and these two
+     lines still held the flat pair, so anyone with reduced transparency on
+     kept the exact screen that was reported. Both themes at once, because
+     the tokens already answer per theme. */
+  :root {
+    --glass: var(--surface);
+    --glass-2: var(--surface-2);
+  }
+  body { background-image: none; }
 }
 
 /* the Word-like summary editor's page: headings and lists render as the
@@ -1027,12 +1495,19 @@
   overflow: hidden;
   isolation: isolate;
   transition: transform .18s cubic-bezier(.2,.9,.3,1), box-shadow .18s ease;
-  background: rgb(var(--surface));
-  border: 1px solid rgb(var(--border));
-  /* R7: the ambient CARD shadow. Island is the floating layers' (dialogs,
-     menus) — a tile is a card, and a meeting row (`tile tile-row`) wore the
-     dialog's shadow while the table row beside it wore none. */
-  box-shadow: var(--shadow-card);
+  /* GLASS (2026-09-08). The border went with every other card's; the sheet
+     is the same recipe `.glass` carries, written out here because `.tile` is
+     UNLAYERED and `@apply` of a layered component class into an unlayered
+     rule is the cascade trap this file's own `.tile-row` note describes. The
+     values are the tokens, so there is still one place to change them. */
+  background: rgb(var(--glass) / var(--glass-alpha));
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  /* R7: the ambient CARD shadow — now the glass one, which is the card
+     family's. Island is the floating layers' (dialogs, menus); a tile is a
+     card, and a meeting row (`tile tile-row`) wore the dialog's shadow while
+     the table row beside it wore none. */
+  box-shadow: var(--shadow-glass);
   color: rgb(var(--fg));
 }
 
@@ -1111,24 +1586,32 @@
 .table-cards.table-headless {
   margin-top: calc(-2 * var(--table-row-gap, 8px));
 }
+/* GLASS ROWS (2026-09-08). A <tr> can carry neither a border nor a radius,
+   so both were painted on the CELLS — and with the borders gone the cells now
+   paint the sheet instead. `backdrop-filter` deliberately does NOT go here:
+   one filter per CELL means a row of six cells samples the ground six times
+   and seams appear at every column boundary. A row is a flat translucent
+   band; the depth in this list comes from the lit lip on the first row of
+   cells and from the hover, not from blurring each cell separately. */
 .table-cards > tbody > tr > td {
-  background: rgb(var(--surface));
-  border-block: 1px solid rgb(var(--border));
-  transition: border-color 120ms ease;
+  background: rgb(var(--glass) / var(--glass-alpha));
+  box-shadow: inset 0 1px 0 0 rgb(var(--glass-edge) / calc(var(--glass-edge-alpha) * 0.8));
+  transition: background-color 120ms ease;
 }
 .table-cards > tbody > tr > td:first-child {
-  border-inline-start: 1px solid rgb(var(--border));
   border-start-start-radius: 16px;
   border-end-start-radius: 16px;
 }
 .table-cards > tbody > tr > td:last-child {
-  border-inline-end: 1px solid rgb(var(--border));
   border-start-end-radius: 16px;
   border-end-end-radius: 16px;
 }
-/* the hover a meeting row has: the whole card's edge, not a tinted band */
+/* the hover a meeting row has. It was the card's whole EDGE; with no edge to
+   darken it is the sheet becoming less transparent — the row steps toward the
+   reader instead of being outlined, which is the same move `.card-row` makes
+   and for the same reason. */
 .table-cards > tbody > tr:hover > td {
-  border-color: rgb(var(--border-strong));
+  background: rgb(var(--glass) / calc(var(--glass-alpha) + 0.16));
 }
 /* the head sits above the cards with no rule under it — the gap between the
    header and the first card already separates them, and a hairline as well
@@ -1142,14 +1625,89 @@
    in the danger tone. ONE overlay rather than 57 hand-drawn disabled
    twins: a second drawing of an icon is a second thing to keep in step,
    and only one of the pair ever gets updated. */
+/*
+ * `vertical-align: middle` — THE ONE LINE THAT PUTS EVERY GLYPH ON THE LINE
+ * OF ITS OWN LABEL (observed 2026-09-08: icons did not sit on the same line
+ * as the text beside them — on the toast, and on some of the platform's
+ * buttons with an icon).
+ *
+ * This box is INLINE, so without a value here it sits on the text BASELINE:
+ * the bottom of the glyph lands where the bottom of an "n" lands, and the
+ * whole icon rides up by the descender depth of the line it is in. Measured
+ * on the toast before the fix: the card's text centred at 50.67px and its
+ * mark at 47.31 — 3.4px high, which is not enough to look like a bug and is
+ * exactly enough to look wrong.
+ *
+ * It never showed inside a `.btn`, because a flex container blockifies its
+ * children and `items-center` then centres them — which is why this survived
+ * so long and why it appears on SOME buttons only: the ones that are not flex.
+ * `middle` aligns the box's own centre to the text's, so a glyph beside a
+ * word is centred on that word wherever it is used, flex or not.
+ *
+ * It costs nothing where it does not apply: `vertical-align` is ignored on a
+ * flex item, so every `.btn` keeps centring the way it already did.
+ */
 .icon {
   display: inline-grid;
   place-items: center;
   position: relative;
   flex: none;
   line-height: 0;
+  vertical-align: middle;
 }
 .icon-off > svg { opacity: .5; }
+
+/*
+ * THE LATIN NUDGE — an icon beside an ENGLISH label, and only there.
+ *
+ * `vertical-align: middle` above fixes the INLINE case. It never reached the
+ * FLEX case, because `vertical-align` is ignored on a flex item: `.btn` and
+ * every hand-rolled `flex items-center` row centre the icon on the LINE BOX
+ * instead, and the line box is not where the letters are.
+ *
+ * MEASURED, in the running app (Vazirmatn 600 at 100px, canvas metrics):
+ *   fontBoundingBoxAscent 103 · descent 54  -> the line box's centre sits
+ *     24.5 above the baseline
+ *   cap height 71                           -> the CAP BAND's centre sits
+ *     35.5 above the baseline
+ * so a centred icon lands 11/100 em BELOW the middle of an English word.
+ * On the reported button (12.11px) that is 2.07px, which is not enough to
+ * look like a bug and is exactly enough to look wrong.
+ *
+ * PERSIAN IS ALREADY RIGHT AND MUST NOT MOVE. The same measurement on
+ * «ویرایش» reads -0.34px: Persian ink runs the full height of Vazirmatn's
+ * box — which is WHY the box is that tall — so its centre is the line box's
+ * centre. One font, two scripts, 0.11em apart; there is no single number,
+ * which is why this is gated on `[dir="ltr"]` rather than applied globally.
+ *
+ * WHAT IT DOES NOT TOUCH: an icon standing ALONE. A glyph centred in a
+ * 28px square is correct as it is, and lifting it would be this same bug
+ * pointed the other way — hence the `.btn-icon` exclusions and the
+ * `:has(+ …)` requirement of a LABEL after the glyph, rather than a blanket
+ * rule on every svg in the locale.
+ *
+ * The `a`/`button` half rests on a fact that was MEASURED rather than
+ * assumed, because it is the half that could go wrong quietly: across
+ * /en, /en/meetings, /en/tasks and /en/settings, all 33 link-or-button
+ * controls holding a lone glyph carry `.btn-icon`, `.btn-icon-sm` or
+ * `.btn-icon-lg` —
+ * zero exceptions, which is `control.guard`'s doing. A hand-rolled square
+ * that skips the family would be lifted 0.11em by this rule; that is one
+ * more reason the family is not optional, and the guard beside this file
+ * is what keeps the premise true.
+ */
+[dir="ltr"] :is(a, button, .chip):not(.btn-icon):not(.btn-icon-sm):not(.btn-icon-lg) > svg,
+[dir="ltr"] :is(a, button, .chip):not(.btn-icon):not(.btn-icon-sm):not(.btn-icon-lg) > .icon,
+[dir="ltr"] svg:has(+ :not(svg):not(.icon):not(:empty)),
+[dir="ltr"] .icon:has(+ :not(svg):not(.icon):not(:empty)),
+[dir="ltr"] :has(> svg:only-child):has(+ :not(svg):not(.icon):not(:empty)) {
+  transform: translateY(-0.11em);
+}
+/* the wrapper carries the nudge; the glyph inside it must not add a second */
+[dir="ltr"] .icon > svg {
+  transform: none;
+}
+
 .icon-off::after {
   content: "";
   position: absolute;
@@ -1247,9 +1805,21 @@
     inset 0 0 40px 10px var(--scope-vignette);
 }
 
+/* the halo CROSS-FADES between its three steps (observed 2026-09-09: the
+   halo flashed at the meter's own rate). The steps are quantised so the
+   filter is re-rasterised at most three ways, but SWITCHING one on is a
+   hard edge — a whole-layer change in one frame, which the eye reads as a
+   flash even when it only happens twice a second. The transition costs
+   nothing the filter did not already cost and removes the edge; the
+   hysteresis in WaveScope.tsx is what stops it being asked for in the
+   first place. */
+.wave-scope { transition: filter 260ms ease-out; }
 .wave-scope[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .20)); }
 .wave-scope[data-glow="2"] {
   filter: drop-shadow(0 0 5px rgb(var(--accent) / .38)) drop-shadow(0 0 18px rgb(var(--accent) / .14));
+}
+@media (prefers-reduced-motion: reduce) {
+  .wave-scope { transition: none; }
 }
 
 /* both lanes dissolve at the OLD edge; the new edge stays crisp because
@@ -1259,7 +1829,9 @@
   position: absolute;
   left: 0; right: 0;
   display: flex;
-  gap: 1px;
+  /* 2px, not 1: at 96 slots a 1px gap on a hairline bar reads as a solid
+     block of tint rather than as a row of samples */
+  gap: 2px;
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 100%);
   mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 100%);
 }
@@ -1276,16 +1848,28 @@
 }
 .wave-bar {
   flex: 1 1 0%;
-  min-width: 2px;
+  min-width: 3px;
   height: 100%;
   border-radius: 999px;
+  /* a CAP at the top of the band: a bar clipped from above shows the part
+     of the ramp its own height reaches, so a bright first stop is what
+     makes a loud sample read as louder rather than merely taller */
   background-image: linear-gradient(
     to bottom,
     rgb(var(--accent)) 0%,
-    rgb(var(--accent) / .55) 60%,
-    rgb(var(--accent) / .35) 100%
+    rgb(var(--accent)) 26%,
+    rgb(var(--accent) / .62) 62%,
+    rgb(var(--accent) / .40) 100%
   );
-  opacity: calc((0.30 + 0.70 * var(--age)) * (0.45 + 0.55 * var(--v)));
+  opacity: calc((0.34 + 0.66 * var(--age)) * (0.50 + 0.50 * var(--v)));
+  /* NO transition on the clip, and no `will-change` (observed 2026-09-09:
+     the lane rendered visibly laggy). Both were tried: a 250ms clip-path
+     tween on 96 bars per lane repaints 192 elements every frame — clip-path
+     is not a compositor property, so it is real paint work — and
+     `will-change` on the same 192 promotes 192 layers. What smooths the
+     lane is the SAMPLE RATE (WAVE_MS, four a second), not an animation:
+     each step is 1/96 of the lane's width, which reads as motion on its
+     own and costs one repaint per sample instead of one per frame. */
 }
 /* clip-path rather than height or scaleY: height reflows every frame,
    scaleY squashes both the pill caps and the gradient, and the gradient
@@ -1321,6 +1905,36 @@
   inset-inline: 0;
   top: 58%;
   border-top: 2px dotted rgb(var(--fg-subtle) / .45);
+}
+/* the HORIZON, once something has been captured: the same axis the empty
+   state draws, as a hairline rather than a dotted "ready" line. It is what
+   makes the two lanes read as one signal in a space — without it the
+   reflection is a second chart hanging under the first. */
+.wave-axis {
+  position: absolute;
+  inset-inline: 0;
+  top: 58%;
+  z-index: 1;
+  border-top: 1px solid rgb(var(--fg-subtle) / .18);
+}
+/* WHERE NOW IS. The newest bar is the right edge and the lane's mask keeps
+   that edge crisp for exactly this; a playhead there is what says the scope
+   is running rather than showing a take. */
+.wave-now {
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  inset-inline-end: 0;
+  z-index: 2;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgb(var(--accent) / .55) 18%,
+    rgb(var(--accent) / .55) 82%,
+    transparent 100%
+  );
 }
 
 /* --- the time rail under the scope ----------------------------------

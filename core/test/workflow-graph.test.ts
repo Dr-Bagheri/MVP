@@ -88,8 +88,15 @@ describe("the SHIPPED starters validate under their own ceilings (rule 10 pin)",
 });
 
 describe("AGENT_STARTERS — the seven options each platform agent offers", () => {
-  it("every agent offers exactly seven", () => {
+  it("every platform agent offers exactly seven; Echo's own shelf is the one short group", () => {
+    /* `echo` (2026-09-08) is the assistant's shelf, not an agent page's
+       menu — named here as the exception so a second short group still
+       fails, rather than the seven-rule quietly becoming "at least one" */
     for (const [agent, keys] of Object.entries(AGENT_STARTERS)) {
+      if (agent === "echo") {
+        expect(keys, agent).toContain("tasks_digest");
+        continue;
+      }
       expect(keys, agent).toHaveLength(7);
     }
   });
@@ -352,5 +359,53 @@ describe("every step kind has a validator arm", () => {
       ],
     };
     expect(() => validateWorkflowGraph(graph, OPTS)).not.toThrow();
+  });
+});
+
+describe("the `tasks` scope and a notify that carries a body (2026-09-08)", () => {
+  it("accepts search scope:\"tasks\" with no `of` — the owner's own board needs no binding", () => {
+    expect(() => validateWorkflowGraph({
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "tasks", limit: 50 },
+        { id: "s2", kind: "ask", from: "{{s1}}", instruction: "خلاصه کن." },
+        { id: "s3", kind: "notify", card: "workflow_result", from: "{{s2}}" },
+      ],
+    }, OPTS)).not.toThrow();
+  });
+
+  it("control: an unknown scope is still refused by name", () => {
+    refusedWith({
+      entry: "s1",
+      steps: [{ id: "s1", kind: "search", scope: "board" }],
+    }, "known scope");
+  });
+
+  it("notify.from must bind an EARLIER step — a body from nowhere is refused", () => {
+    refusedWith({
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "notify", card: "workflow_result", from: "{{s9}}" },
+      ],
+    }, "from");
+  });
+
+  it("an ask's output is opaque content — `{{s2.text}}` does not publish; the whole output does", () => {
+    /* pins the binding the starter and the executor agree on: the executor
+       unwraps `{ text }` from a whole-output bind, so an author who writes
+       the field path gets a publish-time refusal, never a 3 a.m. failure */
+    refusedWith({
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "ask", instruction: "خلاصه کن." },
+        { id: "s2", kind: "notify", card: "workflow_result", from: "{{s1.text}}" },
+      ],
+    }, "from");
+  });
+
+  it("the tasks_digest starter binds the ask's text into its card", () => {
+    const notify = STARTER_WORKFLOWS.tasks_digest.graph.steps.find((s) => s.kind === "notify");
+    expect(notify).toMatchObject({ card: "workflow_result", from: "{{s2}}" });
+    expect(STARTER_WORKFLOWS.tasks_digest.trigger_event).toBeNull();
   });
 });

@@ -47,13 +47,18 @@ interface TrailEntry {
  */
 export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   /*
-   * The landing page is the DASHBOARD again (user directive, 2026-08-29:
-   * "now bring back the dashboard as well"), and the assistant is a
-   * destination under it at its own address. The root crumb names the room
-   * a person actually lands in — a crumb pointing at a redirect is a label
-   * whose destination is a different page, which is the /calls lesson.
+   * The root crumb names the room a person actually lands in — a crumb
+   * pointing at a redirect is a label whose destination is a different page,
+   * which is the /calls lesson.
+   *
+   * That room is HOME (2026-09-08). It was the dashboard until the landing
+   * page became the assistant with the day's own facts under its prompt, and
+   * this label never followed: the trail said «داشبورد» over a page that had
+   * not been one for a while, while the rail beside it said the raw key
+   * `home` — `platform.home` did not exist at all. One name for it now, and
+   * nav.guard derives its coverage from NAV so the two cannot part again.
    */
-  "/": { label: "platform.dashboard" },
+  "/": { label: "platform.home" },
   /*
    * EVERY RAIL ENTRY IS A ROOT (user directive, 2026-09-02: "fix the address
    * bar … the first is the name of the section they are in; for most of them
@@ -94,15 +99,16 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/integrations/[slug]": { entity: true, parent: "/integrations" },
 
   /*
-   * Echo is an app inside the platform (the pivot), so everything of Echo's
-   * hangs beneath it.
+   * ECHO IS GONE. The paragraph that stood here
+   * described `/echo` redirecting onward to `/calls` as "an interim stand-in
+   * for the merged Record+Calls surface that has not landed" — written while
+   * both routes still existed, and left in place after neither did.
    *
-   * `/echo` currently redirects onward to `/calls` — an interim stand-in for
-   * the merged Record+Calls surface that has not landed. That makes the Echo
-   * crumb briefly a near-no-op from inside Calls, which is the correct
-   * temporary state: the trail expresses the IA, and the redirect is the thing
-   * that is temporary. Special-casing it here would have to be undone the week
-   * the merged surface lands.
+   * It contradicted the note twenty lines below, in this same file, which
+   * says correctly that a record hangs under Meetings now. Two incompatible
+   * statements about one route, and only the second was true; a reader who
+   * stopped at the first would have gone looking for an IA the product no
+   * longer has.
    */
   /*
    * ECHO IS A ROOT, not a room inside the assistant (user directive,
@@ -216,8 +222,8 @@ export const NO_TRAIL: Readonly<Record<string, string>> = {
   "/skills": "redirect-only (→ /management/skills); the destination carries the trail",
   "/connectors": "redirect-only (→ /management/connectors)",
   "/admin": "redirect-only (→ /management)",
-  "/calls": "redirect-only (→ /echo) since the merged Record+Calls surface landed; the calls list IS the Echo surface now, so /echo carries the trail",
-  "/capture": "redirect-only (→ /echo); recording moved onto the merged surface",
+  "/calls": "redirect-only (→ /meetings) since the Echo surface was deleted on 2026-09-04; a recording belongs to the meeting it came from, which is where the trail goes. /calls/[id] is untouched",
+  "/capture": "redirect-only (→ /meetings); a take is started on the meeting's own page now",
 };
 
 export interface Crumb {

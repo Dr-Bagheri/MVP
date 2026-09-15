@@ -1,3 +1,4 @@
+import { personFixture } from "@/test/fixtures";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { OrgPersonRecord } from "@/api/types";
@@ -42,7 +43,7 @@ vi.mock("@/lib/dictation", async () => {
 import { Composer } from "./chat/Composer";
 
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "sina" },
+  personFixture({ id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "sina" }),
 ];
 
 function mic(): HTMLElement {

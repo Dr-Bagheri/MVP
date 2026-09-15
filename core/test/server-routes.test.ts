@@ -4,7 +4,7 @@
  * BFF codes against, and that every product route is closed to a pending
  * account.
  */
-import { createHmac } from "node:crypto";
+import { makeKey, signES256, startJwksServer } from "./helpers/es256.ts";
 import { describe, expect, it, vi } from "vitest";
 
 const runPiMock = vi.fn();
@@ -39,19 +39,27 @@ import { STARTER_WORKFLOWS } from "../src/api/workflow-authoring.ts";
 import { isAdmin, isOwner } from "../src/agent/types.ts";
 import { MEMBER_ROLES } from "../src/api/vocabulary.ts";
 
-const SECRET = "test-secret";
+/*
+ * A REAL ES256 KEY AND A REAL JWKS LISTENER (review F1).
+ *
+ * Both are created at MODULE SCOPE, and that is forced rather than stylistic:
+ * `authed` below composes its header at import time, so anything created in a
+ * `beforeAll` would still be undefined when the token is minted.
+ *
+ * A real socket rather than `vi.stubGlobal("fetch", …)`, because routes in
+ * THIS file — member password, uploads, ml — call `fetch` themselves. A global
+ * stub serving JWKS would quietly change unrelated route behaviour.
+ */
+const KEY = makeKey("routes-key");
+const ATTACKER = makeKey("routes-key"); // same kid, different key
+const jwks = await startJwksServer([KEY]);
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const CALL = "33333333-3333-4333-8333-333333333333";
 const RUN = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const SESSION = "55555555-5555-4555-8555-555555555555";
 
-const b64 = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
 function token(sub = ALICE) {
-  const head = b64({ alg: "HS256", typ: "JWT" });
-  const body = b64({ sub, exp: Math.floor(Date.now() / 1000) + 3600 });
-  const sig = createHmac("sha256", Buffer.from(SECRET, "utf8"))
-    .update(`${head}.${body}`).digest().toString("base64url");
-  return `${head}.${body}.${sig}`;
+  return signES256(KEY, { sub, exp: Math.floor(Date.now() / 1000) + 3600 });
 }
 
 const callRow = {
@@ -233,7 +241,7 @@ function fakeDb({
 }
 
 const server = (db = fakeDb()) =>
-  buildServer({ db, jwtSecret: SECRET, tools: [], toolDeps: {} });
+  buildServer({ db, jwksUrl: jwks.url, tools: [], toolDeps: {} });
 
 const authed = { authorization: `Bearer ${token()}` };
 
@@ -277,12 +285,8 @@ describe("POST /v1/signup", () => {
    * email, asserting nothing while looking thorough.
    */
   function signupToken(sub = ALICE, email: string | null = "new@example.com") {
-    const head = b64({ alg: "HS256", typ: "JWT" });
     const claims = { sub, exp: Math.floor(Date.now() / 1000) + 3600 };
-    const body = b64(email === null ? claims : { ...claims, email });
-    const sig = createHmac("sha256", Buffer.from(SECRET, "utf8"))
-      .update(`${head}.${body}`).digest().toString("base64url");
-    return `${head}.${body}.${sig}`;
+    return signES256(KEY, email === null ? claims : { ...claims, email });
   }
 
   it("a founder's account is ACTIVE at birth and says so (0056)", async () => {
@@ -540,7 +544,11 @@ describe("auth contract on /v1", () => {
   });
 
   it("401s on a forged token", async () => {
-    const forged = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: ALICE })}.badsig`;
+    /* A PROPERLY SIGNED ES256 token from an attacker-held P-256 key, same
+       kid. The old fixture was base64 plus a literal ".badsig", which only
+       ever proved base64 parsing — it could not have caught a verifier that
+       accepted any signature (review F1). */
+    const forged = signES256(ATTACKER, { sub: ALICE, exp: Math.floor(Date.now() / 1000) + 3600 });
     const res = await server().inject({
       method: "GET", url: "/v1/calls", headers: { authorization: `Bearer ${forged}` },
     });

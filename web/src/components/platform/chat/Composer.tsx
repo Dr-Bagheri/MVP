@@ -177,7 +177,7 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
   return (
     <div className="relative border-t border-border p-2.5">
       {candidates.length > 0 ? (
-        <ul className="absolute bottom-full mb-1 w-56 overflow-hidden rounded-xl border border-border bg-surface shadow-island">
+        <ul className="absolute bottom-full mb-1 w-56 overflow-hidden glass-chrome rounded-xl shadow-island">
           {candidates.map((c) => (
             <li key={c.handle}>
               <button type="button" onClick={() => choose(c.handle)}

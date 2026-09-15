@@ -69,7 +69,23 @@ import type {
   TranscriptSegment,
   User,
   UserStatus,
-  WorkflowCard, MeetingAttachment, MeetingItem, MeetingItemKind, CallTranslation, TranslationStatus } from "./types";
+  WorkflowCard, MeetingAttachment, MeetingItem, MeetingItemKind, CallTranslation, TranslationStatus,
+  DemoOrganization, DemoLanguage, SeedJobStart, SeedJobView } from "./types";
+
+/** one `echo.workflow_schedule` row as core's workflowRuns.schedules() serves it (UTC on the record) */
+export interface WorkflowSchedule {
+  id: string;
+  workflow_id: string;
+  owner_id: string;
+  cadence: "daily" | "weekly" | "monthly";
+  /** minutes after midnight, UTC */
+  at_minute: number;
+  /** 0 = Sunday … 6 = Saturday (UTC); weekly only */
+  weekday: number | null;
+  next_due: string;
+  last_fired_at: string | null;
+  enabled: boolean;
+}
 /**
  * The producer's own shape for `GET /v1/me`, imported rather than described.
  * `import type` is erased, so nothing from core/ reaches the bundle — the same
@@ -728,6 +744,57 @@ export const api = {
       method: "DELETE", body: JSON.stringify({ reason }), headers: { "content-type": "application/json" },
     });
   },
+
+  /* ── M52: seed a demo organisation ────────────────────────────────────
+     The create's response carries the presenter's PASSWORD, once. It is
+     generated in core, stored nowhere, and never read back — which is why
+     there is no method here that could fetch one later, and why the caller
+     has to show it before it is dropped. */
+  async demoOrganizations(): Promise<DemoOrganization[]> {
+    const page = await bff<{ items: DemoOrganization[] }>("/api/platform/demo-orgs");
+    return page.items;
+  },
+  /* A seed is a JOB (2026-09-09): the POST answers 202 with a job id at
+     once, the seed runs on in core for about four minutes, and `demoSeedJob`
+     is polled for the stage it is on. The finished poll carries the result
+     — the credentials, for a create — EXACTLY ONCE: core deletes the job as
+     it delivers it, so the next poll is a 404, never a second copy. */
+  async createDemoOrganization(input: {
+    name: string; language: DemoLanguage; demo_date: string;
+    offset_minutes: number; presenter_email?: string; reason: string;
+  }): Promise<SeedJobStart> {
+    return bff<SeedJobStart>("/api/platform/demo-orgs", {
+      method: "POST",
+      body: JSON.stringify(input),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async reseedDemoOrganization(
+    id: string, input: { demo_date: string; offset_minutes: number; reason: string },
+  ): Promise<SeedJobStart> {
+    return bff<SeedJobStart>(`/api/platform/demo-orgs/${id}/reseed`, {
+      method: "POST",
+      body: JSON.stringify(input),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  /** One poll. Throws a 404 BffError once the job has been delivered or
+      forgotten (ten minutes unread, or a core restart). */
+  async demoSeedJob(jobId: string): Promise<SeedJobView> {
+    return bff<SeedJobView>(`/api/platform/demo-orgs/jobs/${jobId}`);
+  },
+  async deleteDemoOrganization(id: string, reason: string): Promise<{
+    purged: boolean; identities_removed: number; identities_stranded: string[];
+  }> {
+    return bff<{ purged: boolean; identities_removed: number; identities_stranded: string[] }>(
+      `/api/platform/demo-orgs/${id}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({ reason }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+  },
   async org(): Promise<Org> {
     /* **LIVE** — `GET /api/admin/org` → core's `GET /v1/org` (the read is
        any-active-member; only the write is admin-gated). */
@@ -887,6 +954,33 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(opts),
     });
+  },
+
+  /**
+   * «تولید دوباره» — re-run the DECISION EXTRACTION over this record's
+   * transcript. ONE model pass, not a regenerated summary, and it answers
+   * synchronously with a count.
+   *
+   * It APPENDS, and the insert refuses an exact-body repeat — so pressing it
+   * twice over an unchanged transcript adds nothing. `items` is how many
+   * rows landed.
+   * Nothing a person typed is touched.
+   *
+   * The nothings are kept apart because a screen shows them identically:
+   * `claims: null` means nobody read the meeting (`reason` says whether the
+   * pass could not run or answered unreadably), `claims: 0` means a model read
+   * it and the ledger did not move, and `meeting_id: null` means this is a
+   * plain recording with no meeting for items to hang off.
+   */
+  async extractCallDecisions(callId: string): Promise<{
+    call_id: string;
+    meeting_id: string | null;
+    claims: number | null;
+    items: number;
+    cards: number | null;
+    reason: "no_meeting" | "no_transcript" | "unreadable" | null;
+  }> {
+    return bff(`/api/calls/${encodeURIComponent(callId)}/decisions`, { method: "POST" });
   },
 
   /** Notes & chapters on a call (0079) — annotations, never the record. */
@@ -2414,6 +2508,29 @@ export const api = {
     );
   },
 
+  /**
+   * M41 P4 — a standing cadence on one workflow (2026-09-08). Times are
+   * UTC on the record: `at_minute` is minutes after midnight UTC, `weekday`
+   * 0 = Sunday … 6 = Saturday and REQUIRED for weekly — core refuses a
+   * weekly schedule without its day by name. Returns the first firing.
+   */
+  async scheduleWorkflow(
+    ref: string,
+    body: { cadence: "daily" | "weekly" | "monthly"; at_minute?: number; weekday?: number },
+  ): Promise<{ schedule_id: string; next_due: string }> {
+    return bff<{ schedule_id: string; next_due: string }>(
+      `/api/workflows/${encodeURIComponent(ref)}/schedule`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    );
+  },
+
+  /** the schedules RLS shows this person on one workflow (own; admins the org's) */
+  async workflowSchedules(ref: string): Promise<WorkflowSchedule[]> {
+    const { schedules } = await bff<{ schedules: WorkflowSchedule[] }>(
+      `/api/workflows/${encodeURIComponent(ref)}/schedule`);
+    return schedules;
+  },
+
   /** M41 - the runnable engine catalogue (the Run button's honest source). */
   async engineWorkflows(): Promise<{ id: string; handle: string; name: string; description: string }[]> {
     const { workflows } = await bff<{ workflows: { id: string; handle: string; name: string; description: string }[] }>(
@@ -2989,7 +3106,13 @@ export const api = {
   ): AsyncGenerator<AgentEvent> {
     yield* streamEvents<AgentEvent>(
       `/api/assistant/sessions/${sessionId}/regenerate`,
-      { model: opts?.model, ...(opts?.locale ? { locale: opts.locale } : {}) },
+      {
+        model: opts?.model,
+        ...(opts?.locale ? { locale: opts.locale } : {}),
+        /* the same resolved zone ask sends (M24): a re-answer must not
+           reason in a different clock from the question it re-answers */
+        ...(resolvedZone() ? { timezone: resolvedZone() } : {}),
+      },
       opts?.signal,
     );
   },

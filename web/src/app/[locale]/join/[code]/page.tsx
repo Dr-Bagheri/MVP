@@ -13,6 +13,7 @@ import {
 import { Track } from "livekit-client";
 import "@livekit/components-styles";
 import { IconVideo } from "@/components/icons";
+import { notifyError } from "@/lib/notify";
 
 /**
  * THE GUEST'S WHOLE EXPERIENCE (user directive, 2026-09-02: "how should
@@ -46,12 +47,10 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
   const tCommon = useTranslations("common");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [ticket, setTicket] = useState<{ title: string; token: string; url: string } | null>(null);
 
   const join = async () => {
     setBusy(true);
-    setError(null);
     try {
       const response = await fetch(`/api/join/${encodeURIComponent(code)}`, {
         method: "POST",
@@ -61,12 +60,12 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
       if (!response.ok) {
         /* an unknown code and a revoked one answer the same way on purpose —
            "this link used to work" tells a stranger there is something here */
-        setError(t("joinRefused"));
+        notifyError(t("joinRefused"));
         return;
       }
       setTicket(await response.json() as { title: string; token: string; url: string });
     } catch {
-      setError(t("joinRefused"));
+      notifyError(t("joinRefused"));
     } finally {
       setBusy(false);
     }
@@ -90,7 +89,21 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
              controls read, so the guest met the stock kit one click after a
              screen wearing ours. The named theme is defined once in
              globals.css; LiveKit's generic `[data-lk-theme]` rules still
-             apply, its `[data-lk-theme=default]` palette no longer does. */
+             apply, its `[data-lk-theme=default]` palette no longer does.
+
+             AND THIS IS NOW THE ONLY SURFACE WEARING IT. `meeting/Room.tsx`
+             and `meeting/Stage.tsx` are gone, and this page is the last
+             `LiveKitRoom` in the product — the `Stage` above is this file's
+             own, which is why deleting those two left it standing. So the weld
+             in globals.css — the one that makes each device toggle and its
+             chevron read as one pill in Persian instead of two square boxes —
+             is carried entirely by this attribute: the rules are
+             `[data-lk-theme="neurai"] .lk-button-group …` with LOGICAL
+             corners, they need no markup of ours, and `ControlBar` renders the
+             `.lk-button-group` pairs they select at `variation="minimal"` as
+             at every other variation (the variation chooses labels, not
+             grouping). `liveKitBar.guard.test.ts` holds both halves. Do not
+             "tidy" that CSS block away as dead when you find no Room.tsx. */
           data-lk-theme="neurai"
           className="flex min-h-0 flex-1 flex-col"
         >
@@ -122,10 +135,6 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
               onKeyDown={(e) => { if (e.key === "Enter" && name.trim() !== "") void join(); }}
             />
           </label>
-
-          {error !== null ? (
-            <p role="alert" className="mt-3 text-xs text-danger">{error}</p>
-          ) : null}
 
           <button
             type="button"

@@ -1,7 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
 import {
@@ -11,11 +10,6 @@ import {
   resume,
   subscribeRecorder,
 } from "@/lib/recordingEngine";
-import {
-  getRecorderAnchorSnapshot,
-  getServerRecorderAnchorSnapshot,
-  subscribeRecorderAnchor,
-} from "@/components/platform/recorderAnchor";
 import { formatClock } from "@/lib/format";
 
 /**
@@ -26,12 +20,18 @@ import { formatClock } from "@/lib/format";
  * navigation; a rolling mic with no visible presence would be the worst kind
  * of quiet.
  *
- * Placement (user directive, 2026-08-23): it DOCKS into the top bar beside
- * the calendar/clock, at the centre-side end of that cluster — the bar
- * offers `recorderAnchor` and the pill portals in, styled like the bar's
- * other bordered controls. Screens without the bar (the platform console,
- * auth) register no anchor, and the pill falls back to floating: a live mic
- * must never be invisible.
+ * Placement. It USED to dock into the top bar's `recorderAnchor`, in the
+ * end
+ * cluster — and the bar's search box is centred on the WINDOW now, on a
+ * full-width absolute layer, so the pill and the field shared the same
+ * strip and the field's layer won: a rolling microphone reading as a
+ * smear behind the search box.
+ *
+ * So the pill left the bar entirely. It floats over the assistant column —
+ * inline-end, just under the bar — as its own glass sheet at z-40, which is
+ * above the assistant's z-30 and below the modal layer. Nothing in the
+ * chrome can cover it, and it is beside the thing a person is most likely
+ * to be looking at while a take rolls.
  *
  * Hidden on the recorder's own screens (/echo new-meeting and its aliases)
  * — two live controls for one take is how they disagree.
@@ -42,11 +42,6 @@ export function FloatingRecorder() {
   const pathname = usePathname();
   const router = useRouter();
   const s = useSyncExternalStore(subscribeRecorder, recorderSnapshot, recorderSnapshot);
-  const anchor = useSyncExternalStore(
-    subscribeRecorderAnchor,
-    getRecorderAnchorSnapshot,
-    getServerRecorderAnchorSnapshot,
-  );
 
   const live = s.phase === "recording" || s.phase === "paused" || s.phase === "finishing";
   if (!live) return null;
@@ -65,7 +60,7 @@ export function FloatingRecorder() {
    * A MEETING'S OWN PAGE renders the take as well — its top bar carries the
    * clock and the end button, and its stage carries the light. With this
    * pill there too, one rolling microphone was shown in three places at once
-   * (user report, 2026-09-02), and three renderings of one fact are three
+   * (observed 2026-09-02), and three renderings of one fact are three
    * things to keep in step. Same reasoning as the recorder screen above: the
    * pill exists for ANYWHERE ELSE, where nothing would otherwise say a mic
    * is open.
@@ -73,31 +68,36 @@ export function FloatingRecorder() {
   const onMeetingPage = /^\/meetings\/[^/]+/.test(pathname);
   if (onMeetingPage) return null;
 
-  const docked = anchor !== null;
-
-  const pill = (
+  return (
     <div
       /*
-       * NOTHING IN THIS PILL WRAPS. It is a fixed-height strip in the top bar,
-       * and «پایان و پردازش» is long enough to break onto a second line inside
-       * a 36px box — which does not make the pill taller, it makes its
-       * contents overflow it (user report, 2026-09-02, with the screenshot).
+       * NOTHING IN THIS PILL WRAPS. «پایان و پردازش» is long enough to break
+       * onto a second line inside a short box — which does not make the pill
+       * taller, it makes its contents overflow it (observed 2026-09-02).
        * `whitespace-nowrap` on the row and `shrink-0` on every control is the
        * fix; the TITLE is the one thing allowed to give way, because a
        * truncated title still says which take this is.
+       *
+       * `.glass` rather than `bg-surface`: the sheet is the platform's one
+       * recipe for a surface that floats over content, and over the
+       * assistant's own glass it is what makes the pill read as ABOVE the
+       * chat rather than as a patch cut into it.
+       *
+       * `top` is the bar's height plus a gap, from the `topbar` token the
+       * bar itself renders at — never a repeated literal. `end-4` is the
+       * INLINE end, so the pill sits over the assistant column in English
+       * and over it in Persian too, instead of flipping to the far side.
        */
-      className={
-        docked
-          ? "flex h-9 min-w-0 items-center gap-1 whitespace-nowrap rounded-lg border border-border bg-surface pe-1 ps-2.5"
-          : "fixed bottom-4 start-4 z-40 flex items-center gap-2 whitespace-nowrap rounded-full border border-border bg-surface py-1.5 pe-2 ps-3 shadow-xl"
-      }
+      className="glass fixed end-4 top-[calc(theme(height.topbar)+0.5rem)] z-40 flex items-center gap-2 whitespace-nowrap rounded-full py-1.5 pe-2 ps-3 shadow-island"
     >
       <button
         type="button"
         className="tap flex min-w-0 items-center gap-2"
-        /* the take belongs to a meeting now, so the pill opens the meetings
-           list rather than a recorder screen that no longer exists */
-        onClick={() => router.push("/meetings")}
+        /* STRAIGHT TO THE TAKE. The engine remembers the screen the take was
+           started on;
+           the meetings list is the fallback for a take that has no screen of
+           its own (the hub's), not the destination. */
+        onClick={() => router.push(s.returnPath ?? "/meetings")}
         aria-label={t("pillOpen")}
         title={t("pillOpen")}
       >
@@ -107,11 +107,7 @@ export function FloatingRecorder() {
           }`}
           aria-hidden
         />
-        <span
-          className={`truncate text-xs font-medium text-fg ${
-            docked ? "hidden max-w-28 md:inline" : "max-w-32"
-          }`}
-        >
+        <span className="max-w-32 truncate text-xs font-medium text-fg">
           {s.title || t("untitledCall")}
         </span>
         <span className="ltr shrink-0 text-xs tabular-nums text-fg-muted">
@@ -143,16 +139,14 @@ export function FloatingRecorder() {
             type="button"
             className="btn btn-sm shrink-0 bg-accent text-on-accent"
             onClick={() => void finish()}
-            /* the full sentence stays reachable as the tooltip — the docked
-               strip has room for a verb, not for a description of the job */
+            /* the full sentence stays reachable as the tooltip — a floating
+               pill has room for a verb, not for a description of the job */
             title={t("finish")}
           >
-            {docked ? t("finishShort") : t("finish")}
+            {t("finishShort")}
           </button>
         </>
       )}
     </div>
   );
-
-  return docked ? createPortal(pill, anchor) : pill;
 }

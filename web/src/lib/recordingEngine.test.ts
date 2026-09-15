@@ -28,6 +28,7 @@ vi.mock("@/api/client", () => ({
     liveSttStart: vi.fn(async () => {
       throw new Error("no caption lane in this test");
     }),
+    liveSttStop: vi.fn(async () => undefined),
     deleteCall: vi.fn(async () => undefined),
   },
 }));
@@ -40,7 +41,8 @@ vi.mock("@/lib/takeBuffer", () => ({
   markPart: vi.fn(),
 }));
 
-const { addSharedAudio, finish, recorderSnapshot, startRecording, resume, discardRecording } = await import("./recordingEngine");
+const { addSharedAudio, finish, recorderSnapshot, startRecording, resume, discardRecording, pause, liveSttLegs } = await import("./recordingEngine");
+const { api } = await import("@/api/client");
 const { publishRoomAudio } = await import("./roomAudio");
 type StartOptions = import("./recordingEngine").StartOptions;
 
@@ -423,5 +425,93 @@ describe("another app's audio joins a running room take", () => {
 
     heldStops.splice(0).forEach((fn) => fn());
     await finishing;
+  });
+});
+
+/*
+ * A HIDDEN TAB DOES NOT PAUSE THE TAKE (2026-09-08). The engine used to pause
+ * on `visibilitychange` — reasonable for a call you are watching, wrong for
+ * an in-person meeting where the person recording spends the hour in their
+ * notes or a slide deck, and every switch silently cut the recording. The
+ * pair below is what discriminates: the same take that IGNORES the tab going
+ * hidden still pauses on the person's own word, so a version that removed
+ * `pause()` outright would fail the second half.
+ */
+describe("a rolling take ignores the tab going hidden", () => {
+  function hideTab(hidden: boolean) {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true, get: () => (hidden ? "hidden" : "visible"),
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }
+
+  afterEach(() => hideTab(false));
+
+  it("keeps recording while the tab is hidden, and pauses only on the person's own word", async () => {
+    await startRecording(opts({ source: "mic" }));
+    expect(recorderSnapshot().phase).toBe("recording");
+
+    hideTab(true);
+    expect(recorderSnapshot().phase).toBe("recording");
+
+    /* manual pause is untouched — and it is the half that makes the line
+       above mean something */
+    pause();
+    expect(recorderSnapshot().phase).toBe("paused");
+    resume();
+    expect(recorderSnapshot().phase).toBe("recording");
+  });
+
+  it("still asks before the tab is closed — the leave prompt is the one page hook that stays", async () => {
+    await startRecording(opts({ source: "mic" }));
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+    expect(recorderSnapshot().phase).toBe("paused");
+  });
+});
+
+/*
+ * THE CAPTION LANE'S TWO LEGS (2026-09-08). `/api/live-stt/start` mints a
+ * ticket and, when core knows its public address, `direct_url`; the engine
+ * only ever rode the BFF, whose SSE route is capped by `maxDuration` on a
+ * serverless host — a long in-person meeting lost its captions at the cap.
+ * The pure function is the contract; the live test proves the engine reads
+ * it (a stream opened at the BFF path with a direct address in hand is the
+ * fault this exists to catch).
+ */
+describe("the caption lane goes to core directly when it can", () => {
+  it("uses the direct address with the ticket, and the BFF without one", () => {
+    expect(liveSttLegs({ session_id: "s 1", ticket: "t/k", direct_url: "https://core.example/" })).toEqual({
+      audio: "https://core.example/v1/live-stt/s%201/audio?ticket=t%2Fk",
+      events: "https://core.example/v1/live-stt/s%201/events?ticket=t%2Fk",
+    });
+    /* no public address → the BFF, exactly as before; the audio leg is the
+       api client's own call, so it carries no URL here */
+    expect(liveSttLegs({ session_id: "s1", ticket: "tk", direct_url: null })).toEqual({
+      audio: "", events: "/api/live-stt/s1/events",
+    });
+    /* an address WITHOUT a ticket cannot be used: the ticket is the wall */
+    expect(liveSttLegs({ session_id: "s1", direct_url: "https://core.example" }).events)
+      .toBe("/api/live-stt/s1/events");
+  });
+
+  it("opens the caption stream at core when start hands back an address", async () => {
+    const opened: string[] = [];
+    vi.stubGlobal("EventSource", class {
+      onmessage: unknown = null;
+      constructor(url: string) { opened.push(url); }
+      close() { /* nothing to tear down */ }
+    });
+    vi.mocked(api.liveSttStart).mockResolvedValueOnce({
+      session_id: "s9", ticket: "tk9", direct_url: "https://core.example",
+    });
+    await startRecording(opts({ source: "mic" }));
+    // startLiveCaptions is fire-and-forget; let its await settle
+    await new Promise((r) => setTimeout(r, 0));
+    expect(opened).toEqual(["https://core.example/v1/live-stt/s9/events?ticket=tk9"]);
+    expect(recorderSnapshot().captionsDown).toBe(false);
+    expect(recorderSnapshot().captions).toEqual({ finals: "", interim: "" });
   });
 });

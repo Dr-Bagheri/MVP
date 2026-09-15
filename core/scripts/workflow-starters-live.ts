@@ -23,9 +23,12 @@ import { createWorkflowRunsRepo } from "../src/api/workflow-runs.ts";
 import { createWorkflowAuthoringRepo, STARTER_WORKFLOWS } from "../src/api/workflow-authoring.ts";
 import { resolveIdentity } from "../src/db/actor.ts";
 import { ConflictError } from "../src/api/errors.ts";
+import { requireNeuraiPython } from "./lib/neurai-python.ts";
 
-const PY = process.env.NEURAI_PYTHON
-  ?? "C:/Users/amirreza/Desktop/neurai-mvp/server/.venv/Scripts/python.exe";
+/* THROWS if NEURAI_PYTHON is unset or wrong — a live harness has no second
+   sink, and the two states get different sentences. There is deliberately no
+   default: see scripts/lib/neurai-python.ts (review F4). */
+const PY = requireNeuraiPython();
 function secret(name: string): string {
   const code = "import os;os.environ.setdefault('NEURAI_DATA_DIR',os.path.expanduser('~/.neurai'));"
     + `from neurai.security import get_secret;print(get_secret('${name}') or '',end='')`;

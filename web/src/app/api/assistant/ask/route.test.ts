@@ -38,6 +38,11 @@ const FORWARDED = {
   locale: "fa",
   client_tools: ["navigate", "start_recording"],
   context: { route: "/echo", entity: { kind: "call", id: "c-1" } },
+  live_text: "the meeting so far",
+  /* M24 — the field this route dropped for weeks while client.ts sent it
+     on every ask and core read it: the assistant reasoned in UTC beside
+     screens rendering Tehran, and nothing was red. */
+  timezone: "Asia/Tehran",
 };
 
 beforeEach(() => {
@@ -56,5 +61,17 @@ describe("POST /api/assistant/ask forwarding", () => {
     expect(path).toBe("/v1/assistant/ask");
     // toEqual, not toMatchObject: an extra invented field is drift too
     expect(body).toEqual(FORWARDED);
+  });
+
+  it("drops a timezone that is not the shape of a zone — and keeps the question", async () => {
+    /* the zone is a courtesy from the client's runtime; a mis-spelt one
+       must not cost the person their ask, and must not reach a prompt line */
+    await POST(new Request("http://localhost/api/assistant/ask", {
+      method: "POST",
+      body: JSON.stringify({ ...FORWARDED, timezone: "Asia/Tehran; drop table" }),
+    }));
+    const [, body] = coreStream.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body.timezone).toBeUndefined();
+    expect(body.question).toBe(FORWARDED.question);
   });
 });

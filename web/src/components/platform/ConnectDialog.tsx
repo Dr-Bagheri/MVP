@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { Icon } from "@/components/icons";
 import { BrandMark } from "./brandMarks";
 import { providerLabelFor, useIntegrationCopy, type IntegrationEntry, type TokenField } from "./integrationsCatalogue";
+import { notifyError } from "@/lib/notify";
 
 /**
  * THE CONNECT DIALOG — one door for every integration (2026-09-06), shared by
@@ -51,18 +52,16 @@ export function ConnectDialog({
 
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const token = entry.kind === "token";
   const complete = !token || entry.tokenFields.filter((f) => f.required).every((f) => (fields[f.name] ?? "").trim() !== "");
 
   async function submit(): Promise<void> {
-    setError(null);
     if (!token) {
       try {
         window.location.assign(await api.connectorAuthorization(entry.provider, locale));
       } catch {
-        setError(tw("connectFailed"));
+        notifyError(tw("connectFailed"));
       }
       return;
     }
@@ -74,9 +73,9 @@ export function ConnectDialog({
       /* WHICH nothing: the provider refused the credential (a 502 of kind
          provider), our validation refused its shape (a 400), or the wire
          failed — three sentences, never one */
-      if (cause instanceof BffError && cause.kind === "provider") setError(t("tokenRefused"));
-      else if (cause instanceof BffError && cause.status === 400) setError(t("tokenInvalid"));
-      else setError(tw("connectFailed"));
+      if (cause instanceof BffError && cause.kind === "provider") notifyError(t("tokenRefused"));
+      else if (cause instanceof BffError && cause.status === 400) notifyError(t("tokenInvalid"));
+      else notifyError(tw("connectFailed"));
     } finally {
       setBusy(false);
     }
@@ -164,7 +163,6 @@ export function ConnectDialog({
             <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
             <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
           </div>
-          {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
         </div>
       }
       onConfirm={() => { void submit(); }}

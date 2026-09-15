@@ -11,7 +11,8 @@ import {
   DIALOG_BODY, FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, FOOTER_CANCEL, FOOTER_PRIMARY,
 } from "./tasks/panelStyle";
 import { IconCheck, IconClose, IconPlus } from "@/components/icons";
-import { personName } from "@/lib/format";
+import { personName, personPhoto } from "@/lib/format";
+import { notifyError } from "@/lib/notify";
 
 /**
  * THE NEW-PROJECT DIALOG — the form that MAKES one, and since 2026-09-08 only
@@ -45,9 +46,16 @@ import { personName } from "@/lib/format";
  * THE 0208 FIELDS ARE NOT HERE ON PURPOSE. A project's stage, priority, lead
  * and two dates are all editable in the panel the moment it exists, and a
  * create form that asks nine questions before anything can be made is a form
- * people abandon at the fourth. Every one of them has a column default that
- * reads as an honest starting state: planning has not begun, nobody has been
- * named, no date has been promised.
+ * people abandon at the fourth. Each of them has a column default, and two of
+ * the three read as an honest starting state: nobody has been named as lead, no
+ * date has been promised.
+ *
+ * The stage does NOT (2026-09-10). `0208` defaults it to `'active'`, not
+ * `'planning'` — so a project nobody has started yet says it is under way. That
+ * is a claim the creator never made, and this comment used to assert the
+ * opposite while the column said otherwise. Changing the default is a migration
+ * and a product decision, so it is named here rather than quietly assumed:
+ * either the default becomes `'planning'`, or this form asks the one question.
  */
 
 export const PROJECT_TONES: ProjectTone[] = [
@@ -80,16 +88,16 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
   /* A REFUSED WRITE KEEPS THE DIALOG (2026-09-06, the check-up). It used to
      call an `onFailed` that every parent answered by CLOSING it — the name,
      the summary, the tone and the roster gone with a toast at the top of a
-     page the person was no longer looking at. The refusal is said HERE, over
-     the draft it refused, and the draft stays to be sent again. */
-  const [refused, setRefused] = useState(false);
+     page the person was no longer looking at. THE DIALOG STAYING IS THE
+     PART THAT MATTERED, and it still does; what changed on 2026-09-08 is
+     only where the sentence is drawn — the stack rises in the middle of the
+     screen now, over this dialog rather than on a page behind it. */
 
   const canSubmit = !busy && name.trim() !== "";
 
   const submit = () => {
     if (!canSubmit) return;
     setBusy(true);
-    setRefused(false);
     void api.createProject({
       name: name.trim(),
       summary: summary.trim(),
@@ -98,7 +106,7 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
       member_ids: members,
     })
       .then(onSaved)
-      .catch(() => { setBusy(false); setRefused(true); });
+      .catch(() => { setBusy(false); notifyError(t("writeFailed")); });
   };
 
   const title = t("newProject");
@@ -187,7 +195,7 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
                     on ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2"
                   } ${pinned ? "cursor-default" : ""}`}
                 >
-                  <Avatar name={personName(person, locale)} size="xs" />
+                  <Avatar name={personName(person, locale)} src={personPhoto(person)} size="xs" />
                   <span className="min-w-0 flex-1 truncate">{personName(person, locale)}</span>
                   {person.id === meId ? <span className="text-[10px]">{t("you")}</span> : null}
                   {on ? <IconCheck width={12} height={12} /> : null}
@@ -198,8 +206,6 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
         </div>
 
       </div>
-
-      {refused ? <p role="alert" className="mt-3 text-xs text-danger">{t("writeFailed")}</p> : null}
 
       <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
         <button type="button" onClick={onClose} className={FOOTER_CANCEL}>

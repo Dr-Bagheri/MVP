@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { IconPlus } from "@/components/icons";
 import { TONE_DOT } from "../tasks/TaskDialogs";
 
@@ -38,7 +39,7 @@ import { TONE_DOT } from "../tasks/TaskDialogs";
 export const BOARD_LANE = "scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2";
 
 export const BOARD_COLUMN =
-  "flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card min-h-[70vh]";
+  "glass flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
 
 export const BOARD_HEADER = "flex items-center justify-between gap-1 px-1 py-1";
 export const BOARD_HEADER_START = "flex min-w-0 items-center gap-1";
@@ -49,6 +50,21 @@ export const BOARD_COUNT = "badge-num rounded-md bg-surface-2 px-1.5 text-[11px]
 export const BOARD_CARDS = "scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1";
 /** the board's card is the theme's list card (R7) — pressable, so the cursor says so */
 export const BOARD_CARD = "card-row cursor-pointer";
+
+/**
+ * THE CARRIED CARD'S OWN BOX, emptied (2026-09-09).
+ *
+ * A card being carried is drawn by a clone on the body, so the element left in
+ * the column shows nothing and holds the space it came from open. It keeps its
+ * box: `.card-row` is border-box, so the dashed 2px edge costs no height and
+ * the gap is exactly the card's. The sheet's fill, blur and drop have to be
+ * taken back off by hand — an emptied card that still looks like a card reads
+ * as a second copy of the one in the air.
+ *
+ * Both boards wear it, which is why it is here and not spelled in either.
+ */
+export const BOARD_CARD_SLOT =
+  "[&>*]:invisible border-2 border-dashed border-accent/45 bg-accent-soft/40 shadow-none [backdrop-filter:none] cursor-grabbing";
 
 /** the add-COLUMN placeholder at the end of the lane: a narrower dashed column
     with the same floor, so it stands in the row as a column and not a strip */
@@ -66,6 +82,41 @@ export function BoardAddRow({ label, onClick }: { label: string; onClick: () => 
       <IconPlus width={12} height={12} />
       {label}
     </button>
+  );
+}
+
+/**
+ * THE SLOT A CARRIED CARD LEAVES AND MAKES (2026-09-09, "should make space for
+ * it in the other columns").
+ *
+ * One component draws both halves of the gesture, because they are the same
+ * fact: while a card is carried, the space it occupies belongs to it, and the
+ * space is wherever the pointer is. In the column the card CAME FROM it holds
+ * the card's own place open so the column below does not jump up; in the
+ * column the pointer is OVER it opens a new place at the top, which is where a
+ * dropped card actually lands (`moveTask` writes a position ahead of every
+ * other card in the column). The height is the carried card's measured one,
+ * so the gap is the size of the thing going into it.
+ *
+ * IT OPENS RATHER THAN APPEARS. A gap that is simply there on the first frame
+ * shoves the column's cards down in one jump, which reads as the list
+ * breaking; the same gap grown from nothing over 150ms reads as the column
+ * making room. That costs a state: the first paint is a closed slot and the
+ * next frame is the open one, because a transition needs a value to leave.
+ */
+export function BoardSlot({ height }: { height: number }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setOpen(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <div
+      aria-hidden
+      data-slot=""
+      style={{ height: open ? height : 0, opacity: open ? 1 : 0 }}
+      className="shrink-0 rounded-xl border-2 border-dashed border-accent/45 bg-accent-soft/40 transition-[height,opacity] duration-150 ease-out motion-reduce:transition-none"
+    />
   );
 }
 

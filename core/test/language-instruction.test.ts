@@ -27,6 +27,21 @@ describe("languageInstruction", () => {
     expect(languageInstruction(undefined)).not.toContain("no clear language");
   });
 
+  /*
+   * The regression this clause exists for (observed 2026-09-09): an
+   * English question answered in Persian because the transcript the tools
+   * returned was Persian. The mirror rule alone did not cover it — "the
+   * language of the message" reads as satisfied by a context that is entirely
+   * Persian, so the source case has to be named.
+   */
+  it("says the language of what it READ never decides the answer's language", () => {
+    for (const locale of [undefined, "fa", "en"]) {
+      const line = languageInstruction(locale);
+      expect(line).toContain("READ");
+      expect(line).toContain("WRITE");
+    }
+  });
+
   it("fa and en produce different instructions — the tiebreaker is real, not decorative", () => {
     expect(languageInstruction("fa")).not.toBe(languageInstruction("en"));
   });

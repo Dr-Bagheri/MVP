@@ -34,8 +34,10 @@ const editSegment = vi.fn();
 const editSummary = vi.fn();
 const connectorAction = vi.fn();
 const translateCall = vi.fn();
+const scheduleWorkflow = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
+    scheduleWorkflow: (...args: unknown[]) => scheduleWorkflow(...args),
     createTask: (...args: unknown[]) => createTask(...args),
     orgPeople: (...args: unknown[]) => orgPeople(...args),
     addMeetingAttendees: (...args: unknown[]) => addMeetingAttendees(...args),
@@ -102,19 +104,38 @@ beforeEach(() => {
 describe("executeClientTool", () => {
   it("navigates only to routes a human could click to — and through the router", async () => {
     const { push, ctx } = surface();
-    expect((await executeClientTool("navigate", { path: "/echo/records" }, ctx)).ok).toBe(true);
-    expect(push).toHaveBeenCalledWith("/echo/records");
+    /* a LIVE route — this used to be `/echo/records`, which stopped resolving
+       when the Echo surface was deleted while NAVIGABLE still admitted it
+       (review F19). A fixture naming a dead page cannot tell a working
+       executor from a broken one. */
+    expect((await executeClientTool("navigate", { path: "/meetings" }, ctx)).ok).toBe(true);
+    expect(push).toHaveBeenCalledWith("/meetings");
     // a model-authored path outside the product is a refusal, not a jump
     const evil = await executeClientTool("navigate", { path: "https://evil.example" }, ctx);
     expect(evil.ok).toBe(false);
     expect(push).toHaveBeenCalledTimes(1);
   });
 
-  it("start_recording rides the agentStart param — the recorder's own start path", async () => {
+  it("start_recording REFUSES, and navigates nowhere, because it has no host", async () => {
+    /*
+     * This test used to assert `ok: true` and a push to
+     * `/echo/record?agentStart=…` — and it was GREEN against the bug for as
+     * long as that route had been deleted (review F19). The agent reported a
+     * recording starting while sending the person to a 404.
+     *
+     * A take belongs to a meeting now: `<Recorder>` has no call site,
+     * `MeetingPage` calls `startRecording()` itself, and `FloatingRecorder`
+     * says the meeting's own page "is where a take is started now". So the
+     * honest answer is a refusal that names the real path.
+     *
+     * The load-bearing half is `push` NOT being called. A version that
+     * refuses and still navigates satisfies `result.ok === false` perfectly.
+     */
     const { push, ctx } = surface();
     const result = await executeClientTool("start_recording", { title: "call 1" }, ctx);
-    expect(result.ok).toBe(true);
-    expect(push).toHaveBeenCalledWith("/echo/record?agentStart=call%201");
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/meeting/i);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("pause/resume reach the LIVE recorder or refuse honestly", async () => {
@@ -844,5 +865,43 @@ describe("a Telegram message names a colleague", () => {
     });
     expect(result.ok).toBe(true);
     expect(orgPeople, "a channel is not a person and needs no directory read").not.toHaveBeenCalled();
+  });
+});
+
+describe("schedule_workflow — the chain's middle link (2026-09-08)", () => {
+  it("forwards handle + cadence + weekday + at_minute to the BFF, untouched and in UTC", async () => {
+    scheduleWorkflow.mockReset();
+    scheduleWorkflow.mockResolvedValue({ schedule_id: "s-1", next_due: "2026-09-14T06:00:00.000Z" });
+    const { ctx } = surface();
+    const result = await executeClientTool("schedule_workflow", {
+      workflow: "wf-starter-tasks-digest", cadence: "weekly", weekday: 1, at_minute: 360,
+    }, ctx);
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain("2026-09-14T06:00:00.000Z");
+    expect(scheduleWorkflow).toHaveBeenCalledWith("wf-starter-tasks-digest", {
+      cadence: "weekly", weekday: 1, at_minute: 360,
+    });
+  });
+
+  it("weekly without a weekday is refused HERE, before any request — and names the day scale", async () => {
+    scheduleWorkflow.mockReset();
+    const { ctx } = surface();
+    const result = await executeClientTool("schedule_workflow", {
+      workflow: "wf-starter-tasks-digest", cadence: "weekly",
+    }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/weekday/);
+    expect(scheduleWorkflow).not.toHaveBeenCalled();
+  });
+
+  it("an unknown cadence is refused by name", async () => {
+    scheduleWorkflow.mockReset();
+    const { ctx } = surface();
+    const result = await executeClientTool("schedule_workflow", {
+      workflow: "wf-starter-tasks-digest", cadence: "hourly",
+    }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/daily, weekly or monthly/);
+    expect(scheduleWorkflow).not.toHaveBeenCalled();
   });
 });

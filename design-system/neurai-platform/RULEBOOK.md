@@ -48,6 +48,13 @@ loosened rule — and the user's "except this part" is what puts one there.
    before; their controls still follow the family.)
 7. **R4 = option (a): one control family, three sizes.**
 
+**2026-09-08 (the user, with a reference shot):**
+
+8. **Glassmorphic, and no layout borders** — translucent panels over a page
+   that has something in it, and none of the hairlines that draw the app as a
+   set of panes. Recorded as R23; a field keeps its edge, which is the one
+   exception and the reason is WCAG, not taste.
+
 **2026-09-05, later (eleven screenshots):**
 
 8. **No explanations under titles and headers.** "Just the name — and
@@ -551,6 +558,225 @@ loosened rule — and the user's "except this part" is what puts one there.
   accessible names, the chip per state, each tile's own `data-brand` mark,
   one class string for all four, and the ABSENCE of the description in the
   shelf; a tile that grows a sentence also fails R21's `copy.guard`.
+
+### R23 · Glass, and no layout borders — APPROVED
+
+> "make it glassmorphic look and no border layout like in this example"
+
+The directive arrived with a reference shot of a work-item list whose panes do
+not announce themselves: no rule under the top bar, no hairline down the side
+menu, no outline round a row. Two halves, and they are the same decision.
+
+**The sheet.** A surface is a translucent panel over the page ground, and three
+things are required for that to read as anything at all:
+
+1. **The ground has to have something in it.** Blurring one flat colour returns
+   that colour, so glass over a flat page is arithmetically the page — the
+   first pass turned every panel translucent and the screens came back
+   IDENTICAL. `--wash-1..3` put three very slow radials (all under 14 %) into
+   `body`, `background-attachment: fixed` so the light source belongs to the
+   window rather than to whichever scroller moved last.
+2. **The edge is light, not ink.** `--shadow-glass` is an inset highlight on
+   the panel's top lip plus an ambient drop. That is the whole reason the
+   border could go: the panel still has a boundary, and the boundary is not a
+   rectangle drawn round it.
+3. **Saturation, not just blur.** `saturate()` in `--glass-filter` is the
+   difference between "frosted" and "smeared".
+
+`.glass` is the recipe (content: cards, tiles, rows); `.glass-chrome` is the
+same sheet without lip or drop, for STRUCTURE — the top bar, the assistant
+column, every menu, popover and dialog; `.glass-raised` is a row inside a
+panel. `.card`, `.card-row`, `.well`, `.tile` and `.table-cards`' rows are all
+that recipe, so R7's three surfaces are unchanged in number and changed in
+material.
+
+**No layout borders.** The seams are gone at the site of each one: the rail's
+`border-e`, the top bar's `border-b`, the section menu's `md:border-e` and its
+closed strip, HOME's sidebar column, every card outline, every table-cell edge,
+and `border` on the four shadcn floating bases (which was
+`borderColor.DEFAULT`, not even a token). The pointer response moved with them
+— a sheet with no border cannot darken one, so a row RISES
+(`--shadow-glass-hover`) or becomes less transparent.
+
+Four columns of the shell each carried the same three classes, and all four are
+asserted the same way: the width KEPT, `border-e` / `border-border` /
+`bg-surface` gone. Each of the three is insufficient alone — an opaque column
+with no border is the same two-pane picture with a softer join, a transparent
+one that kept its hairline is a line drawn on the page, and a column that lost
+its width along with its seam passes every absence check while taking the menu
+with it.
+
+**THREE SHELL TONES, CALIBRATED ON THE RENDERED SCREEN.** The first pass took
+each column's whole class list — hairline AND ground — and left it
+transparent, which removed the seam and removed the CHROME with it. The user
+sent it back twice, and the two corrections are different tones for different
+jobs:
+
+- the RAIL and the TOP BAR wear `glass-chrome` ("the rail … should be the
+  same as the top header"). They frame the window, they meet at its corner,
+  and they carry ONE class rather than two tones chosen to match — which is
+  the only form in which "the same colour" survives an edit to either.
+- HOME's sidebar wears `glass-soft` ("different, and more similar to the
+  background of the chat but a bit glass morphicly looking"): the same tone and
+  the same blur at a third of the alpha, so it composites a few values above
+  the ground. It stands INSIDE the page beside a thread, where the bar's white
+  reads as a second header. No lip and no drop on it — what separates it from
+  the conversation is meant to be the tone, not an edge.
+
+`--glass-soft-alpha` is asserted as a RELATIONSHIP (quieter than the chrome, in
+both themes), never as a number: the requirement is that it sits between the
+page and the chrome, and a literal goes stale the first time either end moves.
+
+**THE APP'S TOP EDGE IS TWO ELEMENTS.** "Make the corner of the rail and the
+top header corner rounded" — so the rail owns `rounded-ss-2xl` and the bar
+owns `rounded-se-2xl`, each asserted where it lives, each with the ABSENCE of
+the other's and of a blanket `rounded-2xl`. Rounding either alone leaves a
+square corner at the other end of the same line; the logical corners are
+mandatory, since `rounded-tl` looks correct in English and puts the curve on
+the wrong end of the window in Persian.
+
+**Two proportions, from the rendered screen rather than the reference.** The
+rail's entries sit on `gap-1.5` and `py-2` ("space the rail a bit") — taken
+VERTICALLY only, because this rail's own note records that «Integrations»
+already clears the ~52px a 72px column leaves once both paddings are spent, so
+inline padding is the one axis that cannot give without costing the label a
+line. And `topBarHeight` is **50, not the 62 measured off the reference** — the
+bar is deliberately shallower than the reference, and 50 is 34 (the R4 compact
+control the bar is full of) plus 8 above and below.
+
+**What KEEPS its border, and this is the distinction the rule preserves:** a
+FIELD. The token comment has drawn it since the palette was derived — a card's
+edge is decorative and WCAG asks nothing of it; an input's is a control
+boundary and owes 3:1. On a translucent panel the ground inside an unbordered
+field is the ground behind it, so `.input`, the two task editors, the label
+field and the assistant's composer are translucent AND edged. In-panel
+hairlines stay too (`PanelHeader`'s divider is a standing rule from 2026-09-02,
+the section menu's group rules, `FormPanel`'s `divide-y`): those
+separate things INSIDE one surface and are not what "no border layout" names.
+
+**The opt-out is one token.** `prefers-reduced-transparency: reduce` sets
+`--glass-filter: none` and the alphas to 1 in a single block, so every sheet in
+the product becomes an opaque panel without a per-class edit — and the alphas
+go with the blur, because a translucent panel with the blur removed is the
+worst of both.
+
+**THE DARK LADDER, RE-STEPPED (observed 2026-09-08: dark-theme contrast was
+too low, the shell reading as one flat sheet).** This rule replaced
+every border with a lip and a drop, and in DARK all three separating
+mechanisms were near zero at the same time:
+
+| mechanism | light | dark, as shipped |
+| --- | --- | --- |
+| tone | white sheet on a cream ground | panel **3.5 L\*** above the page |
+| drop | dark ink under a light panel — reads | black on near-black — nothing |
+| lip | white at .9 | white at .07, and `.glass-chrome` has none by design |
+
+So light kept its structure on the drop alone and dark lost all of it, which is
+why the dark screen had no shell in it. In dark the TONE has to carry it,
+and the ladder is now `--bg` → `--surface` **7 L\*** → `--surface-2` +4.7, with
+`--field` stepping DOWN from the panel (a field is a well inside a card) and 4
+above the page so an input on the bare ground is still a shape.
+
+Three things are worth carrying forward from it:
+
+- **WCAG contrast ratio is the wrong instrument for two adjacent near-black
+  surfaces.** The page and the panel read 1.28:1 before the change and 1.42:1
+  after — the denominator is tiny down there and every step looks like "about
+  1.3". `verify-pairs` measures these in **CIE L\***, where ~4 is the step at
+  which two dark surfaces stop looking like one, at either end of the scale.
+- **Nothing had ever asked whether a surface could be SEEN.** Every floor in
+  that file is about text ON a surface, so the flat shell passed all of them on
+  the day it was found. The separation checks are asserted for dark
+  only, and the reason is a mechanism rather than a preference: in light the
+  drop separates the sheet by itself, so the tone is free to be a whisper.
+  Light's numbers are printed beside them so the asymmetry stays visible.
+- **The sheet and the panel are ONE colour, asserted as such.** 256 sites paint
+  `bg-surface` against 46 wearing `.glass`; the sheet's tone is not picked, it
+  is whatever composites to the token at its own alpha (2 L\* tolerance, not
+  equality — three rounds of 8-bit rounding cannot land exactly in both
+  themes). Its first run caught light's `.glass-raised` at 6.6: **white at 50 %
+  over a white panel is white**, so a raised row had been raised in dark only
+  ever since this rule shipped, and no contrast check could see it — a chip
+  that is exactly its own panel is perfectly legible and simply not there.
+
+Two more the change surfaced, both of the artifact-reads-as-satisfied class:
+the reduced-transparency block above held a hand-written COPY of the opaque
+pair, so anyone with that setting on kept the exact reported screen (it reads
+`var(--surface)` / `var(--surface-2)` now — at alpha 1 the sheet IS the panel,
+so it should be the panel's token); and `--assistant-rail` was declared inside
+a nested `:root { }`, which compiles to the descendant selector `:root :root`
+and matches nothing, so that variable had never been set at all.
+
+- **Measured.** Verified on a dev render in both themes: light card
+  `rgba(255,255,255,.72)` / `blur(18px) saturate(1.4)` / border `0px` / the lit
+  lip at `rgba(255,255,255,.9) 0 1px 0 inset`; dark card `rgba(26,30,34,.58)` /
+  `blur(18px) saturate(1.6)` / border `0px` / lip at `rgba(255,255,255,.07)`;
+  `body` carrying the three radials in both. Re-measure on production after
+  deploy. Dark re-measured 2026-09-08 on a real load with a PERSISTED
+  preference (a runtime `data-theme` flip measures nothing): `--surface`
+  `27 32 37`, `--surface-2` `36 42 48`, `--field` `22 26 30`, card
+  `rgba(36,43,50,.58)` with `blur(18px) saturate(1.6)`, border `0px`, lip and
+  drop intact; L* steps 7.0 / 4.7 / 4.0.
+**AND THE SAME RULE BELOW `md`, WHICH THE FIRST SWEEP DID NOT REACH**
+(2026-09-08, measured at 375 on a dev render). Three things stopped at the
+breakpoint, and each was invisible from a desktop:
+
+- the BOTTOM BAR and its «More» sheet still wore `border-t border-border
+  bg-surface` — so the one surface a phone always has on screen was the last
+  opaque pane in the product, carrying the last hairline that draws the app as
+  a stack of panes. Both wear `glass-chrome` now, the rail's own class: the bar
+  is the rail's counterpart below `md`, the two are never on screen together,
+  and one spelling is the only form in which they cannot disagree about the
+  chrome's colour. The safe-area padding stays — translucent is not absent.
+- the TOP BAR'S CORNER was unqualified. `rounded-se-2xl` is one half of the
+  app's top edge and the rail's `rounded-ss-2xl` is the other; below `md` the
+  rail is not drawn, so the class curved ONE end of a full-width strip and left
+  the other square — the asymmetry the two-element rule exists to prevent,
+  arrived from the other direction. `md:rounded-se-2xl` now, the gate the
+  `.chrome-notch` already carried for the same reason.
+- and the PAGE HAD NO NAME. R2 retired the page-title block because «the
+  breadcrumb names the page», which held while the rail stood beside it with
+  the section lit. The rail is `md:flex`; the trail returned `null` for a
+  one-crumb path for want of a parent to point at — so /meetings on a phone was
+  a bar holding one bell over a page holding no title. The compact trail
+  renders the LEAF now, with chevron+parent before it when there is one; the
+  hub stays silent, and the test is the ROOT rather than the length, because
+  «one crumb» meant both the hub and every rail destination since the
+  2026-09-02 ruling made them roots.
+
+**Two shapes of the new shell had no phone at all** (same pass, same directive
+— «fix mobile view according to our new design»):
+
+- HOME'S SIDEBAR is `lg:flex` for a good reason (a rail, a 256px column and a
+  readable conversation do not fit at once), and what that left below `lg` was
+  a Home with no door to any of it: New conversation, Workflows, Agents and
+  every stored conversation live in that column and nowhere else, and
+  `/workflows` and `/agents` REDIRECT into the pane beside it. Below `lg` the
+  same component renders inside a slide-over at the inline-START, closing when
+  a row inside it navigates. The SAME component, because a conversations list
+  written for small screens is a second list to keep in step, and the first
+  thing to drift would be which conversation is open.
+- THE BOTTOM BAR'S CONTENTS. `inBar` was flagged against a rail that has since
+  lost workflows, agents, chat and the assistant, so the four-slot bar filled
+  TWO of them while Meetings and Tasks — the day's work — sat behind «More».
+  Home · Meetings · Tasks · More now; Management keeps its rail tile, its
+  territory and its place in the sheet. The ceiling is a limit, not a target.
+
+- **Solid =** `surface.guard` reads `.tile`'s rule body for the glass shadow,
+  the glass filter and the ABSENCE of `border:`, and asserts `.glass` /
+  `.glass-chrome` exist; `IconRail.test`, `TopBar.test` and
+  `home/HomeSidebar.test` assert the shell's chrome surfaces keep their width
+  and carry none of the seam — each as a PAIR for the reason above;
+  `BottomBar.test`, `Breadcrumbs.test` and `home/HomeSidebar.test`'s slide-over
+  block carry the mobile half (the sheet AND the absent seam; the bar's four
+  rendered slots; «More» still listing every destination the bar omits; the
+  leaf rendered on a root section; the hub still silent). Every one
+  verified red against the pre-R23 classes, and the two column checks were
+  verified red a second time against the control (the width removed).
+  The dark ladder is asserted in `verify-pairs.mjs` (in `pnpm test`): three L*
+  steps, both composite-equals-token pairs, and the quiet sheet's position as a
+  relationship — verified red by restoring the shipped values, which fails 3
+  pairs and exits 1, each naming its own defect.
 
 ## Bugs found while measuring (not rules — fixes)
 

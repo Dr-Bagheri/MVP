@@ -120,14 +120,18 @@ export function SectionMenu({
      * in the theme as the fixed fallback for menus rendered outside a
      * resizable row.
      */
-    <nav aria-label={navLabel} className="h-full w-full px-3 pb-4 md:border-e md:border-border">
+    /* NO SEAM (2026-09-08). The `md:border-e` here was the second of the two
+       hairlines that drew every screen as a set of panes — the rail's was the
+       first. A menu column is a list standing on the page ground; the thing
+       that separates it from the content is the gap, which is already there. */
+    <nav aria-label={navLabel} className="h-full w-full px-3 pb-4">
       {/* `pt-page-menu` is the page title's own top minus the 12px that a
           17px pane title needs to sit on the same line as a 24px page title
           — the pair moves together or the alignment is a coincidence */}
       <h1 className="px-3 pb-2 pt-page-menu text-pane-title font-semibold text-fg">{heading}</h1>
       {groups.map((group, i) => (
         <div key={group.key}>
-          {i > 0 ? <hr className="mx-3 my-3.5 border-border" /> : null}
+          {i > 0 ? <hr className="mx-3 my-3.5 border-0 border-t border-fg/[.07]" /> : null}
           {group.title ? (
             <p className="mb-1.5 mt-4 px-3 text-group-label font-medium text-fg-subtle">
               {group.title}
@@ -297,7 +301,7 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
            read as missing — a slim strip, the full height of the row */
         <button
           type="button"
-          className="tap no-print hidden w-6 shrink-0 items-start justify-center border-e border-border bg-surface pt-4 text-fg-muted hover:text-fg md:flex"
+          className="tap no-print hidden w-6 shrink-0 items-start justify-center pt-4 text-fg-muted hover:text-fg md:flex"
           aria-label={t("openMenu")}
           title={t("openMenu")}
           onClick={() => setAndStore(false)}

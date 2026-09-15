@@ -1,3 +1,4 @@
+import { personFixture } from "@/test/fixtures";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,11 +50,12 @@ const COLUMNS: TaskColumnRecord[] = [{ id: "col-todo", name: "برای انجا�
 const TOPICS: TaskTopicRecord[] = [];
 const LABELS: TaskLabelRecord[] = [];
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner", username: "u-me" },
+  personFixture({ id: "u-me", display_name: "سینا", display_name_en: null, role: "owner", username: "u-me" }),
 ];
 
 const TASK: TaskDetailRecord = {
   id: "t-1", column_id: "col-todo", topic_id: null, call_id: null, call_title: null,
+  meeting_id: null, meeting_title: null,
   title: "اجرای اسکریپت مهاجرت", priority: "medium", labels: [], due_at: null,
   done: false, position: 1, archived: false, created_by: "u-me", assignee_ids: [],
   label_ids: [], checklist_done: 0, checklist_total: 0, comment_count: 0,
@@ -160,5 +162,21 @@ describe("the record chip (2026-09-06)", () => {
     );
     const chip = screen.getByRole("link", { name: /جلسهٔ هفتگی/ });
     expect(chip.getAttribute("href")).toBe("/calls/c-9");
+  });
+
+  it("leads to the MEETING's page, under the meeting's name, when the record has one (2026-09-08)", () => {
+    /* the call above is the control: a task from a plain upload still opens
+       the record, and only a task whose call belongs to a meeting opens the
+       meeting — the wire says which (meeting_id from the producer's join) */
+    render(
+      <TaskDetail
+        task={{ ...TASK, call_id: "c-9", call_title: "ضبط ۹", meeting_id: "m-4", meeting_title: "جلسهٔ محصول" }}
+        columns={COLUMNS} topics={TOPICS} labels={LABELS} people={PEOPLE}
+        onClose={vi.fn()} onChanged={vi.fn()} onLabelsChanged={vi.fn()}
+      />,
+    );
+    const chip = screen.getByRole("link", { name: /جلسهٔ محصول/ });
+    expect(chip.getAttribute("href")).toBe("/meetings/m-4");
+    expect(screen.queryByRole("link", { name: /ضبط ۹/ })).toBeNull();
   });
 });

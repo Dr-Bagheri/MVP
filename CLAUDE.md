@@ -413,7 +413,7 @@ release gate — this file's author), **backend** (core/, ml/, schema), **fronte
 session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
 
 - No `git commit` / `git push` from build sessions; the publisher reviews and
-  pushes. Local tree: `C:\Users\amirreza\Desktop\mvp`.
+  pushes.
 - **Claim before you build** (after two sessions built one screen for an
   hour on crossed messages): before starting any multi-hour piece, announce
   "starting X now" to the session owning adjacent files and wait for the
@@ -519,7 +519,7 @@ neurai.pt on Cloudflare DNS (one.com mailboxes preserved via MX copy).
 start-platform.cmd is now LOCAL DEV ONLY; the PC serves nothing. The
 old rule "one session runs the stack" applies to the SERVER now:
 service control via systemd over SSH, key ~/.ssh/neurai_hetzner. Supabase facts a session must know:
-project aqgpxnyuxukwgphrxslw; **tokens are ES256** (kid 4800f423...,
+project ref in `ECHO_DEV_PROJECT_REF` / the DPAPI store; **tokens are ES256** (kid 4800f423...,
 P-256; legacy HS256 rotated out — core verifies via JWKS, code in
 core/src/api/jwt.ts, SUPABASE_URL env required); built-in email sender
 rate-limits (~2-4/hr) — dashboard Add-user bypasses email; Site URL
@@ -617,7 +617,7 @@ sessions) for the cross-session narrative.
 - 2026-08-12: **ARCHITECTURE LOCKED by the user** (v1.0, M1–M18) after three
   review rounds + the measured Phase-0 spike. Build tracks running: web/
   (Front-end), core/ (Backend), ml/ (Backend 2), schema+RLS (Backend 3).
-  Dev Supabase live (aqgpxnyuxukwgphrxslw; keys in DPAPI store under
+  Dev Supabase live (ref and keys in the DPAPI store under
   echo_platform_*). Soniox funded; quality numbers land post-lock.
 - 2026-08-12 (later): **web/ Phase A serving** — full screen set captured,
   awaiting the user's visual-direction verdict. **db/ schema green on the dev
@@ -6310,3 +6310,273 @@ sessions) for the cross-session narrative.
   org's data is what cost the board on 2026-09-06. The next summarized
   meeting is the measurement.
   db 217 migrations · ml 154 tests · core 1575 tests · web 1402 tests + gate + sweep.
+
+- 2026-09-08 (R23 — GLASS, AND THE APP STOPS DRAWING ITSELF AS A SET OF PANES):
+  glass surfaces, and no layout borders. Two halves, one decision, taken at the
+  TOKENS so it reaches every screen rather than the handful somebody remembers.
+  **THE FIRST PASS CHANGED NOTHING, AND THAT WAS THE USEFUL FAILURE.** Every
+  panel went translucent with an 18px blur and the screens came back
+  IDENTICAL — blurring one flat colour returns that colour, so a translucent
+  sheet over a flat page is arithmetically the page. The panels only became
+  panels once the GROUND stopped being uniform: `--wash-1..3`, three radials
+  under 14 %, `background-attachment: fixed` so the light source belongs to
+  the window and no inner scroller drags it around behind the glass. The other
+  two mechanisms are equally load-bearing: `--shadow-glass` is an inset
+  highlight on the panel's top LIP plus an ambient drop (that is the whole
+  reason the border could go — the panel still has a boundary and the boundary
+  is not a rectangle), and `saturate()` inside `--glass-filter` is the
+  difference between "frosted" and "smeared". `.glass` for content,
+  `.glass-chrome` for structure (no lip, no drop), `.glass-raised` for a row
+  inside a panel; `.card`, `.card-row`, `.well`, `.tile` and `.table-cards`'
+  rows are all that recipe, so R7's three surfaces changed material and not
+  number.
+  **The seams are gone at the site of each one**: the rail's `border-e` (the
+  most visible box-line in the product — it drew the app as two panes above
+  anything either pane had to say), the top bar's `border-b`, the section
+  menu's `md:border-e` and its closed strip, HOME's own sidebar column, every
+  card outline, every table-cell edge, and `border` on the four shadcn floating
+  bases — which was `borderColor.DEFAULT`, not even a token. The pointer response had to move
+  with them: a sheet with no border cannot darken one, so a row RISES
+  (`--shadow-glass-hover`) or becomes less transparent.
+  **WHAT KEEPS ITS BORDER IS THE POINT OF THE RULE.** A FIELD. The palette's
+  own comment has drawn that line since it was derived — a card's edge is
+  decorative and WCAG asks nothing of it, an input's is a control boundary and
+  owes 3:1 — and on a translucent panel the ground inside an unbordered field
+  IS the ground behind it. So `.input`, the two task editors, the label field
+  and the assistant's composer are translucent AND edged. In-panel hairlines
+  stay for the same reason they were introduced: `PanelHeader`'s divider is a
+  standing rule from 2026-09-02, and a rule INSIDE one surface is not what
+  "no border layout" names.
+  **The opt-out is one token**: `prefers-reduced-transparency: reduce` sets
+  `--glass-filter: none` and the alphas to 1 in a single block, so every sheet
+  in the product becomes an opaque panel with no per-class edit — and the
+  alphas go WITH the blur, because a translucent panel with the blur removed
+  shows the ground unsoftened, which is less legible than either glass or a
+  flat card.
+  **Contrast is unchanged and that was checked rather than assumed**: the
+  composite of `--glass` at its alpha over `--bg` lands on the value the
+  opaque token already held (dark 26/30/34 at .58 over 15/17/19 → #15191C
+  against `--surface`'s #16191C; light 255 at .72 over the cream → #FCFCFB),
+  so every pair verify-pairs asserts still resolves against the same ground.
+  **`surface.guard` fired in BOTH directions, as designed.** Eleven floating
+  layers left its allow-list because the recipe it counts is simply not
+  written in them any more (the stale-entry direction, which is what keeps a
+  list from quietly becoming bigger than the tree it describes), and its
+  `.tile` check now reads the rule body for the glass shadow, the glass filter
+  and the ABSENCE of `border:` — a `border:` creeping back is the bordered
+  look returning one declaration at a time, which is exactly how `.tile`
+  drifted to a 20px corner once before.
+  The shell's chrome is asserted as a PAIR at each column (`IconRail.test`,
+  `TopBar.test`, `home/HomeSidebar.test`): the width KEPT, the edge and the
+  ground GONE — because each half alone passes against a version that still
+  looks wrong (an opaque column with no border is the same two-pane picture
+  with a softer join; a transparent one that kept its hairline is a line drawn
+  on the page; and a column that lost its width with its seam satisfies every
+  absence check while taking the menu with it). Six mutations, six reds, each
+  by name.
+  Verified on a dev render in both themes (the shell needs a session, so the
+  reading is the sign-in surface plus the loaded stylesheet): light card
+  `rgba(255,255,255,.72)` / `blur(18px) saturate(1.4)` / border `0px` / lip
+  `rgba(255,255,255,.9) 0 1px 0 inset`; dark card `rgba(26,30,34,.58)` /
+  `blur(18px) saturate(1.6)` / border `0px` / lip `rgba(255,255,255,.07)`;
+  `body` carrying the three radials in both. **NOT re-measured on production**
+  — nothing was deployed. Recorded as RULEBOOK R23.
+  **Two pre-existing reds are NOT R23's and were proven so rather than
+  assumed**: the two `WorkflowBuilder` catalogue cases read `messages/*.json`
+  through an undecoded `import.meta.url`, so a working directory whose name
+  contains a space keeps it as `%20` and the file is not found —
+  the same reason `scripts/build-gate.mjs` reports FAILED while `next build`
+  itself completes (it spawns `next.CMD` with `shell: true` and an unquoted
+  path). The two `Meetings` upload cases still fail with R23 reverted on the
+  dialog layers, which is the check that distinguishes "was already broken"
+  from "I broke it".
+  db 207 migrations · ml 148 tests · core 1433 tests · web 1330 tests
+  (4 pre-existing reds, all path-name artefacts or prior upload work).
+
+- 2026-09-08 (R23's CALIBRATION — three shell tones, two corners, two
+  proportions; five short directives on the rendered screen): the glass landed
+  and then the user looked at it, which is the half no test could have
+  supplied. **Every correction was to the same mistake made once**: the first
+  pass took each shell column's whole class list — the hairline AND the
+  ground — so it removed the seam and removed the CHROME with it. "The rail is
+  the same color as the background of the app and it should be the same as the
+  top header." A transparent column reads as part of the page, and a shell
+  that reads as page is not a shell.
+  **Three tones, and which one a column gets is decided by where it stands.**
+  The rail and the top bar frame the window and meet at its corner, so both
+  wear `glass-chrome` — the TOP BAR'S OWN CLASS written into the rail rather
+  than a tone picked to match, because "the same colour" only survives an edit
+  to either while there is one spelling of it. HOME's sidebar stands INSIDE the
+  page beside a thread, and the bar's white there reads as a second header:
+  "the sidebar color should be different, and more similar to the background of
+  the chat but a bit glass morphicly looking" → `glass-soft`, the same tone and
+  the same blur at a third of the alpha, no lip and no drop, so what separates
+  it from the conversation is the TONE and not an edge. `--glass-soft-alpha` is
+  asserted as a RELATIONSHIP (quieter than the chrome, in both themes) rather
+  than as a value — a literal would go stale the first time either end moved.
+  **The app's top edge is two elements**, which is the whole reason the corner
+  needed two edits: the rail owns `rounded-ss-2xl`, the bar owns
+  `rounded-se-2xl`, each asserted where it lives WITH the absence of the
+  other's and of a blanket `rounded-2xl`, because rounding either alone leaves
+  a square corner at the other end of one line. Logical corners, not physical:
+  `rounded-tl` looks right in English and puts the curve on the wrong end of
+  the window in Persian.
+  **Two proportions, and one of them is a directive over a measurement.** The
+  rail's entries went from `gap-0.5` (two pixels, which under a two-line label
+  reads as one block of text rather than nine destinations) to `gap-1.5` with
+  `py-2` — taken VERTICALLY only, because that file's own note already records
+  that «Integrations» clears the ~52px a 72px column leaves once both paddings
+  are spent, so inline padding is the one axis that cannot give without costing
+  the label a line. And `topBarHeight` is **50, not the 62 measured off the
+  reference on 2026-09-02** — "just take less space at the top" — recorded in
+  the constant itself as a directive over a measurement so nobody corrects it
+  back, and 50 rather than a rounder number because the bar is full of R4's
+  34px compact controls and anything under it stops being padding.
+  **The assertions grew a third leg with the tone.** Each column is now the
+  TRIPLE — width kept, chrome carried, seam gone — and the sidebar additionally
+  asserts it is NOT wearing `glass-chrome`, because the calibration is
+  precisely "not the header's white" and a check that only demanded some glass
+  class would pass against the version this replaced.
+  Nine mutations, nine reds by name, including the two controls (the column's
+  width removed) and the reported bug itself (each column made transparent
+  again).
+  **THE TREE WAS BEING EDITED BY SOMEBODY ELSE THROUGHOUT, and the record
+  matters more than the tidiness.** `MeetingPage.tsx` changed at 05:10:38,
+  `HomeSidebar.tsx` grew 7.5 KB at 05:22, `fa.json` at 05:31, and
+  `keys.test.ts` at 05:44:54 — sixteen seconds before a directory listing —
+  where it now imports `@/lib/widgetRegistry`, a module this tree does not
+  contain. So the suite's failures MOVED between runs (Meetings, then help,
+  then keys) while the R23 set stayed green at 71 tests across nine files. Each
+  was attributed rather than assumed: the two `WorkflowBuilder` cases resolve
+  `messages/*.json` through an undecoded `import.meta.url` and a folder whose
+  name contains a space keeps it as `%20` (the same reason `build-gate.mjs`
+  reports FAILED while `next build` completes — it spawns `next.CMD` with
+  `shell: true` and an unquoted path); the `Meetings` pair still failed with
+  R23 reverted on the dialog layers; the help and keys reds arrived with files
+  whose timestamps are minutes old and which this work never opened. **A red
+  in a tree somebody else is writing is not evidence about your change, and
+  the timestamps are what turn that from an excuse into a finding.**
+  Applied to the working tree carrying the 2026-09-08 home
+  page — NOT by copying from the earlier baseline: the two trees differ in 86
+  files, so 24 whose only difference was this change were copied and six
+  carrying divergent work were ported as string edits. Nothing deployed.
+
+- 2026-09-08 (THE DARK LADDER RE-STEPPED — R23 took the borders away and dark
+  had nothing left to hold a panel off the page): dark-theme contrast, with the
+  shell reading as one flat sheet.
+  **Every pair in verify-pairs.mjs passed on the day that screenshot was
+  taken**, and that is the finding: every floor in that file is about TEXT ON a
+  surface, and not one asked whether the surface could be SEEN. R23 replaced
+  each border with a lip and a drop; in dark all three mechanisms were near
+  zero at once — the panel sat 3.5 L* above the page, a black drop on a
+  near-black ground is arithmetically nothing, and `.glass-chrome` (the rail,
+  the top bar, every menu) carries no lip AT ALL by design. Light kept its
+  structure on the drop alone, dark lost all of it, and the two had looked like
+  one decision.
+  **The instrument was wrong before the palette was.** WCAG contrast RATIO
+  cannot see this: page-vs-panel read 1.28:1 before and 1.42:1 after a change
+  that is plainly visible, because the denominator is tiny down there and every
+  step reads as "about 1.3". These are measured in **CIE L\*** now, where ~4 is
+  where two dark surfaces stop looking like one at either end of the scale.
+  Dark: surface #16191C -> **#1B2025** (7 L* above the page), surface-2 ->
+  #242A30 (+4.7), field -> #161A1E, stepping DOWN from the panel because a
+  field is a well inside a card and with the borders gone the tone is what says
+  so. Asserted for DARK only, and the reason is a mechanism and not a
+  preference: in light the drop is dark ink under a light panel and separates
+  the sheet by itself, so the tone is free to be a whisper — light's numbers
+  are PRINTED beside the assertions so the asymmetry stays visible rather than
+  becoming a hole.
+  **THE SHEET AND THE PANEL ARE ONE COLOUR, and now that is a check.** 256
+  sites paint `bg-surface` against 46 wearing `.glass`; the sheet's tone is not
+  a value anybody picks, it is whatever composites to the token at its own
+  alpha (2 L* tolerance, not equality — three rounds of 8-bit rounding cannot
+  land exactly in both themes, and a check nobody can satisfy gets an exemption
+  written for it). **Its first run caught a real one at 6.6**: light's glass-2
+  was #FFFFFF at 50% over a WHITE panel, which is white — so `.glass-raised` in
+  the light theme had been painting the surface it sits on ever since R23
+  landed, and a raised row was raised in dark only. No contrast check could
+  ever have seen it: a chip that is exactly its own panel is perfectly legible
+  and simply not there.
+  Two more of the artifact-reads-as-satisfied class, both found by reading the
+  rendered document rather than the source. (1) The reduced-transparency block
+  held a hand-written COPY of the opaque pair, so the ladder was re-stepped and
+  those two lines still carried the flat one — anyone with that setting on kept
+  the exact screen that was reported; it reads the tokens now, because at alpha
+  1 the sheet IS the panel and should be the panel's token rather than a copy
+  of its value. (2) `--assistant-rail` was declared inside a NESTED `:root { }`,
+  which compiles to the descendant selector `:root :root` and matches nothing —
+  the variable had never been set on any page, and its computed value came back
+  as the empty string. Both read as correct in the source.
+  **The chip tint moved .12 -> .10** rather than a hue being nudged: raising
+  the dark panel raised every chip with it and the dark accent chip landed at
+  **4.51 against a 4.5 bar** — a pass, and one hundredth the other side of the
+  4.48 near-miss named in that file's own header as the reason it exists. A
+  margin of 0.01 is not a margin; the tint lifts every tone in both themes at
+  once (worst pair 4.51 -> 4.61).
+  Verify-red: restoring the shipped values fails 3 pairs and exits 1, each
+  naming its own defect. Measured on a real load with a PERSISTED preference
+  (a runtime `data-theme` flip measures nothing, as this file already records):
+  surface `27 32 37`, card `rgba(36,43,50,.58)` / `blur(18px) saturate(1.6)` /
+  border `0px` / lip and drop intact; L* steps 7.0 / 4.7 / 4.0; the
+  reduced-transparency rule parsed and resolving through the tokens. RULEBOOK
+  R23 carries the table and the three carry-forwards.
+  **Nothing deployed, and the pixels are NOT verified**: another session was
+  writing this tree throughout — `Hub.tsx` changed ten seconds before a
+  listing and carries an unterminated double-quoted string across a newline,
+  which is that file's build error and not this change's — so the screenshot
+  was blocked by somebody else's red and the readings above are computed values
+  off a loaded document. Theme guards green: IconRail, TopBar, HomeSidebar,
+  surface.guard, units.guard, bridge.guard, control.guard, loading.guard,
+  scaffold, panelStyle (92 tests). The encoding sweep cannot run here (this
+  copy is not a git repo and the sweep reads `git ls-files` on purpose); the
+  three edited files were byte-checked instead — no BOM, no mojibake, no C0.
+
+- 2026-09-09 (THE MINUTES BECOME THE SUMMARY — the lifecycle retires, the
+  document becomes a thing you edit): the minutes are renamed the summary and
+  lose approval, signing, finalisation and the status tab; the summary becomes
+  editable, gains a button that opens the agent sidebar with the call tagged in
+  the composer, and sits after the overview and before tasks.
+  «صورت‌جلسه» was a DOCUMENT WITH A LIFECYCLE — db/0146's draft → تأیید نهایی →
+  امضا → بستن, a status rail to display it, and a signature block. It is a
+  SUMMARY now: read it, correct it, export it. The approve/sign/close controls,
+  the status rail and the signatures section are gone from the tab and from the
+  exported document; `Minutes.tsx` is `Summary.tsx`, the tab is «خلاصه» and it
+  sits SECOND, after «نمای کلی» and before «تسک‌ها» — it is what somebody who
+  missed the meeting opens next, and it had stood last while the two working
+  surfaces came first. Word and PDF moved ABOVE the card with «تولید دوباره»:
+  they had been at the foot of a rail beside a document as long as its meeting,
+  which put the two most-reached controls below the fold.
+  **The server keeps 0146.** The columns and the PATCH doors that write them
+  are untouched and no surface reaches for them — removing the schema is a
+  migration, not a component edit, and a lifecycle that may be asked for again
+  is cheaper left standing than re-derived.
+  **Editing is db/0092's own door, and a refusal is not a glitch.**
+  `editSummary` APPENDS a version authored `human`, so the draft is seeded from
+  the current body and saved whole. `echo.edit_summary` answers the 0077
+  hierarchy — your own record, or one whose owner your role strictly outranks —
+  and refuses as a NOT-FOUND on purpose so the door is not probeable. Measured
+  on production: the demo user is an ADMIN and the seeded records are owned by
+  the org OWNER, so the door 404s for every one of them and the first save
+  reported «خلاصه ذخیره نشد — دوباره تلاش کنید» over a refusal that will refuse
+  forever. The rule cannot be mirrored on this side (it needs the OWNER's role
+  and the wire carries only their id), so a 403/404 says «اجازهٔ ویرایش این
+  خلاصه را نداری» instead of sending somebody back to press the same button.
+  «ویرایش با دستیار» is `openAssistant({ draft })` — the record page's own door
+  since 2026-08-21 — filling the sidebar composer with the meeting NAMED and
+  stopping there: a draft the person edits, never a submission.
+  Verified on production (:3101, signed in as the demo owner): the tabs read
+  «نمای کلی · خلاصه · تسک‌ها · یادداشت‌های من» with the summary `aria-selected`;
+  the toolbar carries تولید دوباره / Word / PDF above the card; sections 1–4
+  with no signatures and no status rail; «ویرایش» opens the textarea over the
+  current body; «ویرایش با دستیار» opened the sidebar with «About the summary of
+  "Weekly meeting with NAI": » in its composer. The edit door was proven on a
+  call the demo user OWNS (200, version 1) and the probe's version deleted
+  afterwards.
+  **Note on the running servers:** :3100 was serving a DIFFERENT checkout
+  (an older baseline, whose meeting page still has Files and
+  Assistant tabs) — the first verification pass measured it and read as if this
+  change had not landed. Confirm :3101 is serving THIS tree. A dev server on a
+  shared port is not evidence about the tree you are editing.
+  db 207 migrations · web tests: Summary + keys green (full suite has 4
+  pre-existing reds, unrelated — Meetings' `api.orgPeople` mock and copy.guard's
+  `scheduleMeetingSubtitle`).

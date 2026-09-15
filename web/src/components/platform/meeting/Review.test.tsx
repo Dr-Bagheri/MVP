@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { meetingFixture } from "@/test/fixtures";
@@ -58,8 +58,8 @@ beforeEach(() => {
   linkSpeaker.mockResolvedValue(undefined);
 });
 
-const draw = (isHost: boolean) => render(
-  <TranscriptPanel callId="c1" meeting={MEETING} isHost={isHost} onSeek={vi.fn()} locale="fa" />,
+const draw = (isHost: boolean, onSeek: (ms: number) => void = vi.fn()) => render(
+  <TranscriptPanel callId="c1" meeting={MEETING} isHost={isHost} onSeek={onSeek} locale="fa" />,
 );
 
 describe("the transcript names its voices", () => {
@@ -99,5 +99,52 @@ describe("the transcript names its voices", () => {
 
     await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-sina"));
     await waitFor(() => expect(screen.getAllByText("سینا سپاسی")).toHaveLength(2));
+  });
+});
+
+/*
+ * CLICK THE SENTENCE, NOT THE CLOCK (user, 2026-09-08: "make the transcript
+ * clickable and once clicked move me to the relevant place in the audio
+ * track"). The clock was already a button and stays one — what these prove is
+ * that the row around it now carries the same seek, and that the one gesture
+ * it must NOT be mistaken for still works.
+ */
+describe("the transcript seeks the audio", () => {
+  it("a click anywhere on the line asks for that line's instant", async () => {
+    const onSeek = vi.fn();
+    draw(false, onSeek);
+    await userEvent.click(await screen.findByText("متن t2"));
+    expect(onSeek).toHaveBeenCalledWith(3000);
+  });
+
+  it("a click that ENDS A SELECTION quotes the line instead of scrubbing it", async () => {
+    /*
+     * Selecting a sentence to copy fires `click` on mouseup. Seeking there
+     * would move the audio every time somebody quoted the transcript — and
+     * collapse the selection they had just made, so the copy would fail too.
+     */
+    const onSeek = vi.fn();
+    draw(false, onSeek);
+    const line = await screen.findByText("متن t1");
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    /* `fireEvent`, not `userEvent`: a real mouse KEEPS the selection through
+       the mouseup that ends the drag, while userEvent's synthetic mousedown
+       collapses it first — which would test the simulation, not the guard. */
+    fireEvent.click(line);
+    expect(onSeek).not.toHaveBeenCalled();
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it("naming a voice does not also move the audio", async () => {
+    /* the picker opens ON the row; its press is about the voice */
+    const onSeek = vi.fn();
+    draw(true, onSeek);
+    const names = await screen.findAllByRole("button", { name: /speakerPick/ });
+    await userEvent.click(names[0]!);
+    expect(onSeek).not.toHaveBeenCalled();
   });
 });

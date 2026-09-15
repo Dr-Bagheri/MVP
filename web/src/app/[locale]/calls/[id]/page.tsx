@@ -36,7 +36,7 @@ import {
 import {
   isGenericTitle, lineDiff, mergeParagraphs, suggestTitleFrom, talkTimes,
 } from "@/lib/transcriptView";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import { openAssistant } from "@/lib/assistantBus";
 import { redactSensitive } from "@/lib/redact";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
@@ -199,7 +199,6 @@ export default function CallDetailPage({
   const [transcriptEn, setTranscriptEn] = useState<Map<string, string> | "loading" | null>(null);
   const [showSummaryEn, setShowSummaryEn] = useState(false);
   const [showTranscriptEn, setShowTranscriptEn] = useState(false);
-  const [translateError, setTranslateError] = useState<string | null>(null);
   /** Reading modes — DISPLAY only, the record is untouched. */
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [cleanRead, setCleanRead] = useState(false);
@@ -304,7 +303,6 @@ export default function CallDetailPage({
   }
 
   async function translate(what: "summary" | "transcript"): Promise<void> {
-    setTranslateError(null);
     if (what === "summary") {
       setSummaryEn("loading");
       setShowSummaryEn(true);
@@ -316,7 +314,7 @@ export default function CallDetailPage({
       } catch {
         setSummaryEn(null);
         setShowSummaryEn(false);
-        setTranslateError(t("translateFailed"));
+        notifyError(t("translateFailed"));
       }
       return;
     }
@@ -338,7 +336,7 @@ export default function CallDetailPage({
     } catch {
       setTranscriptEn(null);
       setShowTranscriptEn(false);
-      setTranslateError(t("translateFailed"));
+      notifyError(t("translateFailed"));
     }
   }
   const [playheadMs, setPlayheadMs] = useState(0);
@@ -1797,13 +1795,6 @@ export default function CallDetailPage({
             </p>
           )}
           </SectionScroller>
-          {/* a refusal stays OUTSIDE the scroller: an alert that can be
-              scrolled out of sight is an alert nobody reads */}
-          {translateError ? (
-            <p role="alert" className="mt-2 text-xs text-danger">
-              {translateError}
-            </p>
-          ) : null}
         </section>
         ) : null}
 

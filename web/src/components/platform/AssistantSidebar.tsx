@@ -8,14 +8,17 @@ import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
-import type { ConnectorStatus } from "@/api/types";
+import type { AssistantSession, ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { FloorChip } from "./FloorChip";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
 import { ThinkingLine, TypingCaret } from "./ThinkingLine";
+import { AnswerContent } from "./AnswerBlocks";
 import { micTone, useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
 import { useAutoGrow } from "@/lib/autoGrow";
+import { digits } from "@/lib/format";
+import { untitledNumbers } from "@/lib/sessionTitles";
 
 /** three and three — the same box at two widths (see Hub.tsx on why the
     ceiling is the floor) */
@@ -38,7 +41,7 @@ import {
   subscribeAssistantOpen,
   subscribeRecordingLive,
 } from "@/lib/assistantBus";
-import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
+import { notify } from "@/lib/notify";
 import { Icon } from "@/components/icons";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -220,6 +223,11 @@ export function sidebarIsSilentOn(pathname: string): boolean {
    * exception in platform — that in assistant page there is no need for
    * assistant side bar on the page, so remove it there").
    *
+   * That surface is HOME now (2026-09-08): `/` is the agent page and
+   * `/assistant` redirects to it. The rule did not change — the address it
+   * names did — and both are listed, because a redirect still renders one
+   * frame and a strip that appears and vanishes reads as a fault.
+   *
    * This is a different reason from every other line here. The rest are
    * silent because the platform SHELL does not render there, so there is no
    * content column to step aside and a fixed strip would lie over the page.
@@ -232,6 +240,10 @@ export function sidebarIsSilentOn(pathname: string): boolean {
    * assistant rather than being it — the orb was once silent on all of them
    * and that was too wide.
    */
+  if (route === "/") return true;
+  /* `/assistant` still resolves — it REDIRECTS to `/` (2026-09-08) — so the
+     rule names it too: the strip must not appear for the frame between the
+     request and the redirect landing. */
   if (/^\/assistant(\/|$)/.test(route)) return true;
   if (/^\/platform(\/|$)/.test(route)) return true;
   if (/^\/join(\/|$)/.test(route)) return true;
@@ -243,6 +255,10 @@ export function AssistantSidebar() {
   /* the mic's label lives in `platform` with the assistant page's own mic —
      one label for one control, said the same way on both surfaces */
   const tp = useTranslations("platform");
+  /* the untitled conversation's name is the HISTORY table's string — «New chat
+     3» must be the same words and the same number in the menu that switches to
+     it and in the table that lists it, or one conversation wears two names */
+  const tc = useTranslations("conversations");
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -493,7 +509,6 @@ export function AssistantSidebar() {
     enabled: visible,
   });
 
-  const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(inputRef, input, PANEL_PROMPT_ROWS);
   /**
@@ -591,16 +606,6 @@ export function AssistantSidebar() {
     }).catch(() => undefined);
     return () => { live = false; };
   }, [pathname]);
-
-  /** every bus notice becomes a toast, gone after 4s */
-  useEffect(() => {
-    return subscribeNotify((notice) => {
-      setToasts((prev) => [...prev.slice(-2), notice]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((item) => item.id !== notice.id));
-      }, 4000);
-    });
-  }, []);
 
   /*
    * AGENTS NO LONGER POST HERE (user directive, 2026-09-03: "i dont want them
@@ -1155,15 +1160,29 @@ export function AssistantSidebar() {
            open state is a full-width overlay there. `shadow-xl` because it
            lies OVER the page rather than in a column of its own — an overlay
            with no edge reads as part of what it covers. */
-        className={`fixed bottom-0 end-0 z-30 flex-col border-s border-border bg-surface shadow-xl md:flex md:w-[var(--assistant-w)] ${
+        className={`glass-chrome fixed bottom-0 end-0 z-30 flex-col shadow-island md:flex md:w-[var(--assistant-w)] ${
           open ? "flex w-full" : "hidden"
         }`}
       >
         {open ? (
           <>
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
-              <span className="text-pane-title font-semibold text-fg">{t("title")}</span>
+              {/* THE GREEN DOT IS GONE. It read as a status light — connected,
+                  live,
+                  listening — and stood for none of those: it was on from the
+                  moment the panel opened, whatever the assistant was doing.
+                  The header's one accent is the composer's, and a lamp that
+                  never changes is a lamp nobody can read. */}
+              <SessionMenu
+                current={live.sessionId}
+                fallbackTitle={t("title")}
+                label={t("switchConversation")}
+                newLabel={t("newConversation")}
+                untitled={(n) => tc("newChat", { n: digits(n, locale) })}
+                emptyLabel={t("noConversations")}
+                onPick={(id) => { if (id !== live.sessionId) void loadSession(id); }}
+                onNew={freshConversation}
+              />
               {voiceStatus ? (
                 <span className="text-group-label text-accent">{voiceStatus}</span>
               ) : null}
@@ -1181,14 +1200,18 @@ export function AssistantSidebar() {
                   type in, not something you reach to the far corner for — and
                   the header is now only what NAMES the room and what closes
                   it. */}
+              {/* COLLAPSE, NOT CLOSE. The X was a lie about what the
+                  button does — the assistant is a fixture and never leaves the
+                  screen; this narrows the column to its strip, which is what a
+                  chevron meeting a wall says and a cross does not. */}
               <button
                 type="button"
                 className={`${headerButton} ms-auto`}
-                aria-label={t("close")}
-                title={t("close")}
+                aria-label={t("collapse")}
+                title={t("collapse")}
                 onClick={collapseSidebar}
               >
-                <Icon name="close" size="md" />
+                <Icon name="collapseEnd" size="md" className="rtl:-scale-x-100" />
               </button>
             </div>
 
@@ -1237,13 +1260,32 @@ export function AssistantSidebar() {
                       >
                         {/* the name leads the answer's own line, not a heading
                             above it */}
-                        {m.role === "assistant" ? (
+                        {/* no name on Echo's own turns — the house mark beside
+                            the line is the signature; see ConversationThread */}
+                        {m.role === "assistant" && (m.author ?? ECHO) !== ECHO ? (
                           <span className="me-1.5 font-semibold text-fg">
                             {/* the colon marks a speaker — see ConversationThread */}
                             <AgentName handle={m.author ?? ECHO} />:
                           </span>
                         ) : null}
-                        {m.content}
+                        {/* THE HUB'S OWN RENDERER on the assistant's turns,
+                            plain text on the person's own.
+
+                            This was `<Markdown>` alone, and the panel is a
+                            surface that ADVERTISES client tools — which is
+                            exactly the condition under which core teaches the
+                            model the `neurai-block` syntax. So the model
+                            emitted checklists here and the panel, having never
+                            been given the parser, showed the reader the JSON
+                            in a code fence (2026-09-08). One renderer now, on
+                            both surfaces; `compact` is the 30% column, not a
+                            second design. A question is typed, not authored,
+                            so a member's asterisks stay asterisks. */}
+                        {m.role === "assistant" ? (
+                          <AnswerContent text={m.content} streaming={m.streaming} compact />
+                        ) : (
+                          m.content
+                        )}
                         {/*
                           NO TOOL CHIPS (user directive, 2026-09-04) — and THIS
                           panel is where removing them was felt, for a reason
@@ -1263,7 +1305,7 @@ export function AssistantSidebar() {
                           ? <TypingCaret />
                           : null}
                         {m.role === "assistant" && m.streaming && m.content === ""
-                          ? <ThinkingLine />
+                          ? <ThinkingLine tools={m.tool_calls} />
                           : null}
                         {m.failed ? (
                           <span className="mt-1 block text-group-label text-warning">
@@ -1362,7 +1404,7 @@ export function AssistantSidebar() {
               className="border-t border-border p-2"
               onSubmit={(e) => { e.preventDefault(); send(); }}
             >
-              <div className="rounded-2xl border border-border bg-field px-2.5 py-2 transition-colors focus-within:border-accent">
+              <div className="rounded-2xl border border-border bg-field/70 px-2.5 py-2 backdrop-blur-sm transition-colors focus-within:border-accent">
                 {/* three lines, growing, then the box's own thin scrollbar —
                     the page's composer and this one are the same box at two
                     widths, so they take the same rows and the same hook */}
@@ -1450,41 +1492,17 @@ export function AssistantSidebar() {
       </aside>
 
       {/*
-        THE TOASTS. Positioned inside a transparent, pointer-transparent frame
-        that used to carry the shell's own `--assistant-rail` padding so a
-        notice landed beside the sidebar. There is no gutter to step around any
-        more (the panel floats over), so the frame is plain — and the toasts
-        sit at the same inline-end, which is where the panel is when it is
-        open. That overlap is accepted rather than unnoticed: a notice is a
-        few seconds and the panel is a place, and moving the stack to the
-        opposite edge would put it under the menu instead.
+        THE TOASTS MOVED OUT (2026-09-08). They were rendered here, anchored
+        beside this sidebar, which quietly made every message in the platform
+        a feature of the assistant: they inherited this component's corner,
+        its z-index and its MOUNTING — so nothing on a signed-out page could
+        raise one, because the assistant renders nothing there.
 
-        z-40, NOT z-50 (user report, 2026-09-02: "the orb is coming on top of
-        the pop up window on the side"). The modal layer is z-50 —
-        `components/ui/dialog.tsx` — and a tie between two portals is decided by
-        DOM order, which is a coin toss. The assistant is chrome and a dialog is
-        the thing you are answering, so the ladder is stated rather than raced:
-        everything here sits at 40 or below. `stacking.guard.test.ts` keeps it.
+        They now live in `components/platform/Toaster.tsx`, mounted in the
+        locale layout above every route, and rise from the middle of the
+        screen. `notify()` is unchanged and still the way to raise one; this
+        file is simply no longer the thing that draws it.
       */}
-      {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-40">
-          <div className="absolute end-4 top-16 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5 md:end-6">
-            {toasts.map((notice) => (
-              <p
-                key={notice.id}
-                role="status"
-                className={`toast-from-bell rounded-xl border px-3 py-1.5 text-group-label shadow-lg ${
-                  notice.kind === "warn"
-                    ? "border-warning/40 bg-surface text-warning"
-                    : "border-border bg-surface text-fg"
-                }`}
-              >
-                {notice.text}
-              </p>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       {/* the other half of the one door — see `trigger` */}
       {/*
@@ -1504,8 +1522,116 @@ export function AssistantSidebar() {
       */}
       {topbarPresenceHost
         ? createPortal(trigger(""), topbarPresenceHost)
-        : trigger("fixed bottom-4 end-4 z-30 border border-border bg-surface shadow-lg")}
+        : trigger("glass fixed bottom-4 end-4 z-30")}
     </>
+  );
+}
+
+/**
+ * THE HEADER IS A SWITCH, NOT A LABEL.
+ *
+ * «NeurAI Assistant» named the room and did nothing else, on a panel where the
+ * one thing you cannot do is go back to what you were just asking about: the
+ * sidebar could ADOPT a stored conversation — `loadSession`, the path the
+ * history table already hands it — but nothing in the sidebar could reach it,
+ * so resuming meant leaving for `/conversations` and coming back. The title
+ * now says which conversation you are IN and opens the list of the others.
+ *
+ * Read on OPEN, never on mount. This component renders on every page in the
+ * platform; a sessions request per navigation, for a menu nobody opened, is
+ * the same waste `ComposerMenu` refuses below. The page is short on purpose —
+ * this is the recent handful, and the door to all of them is History.
+ *
+ * Titles are the SERVER's (M4: derived from the first question, never
+ * rewritten here) and the nameless ones are numbered by `untitledNumbers`, the
+ * same helper the history table uses, so «New chat 3» is one conversation
+ * under one name on both surfaces.
+ */
+const SESSION_MENU_PAGE = 8;
+
+function SessionMenu({
+  current, fallbackTitle, label, newLabel, untitled, emptyLabel, onPick, onNew,
+}: {
+  /** the conversation the sidebar is in, or null before the first ask */
+  current: string | null;
+  fallbackTitle: string;
+  label: string;
+  newLabel: string;
+  untitled: (n: number) => string;
+  emptyLabel: string;
+  onPick: (id: string) => void;
+  onNew: () => void;
+}) {
+  const [sessions, setSessions] = useState<AssistantSession[] | "failed" | null>(null);
+
+  const load = () => {
+    /* re-read on every open, unlike the connectors list: this one CHANGES
+       while the panel is up — the current conversation is being written into
+       it as you ask — so a cached page would go stale in the one menu whose
+       job is to show what exists now. */
+    setSessions(null);
+    void api.agentSessions(false, { limit: SESSION_MENU_PAGE })
+      .then((rows) => setSessions(rows))
+      .catch(() => setSessions("failed"));
+  };
+
+  const rows = Array.isArray(sessions) ? sessions : [];
+  const numbers = untitledNumbers(rows);
+  const nameOf = (s: AssistantSession) =>
+    s.title && s.title.trim() !== "" ? s.title : untitled(numbers.get(s.id) ?? 1);
+  /* the trigger shows the CURRENT conversation once the list has been read and
+     contains it; before that — an unopened menu, a fresh thread, or a
+     conversation older than this page — the room's name stands. Inventing a
+     title from the first message here would be the client re-deriving one. */
+  const currentRow = rows.find((s) => s.id === current);
+  const heading = currentRow ? nameOf(currentRow) : fallbackTitle;
+
+  return (
+    <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          /* the title KEEPS its typography — this is still the header's name,
+             and a control that reads as a button would put a second emphasis
+             on a strip whose one accent belongs to the composer */
+          className="flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-pane-title font-semibold text-fg hover:bg-surface-2"
+          aria-label={label}
+          title={label}
+        >
+          <span className="truncate">{heading}</span>
+          <Icon name="chevronRight" size="sm" className="shrink-0 rotate-90 text-fg-muted" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-56 min-w-0 p-0.5 [&_[role=menuitem]]:gap-1.5 [&_[role=menuitem]]:px-2 [&_[role=menuitem]]:py-1 [&_[role=menuitem]]:text-xs"
+      >
+        <DropdownMenuItem onSelect={() => onNew()}>
+          <Icon name="plus" size="sm" />
+          {newLabel}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {sessions === null ? (
+          <div className="px-2 py-1.5"><SkeletonLines lines={3} /></div>
+        ) : sessions === "failed" || rows.length === 0 ? (
+          <DropdownMenuItem disabled>{emptyLabel}</DropdownMenuItem>
+        ) : (
+          rows.map((s) => (
+            <DropdownMenuItem key={s.id} onSelect={() => onPick(s.id)}>
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                {/* the tick, not a highlight: which conversation you are in is
+                    a fact about one row, and tinting it would compete with the
+                    menu's own hover for "this one" */}
+                <span className="w-3 shrink-0" aria-hidden>
+                  {s.id === current ? <Icon name="check" size="sm" /> : null}
+                </span>
+                <span className="truncate">{nameOf(s)}</span>
+              </span>
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The one org birth path (db/0082): signup joins by NAME now and founds
@@ -16,12 +17,10 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   async function create(): Promise<void> {
     if (busy || !name.trim() || !reason.trim()) return;
     setBusy(true);
-    setFailed(false);
     try {
       await api.platformCreateOrg(name.trim(), reason.trim());
       setName("");
@@ -29,7 +28,7 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
       setOpen(false);
       onCreated();
     } catch {
-      setFailed(true);
+      notifyError(t("newOrgFailed"));
     } finally {
       setBusy(false);
     }
@@ -67,9 +66,6 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
           onKeyDown={(e) => { if (e.key === "Enter") void create(); }}
         />
       </div>
-      {failed ? (
-        <p role="alert" className="mt-2 text-sm text-danger">{t("newOrgFailed")}</p>
-      ) : null}
       <div className="mt-3 flex gap-2">
         <button
           className="btn-primary"
@@ -80,7 +76,7 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
         </button>
         <button
           className="btn-secondary"
-          onClick={() => { setOpen(false); setFailed(false); }}
+          onClick={() => setOpen(false)}
         >
           {t("cancel")}
         </button>

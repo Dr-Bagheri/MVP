@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import { PasswordInput } from "@/components/PasswordInput";
 import { Field } from "@/components/ui";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import type { User } from "@/api/types";
 import { personName } from "@/lib/format";
 import { useLocale } from "next-intl";
@@ -46,7 +46,6 @@ export function SetMemberPassword({
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const mismatch = confirm.length > 0 && password !== confirm;
   const tooShort = password.length > 0 && password.length < 8;
@@ -56,7 +55,6 @@ export function SetMemberPassword({
     event.preventDefault();
     if (!ready) return;
     setBusy(true);
-    setError(null);
     try {
       const { sessions_ended } = await api.setMemberPassword(member.id, password);
       /* the COUNT, not a generic success — see the header */
@@ -74,7 +72,7 @@ export function SetMemberPassword({
        * those is a different thing an admin would do differently about. A
        * client re-deriving them would be copying rules it does not own.
        */
-      setError(
+      notifyError(
         e instanceof BffError
           ? (e.status === 401 ? t("passwordSetFailed") : e.detail ?? t("passwordSetFailed"))
           : t("passwordSetFailed"),
@@ -94,7 +92,7 @@ export function SetMemberPassword({
     >
       <form
         onSubmit={submit}
-        className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-xl"
+        className="w-full max-w-md glass-solid rounded-2xl p-5 shadow-xl"
       >
         <h2 className="h-section">{t("passwordSetTitle", { name: personName(member, locale) })}</h2>
 
@@ -118,7 +116,6 @@ export function SetMemberPassword({
           {mismatch ? (
             <p className="text-xs text-danger">{t("passwordSetMismatch")}</p>
           ) : null}
-          {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2">

@@ -108,3 +108,57 @@ select t.ok(
   '0160: a person removes an item the assistant added — the authority runs one way');
 
 reset role;
+
+-- ─── db/0220: a diarizer's cluster name is not a person ──────────────────
+--
+-- `S1·1` is `call_speaker.label` — what `upsertSpeakers` calls the diarizer's
+-- first cluster in the first part of a recording. It reached this column on
+-- 2026-09-09 by way of the summary's «Owner: …» line, and it is what
+-- ItemsPanel hands the directory when it turns an action item into a task,
+-- so a placeholder here becomes a task nobody can be given.
+--
+-- The migration's own self-check ran once, on the day it was applied. This is
+-- the standing half: a constraint dropped and not recreated two migrations
+-- from now is exactly the edit those self-checks cannot see.
+set local role echo_app;
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob
+
+select t.raises(
+  $$insert into echo.meeting_item (meeting_id, org_id, kind, body, source, owner, created_by)
+    values ('a3000000-0000-4000-8000-000000000001',
+            '0a000000-0000-4000-8000-00000000000a',
+            'action', 'کاری که به هیچ‌کس نمی‌رسد', 'user', 'S1·1',
+            '02000000-0000-4000-8000-000000000002')$$,
+  '23514',
+  '0220: an item cannot be owned by a diarizer label');
+
+select t.raises(
+  $$update echo.meeting_item set owner = 'S2·1'
+     where id = 'a3000000-0000-4000-8000-00000000000a'$$,
+  '23514',
+  '0220: nor can one be renamed into a diarizer label afterwards');
+
+-- THE CONTROL, and the reason the two lines above mean anything: the same
+-- write with a PERSON's name in the same field goes through. A constraint
+-- that refused every owner would satisfy both refusals and take the feature
+-- with it.
+update echo.meeting_item set owner = 'سارا میچل'
+ where id = 'a3000000-0000-4000-8000-00000000000a';
+select t.ok(
+  (select owner from echo.meeting_item
+    where id = 'a3000000-0000-4000-8000-00000000000a') = 'سارا میچل',
+  '0220 CONTROL: an ordinary name is still an owner');
+
+-- and «Speaker 1» is deliberately NOT the database's to refuse: it is
+-- ordinary language, dropped at the extractor where the writer is a model.
+update echo.meeting_item set owner = 'Speaker 1'
+ where id = 'a3000000-0000-4000-8000-00000000000a';
+select t.ok(
+  (select owner from echo.meeting_item
+    where id = 'a3000000-0000-4000-8000-00000000000a') = 'Speaker 1',
+  '0220: the ordinal handle is the parser''s to drop, not the database''s');
+
+update echo.meeting_item set owner = null
+ where id = 'a3000000-0000-4000-8000-00000000000a';
+
+reset role;

@@ -30,6 +30,8 @@ import { firstServable } from "../api/models.ts";
 import { createSessionsRepo } from "../api/sessions.ts";
 import { resolveIdentity } from "../db/actor.ts";
 import { hasMailDrafts } from "../db/capabilities.ts";
+import { readerLanguage } from "../db/reader-language.ts";
+import { mailDraftNote } from "./delivered-copy.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import type { ConnectorItem, ConnectorProvider, MailEnvelope } from "../api/connectors.ts";
@@ -255,14 +257,24 @@ async function draftFor(
   if (!verdict.reply || !verdict.body) return "skipped";
 
   const sessions = createSessionsRepo(options.db);
-  const conversation = await sessions.resolveForAsk(identity, null, envelope.subject);
+  /* db/0221: agent-opened. The draft row and the card point here, and a
+     subject line borrowed from somebody else's email is the clearest case of
+     a title that was never a question this person asked. */
+  const conversation = await sessions.resolveForAsk(identity, null, envelope.subject, "agent");
   await sessions.append(identity, {
     sessionId: conversation.id,
     role: "assistant",
     /* what the person reads in the thread. The draft itself is a card the
        UI renders from the row — repeating the body here would be a second
-       copy to fall out of step with the one they can actually send. */
-    content: verdict.note || "پیش‌نویس پاسخ آماده است.",
+       copy to fall out of step with the one they can actually send.
+
+       TWO AUTHORS, TWO RULES (2026-09-09). `verdict.note` is the MODEL's, so
+       it arrives in the language of the mail it read and is never touched.
+       The stand-in is OURS, and it was hard-coded Persian — one line of
+       Persian in an English thread, on the one path where the model declined
+       to write a note. It follows the reader now, like every other sentence
+       this worker stores; see db/reader-language.ts. */
+    content: verdict.note || mailDraftNote(await readerLanguage(options.db, identity)),
   });
 
   const draft = await options.drafts.create(identity, {

@@ -29,7 +29,9 @@ import {
   IconArchive, IconCheck, IconPencil, IconPeople3, IconPlus, IconRetry, IconTrash,
 } from "@/components/icons";
 import { SkeletonLines } from "@/components/scaffold";
-import { digits, formatDate, personName } from "@/lib/format";
+import { digits, formatDate, personName, personPhoto } from "@/lib/format";
+import { notifyError } from "@/lib/notify";
+import { useSeededName } from "@/lib/seededNames";
 
 /**
  * ONE PROJECT (0181), and since 2026-09-08 THE PLACE A PROJECT IS EDITED.
@@ -73,6 +75,9 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
   const locale = useLocale();
+  /* the work list names the board's own columns — see TaskViews for why
+     every render site and not only the board itself */
+  const seededName = useSeededName();
   const [project, setProject] = useState<ProjectRecord | null | "missing" | "failed">(null);
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
   const [board, setBoard] = useState<{ columns: TaskColumnRecord[]; tasks: TaskCardRecord[] } | null>(null);
@@ -85,7 +90,6 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
   const [topics, setTopics] = useState<TaskTopicRecord[]>([]);
   const [condemned, setCondemned] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const epoch = useRefreshEpoch("projects");
   const load = useCallback(() => {
@@ -164,10 +168,9 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
   const lead = people.find((p) => p.id === project.lead_id) ?? null;
 
   const patch = (body: Parameters<typeof api.updateProject>[1]) => {
-    setError(null);
     void api.updateProject(project.id, body)
       .then(setProject)
-      .catch(() => setError(t("writeFailed")));
+      .catch(() => notifyError(t("writeFailed")));
   };
 
   const start = isAdmin ? (
@@ -334,7 +337,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           <span className={RAIL_EMPTY}>{t("noLead")}</span>
         ) : (
           <span className="flex items-center gap-2">
-            <Avatar name={personName(lead, locale)} size="xs" />
+            <Avatar name={personName(lead, locale)} src={personPhoto(lead)} size="xs" />
             <span className={RAIL_VALUE}>{personName(lead, locale)}</span>
           </span>
         )}
@@ -357,10 +360,12 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
             }}
             onToggle={(userId) => {
               const on = !project.member_ids.includes(userId);
-              setError(null);
               void api.setProjectMember(project.id, userId, on)
                 .then(load)
-                .catch(() => setError(t("writeFailed")));
+                /* the refusal is said in the toast stack, which rises over this
+                   panel — the `notice` slot DetailPanel used to carry for it is
+                   gone on purpose (see that file's header) */
+                .catch(() => notifyError(t("writeFailed")));
             }}
           />
         ) : members.length === 0 ? (
@@ -372,7 +377,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           <ul className="space-y-1.5">
             {members.map((person) => (
               <li key={person.id} className="flex items-center gap-2">
-                <Avatar name={personName(person, locale)} size="xs" />
+                <Avatar name={personName(person, locale)} src={personPhoto(person)} size="xs" />
                 <span className={`min-w-0 flex-1 truncate ${RAIL_VALUE}`}>
                   {personName(person, locale)}
                 </span>
@@ -522,11 +527,6 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         onClose={onClose}
         start={start}
         end={end}
-        notice={error !== null ? (
-          <p role="alert" className="border-b border-border bg-danger/10 px-4 py-2 text-xs text-danger">
-            {error}
-          </p>
-        ) : null}
         rail={rail}
       >
         {/* the title and its summary are ONE section of the divided body, and
@@ -541,7 +541,18 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
                 maxLength={120}
                 aria-label={t("fieldName")}
                 onChange={(e) => setName(e.target.value)}
-                onBlur={() => { if (name.trim() !== "" && name.trim() !== project.name) patch({ name: name.trim() }); }}
+                /* AN EMPTY TITLE SNAPS BACK (fixed 2026-09-10). This used to
+                   fall through all three conditions and do nothing at all: no
+                   write, no word, and the field left showing the cleared value
+                   while the record still held the name. The screen disagreed
+                   with the record and only the record was right. Reverting says
+                   the refusal without inventing a sentence for it — a project
+                   has no nameless state to show. */
+                onBlur={() => {
+                  const next = name.trim();
+                  if (next === "") { setName(project.name); return; }
+                  if (next !== project.name) patch({ name: next });
+                }}
                 className={`${PANEL_INPUT} flex-1`}
               />
             ) : (
@@ -622,7 +633,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
                         {t(`priority_${task.priority}`)}
                       </span>
                       {column !== undefined ? (
-                        <span className="shrink-0 text-[10px] text-fg-subtle">{column.name}</span>
+                        <span className="shrink-0 text-[10px] text-fg-subtle">{seededName(column.name)}</span>
                       ) : null}
                     </Link>
                   </li>
@@ -690,7 +701,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
                  and the list behind it, keyed on the same epoch, has already
                  dropped the card. */
               .then(onClose)
-              .catch(() => setError(t("writeFailed")));
+              .catch(() => notifyError(t("writeFailed")));
           }}
         />
       ) : null}
@@ -821,7 +832,7 @@ function Workload({ rows, people, members, locale, meId }: {
             return (
               <li key={userId}>
                 <div className="mb-1 flex items-center gap-2">
-                  <Avatar name={person === null ? "?" : personName(person, locale)} size="xs" />
+                  <Avatar name={person === null ? "?" : personName(person, locale)} src={personPhoto(person)} size="xs" />
                   <span className="min-w-0 flex-1 truncate text-xs text-fg">
                     {person === null ? t("unknownPerson") : personName(person, locale)}
                   </span>

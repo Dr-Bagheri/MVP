@@ -13,7 +13,7 @@ import { PageContainer, SkeletonCards } from "@/components/scaffold";
 import { Icon } from "@/components/icons";
 import { Link } from "@/i18n/routing";
 import { AgentAvatar } from "./AgentAvatar";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import { AGENT_COLOR_CHOICES, AGENT_ICON_CHOICES, useAgentCopy } from "./agentAppearance";
 
 /**
@@ -247,14 +247,12 @@ function AgentEditor({ agent, onClose, onSaved }: {
   const [color, setColor] = useState(agent?.color ?? "violet");
   const [web, setWeb] = useState(agent?.web ?? false);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
 
   const canSave = name.trim() !== "" && instructions.trim() !== "" && !busy;
 
   const save = () => {
     if (!canSave) return;
     setBusy(true);
-    setFailed(null);
     const body = {
       name: name.trim(), description: description.trim(),
       instructions: instructions.trim(), icon, color, web,
@@ -268,7 +266,7 @@ function AgentEditor({ agent, onClose, onSaved }: {
       : api.updateAgent(agent.id, body))
       .then(() => { notify(t("saved")); onSaved(); })
       .catch((cause: { detail?: string }) => {
-        setFailed(cause?.detail ?? t("saveFailed"));
+        notifyError(cause?.detail ?? t("saveFailed"));
         setBusy(false);
       });
   };
@@ -305,7 +303,6 @@ function AgentEditor({ agent, onClose, onSaved }: {
         </div>
       </div>
 
-      {failed === null ? null : <p className="mt-2 text-sm text-danger">{failed}</p>}
 
       <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
         <button type="button" className="btn btn-sm border border-border bg-surface text-fg" onClick={onClose}>

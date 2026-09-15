@@ -24,6 +24,10 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import pg from 'pg'
+// secretDbUrl() below calls this. Without the import the runner throws
+// ReferenceError on any machine that has no DATABASE_URL in the environment —
+// which is the path the comment above secretDbUrl() describes as the normal one.
+import { findNeuraiPython } from './lib/neurai-python.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
@@ -48,12 +52,14 @@ const FRESH = process.argv.includes('--fresh')
 // The DB connection string is a secret (it carries the password), so it lives
 // in the same encrypted store as every other credential on this machine and
 // never in the repo, the environment file, or a log line.
-const NEURAI_PYTHON =
-  process.env.NEURAI_PYTHON ??
-  'C:\\Users\\amirreza\\Desktop\\neurai-mvp\\server\\.venv\\Scripts\\python.exe'
 
+// Where that interpreter lives is a property of the MACHINE, so it is required
+// rather than defaulted — see lib/neurai-python.mjs for why both obvious
+// defaults are worse than none (review F4). This caller DEGRADES: an
+// ECHO_ENV_FILE or DATABASE_URL sink means no interpreter is needed at all.
 function secretDbUrl() {
-  if (!existsSync(NEURAI_PYTHON)) return null
+  const { path: NEURAI_PYTHON } = findNeuraiPython()
+  if (!NEURAI_PYTHON) return null
   try {
     const out = execFileSync(
       NEURAI_PYTHON,
@@ -195,9 +201,54 @@ const LEDGER = `
   end $$;
   alter table public.echo_migration enable row level security;`
 
+/**
+ * NO TWO MIGRATIONS MAY SHARE A NUMBER (review F12).
+ *
+ * Two files were numbered 0132 and BOTH applied: the ledger is keyed on the
+ * full filename, so there is no primary-key collision, and the order came
+ * from a plain `.sort()` — alphabetically. `…sweeps…` sorting before
+ * `…webhook…` happened to be a safe order, which means the ordering contract
+ * was being kept by the alphabet rather than by the number. A future
+ * `0132_a_…` needing to run AFTER the webhook file would have run before it,
+ * silently.
+ *
+ * This lives inside `migrationFiles()` so it also fires on the `migrate`
+ * path, and `migrate` calls that BEFORE opening a connection — a duplicate
+ * number is a fact about the repository, not about any database, and must be
+ * reportable without one.
+ *
+ * It names BOTH files rather than the count, because "there is a duplicate"
+ * sends the reader to go and find it.
+ */
+function assertUniqueNumbers(files) {
+  const byNumber = new Map()
+  for (const f of files) {
+    const n = f.slice(0, 4)
+    if (!/^\d{4}$/.test(n)) continue
+    byNumber.set(n, [...(byNumber.get(n) ?? []), f])
+  }
+  const clashes = [...byNumber.entries()].filter(([, fs]) => fs.length > 1)
+  if (clashes.length === 0) return
+  const lines = clashes
+    .map(([n, fs]) => `  ${n}: ${fs.join('  +  ')}`)
+    .join('\n')
+  throw new Error(
+    [
+      'two migrations share a number, so their order is decided by the alphabet:',
+      lines,
+      '',
+      'Renumber one of each pair — and check which one is safe to move before you do:',
+      'a file that rewrites a function LATER migrations also rewrite must never move',
+      'to the tail. Renumbering changes the ledger `version`, so an already-migrated',
+      'database needs its echo_migration row renamed once.',
+    ].join('\n'),
+  )
+}
+
 function migrationFiles() {
-  return readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith('.sql'))
+  const names = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql'))
+  assertUniqueNumbers(names)
+  return names
     .sort()
     .map((file) => {
       const sql = readFileSync(join(MIGRATIONS, file), 'utf8')
@@ -211,13 +262,18 @@ function migrationFiles() {
 }
 
 async function migrate({ quiet = false } = {}) {
+  /* BEFORE the connection, deliberately (review F12): a duplicate migration
+     number is a fact about this directory, not about any database, so it must
+     be reportable without one. Reading the files here also means `migrate`
+     cannot open a connection and then refuse. */
+  const pending = migrationFiles()
   const db = await connect()
   try {
     await db.query(LEDGER)
     const { rows } = await db.query('select version, checksum from public.echo_migration')
     const applied = new Map(rows.map((r) => [r.version, r.checksum]))
 
-    for (const m of migrationFiles()) {
+    for (const m of pending) {
       const seen = applied.get(m.version)
       if (seen) {
         // Migrations are append-only. Editing one that has already run means

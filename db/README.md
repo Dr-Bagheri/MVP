@@ -145,7 +145,7 @@ never gets one at all: its procedure runs from the owner connection by design
 (D13), and a login would turn a deliberate operator path into a reachable
 service account. The script refuses it by name.
 
-**Executed on the dev project (`aqgpxnyuxukwgphrxslw`) on 2026-08-12**, scope
+**Executed on the dev project on 2026-08-12**, scope
 `echo_app` + `echo_agent` only, steward-authorized. Note that `db.mjs reset`
 (and therefore `test --fresh`) drops and recreates the roles, which invalidates
 the stored URLs — re-run this script after any such rebuild.

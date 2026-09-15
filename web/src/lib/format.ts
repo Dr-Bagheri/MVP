@@ -52,6 +52,29 @@ export function personName(
 }
 
 /**
+ * A person's PHOTO, beside `personName`'s answer for their name.
+ *
+ * It is a function and not `person.avatar_url` at each site for the two
+ * reasons the sites actually have. First, several of them already hold a
+ * person who may be MISSING — a comment whose author has left, a workload row
+ * for an id the roster no longer lists — and they render `?` for the name; the
+ * photo has to answer null there rather than throw. Second, not every record
+ * that names a person carries the field: an avatar is ~8 KB of `data:` URL, so
+ * it rides the ROSTER alone (core's `OrgPersonRecord`) and a surface resolves
+ * it by id. A structural parameter lets a caller pass whichever record it has
+ * without a cast, and a cast against a wire type is a drift report somebody
+ * decided not to file.
+ *
+ * Null is not a failure: it is "no photo", and `<Avatar>` draws the initial —
+ * which is the state every person is in until they upload one.
+ */
+export function personPhoto(
+  person: { avatar_url?: string | null } | null | undefined,
+): string | null {
+  return person?.avatar_url ?? null;
+}
+
+/**
  * A model's DISPLAY name: the catalogue's "Provider: Model" with the
  * provider half dropped (user directive — "Google: Gemini 3.1" reads as
  * noise; the model IS the name). The id keeps the provider for anything
@@ -65,6 +88,34 @@ export function modelLabel(name: string): string {
   if (display === "Gemini 3.1 Pro Preview") return "Gemini 3.1 Pro";
   if (display === "Gemini 3.1 Flash Lite") return "Gemini 3.1 Flash";
   return display;
+}
+
+/**
+ * A model's price, as the catalogue states it: USD per MILLION tokens, input
+ * then output.
+ *
+ * Digits follow the LANGUAGE (the platform's own axis) and the currency does
+ * not: `$` is the unit the provider bills in, and translating it would be a
+ * claim about what an org pays. Trailing zeros are trimmed because these are
+ * read as a comparison — `$1` beside `$1.75` is the question an admin has,
+ * and `$1.00` is three characters of nothing in a truncating row.
+ */
+export function modelPrice(
+  cost: { input: number; output: number }, locale: string,
+): string {
+  const one = (n: number) => `$${digits(Number(n.toFixed(3)), locale)}`;
+  return `${one(cost.input)} / ${one(cost.output)}`;
+}
+
+/**
+ * A context window, rounded to the unit a person compares in. 1_048_576 and
+ * 1_050_000 are both "1M" to the question being asked here, and rendering the
+ * exact token count invites a comparison the number cannot support.
+ */
+export function modelContext(tokens: number, locale: string): string {
+  if (tokens >= 1_000_000) return `${digits(Math.round(tokens / 100_000) / 10, locale)}M`;
+  if (tokens >= 1_000) return `${digits(Math.round(tokens / 1_000), locale)}K`;
+  return digits(tokens, locale);
 }
 
 const JALALI_MONTHS = [
@@ -314,6 +365,33 @@ export function formatRelativeDate(iso: string, locale: string): string {
     return locale === "fa" ? `${faDigits(diff)} روز پیش` : `${diff} days ago`;
   }
   return formatDate(iso, locale);
+}
+
+/**
+ * "How long ago" at CONVERSATION granularity (2026-09-08, the home sidebar's
+ * session rows).
+ *
+ * `formatRelativeDate` beside it answers in DAYS, and for a list somebody is
+ * scanning to find the thread they were in twenty minutes ago, «امروز» is the
+ * answer for everything they might be looking for. So this one is finer until
+ * the day boundary and then HANDS OVER to it rather than growing a second
+ * ladder — the two must not disagree about what «دیروز» means, and there is
+ * exactly one place that decides it.
+ *
+ * A FUTURE timestamp reads as «همین حالا» rather than as a negative age: the
+ * only way a row is stamped ahead of this clock is a few seconds of skew
+ * between the server and the browser, and "in −3 minutes" is a worse answer to
+ * that than "just now".
+ */
+export function formatTimeAgo(iso: string, locale: string): string {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 1) return locale === "fa" ? "همین حالا" : "just now";
+  if (minutes < 60) {
+    return locale === "fa" ? `${faDigits(minutes)} دقیقه پیش` : `${minutes}m ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return locale === "fa" ? `${faDigits(hours)} ساعت پیش` : `${hours}h ago`;
+  return formatRelativeDate(iso, locale);
 }
 
 export function formatTime(iso: string, locale: string): string {
@@ -582,4 +660,40 @@ export function weekRangeLabel(cells: WeekCell[], locale: string): string {
   return jalali
     ? `${digits(a.d, locale)} ${monthName(a.m, a.y)} تا ${digits(b.d, locale)} ${monthName(b.m, b.y)} ${digits(b.y, locale)}`
     : `${monthName(a.m, a.y)} ${digits(a.d, locale)} – ${monthName(b.m, b.y)} ${digits(b.d, locale)}, ${digits(b.y, locale)}`;
+}
+
+/**
+ * AN ISO INSTANT THE MODEL COPIED OUT OF A TOOL RESULT, made readable.
+ *
+ * The assistant's tools hand it rows straight off the wire — a call's
+ * `started_at` is `"2026-09-09T13:22:47.105Z"` — and when it puts one of
+ * those in a `neurai-block` table it copies the string as it found it. The
+ * reader then gets a "When" column of UTC machine timestamps: right to the
+ * millisecond, in the wrong zone, and unreadable at a glance (user report,
+ * 2026-09-09, a call-history table).
+ *
+ * The prompt now asks for a written-out time (`timeInstructions`, core-side),
+ * and this is the half that does not depend on the model complying. It runs
+ * at RENDER, over model-authored cells only:
+ *
+ *  - the whole cell must BE an instant — a date with a time and a zone. A
+ *    bare `"2026-09-09"` is left alone (it may be a version label, an id
+ *    fragment, a quarter), and so is a sentence that merely contains a date;
+ *    rewriting text around a timestamp is not this function's business.
+ *  - an unparseable string is returned unchanged, never blanked: the model's
+ *    own words are always the fallback.
+ *
+ * The result is the product's own date, in the reader's calendar, zone and
+ * digits — `formatDate` and `formatTime` decide all three, so a cell in a
+ * table reads the same as the same instant on a card two panels over.
+ */
+const ISO_INSTANT_RE =
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+
+export function humanInstant(text: string, locale: string): string {
+  const trimmed = text.trim();
+  if (!ISO_INSTANT_RE.test(trimmed)) return text;
+  const at = new Date(trimmed);
+  if (Number.isNaN(at.getTime())) return text;
+  return `${formatDate(trimmed, locale)} ${formatTime(trimmed, locale)}`;
 }

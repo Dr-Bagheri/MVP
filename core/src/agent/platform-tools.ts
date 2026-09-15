@@ -56,7 +56,7 @@ import { CONNECTOR_PROVIDERS, isConnectorProvider } from "../api/connector-provi
 import type { ConnectorReads } from "./domain-tools.ts";
 import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
-import { createMeetingsRepo } from "../api/meetings.ts";
+import { createMeetingsRepo, type MeetingRecord } from "../api/meetings.ts";
 import { createTasksRepo } from "../api/tasks.ts";
 import { createProjectsRepo } from "../api/projects.ts";
 import { createMembersRepo } from "../api/members.ts";
@@ -111,6 +111,121 @@ async function denying<T>(work: () => Promise<T>, refusal: string): Promise<T> {
 function capped<T>(rows: T[], limit = CAP): { items: T[]; count: number; truncated: boolean } {
   const items = rows.slice(0, limit);
   return { items, count: items.length, truncated: rows.length > items.length };
+}
+
+/**
+ * A meeting row with how far ahead it is, in whole minutes from `now`.
+ *
+ * Present ONLY while the meeting is still ahead: a model reading
+ * `starts_in_minutes: -40` would have to know that negative means "began"
+ * and a missing field means "unparseable", and those are two different
+ * nothings wearing one number. Absent = not ahead (held, past, or a
+ * `scheduled_at` this runtime cannot read); the row's own `scheduled_at`
+ * and `call_id` say which. Rounded rather than floored so 59 seconds away
+ * reads as 1, not 0 — "starts now" is a claim about a meeting that has
+ * not started.
+ */
+export type MeetingRow = MeetingRecord & { starts_in_minutes?: number };
+
+export function withStartsIn(row: MeetingRecord, now: number): MeetingRow {
+  const at = Date.parse(row.scheduled_at);
+  if (Number.isNaN(at) || at < now) return row;
+  return { ...row, starts_in_minutes: Math.round((at - now) / 60_000) };
+}
+
+/**
+ * WHO, BY NAME — the one rule about a person in a tool result.
+ *
+ * `list_tasks` published the board's own record, which carries `assignee_ids`
+ * and `created_by` as UUIDs because that is what the SCREEN needs: the web
+ * fetches the roster once and resolves every mark on the page against it. A
+ * model has no roster and no second render, so asked who a task belongs to it
+ * answered with the id — a production answer on 2026-09-09 listed eight tasks
+ * whose "Assigned To" column read `fa54eda9-ab86-442f-a3da-95d2c9aed86b`, one
+ * of them the id of the person reading it.
+ *
+ * The row was never wrong; the AUDIENCE changed. An id in a sentence written
+ * for a person is never the answer, so the tools that answer "who is carrying
+ * this" resolve it here, once, against the same roster the picker uses
+ * (`people()`, read under the caller's own identity — a member's answer names
+ * exactly the colleagues a member can see).
+ *
+ * THE ID IS REPLACED, NOT ACCOMPANIED. Publishing `assignees` beside
+ * `assignee_ids` would have been the smaller diff and would have left the
+ * defect reachable: a model that has a uuid in front of it eventually prints
+ * one, and nothing downstream can tell that answer from a right one. Nothing
+ * needs the id back — every write goes through a client tool that resolves a
+ * person by name, handle or id (`resolveColleague`), so a name is a complete
+ * round trip.
+ *
+ * REFUSED ALTERNATIVE: telling the model in the prompt to call `list_members`
+ * and join the two lists itself. It does that about half the time — which is
+ * the worst of both, because the failures look exactly like the successes and
+ * only a reader who knows the person's name can tell them apart.
+ */
+export const UNKNOWN_PERSON = "an unknown colleague";
+
+export type PersonName = (id: string | null | undefined) => string;
+
+/**
+ * The lookup, from the roster the caller can see.
+ *
+ * An id that is not on it — a suspended colleague, somebody tombstoned since
+ * the card was written — is NOT passed through as itself: falling back to the
+ * id would keep the exact defect for exactly the people whose names are
+ * hardest to check. It reads as unknown, which is what it is.
+ */
+export function personNames(
+  roster: ReadonlyArray<{ id: string; display_name: string; display_name_en: string | null }>,
+): PersonName {
+  const byId = new Map(
+    roster.map((person) => {
+      /* the name the product displays; the Latin one only when there is no
+         other, because M24's `display_name_en` is an addition and never the
+         authored name */
+      const authored = person.display_name.trim();
+      const latin = (person.display_name_en ?? "").trim();
+      return [person.id, authored !== "" ? authored : latin] as const;
+    }),
+  );
+  return (id) => {
+    const name = id === null || id === undefined ? undefined : byId.get(id);
+    return name !== undefined && name !== "" ? name : UNKNOWN_PERSON;
+  };
+}
+
+/** A board card as an answer: its people named, its ids gone. */
+export function taskWithPeople<T extends { assignee_ids: string[]; created_by: string }>(
+  card: T,
+  nameOf: PersonName,
+): Omit<T, "assignee_ids" | "created_by"> & { assignees: string[]; created_by: string } {
+  const { assignee_ids, created_by, ...rest } = card;
+  return {
+    ...rest,
+    created_by: nameOf(created_by),
+    assignees: assignee_ids.map((id) => nameOf(id)),
+  };
+}
+
+/**
+ * The same card in full. `actor_id` becomes `actor` rather than holding a
+ * name under an `_id` key: a field whose name says id and whose value is a
+ * name is the two-spellings defect waiting for its first reader.
+ */
+export function taskDetailWithPeople<
+  T extends {
+    assignee_ids: string[];
+    created_by: string;
+    comments: { created_by: string }[];
+    events: { actor_id: string }[];
+  },
+>(detail: T, nameOf: PersonName) {
+  const card = taskWithPeople(detail, nameOf);
+  return {
+    ...card,
+    comments: detail.comments.map((comment) => ({ ...comment, created_by: nameOf(comment.created_by) })),
+    events: detail.events.map(({ actor_id, ...event }) => ({ ...event, actor: nameOf(actor_id) })),
+  };
 }
 
 function tool<TArgs>(
@@ -208,20 +323,45 @@ export function createPlatformTools(): PlatformTool[] {
     }),
 
     // ── meetings ─────────────────────────────────────────────────────────
-    tool<{ archived?: boolean }>({
+    tool<{ archived?: boolean; upcoming?: boolean; limit?: number }>({
       name: "list_meetings",
       label: "فهرست جلسات",
       description:
         "The organization's meetings — planned and held — with their time, mode, "
         + "host, invitees and whether a recording exists. The FIRST place to look "
-        + "for anything about what is scheduled.",
+        + "for anything about what is scheduled. Every row still ahead carries "
+        + "starts_in_minutes, counted from the server's clock. For \"what's next\", "
+        + "\"what should I do now\" or \"when is my next meeting\", pass "
+        + "upcoming:true — only meetings still ahead that have not started "
+        + "recording, soonest first.",
       parameters: Type.Object({
         archived: Type.Optional(Type.Boolean({ description: "Filed-away meetings instead of live ones." })),
+        upcoming: Type.Optional(Type.Boolean({
+          description: "Only meetings scheduled from now on with no recording yet, soonest first.",
+        })),
+        limit: Type.Optional(Type.Number({ description: "How many, up to 40." })),
       }),
       async run({ identity, deps }, args) {
+        /*
+         * ONE clock for the whole answer. `now` is read once so forty rows
+         * agree with each other about what "in 30 minutes" means, and so the
+         * filter and the number it carries cannot disagree about a meeting
+         * that starts during the query.
+         */
+        const now = Date.now();
         const rows = await createMeetingsRepo(deps.db)
           .list(identity, { archived: args.archived === true });
-        return capped(rows);
+        const annotated = rows.map((row) => withStartsIn(row, now));
+        const chosen = args.upcoming === true
+          ? annotated
+            /* `call_id === null` rather than a status word: the recorder
+               links the id the moment the take exists (0145), so a meeting
+               with one has STARTED whatever its clock says — and one already
+               under way is not "next", it is "now" */
+            .filter((row) => row.starts_in_minutes !== undefined && row.call_id === null)
+            .sort((a, b) => a.starts_in_minutes! - b.starts_in_minutes!)
+          : annotated;
+        return capped(chosen, Math.min(args.limit ?? CAP, CAP));
       },
     }),
 
@@ -276,7 +416,9 @@ export function createPlatformTools(): PlatformTool[] {
         + "project's — a project owns a folder of its own name; the rest are "
         + "personal groupings) and the cards, with owners, deadlines, priority "
         + "and labels. The place to answer what is in flight, what is late, and "
-        + "who is carrying it.",
+        + "who is carrying it. People come back NAMED (`assignees`, "
+        + "`created_by`): this tool hands back no identifier for a person, "
+        + "because none belongs in an answer.",
       parameters: Type.Object({
         archived: Type.Optional(Type.Boolean()),
       }),
@@ -285,10 +427,15 @@ export function createPlatformTools(): PlatformTool[] {
            default columns on a first visit; an agent asking what is on the
            board must answer "nothing" rather than build one, and on a role
            with SELECT only the attempt is an error rather than a board. */
-        const [board, projects] = await Promise.all([
+        const [board, projects, roster] = await Promise.all([
           createTasksRepo(deps.db).board(identity, { archived: args.archived === true, seed: false }),
           createProjectsRepo(deps.db).list(identity),
+          /* the roster the assignee picker reads, under the caller's own
+             identity — see `personNames` for why a card's people are named
+             here and not left as ids for the model to look up */
+          createTasksRepo(deps.db).people(identity),
         ]);
+        const nameOf = personNames(roster);
         /* THE FOLDERS, each saying whether it is a project's (0181: a project
            owns a folder of its own name). Until 2026-09-06 the board's
            folders were not in this answer at all and no tool listed the
@@ -300,7 +447,7 @@ export function createPlatformTools(): PlatformTool[] {
         return {
           columns: board.columns,
           folders: board.topics.map((t) => ({ id: t.id, name: t.name, project: projectOf.get(t.id) ?? null })),
-          tasks: capped(board.tasks, CAP),
+          tasks: capped(board.tasks.map((card) => taskWithPeople(card, nameOf)), CAP),
         };
       },
     }),
@@ -313,10 +460,17 @@ export function createPlatformTools(): PlatformTool[] {
         + "and its event history — who moved it and when.",
       parameters: Type.Object({ task_id: Type.String() }),
       async run({ identity, deps }, args) {
-        return denying(
-          () => createTasksRepo(deps.db).detail(identity, args.task_id),
-          "no task with that id is visible to you",
-        );
+        /* the same naming `list_tasks` does, for the same reason — the two
+           answer one question at two depths, and a defect fixed on one of
+           them is a defect still shipping on the other */
+        const [detail, roster] = await Promise.all([
+          denying(
+            () => createTasksRepo(deps.db).detail(identity, args.task_id),
+            "no task with that id is visible to you",
+          ),
+          createTasksRepo(deps.db).people(identity),
+        ]);
+        return taskDetailWithPeople(detail, personNames(roster));
       },
     }),
 
@@ -392,18 +546,23 @@ export function createPlatformTools(): PlatformTool[] {
         archived: Type.Optional(Type.Boolean()),
       }),
       async run({ identity, deps }, args) {
-        const [rows, board] = await Promise.all([
+        const [rows, board, roster] = await Promise.all([
           createProjectsRepo(deps.db).list(identity, { archived: args.archived === true }),
           createTasksRepo(deps.db).board(identity, { archived: false, seed: false }),
+          createTasksRepo(deps.db).people(identity),
         ]);
         const folderName = new Map(board.topics.map((t) => [t.id, t.name] as const));
+        /* this tool's own description promises it answers "who is on what",
+           and `member_ids` answered it with UUIDs — the same defect as the
+           board's assignees, one list over */
+        const nameOf = personNames(roster);
         return capped(rows.map((project) => ({
           id: project.id,
           name: project.name,
           summary: project.summary,
           tone: project.tone,
           folder: project.topic_id !== null ? folderName.get(project.topic_id) ?? null : null,
-          member_ids: project.member_ids,
+          members: project.member_ids.map((id) => nameOf(id)),
           task_total: project.task_total,
           task_done: project.task_done,
           archived: project.archived_at !== null,

@@ -13,12 +13,35 @@ import { join } from "node:path";
  *
  * The ladder, stated once so it stops being raced:
  *
+ *   z-60   the TOAST STACK — `components/platform/Toaster.tsx` (2026-09-08)
  *   z-50   the modal layer — `components/ui/dialog.tsx`, every dialog and
  *          side panel in the product
- *   z-40   the TOP BAR and everything hanging off it, and the assistant's
- *          announcements (both transient, and the announcements are
- *          pointer-events-none, so the tie costs nothing)
+ *   z-40   the TOP BAR and everything hanging off it
  *   z-30   the assistant sidebar itself
+ *
+ * THE TOP RUNG IS NEW AND IT IS AN EXCEPTION, so it is written down rather
+ * than left as a number somebody will "correct" later.
+ *
+ * Announcements used to sit at 40 beside the top bar, on the reasoning that
+ * both are transient and the announcements are pointer-events-none, so the
+ * tie costs nothing. That reasoning held while a message was the assistant's
+ * pill in a corner. It stopped holding on 2026-09-08, when every error and
+ * message in the product became a toast: the sentence a person most needs is
+ * a refused save raised from INSIDE the dialog that refused it, and at 40
+ * that card renders behind the dialog's own scrim — dimmed, under the panel,
+ * in exactly the case it exists for.
+ *
+ * So the rule "a dialog is the thing you are answering" is unchanged for
+ * every surface it was written about, and an ANNOUNCEMENT is not one of
+ * them. It is the platform speaking about the thing you are answering, which
+ * has to reach you over it. The same call was already made one level down:
+ * the stack strips the `aria-hidden` a modal puts on it so a screen reader
+ * still hears it, and a stack that is audible and invisible is worse than
+ * either choice made whole.
+ *
+ * What keeps this from being a layer over the app: the frame is
+ * `pointer-events-none`, so nothing up here can swallow a press meant for
+ * the dialog underneath, and a card is 26rem for a few seconds.
  *
  * The top bar joined the ladder on 2026-09-03, from a user report: "the
  * notification go behind the assistant menu bar." The bell's panel was z-50
@@ -49,6 +72,7 @@ const DIALOG = join(SRC, "components/ui/dialog.tsx");
    and MemberDetail was one until 2026-09-02 */
 const OTHER_MODALS = [join(SRC, "components/platform/MemberDetail.tsx")];
 const TOPBAR = join(SRC, "components/platform/TopBar.tsx");
+const TOASTER = join(SRC, "components/platform/Toaster.tsx");
 
 /**
  * Every `z-<n>` / `z-[<n>]` Tailwind class in a file, COMMENTS STRIPPED.
@@ -108,6 +132,29 @@ describe("the stacking ladder", () => {
     expect(Math.max(...bar)).toBeGreaterThan(Math.min(...sidebar));
     /* ... and still under the modal layer, which must cover both */
     expect(Math.max(...bar)).toBeLessThan(Math.min(...levels(DIALOG)));
+  });
+
+  it("puts the toast stack above the modal layer, and leaves it harmless there", () => {
+    /*
+     * The exception, checked rather than trusted. It shipped at 40 — under
+     * the modal layer — and nothing on screen confessed to it: the toast
+     * rendered, the assertion "the person is told" passed, and the card was
+     * behind the dialog's scrim. A number that is only right by intention is
+     * the exact thing this file exists to stop being raced.
+     */
+    const toaster = levels(TOASTER);
+    expect(toaster.length, "the toast stack declares a stacking level").toBeGreaterThan(0);
+    expect(Math.min(...toaster)).toBeGreaterThan(Math.max(...levels(DIALOG)));
+
+    /*
+     * AND THE PRICE OF BEING UP THERE. A layer above every dialog that could
+     * take a press would make the app unusable for as long as a toast is on
+     * screen, which is the reason the ladder was written in the first place.
+     * The frame is transparent to the pointer; only the cards inside take it
+     * back, for the X.
+     */
+    const source = readFileSync(TOASTER, "utf8");
+    expect(source).toContain("pointer-events-none fixed inset-x-0");
   });
 
   it("can answer NO — a sidebar level at the modal's height is reported", () => {

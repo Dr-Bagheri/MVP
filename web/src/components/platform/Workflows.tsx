@@ -11,7 +11,6 @@ import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/ap
 import { Link } from "@/i18n/routing";
 import { FilterChips, FILTER_ROW_GAP, SECTION_ROW_GAP, SectionTabs } from "./sectionTabs";
 import { IconCalendar, IconFileText, IconMail, IconMic, IconPlay, IconRows } from "@/components/icons";
-import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
 import { PageContainer, SkeletonCards } from "@/components/scaffold";
@@ -166,8 +165,15 @@ export function Workflows() {
     : library.filter((s) => (s.trigger_event ?? "manual") === kind);
   const libraryReady = me !== null && (!isAdmin || authored !== null);
 
+  /*
+   * NO `PlatformShell` HERE (2026-09-08). This list lives in HOME's view pane
+   * now, and a component that renders the shell cannot be hosted by a page
+   * that already has one — it would nest a rail and a top bar inside a rail
+   * and a top bar. The host owns the shell; this owns its contents.
+   * `home/Home.tsx` is the other half, and `/workflows` redirects there.
+   */
   return (
-    <PlatformShell>
+    <>
       <>
         <PageContainer>
           {/* ROW 1 (R3, user ruling 2026-09-05): the section tabs, and the
@@ -348,6 +354,6 @@ export function Workflows() {
           onSaved={loadAuthored}
         />
       ) : null}
-    </PlatformShell>
+    </>
   );
 }

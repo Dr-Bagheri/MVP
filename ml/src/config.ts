@@ -52,11 +52,18 @@ const Schema = z.object({
   ML_URL_ALLOWLIST: csv,
 
   // The FALLBACK lane's ceiling, and the pipeline's answer when no lane is
-  // configured at all: a 30-minute part plus slack. The primary lane carries
-  // its own, below — one number every lane was held to turned a 40-minute
-  // recorded part into `media_too_long` on a provider that carries five
-  // hours (2026-09-06, the long-file lane).
-  ML_MAX_DURATION_MS: int(35 * 60 * 1000),
+  // configured at all. The primary lane carries its own, below — one number
+  // every lane was held to turned a 40-minute recorded part into
+  // `media_too_long` on a provider that carries five hours (2026-09-06, the
+  // long-file lane).
+  //
+  // 90 minutes, not 35 (2026-09-08): 35 was a 30-minute part plus slack, from
+  // the era when a take was split into parts. The split is retired — a take
+  // records as ONE continuous part — so an ordinary hour-long meeting reached
+  // this lane whole and was refused whenever the primary lane was down. The
+  // fallback carrying 90 minutes covers the recordings people actually make;
+  // the byte cap (`ML_MAX_BYTES`) still binds a single upload.
+  ML_MAX_DURATION_MS: int(90 * 60 * 1000),
   // Soniox's async model: five hours per file, the provider's own limit.
   ML_SONIOX_MAX_DURATION_MS: int(5 * 60 * 60 * 1000),
   ML_MAX_BYTES: int(500 * 1024 * 1024),

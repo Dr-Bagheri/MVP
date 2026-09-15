@@ -228,7 +228,17 @@ describe("the draft_mail step round-trips", () => {
 describe("the event picker's catalogue", () => {
   const fs = require("node:fs") as typeof import("node:fs");
   const path = require("node:path") as typeof import("node:path");
-  const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1"));
+  /*
+   * `fileURLToPath`, not a hand-rolled strip of the leading slash.
+   *
+   * `new URL(...).pathname` is PERCENT-ENCODED, so a checkout under a
+   * directory whose name contains a space resolved with `%20` in place of it
+   * and the read failed with ENOENT naming a path that looks almost right —
+   * the file is there, the string is not. The node builtin decodes and picks
+   * the platform's own separators, which is the whole reason it exists.
+   */
+  const { fileURLToPath } = require("node:url") as typeof import("node:url");
+  const here = path.dirname(fileURLToPath(import.meta.url));
   for (const locale of ["fa", "en"] as const) {
     it(`names every event in ${locale}`, () => {
       const messages = JSON.parse(fs.readFileSync(

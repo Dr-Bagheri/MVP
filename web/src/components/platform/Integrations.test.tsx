@@ -572,7 +572,11 @@ describe("the integrations page", () => {
     fireEvent.change(within(dialog).getByLabelText("توکن بات"), { target: { value: "bad" } });
     await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "اتصال" })); });
 
-    expect(within(dialog).getByRole("alert").textContent).toBe(fa.integrations.tokenRefused);
+    /* the refusal is the platform's toast (2026-09-08) — it rises over the
+       dialog rather than inside it, and the PROVIDER's own distinction (a
+       refused token, not a broken round trip) is what it carries. The line
+       under it is the half this test exists for: the dialog stays. */
+    expect((await screen.findByRole("alert")).textContent).toBe(fa.integrations.tokenRefused);
     expect(screen.getByRole("alertdialog"), "the dialog stays for a second try").toBeTruthy();
     /* the control: the tile behind it is still the unconnected door */
     cleanup();

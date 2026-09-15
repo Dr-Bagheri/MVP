@@ -42,11 +42,18 @@ vi.mock("next-intl", () => {
         const value = walk(table(), key);
         return typeof value === "string" ? value : `${namespace}.${key}`;
       };
+      /* `raw` REPORTS and returns the key path — it does not throw. See
+         web/vitest.setup.ts for the reading of the installed use-intl runtime
+         that settles this, and why `has` belongs beside it (review F15). */
       t.raw = (key: string): unknown => {
         const value = walk(table(), key);
-        if (value === undefined) throw new Error(`missing message: ${namespace}.${key}`);
-        return value;
+        if (value !== undefined) return value;
+        console.error(
+          `MISSING_MESSAGE: Could not resolve \`${namespace}.${key}\` in messages for locale \`${locale}\`.`,
+        );
+        return `${namespace}.${key}`;
       };
+      t.has = (key: string): boolean => walk(table(), key) !== undefined;
       return t;
     },
     useLocale: () => locale,

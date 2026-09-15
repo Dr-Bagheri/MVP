@@ -335,12 +335,27 @@ export function createTranscriptsRepo(db: Db) {
      */
     async search(
       identity: Identity, query: string,
-      options: { limit?: number | undefined; callId?: string | undefined } = {},
+      options: {
+        limit?: number | undefined;
+        callId?: string | undefined;
+        /**
+         * PRIOR-MEETING retrieval (2026-09-08): the call being summarised is
+         * the one call GUARANTEED to match its own glossary terms, so a
+         * JS-side exclusion would spend the whole limit on the call itself.
+         * Excluded in SQL, on all three legs; `startedBefore` keeps only
+         * calls that began before the given instant — "last time" means
+         * earlier, and a later meeting on the same subject is not a prior.
+         */
+        excludeCallId?: string | undefined;
+        startedBefore?: string | undefined;
+      } = {},
     ): Promise<SearchHit[]> {
       const text = query.trim();
       if (text.length < 2) throw new ValidationError("query must be at least 2 characters");
       const limit = Math.min(Math.max(options.limit ?? 20, 1), MAX_HITS);
       const callId = options.callId ? assertUuid(options.callId, "call id") : null;
+      const excludeCallId = options.excludeCallId ? assertUuid(options.excludeCallId, "call id") : null;
+      const startedBefore = options.startedBefore ?? null;
       /**
        * Titles match by escaped ILIKE, not tsquery — the members-directory
        * precedent: a NAME lookup is expected to prefix-match («call2» while
@@ -367,6 +382,8 @@ export function createTranscriptsRepo(db: Db) {
               where s.search @@ q.tsq
                 and c.deleted_at is null
                 and ($2::uuid is null or s.call_id = $2::uuid)
+                and ($5::uuid is null or s.call_id <> $5::uuid)
+                and ($6::timestamptz is null or c.started_at < $6::timestamptz)
              union all
              select m.call_id, c.title, c.created_at, 'summary',
                     null::int, null::int,
@@ -379,6 +396,8 @@ export function createTranscriptsRepo(db: Db) {
               where m.search @@ q.tsq
                 and c.deleted_at is null
                 and ($2::uuid is null or m.call_id = $2::uuid)
+                and ($5::uuid is null or m.call_id <> $5::uuid)
+                and ($6::timestamptz is null or c.started_at < $6::timestamptz)
              union all
              select c.id, c.title, c.created_at, 'call',
                     null::int, null::int,
@@ -388,11 +407,13 @@ export function createTranscriptsRepo(db: Db) {
               where c.deleted_at is null
                 and c.title is not null
                 and ($2::uuid is null or c.id = $2::uuid)
+                and ($5::uuid is null or c.id <> $5::uuid)
+                and ($6::timestamptz is null or c.started_at < $6::timestamptz)
                 and echo.fa_fold(c.title) ilike ('%' || echo.fa_fold($4) || '%') escape '\\'
            ) hits
            order by rank desc, start_ms nulls last
            limit $3`,
-          [text, callId, limit, titlePattern],
+          [text, callId, limit, titlePattern, excludeCallId, startedBefore],
         ),
       );
       return rows.map((row) => ({

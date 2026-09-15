@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { ConnectorProvider, ConnectorStatus, MailDraft, Skill, WorkflowCard } from "@/api/types";
+import type { ConnectorProvider, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { SkeletonLines } from "@/components/scaffold";
+/* the picker's date goes through the platform's own formatter, so a record's
+   date reads in the reader's calendar and digits rather than in the wire's */
+import { formatDate } from "@/lib/format";
 import { micTone, useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
-import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { useThreadFollow } from "@/lib/threadFollow";
 import { useSkillStarters } from "@/lib/skillName";
@@ -23,7 +25,7 @@ import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 /* SendIcon left with the paper plane (2026-09-03): the send key wears the
    RETURN glyph now, which is the key it duplicates. */
-import { DocumentIcon, MicIcon, PlusIcon } from "./icons";
+import { MicIcon } from "./icons";
 import { FloorChip } from "./FloorChip";
 import { liveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
@@ -32,13 +34,9 @@ import {
   consentGrantServer, consentGrantedForSession, revokeSessionConsent, sessionGrantEligible, subscribeConsentGrant,
 } from "@/lib/consentGrant";
 import { Icon } from "@/components/icons";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
-  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { startRecording } from "@/lib/recordingEngine";
 import { useAutoGrow } from "@/lib/autoGrow";
+import { notifyError } from "@/lib/notify";
 
 /**
  * THREE LINES, THEN IT SCROLLS (user directive, 2026-09-04: "the prompt box
@@ -54,7 +52,61 @@ import { useAutoGrow } from "@/lib/autoGrow";
  */
 const PROMPT_ROWS = { min: 3, max: 3 };
 
-type CreateKind = "doc" | "pdf";
+/**
+ * ATTACHMENTS AND CALLS ARE THE COMPOSER'S TWO ACTS.
+ *
+ * What left was a ⊕ opening three submenus — Create (Doc/PDF), Sources
+ * (attach / search the web) and Connectors — and what replaced it is a single
+ * paperclip that opens the file picker on the FIRST press. The directive named
+ * the shape and the reason is the one the composer has been converging on all
+ * week: a box whose job is a sentence should not carry a menu of decisions to
+ * make before typing it.
+ *
+ * Create is DELETED, not hidden: its state, its two prompt prefixes, its chip
+ * and the auto-download effect are gone. The `created` tag still travels on the
+ * wire and `ConversationThread` still draws the Save-as-PDF / download button
+ * for any stored answer that carries one, so conversations made before today
+ * keep their file — what left is the producer, which is what "no create
+ * feature" names.
+ *
+ * Connectors left the composer with the menu that held them. They are not lost:
+ * the sidebar composer's own menu still lists them and `/integrations` is the
+ * page. Web search left with Sources — see `send()` for the one line that
+ * changed on the wire.
+ */
+
+const ATTACH_MAX_BYTES = 50_000;
+const ATTACH_MAX_COUNT = 3;
+/** how long the mention picker waits after a keystroke before it asks the index */
+const MENTION_DEBOUNCE_MS = 200;
+/** the index refuses a shorter query (api.search returns [] below this) */
+const MENTION_MIN_QUERY = 2;
+/** a picker is a glance, not a page */
+const MENTION_SHOWN = 6;
+
+/** a call attached as context: the id rides the ask, the title is what a person reads */
+type ContextCall = { id: string; title: string };
+
+/**
+ * THE `@` IS A CALL.
+ *
+ * The caret's own text is what decides, exactly as the room's mention picker
+ * decides: the run of characters between a `@` at a word boundary and the
+ * caret. Anything else — a `@` in the middle of an address, a `@` three words
+ * back that the person typed past — is not a mention being written.
+ *
+ * Exported for its test: this is the one piece of the feature with edges
+ * (a bare `@`, an email, a mention already finished) and no DOM.
+ */
+export function mentionQuery(value: string, caret: number): string | null {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(value.slice(0, caret));
+  /* written as a statement, not `match === null ? null :` — that spelling is
+     what `loading.guard` counts as a section vanishing instead of framing
+     itself, and a file with no entry on its worklist must not grow one for a
+     line that is not a loading state at all */
+  if (match === null) return null;
+  return match[1]!;
+}
 
 /* `StreamDiedError` moved to `assistantSession` with the loop it belongs to
    (2026-09-04). It was declared here and re-declared in the sidebar — two
@@ -87,7 +139,7 @@ type CreateKind = "doc" | "pdf";
  * (feedback, regenerate) needs the persisted id. Onyx refetches for the same
  * reason; adopting the server's rows is what makes the toolbar honest.
  */
-export function Hub() {
+export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
   const t = useTranslations("platform");
   const tPresence = useTranslations("presence");
   /* the consent card, the same one the strip draws (2026-09-06: this page
@@ -147,17 +199,31 @@ export function Hub() {
   const [input, setInput] = useState("");
   const streaming = live.streaming;
   const [feedback, setFeedback] = useState<Record<string, string>>({});
-  const [shared, setShared] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [model, setModel] = useState<string>("");
   const [skill, setSkill] = useState<string>("");
-  /** The SERVER's refusal sentence, when an ask never opened a stream. */
-  /* the COMPOSER's own refusals (a file too large, too many attachments) —
-     a different fact from a refused run, which the store owns and names in
-     the server's words. Rendered through one line below; only one of the two
-     can be set at a time, and merging them at the render is honest where a
-     second copy of either would not be. */
-  const [askError, setAskError] = useState<string | null>(null);
+  /*
+   * THE RUN'S REFUSAL, SAID ONCE (2026-09-08).
+   *
+   * Two different facts used to share one red line under the composer: this
+   * page's own refusals (a file too large, too many attachments) and the
+   * STORE's — the server's sentence when an ask never opened a stream. The
+   * composer's are toasts at the point they happen; the store's is a value
+   * that sits in a snapshot until the next ask clears it, so it is raised on
+   * the EDGE rather than on every render that reads it.
+   *
+   * The server's own words win when it gave any: a store has no locale and
+   * must not write copy, and this page's translated line is the fallback for
+   * a transport failure that produced no sentence at all.
+   */
+  const prevRunError = useRef(live.error);
+  useEffect(() => {
+    if (live.error !== null && live.error !== prevRunError.current) {
+      notifyError(live.error.detail ?? t("askFailed"));
+    }
+    prevRunError.current = live.error;
+  }, [live.error, t]);
+
   /**
    * Attached files (user directive: "add files and ask about them"). Text
    * files only, read CLIENT-side and sent as part of the question — the ask
@@ -166,29 +232,58 @@ export function Hub() {
    * sentence, never silently dropped.
    */
   const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
+  /**
+   * THE SAME LIST, READABLE THIS INSTANT — and it is not a second source of
+   * truth, it is the one the writer reads.
+   *
+   * Three files dropped together are three passes through `attach`, each one
+   * awaiting `file.text()`, and React does not run a state updater until it
+   * renders: `attachments` is the list as it was when the drop began, and a
+   * ceiling checked against it lets all three past a limit of three. Reading
+   * `prev` inside the setter sees the right list but answers a frame too late
+   * for the loop that has to decide whether to say so.
+   *
+   * So every write goes through `stageFiles`, which moves the ref and the
+   * state together. A caller that reaches for `setAttachments` directly is the
+   * bug this exists to prevent.
+   */
+  const stagedRef = useRef<{ name: string; text: string }[]>([]);
+  const stageFiles = useCallback((next: { name: string; text: string }[]) => {
+    stagedRef.current = next;
+    setAttachments(next);
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   /**
-   * The Create and Sources menus (user directive, 2026-08-18, from the
-   * reference hub): every entry is a REAL destination or a real act — the
-   * no-dead-buttons law binds a menu item exactly as it binds a button.
+   * DRAGGING A FILE ONTO THE BOX ATTACHES IT.
+   *
+   * Native `dragover`/`drop`, and that is NOT a breach of R17's ban on
+   * `draggable`: R17 governs dragging an ELEMENT of ours, where a native
+   * `dragstart` fires from the nearest draggable ancestor and eats the
+   * pointer gesture `holdDrag` is built on. A file arriving from the operating
+   * system has no element and no gesture of ours — the drop event is the only
+   * way the browser will ever hand it over.
+   *
+   * The counter, not a boolean: `dragenter`/`dragleave` fire for every child
+   * the pointer crosses, so a flag set on enter and cleared on leave goes dark
+   * the moment the cursor passes over the textarea inside the panel — the
+   * highlight flickering while the file is still held is exactly the state
+   * this is meant to make legible.
    */
-  /* `createOpen` is written and never read since the ⊕ took over the create
-     menu (2026-09-03) — the setter stays because the kebab and the sources
-     panel still close each other, and a dangling `true` would be a menu that
-     nothing can reopen. The value being unread is the honest signal that the
-     old trigger is gone. */
-  const [, setCreateOpen] = useState(false);
-  /** A document format is a visible, removable part of the request — never
-   * hidden text placed into the editor on the person's behalf. */
-  const [createKind, setCreateKind] = useState<CreateKind | null>(null);
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
   /**
-   * Meetings attached as context. These ride the ask as `callIds` — the same
-   * context mechanic the Echo pane's @mention uses, reached here through
-   * Sources → search. The agent still re-checks visibility server-side;
-   * attaching is scoping, never authority.
+   * CALLS ATTACHED AS CONTEXT, reached by typing `@` in the box.
+   *
+   * These ride the ask as `callIds` — a wire that has been live and tested
+   * with no producer since the Sources search was removed on 2026-09-04, and
+   * whose own tombstone in this file named this as where its next producer
+   * would arrive. The agent still re-checks visibility server-side; attaching
+   * is SCOPING, never authority.
    */
-  const [webSearch, setWebSearch] = useState(false);
-  /** The skill and model pickers — Sources-style hover menus, not selects. */
+  const [contextCalls, setContextCalls] = useState<ContextCall[]>([]);
+  /** the run of text after the `@` being typed, or null when none is */
+  const [mention, setMention] = useState<string | null>(null);
+  const [mentionHits, setMentionHits] = useState<SearchHit[] | "searching">("searching");
   const promptRef = useRef<HTMLTextAreaElement>(null);
   /* the box is the size of what is in it — three lines up to twelve, then
      its own thin scrollbar */
@@ -464,7 +559,7 @@ export function Hub() {
        a workflow the person started once — real model spend, and a thread
        they did not ask for. */
     router.replace({
-      pathname: "/assistant",
+      pathname: "/",
       query: { workflow: workflowSlug, connectorProvider, sourceId },
     } as never);
   }, [autoRun, resumeId, streaming, model, workflowSlug, connectorProvider, sourceId,
@@ -483,10 +578,12 @@ export function Hub() {
         ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName);
       if (event.ctrlKey && event.shiftKey && event.code === "KeyA") {
         event.preventDefault();
-        router.push("/agents");
+        /* the PANE, not the address that redirects into it (2026-09-08):
+           a shortcut that costs a round trip is a slower shortcut */
+        router.push({ pathname: "/", query: { view: "agents" } } as never);
       } else if (event.ctrlKey && event.shiftKey && event.code === "KeyI") {
         event.preventDefault();
-        router.push("/workflows");
+        router.push({ pathname: "/", query: { view: "workflows" } } as never);
       } else if (event.key === "/" && !inField && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         promptRef.current?.focus();
@@ -496,28 +593,119 @@ export function Hub() {
     return () => window.removeEventListener("keydown", onKey);
   }, [router]);
 
-  const ATTACH_MAX_BYTES = 50_000;
-  const ATTACH_MAX_COUNT = 3;
-
-  async function attach(file: File) {
-    setAskError(null);
-    if (attachments.length >= ATTACH_MAX_COUNT) {
-      setAskError(t("fileTooMany"));
-      return;
+  /**
+   * ATTACH A LIST, NOT A FILE - a drop and a multi-select both arrive as
+   * several, and the single-file version silently kept the first one.
+   *
+   * The count is read from the SETTER's `prev`, never from the rendered
+   * `attachments`: three files dropped together are three calls against one
+   * stale closure, so a guard on the rendered array would let all three past a
+   * ceiling of three. Each refusal keeps its own sentence - a drop that
+   * quietly loses the fourth file is the same defect one level up.
+   */
+  async function attach(files: readonly File[]) {
+    for (const file of files) {
+      if (file.size > ATTACH_MAX_BYTES) {
+        notifyError(t("fileTooBig", { name: file.name }));
+        continue;
+      }
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        notifyError(t("fileNotText", { name: file.name }));
+        continue;
+      }
+      if (text.includes("\u0000")) {
+        // a NUL byte is the honest binary test - an audio file belongs in
+        // Echo's uploader, and pretending to read it would feed the model noise
+        notifyError(t("fileNotText", { name: file.name }));
+        continue;
+      }
+      const staged = stagedRef.current;
+      if (staged.length >= ATTACH_MAX_COUNT) {
+        notifyError(t("fileTooMany"));
+        return;
+      }
+      /* one file, one slot: the same file dropped twice is a person repeating
+         themselves, not two sources */
+      if (staged.some((a) => a.name === file.name)) continue;
+      stageFiles([...staged, { name: file.name, text }]);
     }
-    if (file.size > ATTACH_MAX_BYTES) {
-      setAskError(t("fileTooBig", { name: file.name }));
-      return;
-    }
-    const text = await file.text();
-    if (text.includes("\u0000")) {
-      // a NUL byte is the honest binary test — an audio file belongs in
-      // Echo's uploader, and pretending to read it would feed the model noise
-      setAskError(t("fileNotText", { name: file.name }));
-      return;
-    }
-    setAttachments((prev) => [...prev, { name: file.name, text }]);
   }
+
+  /**
+   * WHAT THE `@` IS REACHING FOR, asked of the index rather than of a list
+   * held in the page.
+   *
+   * `api.search` is the only NAME search the platform has for records, and its
+   * `kind: "call"` hits are exactly the title matches - so a picker built on it
+   * shows what the person can SEE, because the search runs under their own
+   * identity. A client-side filter over `listCalls()` would have to download
+   * the org's whole record list to answer one keystroke.
+   *
+   * The sequence number is the whole reason this is not a race: two keystrokes
+   * are two requests, and the slower one answers last. Without it a fast typist
+   * ends up looking at the results for a prefix they have already finished
+   * typing (GlobalSearch settled this on the same api, 2026-08-27).
+   */
+  const mentionSeq = useRef(0);
+  useEffect(() => {
+    if (mention === null) return;
+    const query = mention.trim();
+    const seq = ++mentionSeq.current;
+    /* the index refuses a shorter query, so a bare `@` shows the FRAME and no
+       rows rather than firing a request that can only come back empty */
+    if (query.length < MENTION_MIN_QUERY) {
+      setMentionHits([]);
+      return;
+    }
+    setMentionHits("searching");
+    const timer = setTimeout(() => {
+      void api.search(query)
+        .then((hits) => {
+          if (seq !== mentionSeq.current) return;
+          /*
+           * TITLE MATCHES ONLY. `kind: "call"` is the index's own word for
+           * "this record is CALLED that", and it is the whole answer here: a
+           * transcript or summary hit means a record said the word somewhere
+           * inside it, which is a fine reason to open a search page and a bad
+           * reason to appear in a picker somebody is using to name a meeting.
+           *
+           * That also settles duplicates without a Set. The index answers one
+           * title hit per record, so a de-duplicating pass here would be a
+           * guard for a shape this filter has already made impossible - and an
+           * unreachable guard is a line the next reader has to disprove.
+           */
+          setMentionHits(hits.filter((h) => h.kind === "call").slice(0, MENTION_SHOWN));
+        })
+        .catch(() => { if (seq === mentionSeq.current) setMentionHits([]); });
+    }, MENTION_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [mention]);
+
+  /** the box changed: decide whether a mention is being written, and where */
+  const onPromptChange = (value: string) => {
+    setInput(value);
+    const caret = promptRef.current?.selectionStart ?? value.length;
+    setMention(mentionQuery(value, caret));
+  };
+
+  /**
+   * Choosing a call REPLACES the `@query` it was chosen from. The handle is
+   * not left in the text: a call is attached as an ID and shown as a chip, so
+   * a leftover `@sales` in the sentence would be a second, weaker claim about
+   * the same thing - and the one the model would read.
+   */
+  const attachCall = (hit: SearchHit) => {
+    setInput((cur) => cur.replace(/(^|\s)@[^\s@]*$/, "$1"));
+    setContextCalls((prev) =>
+      prev.some((c) => c.id === hit.call_id) ? prev : [...prev, { id: hit.call_id, title: hit.call_title }],
+    );
+    setMention(null);
+    promptRef.current?.focus();
+  };
+
 
   const refreshDrafts = useCallback(async (sessionForDrafts: string | undefined) => {
     if (!sessionForDrafts) return;
@@ -566,7 +754,6 @@ export function Hub() {
     setHeldThreadId(id);
     setFeedback(verdicts);
     setStarted(true);
-    void api.shareState(id).then(setShared).catch(() => setShared(false));
   }, [setStarted]);
 
   useEffect(() => {
@@ -658,37 +845,14 @@ export function Hub() {
     setHeldThreadId(null);
     setInput("");
     setFeedback({});
-    setShared(false);
-    setAttachments([]);
-    setCreateKind(null);
-    setWebSearch(false);
-    setAskError(null);
+    stageFiles([]);
+    setContextCalls([]);
+    setMention(null);
     /* `/assistant`, not `/` — the hub's own address. `/` became the
        dashboard (2026-08-25) and this line kept sending "new conversation"
        to a briefing screen; same seam as the workflow launcher's. */
-    if (resumeId) router.replace("/assistant");
+    if (resumeId) router.replace("/");
   }, [resetVersion, resumeId, router]);
-
-  /**
-   * Create → Doc delivers ITSELF: a download needs no click gesture, so the
-   * moment a doc-tagged answer settles, the file lands ("fully works" means
-   * nobody hunts for a button — it stays in the toolbar for re-downloading).
-   * PDF cannot do this: print dialogs require a user gesture, so it remains
-   * the prominent toolbar button. The ref makes each answer deliver ONCE —
-   * every later render of the same settled message is a no-op.
-   */
-  const deliveredDocs = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    for (const m of messages) {
-      if (
-        m.created === "doc" && !m.streaming && m.content &&
-        m.failed !== true && !deliveredDocs.current.has(m.id)
-      ) {
-        deliveredDocs.current.add(m.id);
-        deliverDoc(m.content, t("createDoc"));
-      }
-    }
-  }, [messages, t]);
 
   /**
    * Draft autosave, per conversation (Onyx's composer habit): a half-typed
@@ -722,7 +886,7 @@ export function Hub() {
   const loadingThread = resumeId !== null && heldThreadId !== resumeId;
 
   /* the dashboard LEFT this component (user directive, 2026-08-25): it is
-     the landing PAGE now (components/platform/Dashboard.tsx), not a view of
+     the landing PAGE now (components/platform/home/Home.tsx), not a view of
      the hub — a briefing and a conversation are different screens */
 
   /**
@@ -757,7 +921,7 @@ export function Hub() {
         return answer;
       },
       push: router.push,
-      switchLocale: (next) => router.replace("/assistant", { locale: next }),
+      switchLocale: (next) => router.replace("/", { locale: next }),
     }),
     onSettled: (reason, asOf) => {
       const id = assistantSnapshot().sessionId;
@@ -825,7 +989,6 @@ export function Hub() {
     follow.repin();
     setStarted(true);
     setInput("");
-    setAskError(null);
 
     /*
      * Attachments travel INSIDE the question — the ask wire is text, and
@@ -833,28 +996,29 @@ export function Hub() {
      * (the thread refetch renders it, deliberately: an invisible context
      * would be a prompt the record can't explain).
      */
-    const authoredRequest =
-      createKind === "doc"
-        ? `${t("createDocRequest")}\n\n${typed}`
-        : createKind === "pdf"
-          ? `${t("createPdfRequest")}\n\n${typed}`
-          : typed;
     const question =
       attachments.length === 0
-        ? authoredRequest
+        ? typed
         : attachments
             .map((a) => `[${t("attachmentTag")}: ${a.name}]\n${a.text}`)
-            .join("\n\n") + `\n\n${authoredRequest}`;
-    setAttachments([]);
+            .join("\n\n") + `\n\n${typed}`;
+    /* the calls travel as IDS, not as text: the server re-checks who may read
+       each one, so a person cannot widen their own reach by naming a record.
+       Cleared with the attachments - a scope belongs to the question that was
+       asked, not to the box it was typed in. */
+    const calls = contextCalls.map((c) => c.id);
+    stageFiles([]);
+    setContextCalls([]);
 
     await askAssistant({
       question,
       page: "hub",
-      /* client-only tag: when this answer lands, the toolbar offers the
-         promised deliverable (Save as PDF / download) — the Create chip used
-         to only PREFIX the prompt, and the person got prose with no file
-         (user report, 2026-08-20) */
-      ...(createKind ? { created: createKind } : {}),
+      /* the calls the person named with `@`, as CONTEXT. The wire has carried
+         them since 0184 and had no producer on this surface after the Sources
+         search was removed (2026-09-04); this is that producer. Omitted when
+         empty rather than sent as [], so a question with no calls looks on the
+         wire exactly like every question asked before today. */
+      ...(calls.length > 0 ? { callIds: calls } : {}),
       options: {
           model: model || undefined,
           skill: skill || undefined,
@@ -865,7 +1029,6 @@ export function Hub() {
           workflow: workflowSlug || undefined,
           connectorProvider,
           sourceId: sourceId || undefined,
-          web: webSearch,
           locale,
           /*
            * THE ASSISTANT PAGE CAN ACT, not only answer (user directive,
@@ -908,40 +1071,6 @@ export function Hub() {
     });
   }
 
-  async function toggleShare() {
-    if (!live.sessionId) return;
-    setShared(await api.setShared(live.sessionId, !shared));
-  }
-
-  /** The visible thread as Markdown — a file the reader can keep. */
-  function exportMarkdown() {
-    const lines = messages
-      .filter((m) => m.content)
-      .map((m) => (m.role === "user" ? `**${t("exportYou")}:** ${m.content}` : m.content));
-    const blob = new Blob([lines.join("\n\n---\n\n") + "\n"], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "conversation.md";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  /*
-   * THE TOOLBAR'S OWN IDIOM, not a fifth button shape (audit finding,
-   * 2026-09-02). This const used to spell a 32px rounded-full lozenge with
-   * 11.5px text — a pill on a BUTTON, which the radii rule forbids — and it
-   * dressed five controls on a screen whose toolbar, one row up, is 34px
-   * `.btn-sm` rectangles: two button families stacked on one page, the "ten
-   * developers" symptom exactly. The control guard could not see it because
-   * the classes lived in a const rather than a className literal. The string
-   * is now AssistantMenu's, verbatim, so the two rows read as one toolbar.
-   */
-  const headerBtn = "btn btn-sm gap-1.5 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg";
-  /* the PRESSED state (Share is a toggle): the soft accent the listening mic
-     already wears. Not `border-accent` — `.btn-sm` draws no border, so that
-     class would be present, read as satisfied, and paint nothing. */
-  const headerBtnOn = "btn btn-sm gap-1.5 font-medium bg-accent-soft text-accent";
 
   return (
     <div
@@ -1014,33 +1143,21 @@ export function Hub() {
       className="relative isolate flex h-full min-h-0 w-full flex-col overflow-hidden"
     >
       {/*
-        the conversation's own actions — Share and Export, once there is a
-        persisted conversation to share or export.
+        THE CONVERSATION'S OWN ACTIONS LEFT THIS SCREEN.
 
-        THE HISTORY LINK LEFT THIS ROW (audit finding, 2026-09-02): the page
-        mounts <AssistantMenu> directly above this component, and that toolbar
-        already carries the door to /conversations as a `.btn-sm`. Keeping a
-        second one here put two toolbars back to back with two History doors
-        — a leftover from when the menu was a side pane. The meetings and
-        tasks pages have exactly one toolbar row and never repeat a
-        destination. The row now renders only when it has something in it:
-        an empty `mb-4` div under a first live ask was 16px of dead space.
+        Share and Export stood here as a two-button row above the thread, and
+        they were the last thing in it. They are PER-CONVERSATION actions, and
+        this screen can only ever ask them about the one conversation already
+        open - so the sidebar's kebab, which is beside every conversation and
+        already holds this product's other per-row action, answers for all of
+        them instead. HomeSidebar owns both now, sharing this component's
+        `platform.share` / `platform.exportMd` / `platform.exportYou` words so
+        the file and the menu keep saying the same thing.
+
+        Removing the row also removed the last reason for `headerBtn` /
+        `headerBtnOn`, the toolbar's own `.btn-sm` spelling: the surviving
+        toolbar above this component (AssistantMenu) carries its own.
       */}
-      {!idle && live.sessionId ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={shared ? headerBtnOn : headerBtn}
-            aria-pressed={shared}
-            onClick={() => void toggleShare()}
-          >
-            {shared ? t("sharedWithOrg") : t("share")}
-          </button>
-          <button type="button" className={headerBtn} onClick={exportMarkdown}>
-            {t("exportMd")}
-          </button>
-        </div>
-      ) : null}
 
       {/*
         THE AGENT PANEL IS GONE (user directive, 2026-09-03: the agents must
@@ -1076,18 +1193,34 @@ export function Hub() {
            back, which is what they are. */
         <div className="scroll-quiet fade-scroll flex min-h-0 flex-1 flex-col justify-start overflow-y-auto">
           {/*
-            THE ASSISTANT SPEAKS FIRST — and this is a GREETING, not a
-            message: it is never persisted, never given a role, and never
-            joins the thread. The rule the platform already carries about
-            failure annotations applies here for the same reason — a
-            synthetic line that can be mistaken for something the assistant
-            actually said is a lie on a delay, so this one lives only on the
-            empty screen and disappears the moment a real turn exists.
+            NO OPENING LINE.
+
+            «سلام — من دستیار نورای هستم…» stood here as a GREETING rather
+            than a message — never persisted, never given a role, never part
+            of the thread — and it was still a paragraph of the assistant
+            introducing itself on a screen whose whole job is a prompt box.
+            The suggestions under it say the same thing in a form you can
+            press, and the greeting above them already says hello by name.
+
+            `platform.hubWelcome` left both catalogues with it: dead copy is
+            how a fixed thing keeps apologising for itself.
           */}
-          {!workflowSlug ? (
-            <p className="message-arrives mx-auto mt-2 w-full max-w-content text-sm leading-7 text-fg">
-              {t("hubWelcome")}
-            </p>
+          {/*
+            THE HOME PAGE'S OWN EMPTY STATE.
+
+            A SLOT rather than a branch: this component is the conversation
+            and knows nothing about meetings or tasks, and the page that does
+            hands it in. It renders here — under the assistant's opening line,
+            above the suggestions — because it is the same kind of thing the
+            suggestions are: what there is to do before anything has been
+            said. The moment a turn exists this whole region is replaced by
+            the thread, so nothing here has to be dismissed.
+
+            `/assistant` passes nothing and keeps the bare welcome it has
+            always had.
+          */}
+          {idleContent !== undefined && !workflowSlug ? (
+            <div className="mx-auto mt-4 w-full max-w-content">{idleContent}</div>
           ) : null}
           {/* THE WATERMARK IS GONE (user directive, 2026-09-02: "also remove
                 the background"). A brand mark behind the one screen whose
@@ -1104,31 +1237,20 @@ export function Hub() {
           ) : null}
 
           {/*
-            THE SUGGESTIONS ARE BACK ON THE HUB (user directive, 2026-09-02:
-            "with the suggestion on top after its first pre-answer
-            conversation"). They spent a while in the side menu, where they
-            read as a list of features; under the assistant's opening line
-            they read as things to say, which is what they are.
-            Every shipped skill's starters, not just a picked one's — the
-            skill picker went in the same round, so "the active skill" is now
-            always the default and gating on it would have shown nothing.
-            One press FILLS the composer; sending stays the person's act,
-            which is the rule these rows have carried since they existed.
+            THE SUGGESTIONS MOVED DOWN TO THE COMPOSER.
+            They render as the composer's own first row now - see below.
+
+            They stood HERE from 2026-09-02, under the assistant's opening
+            line, on the reasoning that a chip under a greeting reads as
+            something to say back rather than as a toolbar bolted to the input.
+            That reasoning did not survive its own premise: the greeting was
+            removed on 2026-09-08, and this region is `justify-start` inside a
+            `flex-1` scroller - so the chips stayed pinned at the TOP under a
+            snapshot card, with the empty half of the screen between them and
+            the box they fill. A suggestion a screen away from the composer is
+            a list of features again, which is exactly what putting them here
+            was meant to stop.
           */}
-          {!workflowSlug && suggestions.length > 0 ? (
-            <div className="mx-auto mt-3 flex w-full max-w-content flex-wrap justify-start gap-2">
-              {suggestions.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  className="chip border border-border bg-surface text-xs text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
-                  onClick={() => setInput(q)}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
       ) : (
         <div
@@ -1186,14 +1308,6 @@ export function Hub() {
               onFeedback={(id, verdict) => void judge(id, verdict)}
               onRegenerate={() => void regenerate()}
             />
-            {/* the composer's own refusal, or the run's — the run's words are
-                the SERVER's when it gave any, and this page's translated line
-                when it did not (a store has no locale and must not write copy) */}
-            {askError !== null || live.error !== null ? (
-              <p role="alert" className="mt-2 text-xs leading-6 text-danger">
-                {askError ?? live.error?.detail ?? t("askFailed")}
-              </p>
-            ) : null}
             {consent ? (
               <div className="mt-3 rounded-xl border border-accent/30 bg-accent-soft p-3">
                 <p className="text-detail text-fg">
@@ -1239,272 +1353,368 @@ export function Hub() {
         </div>
       )}
 
+      {/*
+        THE SUGGESTIONS SIT ON THE COMPOSER.
+
+        `mx-auto max-w-content` and no gap under them: they take the composer's
+        own column and stand on its top edge, so the row and the box read as
+        ONE control - which is what a suggestion is, a way of filling the box
+        without typing. One press FILLS it; sending stays the person's act,
+        the rule these rows have carried since they existed.
+
+        IDLE ONLY, and that is the half worth stating. They used to live inside
+        the idle branch, so the `idle` test was structural and invisible; out
+        here it has to be written, and without it every answer in a live
+        conversation would be followed by four openers for a conversation that
+        has already started.
+
+        Every shipped skill's starters rather than a picked one's - the skill
+        picker left in the same round that removed the model picker, so "the
+        active skill" is always the default and gating on it would show
+        nothing.
+      */}
+      {idle && !loadingThread && !workflowSlug && suggestions.length > 0 ? (
+        <div className="mx-auto mb-2 flex w-full max-w-content flex-wrap justify-start gap-2">
+          {suggestions.map((q) => (
+            <button
+              key={q}
+              type="button"
+              className="chip border border-border bg-surface text-xs text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+              onClick={() => setInput(q)}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+
+      {/*
+        THE COMPOSER: "instead of the + icon make it attachment,
+        delete the create one which doesn't work good - no create feature, and
+        only attachment ... add a feature to do @ and add a call ... just
+        attach a file, allow drag and drop, support white theme also".
+
+        The shape is the reference's: staged attachments ABOVE the field, the
+        field, then a toolbar of left actions and one send. The plus and its
+        three submenus are gone - the paperclip opens the file picker on the
+        FIRST press, which is the whole reason a dedicated control beats a menu
+        here (the same argument the room's own mention button settled).
+
+        The WRAPPER carries the position and the drop target; the panel inside
+        it is the field. Two elements because the mention picker hangs off the
+        wrapper: `bottom-full` inside the panel would measure from the panel's
+        own padding box and open on top of the text.
+      */}
       <div
-        /* focus-within: the PANEL is the control, so the panel carries the
-           focus affordance — the global :focus-visible ring on the inner
-           input drew a box inside a box (the user's report) */
-        /* the composer takes the TABLE width (user directive, 2026-08-27:
-           "as large as the tables"). 660px was a reading measure chosen when
-           the hub was a centred landing card; on a page whose job is a
-           conversation it left the prompt floating in a column half the width
-           of every other surface in the product. */
-        className={`flex w-full max-w-content flex-col rounded-2xl border border-border-strong bg-surface px-3 pb-0.5 pt-3 text-start transition-colors focus-within:border-accent ${
-          idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
-        }`}
+        className={`relative w-full max-w-content ${idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"}`}
+        /*
+          A FILE DROPPED ON THE BOX IS ATTACHED. Native drag events, and that is
+          not R17's business: R17
+          governs dragging an element of OURS, where a native `dragstart` fires
+          from the nearest draggable ancestor and eats the pointer gesture
+          `holdDrag` is built on. A file arriving from the operating system has
+          no element of ours and no gesture of ours - the drop event is the
+          only way the browser will ever hand it over.
+
+          The COUNTER, not a boolean: `dragenter`/`dragleave` fire for every
+          child the pointer crosses, so a flag cleared on leave goes dark the
+          moment the cursor passes over the textarea inside the panel, and the
+          highlight flickers while the file is still held.
+        */
+        onDragEnter={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          dragDepth.current += 1;
+          setDragging(true);
+        }}
+        onDragOver={(e) => {
+          /* without this the browser NAVIGATES to the dropped file, which
+             throws the half-typed question away to show a text file */
+          if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+        }}
+        onDragLeave={() => {
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          dragDepth.current = 0;
+          setDragging(false);
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length > 0) void attach(files);
+        }}
       >
         {/*
-          THE FIELD ON ITS OWN LINE, THE CONTROLS UNDER IT — and the controls
-          sit in FIXED PHYSICAL CORNERS (user directive, 2026-09-03: "put it in
-          right down corner in both fa and en version ... the plus and mic
-          together in left down corner").
-
-          `dir="ltr"` on the control row is the whole mechanism, and it is a
-          deliberate exception to this codebase's logical-properties rule. Every
-          other row here follows the page so it mirrors in English; this one
-          must NOT. A send key that swaps corners with the interface language is
-          a key that has to be found again after every switch — the same
-          argument the time picker settled a few hours earlier, where the panel
-          was pinned to match the `HH:mm` it edits.
-
-          So: mic and ⊕ at the physical left, send at the physical right, in
-          both locales. The TEXT inside the field is untouched — it follows the
-          page, as prose must.
+          THE @ PICKER. Upward, because the composer sits at the foot of the
+          page - `popover.guard` bans `absolute top-full` for exactly the
+          clipping this would hit, and the room's own mention list settled the
+          same shape a few days earlier. `glass-chrome` is R23's material for a
+          floating panel, so it is the theme's sheet rather than a ground
+          chosen here.
         */}
-        {/*
-          A TEXTAREA, THREE LINES TALL (user directive, 2026-09-04: "the
-          prompt box must be multi-line and should get as much as I gave it,
-          and show at least three lines then go to scroll mode inside it with
-          a thin scroll").
-
-          It was an `<input>` — one line by construction, no wrapping at all —
-          so a dictated paragraph scrolled off sideways and the person could
-          read the last few words of their own sentence. `useAutoGrow` takes it
-          from three lines to twelve and hands the rest to the box's own
-          scrollbar, which is `scroll-quiet`: the platform's 6px bar, not a new
-          one invented here.
-
-          `resize-none` because the corner grip would fight the measurement —
-          a person's dragged height is overwritten by the next keystroke, which
-          is a control that works once.
-        */}
-        {/* who is in the room, and the × that hands it back to Echo (2026-09-06) */}
-        <FloorChip className="mb-1" />
-        <textarea
-          ref={promptRef}
-          rows={PROMPT_ROWS.min}
-          className="scroll-quiet fade-scroll-tight w-full resize-none bg-transparent text-sm leading-6 text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
-          placeholder={t("promptPlaceholder")}
-          aria-label={t("promptPlaceholder")}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            /*
-             * ENTER SENDS, SHIFT+ENTER BREAKS THE LINE — and `isComposing`
-             * guards the one case where that is wrong: an IME is mid-word and
-             * Enter is choosing a candidate, not finishing a thought.
-             */
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              void send();
-            }
-            if (e.key === "Escape" && streaming) stop();
-          }}
-        />
-        {/*
-          THE CONTROLS SIT LOW (user directive, 2026-09-04: "make the items
-          icons of the enter and plus and mic 10% above the bottom level of the
-          prompt box, they are too high in it").
-
-          The row was `mt-1.5` under the field, which put it wherever the field
-          happened to end — floating inside a box padded 12px on every side.
-
-          Asked TWICE (2026-09-04, with a before/after pair): the first answer
-          cut the pad to 8px, which was still too high. It is 2px now, and the
-          gap under the glyphs is the icon button's own — `.btn-icon` is 28px
-          around a 16px glyph, so six of the ten pixels beneath a mic are
-          inside its hit area and cannot be taken away without shrinking the
-          target. That is the floor, and it is worth saying because the next
-          person asked to move them "down a bit more" needs to know the
-          remaining space is a 44px-hit-area promise rather than padding.
-
-          `mt-auto` takes any slack when the box is stretched (the idle hub
-          centres it in the column); `pt-3` above the field is untouched.
-        */}
-        <div className="mt-auto flex items-center justify-between pt-0.5" dir="ltr">
-          <span className="flex items-center gap-1">
-            <button
-              type="button"
-              className={`btn btn-icon shrink-0 ${micTone(dictation.status)}`}
-              title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
-              aria-pressed={dictation.status === "listening"}
-              onClick={dictation.toggle}
-            >
-              <MicIcon width={16} height={16} />
-            </button>
-            <ComposerActions
-              connectorsLabel={t("connectors")}
-              manageLabel={t("manageConnectors")}
-              createLabel={t("create")}
-              sourcesLabel={t("sources")}
-              docLabel={t("createDoc")}
-              pdfLabel={t("createPdf")}
-              menuLabel={t("composerMenu")}
-              attachFileLabel={t("sourcesAttach")}
-              webSearchLabel={t("sourcesWeb")}
-              webSearch={webSearch}
-              onCreate={(kind) => { setCreateKind(kind); setCreateOpen(false); }}
-              onAttachFile={() => fileRef.current?.click()}
-              onToggleWeb={() => setWebSearch((v) => !v)}
-              /* `/integrations` is the page (2026-09-03); `/settings/integrations`
-                 fell through the settings resolver to General with nothing said */
-              onManageConnectors={() => router.push("/integrations")}
-            />
-          </span>
-          {streaming ? (
-            /* send morphs into STOP — one button, one place, per the donor's
-               composer; Esc does the same from the keyboard */
-            <button
-              type="button"
-              className="btn btn-icon shrink-0 bg-surface-2 text-fg"
-              title={t("stop")}
-              onClick={stop}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
-            </button>
-          ) : (
-            <button
-              type="button"
-              /* NO FILL (user directive, 2026-09-03). A solid accent square in
-                 a composer whose one other accent is the workspace's primary
-                 action makes neither of them mean "this is the main thing" —
-                 the same call the sidebar's send key took. `disabled:opacity`
-                 is what says the box is empty. */
-              className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
-              /*
-                IT SAYS WHEN IT CANNOT SEND (user report, 2026-09-04: "the
-                enter key is not working for sending the prompt").
-
-                `send()` returns silently while a run is streaming — correct,
-                since two questions on one thread would interleave — but this
-                button was disabled only on an EMPTY box, so during a run it
-                looked live, took the press and did nothing. Enter did the
-                same. After a turn that ended badly the composer was simply
-                dead, with nothing on screen to say so and nothing to press to
-                recover.
-
-                The panel already solved this: while streaming the key becomes
-                the way to STOP. Same here now, so the state is visible and the
-                way out is the control already under the pointer.
-              */
-              title={streaming ? t("stop") : t("send")}
-              aria-label={streaming ? t("stop") : t("send")}
-              disabled={!streaming && input.trim() === ""}
-              onClick={() => { if (streaming) stop(); else void send(); }}
-            >
-              {/* the RETURN key's own glyph, not a paper plane: the button and
-                  the Enter shortcut it duplicates stop being two unrelated
-                  facts a person has to learn separately */}
-              <Icon name={streaming ? "pause" : "enter"} size="sm" />
-            </button>
-          )}
-        </div>
-        {dictation.status === "unsupported" || dictation.status === "denied" ? (
-          /* two different nothings: "this browser can't" vs "you said no" */
-          <p className="mt-2 text-xs leading-5 text-fg-muted">
-            {dictation.status === "unsupported" ? t("voiceUnsupported") : t("voiceDenied")}
-          </p>
-        ) : null}
-        {attachments.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {attachments.map((a) => (
-              <span key={a.name} className="chip bg-surface-2 text-xs text-fg">
-                <span className="ltr">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={t("removeAttachment", { name: a.name })}
-                  className="ms-1 text-fg-muted hover:text-fg"
-                  onClick={() =>
-                    setAttachments((prev) => prev.filter((x) => x.name !== a.name))
-                  }
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+        {mention === null ? null : (
+          <div className="absolute bottom-full z-20 mb-1.5 w-72 overflow-hidden rounded-xl glass-chrome shadow-island">
+            <ul aria-label={t("mentionCalls")}>
+              {mention.trim().length < MENTION_MIN_QUERY ? (
+                <li className="px-2.5 py-6 text-center text-xs text-fg-subtle">{t("searchHint")}</li>
+              ) : mentionHits === "searching" ? (
+                <li className="px-2.5 py-6 text-center text-xs text-fg-subtle">{t("sourcesSearching")}</li>
+              ) : mentionHits.length === 0 ? (
+                /* WHICH nothing: the index answered and nothing you can see
+                   matched - not "we did not look" and not "there are none" */
+                <li className="px-2.5 py-6 text-center text-xs text-fg-subtle">{t("sourcesNoHits")}</li>
+              ) : (
+                mentionHits.map((hit) => (
+                  <li key={hit.call_id}>
+                    <button
+                      type="button"
+                      /* mousedown, not click: the textarea's `blur` closes the
+                         picker, and a click fires after blur - so the row was
+                         gone before the press landed on it */
+                      onMouseDown={(e) => { e.preventDefault(); attachCall(hit); }}
+                      className="tap flex w-full items-center gap-2 px-3 py-1.5 text-start text-xs text-fg hover:bg-surface-2"
+                    >
+                      <Icon name="video" size="sm" className="shrink-0 text-fg-subtle" />
+                      <bdi className="min-w-0 flex-1 truncate font-medium">{hit.call_title}</bdi>
+                      <span className="shrink-0 text-[11px] text-fg-subtle">{formatDate(hit.call_date, locale)}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
           </div>
-        ) : null}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        )}
+
+        <div
+          /* focus-within: the PANEL is the control, so the panel carries the
+             focus affordance — the global :focus-visible ring on the inner
+             input drew a box inside a box (the user's report) */
+          /* the composer takes the TABLE width. 660px was a reading measure
+             chosen when
+             the hub was a centred landing card; on a page whose job is a
+             conversation it left the prompt floating in a column half the width
+             of every other surface in the product. */
+          /* TRANSLUCENT AND EDGED (R23, and the white theme the directive asks
+             for arrives with it). Every sheet in the product dropped its
+             outline for the glass lip; a FIELD did not, because a card's edge
+             is decorative and a control boundary owes 3:1 - and on a
+             translucent panel the ground inside an unbordered field is the
+             ground behind it. Both sides are tokens, so light is the same two
+             declarations rather than a second design. */
+          className={`flex w-full flex-col rounded-2xl border bg-surface/70 px-3 pb-0.5 pt-3 text-start backdrop-blur-sm transition-colors ${
+            dragging ? "border-accent ring-2 ring-accent/40" : "border-border-strong focus-within:border-accent"
+          }`}
+        >
+          {/* who is in the room, and the × that hands it back to Echo (2026-09-06) */}
+          <FloorChip className="mb-1" />
+
+          {/*
+            STAGED ABOVE THE FIELD, as the reference does. They were under the
+            control row, which put a file the person had just attached BELOW
+            the send key - the last place a reader looks before pressing it.
+          */}
+          {attachments.length > 0 || contextCalls.length > 0 ? (
+            <div className="mb-1.5 flex flex-wrap gap-1.5">
+              {attachments.map((a) => (
+                <span key={a.name} className="chip bg-surface-2 text-xs text-fg">
+                  <Icon name="paperclip" size="xs" className="shrink-0 text-fg-subtle" />
+                  <span className="ltr max-w-[12rem] truncate">{a.name}</span>
+                  <button
+                    type="button"
+                    aria-label={t("removeAttachment", { name: a.name })}
+                    className="ms-1 text-fg-muted hover:text-fg"
+                    onClick={() => stageFiles(stagedRef.current.filter((x) => x.name !== a.name))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {/* a call reads as CONTEXT rather than as a file: the same chip
+                  geometry, wearing the accent tint this product uses for "this
+                  is scoping the answer" */}
+              {contextCalls.map((c) => (
+                <span key={c.id} className="chip bg-accent-soft text-xs text-accent">
+                  <Icon name="video" size="xs" className="shrink-0" />
+                  <bdi className="max-w-[12rem] truncate">{c.title}</bdi>
+                  <button
+                    type="button"
+                    aria-label={t("removeContext", { name: c.title })}
+                    className="ms-1 text-accent/70 hover:text-accent"
+                    onClick={() => setContextCalls((prev) => prev.filter((x) => x.id !== c.id))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {/*
+            A TEXTAREA, THREE LINES TALL. `resize-none` because the corner grip
+            would fight
+            the measurement - a dragged height is overwritten by the next
+            keystroke, which is a control that works once.
+          */}
+          <textarea
+            ref={promptRef}
+            rows={PROMPT_ROWS.min}
+            className="scroll-quiet fade-scroll-tight w-full resize-none bg-transparent text-sm leading-6 text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+            placeholder={t("promptPlaceholder")}
+            aria-label={t("promptPlaceholder")}
+            value={input}
+            onChange={(e) => onPromptChange(e.target.value)}
+            onKeyDown={(e) => {
+              /*
+               * ENTER SENDS, SHIFT+ENTER BREAKS THE LINE — and `isComposing`
+               * guards the one case where that is wrong: an IME is mid-word and
+               * Enter is choosing a candidate, not finishing a thought.
+               */
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void send();
+              }
+              /* Escape closes the PICKER first: it is the thing on top, and a
+                 key that stops a run while a menu is open over it did
+                 something the person could not see. */
+              if (e.key === "Escape") {
+                if (mention !== null) {
+                  e.preventDefault();
+                  setMention(null);
+                } else if (streaming) {
+                  stop();
+                }
+              }
+            }}
+            /* the caret moves without the text changing (arrows, a click), and
+               what decides a mention is the run of characters before the caret
+               - so the caret's own movements have to be read too */
+            onKeyUp={(e) => setMention(mentionQuery(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
+            onClick={(e) => setMention(mentionQuery(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
+            onBlur={() => setMention(null)}
+          />
+
+          {/*
+            THE CONTROLS SIT LOW and in FIXED PHYSICAL
+            CORNERS (2026-09-03: "put it in right down corner in both fa and en
+            version ... the plus and mic together in left down corner").
+
+            `dir="ltr"` on this row is the whole mechanism and a deliberate
+            exception to this codebase's logical-properties rule: the person was
+            LOOKING AT THE RTL PAGE when they named the corners, so a logical
+            form would look right in English and move both clusters to the other
+            side of the box they had just pointed at. The TEXT above is
+            untouched — prose follows the page.
+          */}
+          <div className="mt-auto flex items-center justify-between pt-0.5" dir="ltr">
+            <span className="flex items-center gap-1">
+              <button
+                type="button"
+                className={`btn btn-icon shrink-0 ${micTone(dictation.status)}`}
+                title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
+                aria-pressed={dictation.status === "listening"}
+                onClick={dictation.toggle}
+              >
+                <MicIcon width={16} height={16} />
+              </button>
+              {/* ONE PRESS, ONE ACT. The plus opened three submenus and every
+                  one of them was a decision to make before typing; what the
+                  directive asked for is the act itself, wearing its own glyph.
+                  `IconUpload` was the near-miss already in the set and it is
+                  the wrong word - an arrow into a tray is a file leaving for
+                  somewhere, and this one stays in the sentence. */}
+              <button
+                type="button"
+                className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
+                aria-label={t("sourcesAttach")}
+                title={t("sourcesAttach")}
+                onClick={() => fileRef.current?.click()}
+              >
+                <Icon name="paperclip" size="md" />
+              </button>
+            </span>
+            {streaming ? (
+              /* send morphs into STOP — one button, one place, per the donor's
+                 composer; Esc does the same from the keyboard */
+              <button
+                type="button"
+                className="btn btn-icon shrink-0 bg-surface-2 text-fg"
+                title={t("stop")}
+                aria-label={t("stop")}
+                onClick={stop}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                /* NO FILL. A solid accent square in
+                   a composer whose one other accent is the workspace's primary
+                   action makes neither of them mean "this is the main thing" —
+                   the same call the sidebar's send key took. `disabled:opacity`
+                   is what says the box is empty. */
+                className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
+                title={t("send")}
+                aria-label={t("send")}
+                disabled={input.trim() === ""}
+                onClick={() => { void send(); }}
+              >
+                {/* the RETURN key's own glyph, not a paper plane: the button and
+                    the Enter shortcut it duplicates stop being two unrelated
+                    facts a person has to learn separately */}
+                <Icon name="enter" size="sm" />
+              </button>
+            )}
+          </div>
+
+          {dictation.status === "unsupported" || dictation.status === "denied" ? (
+            /* two different nothings: "this browser can't" vs "you said no" */
+            <p className="mt-2 text-xs leading-5 text-fg-muted">
+              {dictation.status === "unsupported" ? t("voiceUnsupported") : t("voiceDenied")}
+            </p>
+          ) : null}
+
           <input
             ref={fileRef}
             type="file"
+            multiple
             className="hidden"
             accept=".txt,.md,.csv,.json,.log,.tsv,text/*"
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const files = Array.from(e.target.files ?? []);
               e.target.value = "";
-              if (file) void attach(file);
+              if (files.length > 0) void attach(files);
             }}
           />
-          {/* CREATE — choosing a format makes it a visible chip beside the
-              real request. It never pre-fills the editor. */}
-          {createKind ? (
-            /* `.chip`, the same spelling as the context and attachment chips a
-               few lines up (audit finding, 2026-09-02): this one had copied
-               `headerBtn`'s 32px geometry, so one composer showed two chip
-               heights. Its × is the sibling chips' × too. */
-            <span className="chip bg-accent-soft text-xs text-accent">
-              <DocumentIcon width={14} height={14} />
-              {createKind === "doc" ? t("createDoc") : t("createPdf")}
-              <button
-                type="button"
-                className="ms-1 text-accent/70 hover:text-accent"
-                aria-label={t("removeCreate", { name: createKind === "doc" ? t("createDoc") : t("createPdf") })}
-                onClick={() => setCreateKind(null)}
-              >
-                ×
-              </button>
-            </span>
-          ) : null}
-          {/* the CREATE menu's own trigger is gone (2026-09-03): the composer's
-              ⊕ opens it now, so a second button beside the field would be two
-              doors to one room. The chip above still shows the chosen format. */}
 
-          {/*
-            THE MEETING SEARCH IS GONE (user directive, 2026-09-04: "remove the
-            search in source"), and the panel went with it rather than staying
-            behind as a room with no door. It was the only opener; `attachCall`,
-            the debounced search and the attached-meeting chips were the only
-            things it fed, so they are gone too. A producer with no consumer is
-            a defect its author cannot see — and this one would have been an
-            entire panel, its state, and a network call on every keystroke into
-            a field nobody could reach.
+          {/* CREATE IS GONE. Its state, its two
+              prompt prefixes, its chip and the auto-download effect left with
+              it. The `created` tag still travels on the wire and
+              ConversationThread still draws the download for any stored answer
+              that carries one, so conversations made before today keep their
+              file — what left is the PRODUCER, which is what "no create
+              feature" names.
 
-            The `call_ids` WIRE is untouched: the ask still carries context
-            calls, there is simply no producer for them on this surface at the
-            moment. That is a smaller thing than a panel, and it is where a
-            future "ask about this meeting" would arrive.
-          */}
-          {/* THE RECORDER LEFT THE COMPOSER (user directive, 2026-09-02:
-              "remove record from it as well"). It started an Echo take from
-              the assistant's prompt box — two products in one control, on the
-              screen whose whole job is a sentence. The recorder still lives
-              on the meeting, which is where a recording belongs. */}
-          {/* The Tools menu was REMOVED from the composer (user directive,
-              2026-08-20). It listed the assistant's tool registry — facts,
-              not switches — and reads better as documentation than as a
-              composer control. The registry itself (api.assistantTools) still
-              powers the Agents create-modal's tool checkboxes. */}
-          {/* THE MODEL AND SKILL PICKERS ARE GONE (user directive,
-              2026-09-02: "remove the models and skills as well").
-              Both were choices about HOW the assistant answers, offered
-              beside the box where a person says WHAT they want — and the M5
-              ladder already answers the model question without being asked
-              (skill pin → saved preference → the org's list). What a picker
-              added was a decision to make before typing.
-              The ladder is untouched: `model` stays in the ask payload and
-              the server still resolves it. What left is the control, not the
-              capability — and a person who wants a particular model still
-              sets it once in Settings rather than every time they type. */}
+              SOURCES went with the same sentence ("no need to have sources
+              also just attach a file"), and the web-search toggle went with
+              Sources: `options.web` has no producer on this surface now.
+
+              CONNECTORS left with the menu that held them, and are not lost —
+              the sidebar composer's own menu still lists them and
+              `/integrations` is the page.
+
+              THE MEETING SEARCH's tombstone comes down (2026-09-04: "remove the
+              search in source"). It recorded that the `call_ids` wire was
+              untouched with no producer here, and that this is where a future
+              "ask about this meeting" would arrive. It arrived: the @ picker
+              above is that producer. What stays removed is the PANEL — a search
+              field inside a dropdown was the thing that was wrong with it, and
+              an inline mention needs no field of its own.
+
+              THE RECORDER, THE TOOLS MENU AND THE MODEL/SKILL PICKERS are still
+              gone (2026-09-02): a recording belongs to the meeting, the tool
+              registry reads as documentation rather than as a composer control,
+              and the M5 ladder answers the model question without being asked. */}
         </div>
       </div>
 
@@ -1528,208 +1738,18 @@ export function Hub() {
   );
 }
 
-/**
- * A hover-driven menu in the Sources panel's clothes (user directive,
- * 2026-08-18: every composer menu opens when the mouse arrives and leaves
- * with it; the skill and model pickers stop being native selects).
+/*
+ * THE COMPOSER'S MENU IS GONE, and with it the three rooms
+ * it was the only door to.
  *
- * The padding wrapper is the load-bearing part: the visual gap between pill
- * and panel belongs to the PANEL's box, so crossing it never fires
- * mouseleave. A margin there instead closes the menu halfway to the first
- * row. Click still toggles, which is what a touch screen has. (It is `pb-2`
- * now that the panels open upward — same reason, other side.)
+ * What stood here was `ComposerActions`: a plus opening Create (Doc/PDF),
+ * Sources (attach a file / search the web) and Connectors as Radix submenus,
+ * carrying the hover-panel history that preceded them. DELETED rather than
+ * hidden - the file picker it wrapped is one press on the paperclip now, and a
+ * menu kept for the two entries the directive removed would be a door to two
+ * rooms nobody may enter.
+ *
+ * What each of them was, and where its capability went, is recorded beside the
+ * composer instead: the next reader finds the reasons at the site of the
+ * absence rather than in a component nothing renders.
  */
-/**
- * THE COMPOSER'S MENUS — the platform's popover, opening upward.
- *
- * User directive, 2026-09-02: "change the shape for create, make it the same
- * as any dropdown that we have, just it opens upward — rewrite it whole so it
- * becomes one with the theme itself; also do it for the sources."
- *
- * What this replaced was a hand-positioned `absolute bottom-full` panel that
- * opened on HOVER, and both halves were wrong in the same way — they were
- * this file's private answers to questions the platform had already answered.
- * Hover in particular: a menu that opens because a pointer passed over it is
- * a menu that opens by accident, and it has no keyboard equivalent at all.
- *
- * `side="top"` is a preference rather than a rule: Radix flips it when there
- * is no room above, which is the half a hand-written `bottom-full` cannot do
- * and the reason the old panel could be clipped on a short viewport.
- */
-/* `HoverMenu` left with the sources panel (2026-09-04) — it was written for
-   that one panel and had exactly one consumer, so keeping it would have been a
-   component nothing renders waiting to be rediscovered and reused for
-   something it was not shaped for. */
-
-/**
- * THE COMPOSER'S ⊕ (user directive, 2026-09-03: "in the plus make a kebab menu
- * with connectors, create and source in it, make the text of the kebab menu
- * small and the size of their icon and tabs as small as possible").
- *
- * Three text buttons under the field became one glyph beside it. What they
- * were — «ساخت», «منابع» — are the same acts; what changed is that a composer
- * whose job is a sentence stopped carrying a second toolbar underneath it.
- *
- * «اتصال‌ها» joins them because it belongs to the same question. Create,
- * sources and connectors are all "what should this answer be built from", and
- * the third one was only ever reachable from a settings page.
- *
- * SMALL, deliberately: `text-xs` rows, `w-52`, tight padding. It is a list of
- * three things beside a field, not a section — the sidebar's own composer menu
- * settled the same measurements a few hours earlier, and two menus doing one
- * job at two sizes is the drift this file has been paying off all day.
- *
- * The connector list is READ (`api.connectors()`), never a hand-written list
- * of providers — that would be a second claim about what the product supports,
- * and the first thing to rot the day one is added.
- */
-function ComposerActions({
-  connectorsLabel, manageLabel, createLabel, sourcesLabel,
-  docLabel, pdfLabel, menuLabel, attachFileLabel,
-  webSearchLabel, webSearch,
-  onCreate, onAttachFile, onToggleWeb, onManageConnectors,
-}: {
-  connectorsLabel: string;
-  manageLabel: string;
-  createLabel: string;
-  sourcesLabel: string;
-  docLabel: string;
-  pdfLabel: string;
-  menuLabel: string;
-  attachFileLabel: string;
-  webSearchLabel: string;
-  webSearch: boolean;
-  onCreate: (kind: "doc" | "pdf") => void;
-  onAttachFile: () => void;
-  onToggleWeb: () => void;
-  onManageConnectors: () => void;
-}) {
-  const [connectors, setConnectors] = useState<ConnectorStatus[] | "failed" | null>(null);
-
-  /* read when the menu OPENS, not on mount: this composer renders on every
-     visit to the assistant, and a connectors request per visit for a menu
-     nobody opened is a request nobody asked for */
-  const load = () => {
-    if (connectors !== null) return;
-    void api.connectors().then(setConnectors).catch(() => setConnectors("failed"));
-  };
-
-  /* small, and the same measurements the sidebar's composer menu settled:
-     three things beside a field, not a section */
-  const item = "gap-2 px-2 py-1 text-xs";
-  const panel = "min-w-0 p-0.5";
-  /*
-   * FORTY PER CENT NARROWER (user directive, 2026-09-04: "make the length of
-   * the menu of the plus 40% less than what it is now").
-   *
-   * Written as the arithmetic rather than as the answer, because the answer is
-   * the part that stops being checkable: 13rem was chosen for a menu whose
-   * longest row is «اتصال‌ها», and 13 × 0.6 = 7.8 is a sentence somebody can
-   * verify against the directive a month from now. `w-32` would be 8rem and
-   * near enough, and near enough is how a measured value becomes folklore.
-   */
-  const menuW = "w-[7.8rem]";      // 13rem − 40%
-  const subW = "w-[8.4rem]";       // 14rem − 40%, the wider submenus
-  const subNarrowW = "w-[6.6rem]"; // 11rem − 40%, Create's two rows
-  return (
-    <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
-          aria-label={menuLabel}
-          title={menuLabel}
-        >
-          <PlusIcon width={16} height={16} />
-        </button>
-      </DropdownMenuTrigger>
-      {/*
-        EVERY ROW CARRIES ITS ICON (user directive, 2026-09-03: "all must have
-        icons as well"). A menu of three submenus is read by shape before it is
-        read by word — and these three answer genuinely different questions
-        (make something, attach something, reach something), so the glyph is
-        doing work rather than decorating.
-      */}
-      <DropdownMenuContent side="top" align="start" className={`${menuW} ${panel}`}>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className={item}>
-            <DocumentIcon width={13} height={13} />
-            {createLabel}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={`${subNarrowW} ${panel}`}>
-            <DropdownMenuItem className={item} onSelect={() => onCreate("doc")}>
-              <Icon name="fileText" size="sm" />
-              {docLabel}
-            </DropdownMenuItem>
-            <DropdownMenuItem className={item} onSelect={() => onCreate("pdf")}>
-              <Icon name="download" size="sm" />
-              {pdfLabel}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        {/*
-          SOURCES IS A SUBMENU NOW, not a row that opened a second panel. It
-          had stayed a plain item pointing at the old hover-panel, which left
-          «منابع» drawn twice — once in here and once as a leftover button
-          under the field. Its three ACTS are what belong in a menu; the
-          meeting SEARCH still opens the rich panel, because a search field
-          inside a dropdown is a worse place to type than the panel built for
-          it.
-        */}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className={item}>
-            <Icon name="tag" size="sm" />
-            {sourcesLabel}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={`${subW} ${panel}`}>
-            <DropdownMenuItem className={item} onSelect={onAttachFile}>
-              <Icon name="fileText" size="sm" />
-              {attachFileLabel}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className={item} onSelect={(e) => { e.preventDefault(); onToggleWeb(); }}>
-              <Icon name="globe" size="sm" />
-              {webSearchLabel}
-              {/* the STATE, not a switch: a toggle inside a menu row is two
-                  hit targets in one line, and the check says the same thing */}
-              {webSearch ? <Icon name="check" size="sm" className="ms-auto text-accent" /> : null}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className={item}>
-            <Icon name="plug" size="sm" />
-            {connectorsLabel}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={`${subW} ${panel}`}>
-            {connectors === null ? (
-              <div className="px-2 py-1"><SkeletonLines lines={2} /></div>
-            ) : connectors === "failed" ? (
-              <DropdownMenuItem className={item} disabled>{connectorsLabel}</DropdownMenuItem>
-            ) : (
-              connectors.map((row) => (
-                <DropdownMenuItem key={row.provider} className={item} onSelect={onManageConnectors}>
-                  <span
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      row.status === "connected" ? "bg-accent" : "bg-fg-subtle"
-                    }`}
-                    aria-hidden
-                  />
-                  <span className="truncate">{row.account_label ?? row.provider}</span>
-                </DropdownMenuItem>
-              ))
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className={item} onSelect={onManageConnectors}>
-              <Icon name="settings" size="sm" />
-              {manageLabel}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}

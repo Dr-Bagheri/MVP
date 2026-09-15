@@ -35,7 +35,9 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
    * The ceiling is the LANES' (2026-09-06): the largest a usable lane will
    * carry, judged before any of them is paid. It used to be one number for
    * every lane — 35 minutes — which refused, at this line, recordings the
-   * primary lane carries for five hours.
+   * primary lane carries for five hours. The fallback's own number is now 90
+   * minutes (2026-09-08), so a job that falls through still carries a
+   * full-length meeting.
    */
   const ceilingMs = maxDurationForLanes(job.options.lane);
   if (media.duration_ms !== null && media.duration_ms > ceilingMs) {

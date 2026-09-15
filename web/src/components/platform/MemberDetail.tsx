@@ -9,7 +9,8 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { IconClose } from "@/components/icons";
 import { Chip } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
-import { formatDate, personName } from "@/lib/format";
+import { formatDate, personName, personPhoto } from "@/lib/format";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The member detail panel (Part 4) — one person, all their identity facts,
@@ -81,16 +82,12 @@ export function MemberDetail({
    */
   const [nameDraft, setNameDraft] = useState(user.display_name);
   const [usernameDraft, setUsernameDraft] = useState(user.username ?? "");
-  const [renameError, setRenameError] = useState<string | null>(null);
   useEffect(() => {
     setNameDraft(user.display_name);
   }, [user.id, user.display_name]);
   useEffect(() => {
     setUsernameDraft(user.username ?? "");
   }, [user.id, user.username]);
-  useEffect(() => {
-    setRenameError(null);
-  }, [user.id]);
 
   const trimmedName = nameDraft.trim();
   /* an emptied handle field means "clear it" — null is the wire's word */
@@ -101,14 +98,13 @@ export function MemberDetail({
 
   async function saveRename(): Promise<void> {
     if (!onRename || !renameDirty || busy) return;
-    setRenameError(null);
     const patch: { display_name?: string; username?: string | null } = {};
     if (nameChanged) patch.display_name = trimmedName;
     if (usernameChanged) patch.username = usernameValue;
     try {
       await onRename(user.id, patch);
     } catch (error) {
-      setRenameError(
+      notifyError(
         error instanceof BffError && error.detail ? error.detail : t("detailSaveFailed"),
       );
     }
@@ -173,7 +169,7 @@ export function MemberDetail({
               uppercased, so a Latin name read `a` here and `A` in the table.
               (initials ARE the avatar: avatar_url is a ruled absence, not a
               gap — the component takes a photo the day there is one.) */}
-          <Avatar name={personName(user, locale)} size="lg" />
+          <Avatar name={personName(user, locale)} src={personPhoto(user)} size="lg" />
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-fg">{personName(user, locale)}</p>
             {user.username ? (
@@ -240,7 +236,7 @@ export function MemberDetail({
               user.username ? <span className="ltr">@{user.username}</span> : t("detailNoUsername"),
             )
           )}
-          {editable && onRename && (renameDirty || renameError) ? (
+          {editable && onRename && renameDirty ? (
             <div className="flex flex-wrap items-center gap-3 py-2">
               {renameDirty ? (
                 <button
@@ -252,7 +248,6 @@ export function MemberDetail({
                   {t("detailSave")}
                 </button>
               ) : null}
-              {renameError ? <span className="text-xs text-danger">{renameError}</span> : null}
             </div>
           ) : null}
           {row(

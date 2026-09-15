@@ -66,6 +66,9 @@ describe("AssistantMenu", () => {
       </AssistantConversationProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "newConversation" }));
-    expect(pushed).toContain("/assistant");
+    /* HOME is the hub now (2026-09-08) — `/assistant` redirects there, and the
+       button pushes the address the conversation actually lives at rather than
+       the one that bounces to it */
+    expect(pushed).toContain("/");
   });
 });

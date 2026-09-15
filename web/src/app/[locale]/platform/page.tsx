@@ -20,7 +20,7 @@ import type {
 } from "@/api/types";
 
 type AccessState = "checking" | "claim" | "root" | "denied";
-type Tab = "organizations" | "users" | "audit";
+type Tab = "organizations" | "users" | "audit" | "demo";
 type OrgFilter = "all" | "active" | "suspended";
 type UserFilter = "all" | "active" | "pending" | "disabled";
 
@@ -80,6 +80,7 @@ const PAGE = 50;
  */
 
 import { CreateOrg } from "@/components/platform/CreateOrg";
+import { DemoOrgs } from "@/components/platform/DemoOrgs";
 import { ConfirmDialog, type KebabItem } from "@/components/rowActions";
 /* audit finding, 2026-09-02: the console's three lists were the only
    list-of-rows in the product still hand-rolled — a hairline-divided box
@@ -104,6 +105,7 @@ import {
   IconToggleOn,
   IconTrash,
 } from "@/components/icons";
+import { notifyError } from "@/lib/notify";
 
 export default function PlatformControlPage() {
   const t = useTranslations("platformRoot");
@@ -133,7 +135,6 @@ export default function PlatformControlPage() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [working, setWorking] = useState<string | null>(null);
-  const [error, setError] = useState<"load" | "claim" | null>(null);
   const [claiming, setClaiming] = useState(false);
   /* THE ANSWER HAS ARRIVED — not "there are rows". The three lists start as
      `[]`, so before this flag existed every first paint said «چیزی با این
@@ -182,7 +183,7 @@ export default function PlatformControlPage() {
         try {
           await load();
         } catch {
-          if (live) setError("load");
+          if (live) notifyError(t("loadFailed"));
         }
       })
       .catch(() => live && setAccess("denied"));
@@ -192,7 +193,6 @@ export default function PlatformControlPage() {
   }, [load]);
 
   const refresh = useCallback(async () => {
-    setError(null);
     try {
       await load({
         organizations: orgSearch,
@@ -201,11 +201,16 @@ export default function PlatformControlPage() {
         userDeleted: userTrash,
       });
     } catch {
-      setError("load");
+      notifyError(t("loadFailed"));
     }
   }, [load, orgSearch, userSearch, orgTrash, userTrash]);
 
-  async function loadMore(kind: Tab) {
+  async function loadMore(kind: Exclude<Tab, "demo">) {
+    /* the demo tab is deliberately not here: its list is one read of every
+       demo organisation, so there is no offset to carry and a `More` that
+       could never appear would be a branch nobody exercises. Excluding it in
+       the TYPE is what stops a later edit calling this with it and silently
+       getting the audit feed's offset. */
     const offset = kind === "organizations" ? nextOrgs : kind === "users" ? nextUsers : nextAudit;
     if (offset === null) return;
     setWorking(`more-${kind}`);
@@ -224,7 +229,7 @@ export default function PlatformControlPage() {
         setNextAudit(p.next_offset);
       }
     } catch {
-      setError("load");
+      notifyError(t("loadFailed"));
     } finally {
       setWorking(null);
     }
@@ -236,7 +241,6 @@ export default function PlatformControlPage() {
    * would be one render behind the click.
    */
   async function toggleTrash(kind: "organizations" | "users", on: boolean) {
-    setError(null);
     if (kind === "organizations") setOrgTrash(on);
     else setUserTrash(on);
     setWorking(`view-${kind}`);
@@ -254,7 +258,7 @@ export default function PlatformControlPage() {
         setNextUsers(p.next_offset);
       }
     } catch {
-      setError("load");
+      notifyError(t("loadFailed"));
     } finally {
       setLoaded(true);
       setWorking(null);
@@ -292,7 +296,6 @@ export default function PlatformControlPage() {
 
   async function claim() {
     setClaiming(true);
-    setError(null);
     try {
       const result = await api.bootstrapPlatformRoot();
       if (!result.claimed) throw new Error("not claimed");
@@ -300,7 +303,7 @@ export default function PlatformControlPage() {
       window.dispatchEvent(new Event("neurai:platform-root-changed"));
       await load();
     } catch {
-      setError("claim");
+      notifyError(t("claimFailed"));
     } finally {
       setClaiming(false);
     }
@@ -716,11 +719,6 @@ export default function PlatformControlPage() {
         <Card className="w-full max-w-xl">
           <h1 className="text-lg font-bold text-fg">{t("claimTitle")}</h1>
           <p className="mt-3 text-sm leading-6 text-fg-muted">{t("claimBody")}</p>
-          {error === "claim" ? (
-            <p role="alert" className="mt-3 text-sm text-danger">
-              {t("claimFailed")}
-            </p>
-          ) : null}
           <button
             type="button"
             className="btn-primary mt-5"
@@ -772,12 +770,6 @@ export default function PlatformControlPage() {
       </header>
 
       <main className="mx-auto max-w-content px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page">
-        {error === "load" ? (
-          <p role="alert" className="mt-4 text-sm text-danger">
-            {t("loadFailed")}
-          </p>
-        ) : null}
-
         {/* overview */}
         <section aria-label={t("title")} className="mt-5 grid gap-3 sm:grid-cols-3">
           <StatCard
@@ -810,7 +802,7 @@ export default function PlatformControlPage() {
             control no other surface uses; every other surface switches with
             the pill toolbar */}
         <nav className="mt-6 flex flex-wrap items-center gap-1" role="tablist" aria-label={t("title")}>
-          {(["organizations", "users", "audit"] as const).map((key) => (
+          {(["organizations", "users", "audit", "demo"] as const).map((key) => (
             <button
               key={key}
               role="tab"
@@ -823,7 +815,7 @@ export default function PlatformControlPage() {
               onClick={() => setTab(key)}
             >
               {t(key)}
-              {key !== "audit" ? (
+              {key === "organizations" || key === "users" ? (
                 /* audit finding, 2026-09-02: the count printed Latin digits in
                    the Persian console — `badge-num` is the theme's numeral
                    box (tabular figures), `digits()` the locale's numerals */
@@ -1212,6 +1204,12 @@ export default function PlatformControlPage() {
           </section>
         ) : null}
 
+        {/* DEMO (M52) — seed a rehearsable organisation on a chosen date.
+            Its own component: the tab holds a form, a shown-once credentials
+            panel and a list with two acts, and none of it shares state with
+            the three console tabs above. */}
+        {tab === "demo" ? <DemoOrgs /> : null}
+
       </main>
 
       {pending ? (
@@ -1534,7 +1532,6 @@ function EditDialog({
   );
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1551,12 +1548,11 @@ function EditDialog({
   async function go() {
     if (!valid || busy) return;
     setBusy(true);
-    setFailed(false);
     try {
       const trimmed = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.trim()]));
       await onConfirm(trimmed, reason.trim());
     } catch {
-      setFailed(true);
+      notifyError(labels.failed);
     } finally {
       setBusy(false);
     }
@@ -1571,7 +1567,7 @@ function EditDialog({
       onClick={() => !busy && onClose()}
     >
       <div
-        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-lg"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto glass-solid rounded-2xl p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-fg">{edit.title}</h2>
@@ -1635,12 +1631,6 @@ function EditDialog({
           </div>
         </div>
 
-        {failed ? (
-          <p role="alert" className="mt-2 text-sm text-danger">
-            {labels.failed}
-          </p>
-        ) : null}
-
         {/* audit finding, 2026-09-02: a 40px, 12px-corner pair — the primary
             action changing shape between the page and its own dialog. These
             are the theme's two buttons, the ones `ConfirmDialog` uses. */}
@@ -1684,7 +1674,6 @@ function ActionDialog({
   const locale = useLocale();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   /* focus the reason box on open. Escape is NOT bound here any more —
@@ -1699,11 +1688,10 @@ function ActionDialog({
   async function go() {
     if (!valid || busy) return;
     setBusy(true);
-    setFailed(false);
     try {
       await onConfirm(reason.trim());
     } catch {
-      setFailed(true);
+      notifyError(labels.failed);
     } finally {
       setBusy(false);
     }
@@ -1756,12 +1744,6 @@ function ActionDialog({
               {digits(reason.trim().length, locale)}/{digits(500, locale)}
             </span>
           </div>
-
-          {failed ? (
-            <p role="alert" className="mt-2 text-sm text-danger">
-              {labels.failed}
-            </p>
-          ) : null}
         </>
       }
       confirmLabel={busy ? labels.working : labels.confirm}

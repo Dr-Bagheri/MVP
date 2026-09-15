@@ -17,7 +17,7 @@ import { HELP_GROUPS, HELP_SECTIONS, type HelpSlug } from "../sections";
  * Rewritten from the beginning twice (2026-08-28, 2026-09-04) and again on
  * 2026-09-05 ("update the help in main menu regarding our latest update on
  * the platform, both in text, sections and designs"): twelve sections in the
- * rail's own order, the dashboard among them now that it is the first page.
+ * rail's own order, Home among them because it is the first page.
  * A guide that teaches a layout the product no longer has is worse than none,
  * so every step was checked against the component it describes.
  *
@@ -175,20 +175,19 @@ function HelpArt({ slug }: { slug: HelpSlug }) {
       </svg>
     );
   }
-  if (slug === "dashboard") {
+  if (slug === "home") {
     return (
       <svg viewBox="0 0 320 120" className={cls} aria-hidden>
-        {/* four counters over the week's hour grid */}
-        {[14, 90, 166, 242].map((x, i) => (
-          <rect key={x} x={x} y="10" width="64" height="26" rx="6" {...common}
-            className={i === 0 ? "text-accent" : undefined} />
+        {/* the sidebar, the two glance panels, and the prompt box under them */}
+        <rect x="10" y="10" width="52" height="100" rx="6" {...common} />
+        {[20, 34, 48, 62, 76, 90].map((y) => (
+          <line key={y} x1="20" y1={y} x2="52" y2={y} {...common} />
         ))}
-        <rect x="14" y="48" width="292" height="62" rx="6" {...common} />
-        {[56, 98, 140, 182, 224, 266].map((x) => (
-          <line key={x} x1={x} y1="48" x2={x} y2="110" {...common} />
-        ))}
-        <rect x="102" y="60" width="34" height="18" rx="4" {...common} className="text-accent" />
-        <rect x="228" y="80" width="34" height="18" rx="4" {...common} className="text-accent" />
+        <rect x="74" y="10" width="110" height="46" rx="6" {...common} />
+        <rect x="196" y="10" width="110" height="46" rx="6" {...common} />
+        <rect x="74" y="72" width="232" height="38" rx="8" {...common}
+          className="text-accent" />
+        <line x1="86" y1="88" x2="180" y2="88" {...common} className="text-accent" />
       </svg>
     );
   }

@@ -91,7 +91,21 @@ describe("a submenu's arrow", () => {
       if (file === PRIMITIVE) continue;
       seen += subTriggerBodies(readFileSync(file, "utf8")).length;
     }
-    expect(seen, "no sub-triggers found — the sweep had nothing to check").toBeGreaterThan(3);
+    /*
+     * The floor moved 3 → 0-exclusive on 2026-09-08, and the reason is this
+     * repo's own count trap: 3 was a fact about the TREE wearing the costume
+     * of a fact about the sweep. The hub's composer menu held three of the
+     * product's five sub-triggers; the directive that replaced its ⊕ with a
+     * paperclip took all three, and this test went red — reporting a feature
+     * removal as an instrument failure, which is the false positive that gets
+     * a guard muted.
+     *
+     * `> 0` is the property it was always standing in for: the sweep read real
+     * triggers out of real files. It can still fail — the day the last menu
+     * leaves, or the day the tag is renamed — and it no longer fails for the
+     * tree merely being smaller.
+     */
+    expect(seen, "no sub-triggers found — the sweep had nothing to check").toBeGreaterThan(0);
     /* and it can answer YES: a staged body with a chevron in it is caught */
     expect(
       subTriggerBodies('<DropdownMenuSubTrigger><IconChevronRight /></DropdownMenuSubTrigger>')

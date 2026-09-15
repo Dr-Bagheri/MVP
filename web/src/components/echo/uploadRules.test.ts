@@ -29,7 +29,7 @@ describe("what the limits line promises", () => {
   });
 
   it("accepts a file exactly AT each limit — the boundary the numbers were chosen to allow", () => {
-    /* five hours (2026-09-06): the lane's ceiling, not the fallback's 35 minutes */
+    /* five hours (2026-09-06): the lane's ceiling, not the fallback's 90 minutes */
     expect(uploadRejection(50 * MB, minutes(300))).toBeNull();
     expect(uploadRejection(50 * MB, minutes(240))).toBeNull();
   });

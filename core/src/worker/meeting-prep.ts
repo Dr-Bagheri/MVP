@@ -147,7 +147,11 @@ async function prepareFor(
   if (!brief) return "skipped";
 
   const sessions = createSessionsRepo(options.db);
-  const conversation = await sessions.resolveForAsk(identity, null, event.title);
+  /* db/0221: the brief's home, not an entry in the owner's conversation list —
+     nobody asked for this meeting to be prepared in a conversation. The
+     `meeting_prep` row and the card below both point here, so it stays
+     reachable; it joins the list the first time the owner replies to it. */
+  const conversation = await sessions.resolveForAsk(identity, null, event.title, "agent");
   await sessions.append(identity, {
     sessionId: conversation.id, role: "assistant", content: brief,
   });

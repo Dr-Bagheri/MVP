@@ -8,7 +8,7 @@
 // `openWavStream` yields the same samples chunk by chunk from a file handle,
 // which is what the VAD consumes; nothing in the pipeline needs a whole
 // recording in memory at once, and the streaming source is how that stays
-// true when the ceiling moves from 35 minutes to five hours.
+// true when the ceiling moves from the fallback lane's 90 minutes to five hours.
 
 import { readFile, open } from "node:fs/promises";
 import { MlError } from "../errors.js";

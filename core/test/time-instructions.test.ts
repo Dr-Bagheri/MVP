@@ -66,6 +66,36 @@ describe("what time the assistant thinks it is", () => {
     expect(out).toContain("T09:00:00+03:30");
   });
 
+  /*
+   * The other direction: what the model WRITES. A call-history table came
+   * back as thirteen rows of `2026-09-09T13:22:47.105Z` because every rule
+   * here was about reading a time and none about showing one.
+   */
+  it("forbids a raw ISO/UTC timestamp in the ANSWER, while keeping it for tools", () => {
+    const out = timeInstructions(NOON_UTC, "Asia/Tehran");
+    expect(out).toMatch(/Never put a raw ISO or UTC timestamp/);
+    expect(out).toMatch(/table cell/);
+    /* the exception is named, or a written-out date lands in a tool argument */
+    expect(out).toMatch(/ISO is for tool arguments only/);
+    /* and the example is a written date, in BOTH calendars the person may read */
+    expect(out).toContain("Friday, September 4, 2026");
+  });
+
+  /*
+   * And WHICH calendar. The rule showed both forms, Jalali first and neither
+   * labelled, so an English answer came back with «جمعه, ۲۰ شهریور» in a table
+   * cell — the right instant, in a calendar its reader does not use. The
+   * assertion is that each example is NAMED for the language it belongs to,
+   * which is the half the two unlabelled examples did not carry.
+   */
+  it("ties the calendar to the language of the answer, and labels each example (2026-09-09)", () => {
+    const out = timeInstructions(NOON_UTC, "Asia/Tehran");
+    expect(out).toMatch(/THE DATE IS WRITTEN IN THE LANGUAGE OF YOUR ANSWER/);
+    expect(out).toMatch(/an English answer takes the Gregorian form \("Friday, September 4, 2026/);
+    expect(out).toMatch(/a Persian answer the Jalali one \(«[^»]*شهریور/);
+    expect(out, "the mixing is what the report was about, in both directions").toMatch(/Never mix them/);
+  });
+
   it("the control: a different instant gives different instructions", () => {
     /* without this, a helper that returned a fixed sentence would satisfy
        every assertion above */

@@ -18,6 +18,14 @@
  * granted in the browser's own dialog — and the value is a constant that
  * identifies the product, never anything about the meeting or the person.
  *
+ * The PUBLISHER IS GONE (2026-09-08). The meeting page published this handle
+ * while the online lane recorded a shared surface; that lane and the video
+ * room it shared went with the live screen's simplification, and every take
+ * is a microphone now. `CAPTURE_HANDLE` stays because the recorder still
+ * reads it — the Echo recorder can still share a tab — and its check simply
+ * never matches this product's own tab any more, which is the answer it
+ * gives for every other tab too.
+ *
  * Where it is not available (Firefox, Safari, an older Chrome) nothing is
  * published and the recorder reads "not ours", which keeps the behaviour it
  * has always had: the tab is mixed. That is the safe direction — being wrong
@@ -25,35 +33,3 @@
  * exists to end.
  */
 export const CAPTURE_HANDLE = "neurai-meeting";
-
-interface HandleConfig {
-  handle: string;
-  exposeOrigin: boolean;
-  permittedOrigins: string[];
-}
-
-type WithHandles = MediaDevices & {
-  setCaptureHandleConfig?: (config: HandleConfig) => void;
-};
-
-/** publish it; returns a function that takes it back down */
-export function publishCaptureHandle(): () => void {
-  const devices = navigator.mediaDevices as WithHandles | undefined;
-  if (devices?.setCaptureHandleConfig === undefined) return () => undefined;
-  try {
-    devices.setCaptureHandleConfig({
-      handle: CAPTURE_HANDLE,
-      exposeOrigin: false,
-      permittedOrigins: ["*"],
-    });
-  } catch {
-    /* a browser that has the method and refuses the config is a browser that
-       simply cannot answer the question; the recorder's fallback covers it */
-    return () => undefined;
-  }
-  return () => {
-    try {
-      devices.setCaptureHandleConfig?.({ handle: "", exposeOrigin: false, permittedOrigins: [] });
-    } catch { /* leaving it published is harmless — it names the product */ }
-  };
-}

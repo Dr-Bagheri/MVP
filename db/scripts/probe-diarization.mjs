@@ -15,23 +15,27 @@
  * Usage: node db/scripts/probe-diarization.mjs [--days 14]
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { ownerClient } from './lib/owner-url.mjs'
+import { findNeuraiPython } from './lib/neurai-python.mjs'
 
 /*
- * The same lookup db.mjs does — COPIED byte for byte from probe-telegram.mjs,
- * which copied it from db.mjs, for the reason recorded there: a JS string
+ * The python ONE-LINER below is the same lookup db.mjs does and is COPIED byte
+ * for byte from it, for the reason recorded in probe-telegram.mjs: a JS string
  * literal eats backslashes, and a retyped `r'~\\.neurai'` reports "no secret
  * store" about a store that is right there.
+ *
+ * The interpreter's PATH is NOT copied and has no default. Where it lives is a
+ * property of the machine, and both obvious defaults are worse than none —
+ * lib/neurai-python.mjs (review F4) argues that and owns the two sentences.
+ * This caller has DATABASE_URL as a first sink, so it takes the non-throwing
+ * half and passes the `reason` on: "nobody said where the interpreter is" and
+ * "somebody did and the path is wrong" send the reader to different places.
  */
-const NEURAI_PYTHON =
-  process.env.NEURAI_PYTHON ??
-  'C:\\Users\\amirreza\\Desktop\\neurai-mvp\\server\\.venv\\Scripts\\python.exe'
-
 function ownerUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL
-  if (!existsSync(NEURAI_PYTHON)) {
-    throw new Error('no DATABASE_URL, and no python to read the secret store with')
+  const { path: NEURAI_PYTHON, reason } = findNeuraiPython()
+  if (!NEURAI_PYTHON) {
+    throw new Error(`no DATABASE_URL, and no python to read the secret store with. ${reason}`)
   }
   const out = execFileSync(
     NEURAI_PYTHON,

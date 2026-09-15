@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NAVIGABLE } from "./agentSurface";
@@ -140,5 +140,83 @@ describe("where the agents may be sent", () => {
        `/echo/speakers` stood here until that surface was deleted */
     expect(serves(routes, "/settings/security")).toBe(true);
     expect(serves(routes, "/definitely-not-a-page")).toBe(false);
+  });
+
+  /*
+   * THE DIRECTION THIS FILE DID NOT LOOK (review F19).
+   *
+   * The three-way containment above is *enum ⊆ NAVIGABLE ⊆ route tree*, and
+   * it passed for months while `NAVIGABLE` admitted seven `/echo/*` addresses
+   * that no longer resolved. `NAVIGABLE` is a SUPERSET of the enum, so
+   * nothing above ever reads the parts of it the enum does not name — and
+   * `projects` and `chat` were added to that very regex while the dead branch
+   * sat two alternations away.
+   *
+   * A regex cannot be enumerated in general. This one is a flat alternation of
+   * literals by construction, and that is a property worth pinning: if it ever
+   * stops being one, this test says so rather than quietly checking nothing.
+   */
+  describe("NAVIGABLE itself, not only the enum inside it", () => {
+    /** the literal top-level segments the pattern admits */
+    const admitted = (): string[] => {
+      const src = NAVIGABLE.source;
+      const open = src.indexOf("(");
+      const close = src.lastIndexOf(")");
+      expect(open, "NAVIGABLE is still one alternation group").toBeGreaterThan(-1);
+      return src
+        .slice(open + 1, close)
+        .split("|")
+        .map((branch) => branch.replace(/\(.*$/, "").replace(/[?^$\\]/g, "").trim())
+        .filter(Boolean)
+        .map((segment) => `/${segment}`);
+    };
+
+    it("parses to a list of real segments, or says it cannot", () => {
+      /* the vacuum guard: if the shape changes and this yields nothing, every
+         assertion below passes over an empty array */
+      expect(admitted().length, "segments parsed out of NAVIGABLE").toBeGreaterThan(8);
+      expect(admitted()).toContain("/meetings");
+      /*
+       * AND THE PARSE ITSELF HAS TO BE HONEST. A nested alternation —
+       * `echo(\/(record|upload))?` — splits on `|` into fragments this simple
+       * reader cannot name, and it would then report `/upload))` as a dead
+       * route: a real failure with a nonsense address, which sends the reader
+       * to look for a page rather than at this parser. "I cannot read the
+       * pattern" and "the pattern admits a dead page" are different nothings.
+       */
+      const unparsed = admitted().filter((seg) => !/^\/[a-z-]*$/.test(seg));
+      expect(unparsed, "NAVIGABLE is no longer a flat alternation this test can read").toEqual([]);
+    });
+
+    it("every address NAVIGABLE admits is a page the app serves", () => {
+      const routes = realRoutes();
+      const dead = admitted().filter((path) => !serves(routes, path));
+      expect(dead, "the executor would navigate here and the app serves nothing").toEqual([]);
+    });
+  });
+
+  /*
+   * EVERY `surface.push`, not only the `navigate` tool's.
+   *
+   * `start_recording` pushed a hardcoded `/echo/record?agentStart=…` from a
+   * different `case` arm and returned `{ ok: true }` while doing it. The guard
+   * above is scoped to the navigate enum, so it has a hole exactly where a
+   * navigation escapes that tool — the same shape as a BFF checker scoped to
+   * `coreFetch` missing the raw `fetch` family (review F10).
+   */
+  it("every literal path pushed onto the surface resolves", () => {
+    const source = readFileSync(join(process.cwd(), "src", "lib", "agentSurface.ts"), "utf8");
+    const pushes = [...source.matchAll(/surface\.push\(\s*[`"']([^`"'$]*)/g)]
+      .map((m) => m[1] ?? "")
+      .filter((p) => p.startsWith("/"))
+      /* a template's leading literal is enough: `/meetings/${id}` yields
+         `/meetings/`, whose base is what has to exist */
+      .map((p) => p.replace(/\/$/, ""))
+      .map((p) => p.split("?")[0] ?? "")
+      .filter(Boolean);
+    expect(pushes.length, "surface.push sites found — a rename would empty this").toBeGreaterThan(3);
+    const routes = realRoutes();
+    const dead = [...new Set(pushes)].filter((p) => !serves(routes, p));
+    expect(dead, "pushed by a client tool, served by nothing").toEqual([]);
   });
 });

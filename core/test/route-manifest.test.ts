@@ -54,6 +54,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/calls/:id/summary", "SPEC §The summary"],
   ["GET", "/v1/calls/:id/summaries", "invariant 4 — versions, never edits"],
   ["POST", "/v1/calls/:id/summaries", "2026-08-23 — regenerate as a NEW version, optionally shaped by a ruled template and the requester's instruction"],
+  ["POST", "/v1/calls/:id/decisions", "0217 — the Summary tab's re-run: a model pass over the TRANSCRIPT that lands decisions and commitments as meeting items and delivers the aftermath cards. The web calls it (api.extractCallDecisions) and nothing recorded that it has to exist"],
   ["GET", "/v1/search", "SPEC §Search"],
 
   ["POST", "/v1/assistant/ask", "SPEC §The assistant"],
@@ -173,7 +174,13 @@ function fakeDb() {
  * four characters per level.
  */
 function actualRoutes(): Set<string> {
-  const app = buildServer({ db: fakeDb(), jwtSecret: "manifest", tools: [], toolDeps: {} });
+  /* A URL THIS TEST NEVER DIALS. `actualRoutes()` runs during collection, so a
+     listener started in a hook is still undefined here — and this file only
+     reads the route table, never verifies a token, so a literal is honest
+     (review F1). */
+  const app = buildServer({
+    db: fakeDb(), jwksUrl: "https://manifest.test/jwks.json", tools: [], toolDeps: {},
+  });
   const found = new Set<string>();
   const stack: string[] = [];
 

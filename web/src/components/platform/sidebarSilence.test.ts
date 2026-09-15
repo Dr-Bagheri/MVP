@@ -65,14 +65,21 @@ describe("sidebarIsSilentOn", () => {
      */
     expect(sidebarIsSilentOn("/fa/assistant"), "/fa/assistant").toBe(true);
     expect(sidebarIsSilentOn("/en/assistant"), "/en/assistant").toBe(true);
+    /* THE LANDING PAGE IS THAT SURFACE NOW (2026-09-08): `/` is the agent
+       page and `/assistant` redirects to it. Both are asserted, because the
+       redirect still renders one frame and a strip that appears and vanishes
+       reads as a fault. `/fa` and `/en` used to sit in the negative list
+       below as "the dashboard, inside the shell" — the rule did not change,
+       the address it names did. */
+    expect(sidebarIsSilentOn("/fa"), "/fa").toBe(true);
+    expect(sidebarIsSilentOn("/en"), "/en").toBe(true);
+    expect(sidebarIsSilentOn("/"), "/").toBe(true);
     for (const route of [
       "/en/conversations",
       "/fa/workflows",
       "/en/workflows/draft-email-replies",
       "/fa/agents",
       "/en/integrations",
-      "/fa", // the landing page — the dashboard, inside the shell
-      "/en",
     ]) {
       expect(sidebarIsSilentOn(route), route).toBe(false);
     }

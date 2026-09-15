@@ -80,19 +80,24 @@ describe("a colleague's mark", () => {
       .toBe("/agents/roya.png");
   });
 
-  it("Echo wears the platform's own accent, with no row to read it from", async () => {
+  it("Echo signs with the house mark, not a portrait", async () => {
     /*
-     * User directive, 2026-09-04: "for echo also add an avatar with E sign
-     * like the one in the logo of the site". Echo has no seat in the agents
-     * table and never will — it is the assistant, not a colleague — so this
-     * asserts the two facts that make that workable: the letter comes from
-     * the handle, and the tone is named rather than looked up.
+     * Changed 2026-09-08: the `echo:` prefix and the full logo came off this
+     * signature, replaced by a smaller company mark. Echo has no seat in the
+     * agents table and never will — it is the assistant, not a colleague — so
+     * its turns are signed by the product's mark. Both theme variants stay in
+     * the DOM (CSS picks one) for the reason IconRail carries the pair.
      */
     render(<><AgentAvatar handle={ECHO} /><AgentName handle={ECHO} /></>);
     const face = document.querySelector(`[data-agent-avatar="${ECHO}"]`);
-    expect(face?.getAttribute("src")).toBe("/agents/echo.png");
-    /* the NAME still resolves without a roster row, which is the half that
-       would break if `echo` were ever looked up like a colleague */
+    const srcs = Array.from(face?.querySelectorAll("img") ?? [])
+      .map((img) => img.getAttribute("src"));
+    expect(srcs).toEqual([
+      "/brand/neurai-mark.png",
+      "/brand/neurai-mark-light-transparent.png",
+    ]);
+    /* the NAME still resolves without a roster row — the thread no longer
+       prints it beside the mark, but the tooltip and every other surface do */
     await waitFor(() => expect(screen.getByText(fa.platform.echo)).toBeTruthy());
   });
 

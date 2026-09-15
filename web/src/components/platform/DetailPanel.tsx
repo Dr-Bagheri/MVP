@@ -24,9 +24,14 @@ import { PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
  *
  * SLOTS rather than a prop per button: `start` is the cluster beside the close
  * (the ⋯ menu, the edit toggle), `end` is the context acts on the other side
- * (a link out, the panel's one primary act), `notice` is the alert line under
- * the bar, `rail` is the 283px column. What a panel SAYS is its own; where it
- * says it is this file's.
+ * (a link out, the panel's one primary act), `rail` is the 283px column. What
+ * a panel SAYS is its own; where it says it is this file's.
+ *
+ * THE `notice` SLOT IS GONE (2026-09-08). It held one thing — the red line a
+ * detail drew when a write was refused — and every message in the platform
+ * moved to the toast stack, so both of its callers stopped passing anything.
+ * Kept as an optional prop it would be a slot that renders nothing forever,
+ * which is how the next panel comes to draw its own second red line here.
  *
  * ON THE PLATFORM'S ONE DIALOG SHELL (2026-09-06, the check-up). This was a
  * hand-rolled fixed layer — a backdrop div with an onClick and a div wearing
@@ -39,13 +44,12 @@ import { PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
  * body. The frame's signature — the one class string a second copy would have
  * to carry — is the body/rail grid below (detailPanel.guard).
  */
-export function DetailPanel({ label, closeLabel, onClose, start, end, notice, rail, children }: {
+export function DetailPanel({ label, closeLabel, onClose, start, end, rail, children }: {
   label: string;
   closeLabel: string;
   onClose: () => void;
   start?: ReactNode;
   end?: ReactNode;
-  notice?: ReactNode;
   rail: ReactNode;
   children: ReactNode;
 }) {
@@ -66,8 +70,6 @@ export function DetailPanel({ label, closeLabel, onClose, start, end, notice, ra
           </div>
           <div className="flex items-center gap-1.5">{end}</div>
         </div>
-
-        {notice}
 
         {/* ── body, then the rail — SECTIONS DIVIDED (2026-09-05) ─────────
             Each child of the body and each child of the rail is a section,

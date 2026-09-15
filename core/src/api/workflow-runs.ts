@@ -56,6 +56,57 @@ export interface WorkflowStepRunRecord {
   decision?: string;
 }
 
+export interface WorkflowScheduleRecord {
+  id: string;
+  workflow_id: string;
+  owner_id: string;
+  cadence: "daily" | "weekly" | "monthly";
+  /** minutes after midnight, UTC */
+  at_minute: number;
+  /** 0 = Sunday .. 6 = Saturday (UTC); set on weekly only */
+  weekday: number | null;
+  next_due: string;
+  last_fired_at: string | null;
+  enabled: boolean;
+}
+
+/**
+ * The first firing of a new schedule, STRICTLY after `now`, in UTC.
+ *
+ * daily:   the next `atMinute` — today if still ahead, else tomorrow.
+ * weekly:  the next `weekday` at `atMinute` — today if it is that day and
+ *          the minute is still ahead, else the coming one (1..7 days out).
+ * monthly: the next `atMinute` on today's day-of-month — this month if
+ *          still ahead, else next month (the 0111 advance adds a month
+ *          from there, so the day-of-month is the creation day's).
+ *
+ * Pure, so the weekday arithmetic has a test that needs no clock and no
+ * database — the bug this replaces lived in an SQL expression no test
+ * ever evaluated.
+ */
+export function nextDueAfter(
+  now: Date,
+  cadence: "daily" | "weekly" | "monthly",
+  atMinute: number,
+  weekday: number | null,
+): Date {
+  const todayAt = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+    Math.floor(atMinute / 60), atMinute % 60, 0, 0));
+  if (cadence === "weekly" && weekday !== null) {
+    let ahead = (weekday - now.getUTCDay() + 7) % 7;
+    if (ahead === 0 && todayAt.getTime() <= now.getTime()) ahead = 7;
+    return new Date(todayAt.getTime() + ahead * 86_400_000);
+  }
+  if (todayAt.getTime() > now.getTime()) return todayAt;
+  if (cadence === "monthly") {
+    return new Date(Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate(),
+      Math.floor(atMinute / 60), atMinute % 60, 0, 0));
+  }
+  return new Date(todayAt.getTime() + 86_400_000);
+}
+
 export function createWorkflowRunsRepo(db: Db) {
   const queue = createQueue(db);
 
@@ -250,13 +301,25 @@ export function createWorkflowRunsRepo(db: Db) {
       return { decision, resumed };
     },
 
-    /** P4 — a standing cadence; the run executes as the schedule's OWNER.
-        v1 timing is UTC, on the record — never a hidden guess about
-        anyone's midnight. */
+    /**
+     * P4 — a standing cadence; the run executes as the schedule's OWNER.
+     * v1 timing is UTC, on the record — never a hidden guess about
+     * anyone's midnight.
+     *
+     * `next_due` is computed HERE, in the process's clock, and inserted as
+     * a value (2026-09-08): the SQL expression it replaced took the next
+     * `at_minute` from today and ignored `weekday` entirely, so a weekly
+     * Monday-08:00 schedule created on a Wednesday fired Thursday 08:00
+     * and every seventh day after — the row said Monday and the clock
+     * said Thursday, forever (claim_workflow_fire advances by whole weeks,
+     * so a wrong first firing is a wrong schedule). `nextDueAfter` is pure
+     * and exported for its test; the sweep's advance stays the 0111 function.
+     */
     async schedule(
       identity: Identity,
       ref: string,
       input: { cadence?: unknown; at_minute?: unknown; weekday?: unknown; owner_id?: unknown },
+      now: Date = new Date(),
     ): Promise<{ schedule_id: string; next_due: string }> {
       const cadence = input.cadence;
       if (cadence !== "daily" && cadence !== "weekly" && cadence !== "monthly") {
@@ -266,6 +329,15 @@ export function createWorkflowRunsRepo(db: Db) {
         && Number.isInteger(input.at_minute)
         && input.at_minute >= 0 && input.at_minute < 1440
         ? input.at_minute : 480;
+      /* weekly needs its day; a weekly schedule with no weekday would be
+         "every seven days from whenever this was pressed", which is the
+         bug above wearing a default's costume. Daily/monthly ignore it. */
+      const weekday = typeof input.weekday === "number" && Number.isInteger(input.weekday)
+        && input.weekday >= 0 && input.weekday <= 6
+        ? input.weekday : null;
+      if (cadence === "weekly" && weekday === null) {
+        throw new ValidationError("a weekly schedule needs a weekday (0 = Sunday .. 6 = Saturday, UTC)");
+      }
       const ownerId = typeof input.owner_id === "string" && input.owner_id !== ""
         ? input.owner_id : identity.userId;
       const found = await db.withIdentity(identity, (tx: SqlTx) =>
@@ -275,21 +347,51 @@ export function createWorkflowRunsRepo(db: Db) {
             : `select id from echo.workflow where handle = $1 and archived_at is null`,
           [ref]));
       if (!found[0]) throw new NotFoundError("no such workflow");
+      const nextDue = nextDueAfter(now, cadence, atMinute, weekday);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string; next_due: string }>(
           `insert into echo.workflow_schedule
              (org_id, owner_id, workflow_id, cadence, at_minute, weekday, next_due)
-           values ($1, $2, $3, $4, $5, $6,
-             case when date_trunc('day', now()) + make_interval(mins => $5) > now()
-                  then date_trunc('day', now()) + make_interval(mins => $5)
-                  else date_trunc('day', now()) + interval '1 day' + make_interval(mins => $5)
-             end)
+           values ($1, $2, $3, $4, $5, $6, $7::timestamptz)
            returning id, next_due`,
           [identity.orgId, ownerId, found[0]!.id, cadence, atMinute,
-            typeof input.weekday === "number" ? input.weekday : null]));
+            cadence === "weekly" ? weekday : null, nextDue.toISOString()]));
       const row = rows[0];
       if (!row) throw new NotFoundError("schedule not created — the wall refused it");
       return { schedule_id: row.id, next_due: iso(row.next_due) };
+    },
+
+    /**
+     * The standing schedules on one workflow, as RLS shows them (own; an
+     * admin also the org's). Read so a page can say "every Monday at
+     * 08:00 UTC, next on ..." instead of re-printing the trigger sentence.
+     */
+    async schedules(identity: Identity, ref: string): Promise<WorkflowScheduleRecord[]> {
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{
+          id: string; workflow_id: string; owner_id: string; cadence: string;
+          at_minute: number; weekday: number | null; next_due: string;
+          last_fired_at: string | null; enabled: boolean;
+        }>(
+          `select s.id, s.workflow_id, s.owner_id, s.cadence, s.at_minute, s.weekday,
+                  s.next_due, s.last_fired_at, s.enabled
+             from echo.workflow_schedule s
+             join echo.workflow w on w.id = s.workflow_id
+            where ${UUID.test(ref) ? "w.id = $1" : "w.handle = $1"}
+              and w.archived_at is null
+            order by s.created_at`,
+          [ref]));
+      return rows.map((row) => ({
+        id: row.id,
+        workflow_id: row.workflow_id,
+        owner_id: row.owner_id,
+        cadence: row.cadence as WorkflowScheduleRecord["cadence"],
+        at_minute: Number(row.at_minute),
+        weekday: row.weekday === null ? null : Number(row.weekday),
+        next_due: iso(row.next_due),
+        last_fired_at: isoOrNull(row.last_fired_at),
+        enabled: row.enabled === true,
+      }));
     },
 
     /** The list: RLS decides whose (own; admins also the org's). Keyset. */

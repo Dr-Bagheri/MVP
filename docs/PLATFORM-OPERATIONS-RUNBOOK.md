@@ -22,7 +22,7 @@ Last updated: 2026-08-19, after deploying the platform-root control plane.
 | **Runtime** | `node --experimental-strip-types src/api/main.ts` | No build step — TypeScript runs from source. `node` v22 on the server. |
 | **Env files** | `/etc/neurai/`, root-owned | `core.env` (api+worker, `root:neurai` mode `640`), `ml.env`, `env` (legacy copy). **Never print contents** — `grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' core.env` lists the NAMES safely. The two database ones are **`DATABASE_URL_APP`** and **`DATABASE_URL_AGENT`**; there is no plain `DATABASE_URL`, and a probe that reads that name gets an empty string and connects to a local default — which answers ECONNREFUSED, or worse, answers. |
 | **M5 env rung** | `WORKER_SUMMARY_MODEL` in `core.env` | The operator's model fallback (owner pref → org first choice → THIS → skip). Set 2026-08-27 (`google/gemini-2.5-flash`) after the P2 workflow acceptance found it EMPTY: a member with no preference in an org with no curation had no model at all, and the summarizer had been riding the higher rungs by luck. |
-| **Database / Auth / Storage / queues** | Supabase (cloud) | Production project ref `icnbeprlqqjojwjzjdgj` (distinct from the dev project `aqgpxnyuxukwgphrxslw`). The server holds only the `echo_app`/`echo_agent` role URLs. |
+| **Database / Auth / Storage / queues** | Supabase (cloud) | Production and dev project refs are held in the DPAPI store and in `ECHO_DEV_PROJECT_REF`, not written here — a ref names a live endpoint. They are distinct projects. The server holds only the `echo_app`/`echo_agent` role URLs. |
 | **Package manager** | pnpm `9.12.3` (pinned via `packageManager`) | Use `corepack pnpm@9.12.3`. |
 
 Secret naming: every platform credential in the DPAPI store carries the
@@ -306,8 +306,8 @@ server-side during reset. History delete works (the archive BFF hop
 existed nowhere); session lists carry message_count. Hub composer's Tools
 menu removed. Create-workflow shipped end to end.
 
-Test residue erased: both test identities (amirrezabagheri77777@…,
-amirrezabagheript@…) removed product-side via `db/scripts/erase-user.mjs`
+Test residue erased: both test identities removed product-side via
+`db/scripts/erase-user.mjs`
 (owner-run; savepoint-per-delete catalogue walk; accepts emails or raw
 UUIDs — an email lookup misses TOMBSTONED rows) and then auth-side via the
 admin API (verified 0 matches). Note: the walk deletes RESTRICT-referencing

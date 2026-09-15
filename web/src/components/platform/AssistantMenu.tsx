@@ -68,7 +68,7 @@ export function AssistantMenu({
              the screen for no reason and lose whatever was half-typed. From a
              subpage it simply goes there. */
           onClick={() => {
-            if (!isHub) { router.push("/assistant"); return; }
+            if (!isHub) { router.push("/"); return; }
             if (started) startNewConversation();
           }}
           className={`btn btn-sm gap-1.5 font-medium ${

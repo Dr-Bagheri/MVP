@@ -16,6 +16,7 @@ import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferenc
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 import { signOutThisDevice } from "@/lib/signOut";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The account menu (user directive, review round 2). Five entries are the
@@ -52,7 +53,6 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
    * still shows the old one — correct, but silent. This is the line that stops
    * it being silent.
    */
-  const [saveFailed, setSaveFailed] = useState(false);
   const theme = useTheme();
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();
@@ -120,7 +120,7 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
       {open ? (
         <div
           role="menu"
-          className="absolute top-11 z-30 w-64 rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+          className="absolute top-11 z-30 w-64 glass-chrome rounded-xl p-1.5 shadow-lg"
           style={{ insetInlineStart: 0 }}
         >
           {/*
@@ -215,9 +215,8 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
                     value={calendar}
                     ariaLabel={t("calendar")}
                     onChange={(value) => {
-                      setSaveFailed(false);
                       void saveCalendarPreference(value as CalendarPreference).catch(() =>
-                        setSaveFailed(true),
+                        notifyError(t("preferenceSaveFailed")),
                       );
                     }}
                     options={[
@@ -234,8 +233,7 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
                     value={timezone}
                     ariaLabel={t("timezone")}
                     onChange={(value) => {
-                      setSaveFailed(false);
-                      void saveTimezonePreference(value).catch(() => setSaveFailed(true));
+                      void saveTimezonePreference(value).catch(() => notifyError(t("preferenceSaveFailed")));
                     }}
                     options={[
                       { value: "auto", label: t("timezoneAuto") },
@@ -244,14 +242,6 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
                   />
                 </label>
 
-                {/* the control still shows the OLD value, which is true — this
-                    says why, rather than leaving a change that silently
-                    didn't happen */}
-                {saveFailed ? (
-                  <p role="alert" className="text-[11px] leading-5 text-danger">
-                    {t("preferenceSaveFailed")}
-                  </p>
-                ) : null}
               </div>
           </div>
 

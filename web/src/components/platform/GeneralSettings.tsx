@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, Field } from "@/components/ui";
 import { Select } from "@/components/Select";
@@ -9,6 +8,7 @@ import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferenc
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 import type { CalendarPreference } from "@/lib/preferences";
+import { notifyError } from "@/lib/notify";
 
 /**
  * Settings · General — the preferences a person reaches for first, and
@@ -59,7 +59,6 @@ export function GeneralSettings() {
   const theme = useTheme();
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();
-  const [saveFailed, setSaveFailed] = useState(false);
 
   return (
     <div className="space-y-5">
@@ -103,9 +102,8 @@ export function GeneralSettings() {
             <Select
               value={calendar}
               onChange={(next) => {
-                setSaveFailed(false);
                 void saveCalendarPreference(next as CalendarPreference)
-                  .catch(() => setSaveFailed(true));
+                  .catch(() => notifyError(tAvatar("preferenceSaveFailed")));
               }}
               options={[
                 { value: "auto", label: tAvatar("calendarAuto") },
@@ -118,9 +116,8 @@ export function GeneralSettings() {
             <Select
               value={timezone}
               onChange={(next) => {
-                setSaveFailed(false);
                 void saveTimezonePreference(next)
-                  .catch(() => setSaveFailed(true));
+                  .catch(() => notifyError(tAvatar("preferenceSaveFailed")));
               }}
               options={[
                 { value: "auto", label: tAvatar("timezoneAuto") },
@@ -129,13 +126,6 @@ export function GeneralSettings() {
             />
           </Field>
         </div>
-        {/* the control still shows the OLD value, which is true — this says
-            why, instead of leaving a change that silently didn't happen */}
-        {saveFailed ? (
-          <p role="alert" className="mt-2 text-[11px] leading-5 text-danger">
-            {tAvatar("preferenceSaveFailed")}
-          </p>
-        ) : null}
       </Card>
     </div>
   );

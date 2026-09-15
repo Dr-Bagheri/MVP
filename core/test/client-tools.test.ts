@@ -196,3 +196,21 @@ describe("the registry", () => {
     );
   });
 });
+
+describe("the workflow chain the assistant can drive (2026-09-08)", () => {
+  it("install_workflow_starter names tasks_digest and the schedule that follows it", () => {
+    const install = CLIENT_TOOLS.find((t) => t.name === "install_workflow_starter")!;
+    expect(install.description).toContain("tasks_digest");
+    expect(install.description).toContain("schedule_workflow");
+  });
+
+  it("schedule_workflow is a WRITE with the schedule row's own shape, in UTC", () => {
+    const tool = CLIENT_TOOLS.find((t) => t.name === "schedule_workflow")!;
+    expect(tool.effect).toBe("write");
+    const params = tool.parameters as { properties: Record<string, { enum?: string[] }>; required: string[] };
+    expect(params.required).toEqual(["workflow", "cadence"]);
+    expect(params.properties.cadence!.enum).toEqual(["daily", "weekly", "monthly"]);
+    expect(Object.keys(params.properties).sort()).toEqual(["at_minute", "cadence", "weekday", "workflow"]);
+    expect(tool.description).toMatch(/UTC/);
+  });
+});

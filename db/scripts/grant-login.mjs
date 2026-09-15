@@ -20,6 +20,7 @@
 
 import { randomBytes } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import { requireNeuraiPython } from './lib/neurai-python.mjs'
 import { existsSync } from 'node:fs'
 import pg from 'pg'
 
@@ -39,16 +40,15 @@ const GRANTABLE = {
 }
 const NEVER = new Set(['echo_vendor'])
 
-const NEURAI_PYTHON =
-  process.env.NEURAI_PYTHON ??
-  'C:\\Users\\amirreza\\Desktop\\neurai-mvp\\server\\.venv\\Scripts\\python.exe'
 
 const PY_PRELUDE =
   "import os,sys,json;os.environ.setdefault('NEURAI_DATA_DIR',os.path.expanduser(r'~\\\\.neurai'));" +
   'from neurai.security import get_secret, set_secret;'
 
 function readSecret(name) {
-  if (!existsSync(NEURAI_PYTHON)) throw new Error(`no NeurAI python at ${NEURAI_PYTHON}`)
+  /* THROWS rather than degrading: this script mints credentials and has no
+     second sink to fall back to — lib/neurai-python.mjs (review F4) */
+  const NEURAI_PYTHON = requireNeuraiPython()
   return execFileSync(
     NEURAI_PYTHON,
     ['-c', `${PY_PRELUDE}print(get_secret(${JSON.stringify(name)}) or '',end='')`],
@@ -59,6 +59,7 @@ function readSecret(name) {
 // Value arrives on stdin, never on argv — another process can read a command
 // line, and this one would carry a live credential.
 function writeSecret(name, value) {
+  const NEURAI_PYTHON = requireNeuraiPython()
   execFileSync(
     NEURAI_PYTHON,
     ['-c', `${PY_PRELUDE}d=json.load(sys.stdin);set_secret(d['n'],d['v'])`],

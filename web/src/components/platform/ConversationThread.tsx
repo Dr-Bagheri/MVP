@@ -7,7 +7,8 @@ import { ThinkingLine, TypingCaret } from "./ThinkingLine";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
 import { deliverDoc, deliverPdf } from "@/lib/deliver";
-import { parseAnswerBlocks, type AnswerBlock } from "@/lib/answerBlocks";
+import { stripAnswerBlocks } from "@/lib/answerBlocks";
+import { AnswerContent } from "./AnswerBlocks";
 
 /**
  * A persisted assistant conversation, rendered.
@@ -239,7 +240,16 @@ const MessageRow = memo(function MessageRow({
               >
                 {/* the name leads the answer's first line, in its own weight
                     — not a heading above it */}
-                {isUser ? null : (
+                {/*
+                  NO NAME ON ECHO'S TURNS. The assistant is the surface
+                  answering, so its
+                  signature is the house mark beside the line and nothing else
+                  — a name the reader never had to work out was costing every
+                  answer its first five characters. A COLLEAGUE keeps the label
+                  for the reason recorded above: between Roya and Ava the name
+                  is the only thing that says which of them is talking.
+                */}
+                {isUser || (m.author ?? ECHO) === ECHO ? null : (
                   <span className="me-1.5 font-semibold text-fg">
                     {/* the COLON is what makes this a speaker label rather
                         than the answer's first word (user directive,
@@ -250,7 +260,7 @@ const MessageRow = memo(function MessageRow({
                     <AgentName handle={m.author ?? ECHO} />:
                   </span>
                 )}
-                {isUser ? m.content : <AnswerContent text={m.content} />}
+                {isUser ? m.content : <AnswerContent text={m.content} streaming={m.streaming} />}
                 {/* mid-sentence: the caret goes where the next character will
                     be, which is why this one stays INLINE */}
                 {m.streaming && m.content !== "" ? <TypingCaret /> : null}
@@ -263,7 +273,7 @@ const MessageRow = memo(function MessageRow({
                   sideways. Underneath, the text lands where it was always
                   going to land and the line below it simply goes away.
                 */}
-                {m.streaming && m.content === "" ? <ThinkingLine /> : null}
+                {m.streaming && m.content === "" ? <ThinkingLine tools={m.tool_calls} /> : null}
               </div>
 
               {/*
@@ -496,78 +506,6 @@ function MessageToolbar({
 }
 
 /**
- * Phase D — generative blocks: an assistant answer renders its structured
- * islands (table / checklist / timeline) as real components; everything the
- * parser degrades stays the model's literal words. Whitespace is preserved
- * on text runs — prose is the default, blocks are the exception.
- */
-function AnswerContent({ text }: { text: string }) {
-  const segments = parseAnswerBlocks(text);
-  return (
-    <>
-      {segments.map((segment, i) =>
-        segment.type === "text" ? (
-          <span key={i} className="whitespace-pre-wrap">{segment.text}</span>
-        ) : (
-          <BlockView key={i} block={segment.block} />
-        ),
-      )}
-    </>
-  );
-}
-
-function BlockView({ block }: { block: AnswerBlock }) {
-  if (block.kind === "table") {
-    return (
-      <div className="my-2 overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-max text-xs">
-          <thead>
-            <tr className="border-b border-border bg-surface-2/60">
-              {block.columns.map((column, i) => (
-                <th key={i} className="px-3 py-1.5 text-start font-semibold text-fg">{column}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {block.rows.map((row, r) => (
-              <tr key={r} className="border-b border-border last:border-b-0">
-                {row.map((cell, c) => (
-                  <td key={c} className="px-3 py-1.5 text-fg-muted">{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-  if (block.kind === "checklist") {
-    return (
-      <ul className="my-2 space-y-1">
-        {block.items.map((item, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm">
-            <span aria-hidden className={item.done ? "text-success" : "text-fg-subtle"}>
-              {item.done ? "☑" : "☐"}
-            </span>
-            <span className={item.done ? "text-fg-muted line-through" : "text-fg"}>{item.text}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  return (
-    <ol className="my-2 space-y-1 border-s-2 border-accent/30 ps-3">
-      {block.items.map((item, i) => (
-        <li key={i} className="text-sm">
-          {item.when ? <span className="me-2 text-xs font-semibold text-accent">{item.when}</span> : null}
-          <span className="text-fg">{item.what}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-/**
  * Phase D — speech OUT (item 18, first half): the browser's own synthesis
  * reads the answer aloud. Honest limits: voice quality and Persian support
  * depend on the OS's installed voices — this is the zero-dependency floor,
@@ -586,7 +524,7 @@ function SpeakButton({ text }: { text: string }) {
       setSpeaking(false);
       return;
     }
-    const prose = text.replace(/```neurai-block[\s\S]*?```/g, " ").trim();
+    const prose = stripAnswerBlocks(text);
     if (!prose) return;
     const utterance = new SpeechSynthesisUtterance(prose);
     utterance.lang = /[؀-ۿ]/.test(prose) ? "fa-IR" : "en-US";

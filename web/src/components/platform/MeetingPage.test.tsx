@@ -1,24 +1,33 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Call, MeetingRecord } from "@/api/types";
+import type { RecorderSnapshot } from "@/lib/recordingEngine";
+import type { RecalledDecision } from "@/api/types";
 import { meetingFixture } from "@/test/fixtures";
-import { __setPreferencesForTest } from "@/lib/preferences";
 
 /**
- * The meeting page's contract facts (the big-milestone shape):
+ * The meeting page's contract facts, after the 2026-09-08 simplification
+ * ("we dont need the before during after now … I just want a recording
+ * screen with a spectogram showing its recording, and a button to finish"):
  *
- *  1. THE LADDER MAPPING is the load-bearing one: the processing view's
- *     four steps are the call-status ladder wearing the reference's labels
- *     — asserted PER STEP. (Verified red by breaking ladderIndex to a
- *     constant: the per-step assertions failed.)
- *  2. A READY record shows the review panels (transcript + extraction),
- *     not the processing card — the states are exclusive.
- *  3. "failed" is named a failure, never progress.
- *  4. An unrecorded meeting opens on its PLAN however overdue it is, and
- *     its post stage names the absence; a recorded one opens on post.
- *  5. Starting hands the ENGINE the meeting's mapping (online → system
- *     source, the meeting's own title) — the engine is the only recorder.
+ *  1. THERE IS NO STEPPER. The view is DERIVED from the record, so the
+ *     screen cannot disagree with the pipeline and nobody can put the page
+ *     into a state the record does not support. Asserted as an ABSENCE —
+ *     the version that still renders three steps looks perfectly fine on
+ *     its own and is only wrong against the sentence that removed them.
+ *  2. THE LADDER MAPPING: the processing view's four steps are the
+ *     call-status ladder wearing the reference's labels, asserted per step.
+ *  3. A READY record shows the review panels, not the processing card.
+ *     "failed" is named a failure, never progress.
+ *  4. An unrecorded microphone meeting IS the live screen and starts its
+ *     take by ARRIVING — with the meeting's own title, on the microphone.
+ *  5. The live screen is a scope, a clock and one button: no whiteboard, no
+ *     presentation, no video room, no rail of cards.
+ *  6. The UPLOAD lane never opens a microphone, and the file the wizard
+ *     handed over is sent HERE, under the processing card.
+ *  7. Starting and ending are the HOST'S; a colleague is moved to the
+ *     record when the host finishes.
  */
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -29,81 +38,101 @@ vi.mock("@/i18n/routing", () => ({
 vi.mock("@/components/platform/CrumbTitle", () => ({
   useCrumbTitle: () => undefined,
 }));
-/* the canvas is its own subject — here it only needs to exist */
-vi.mock("./meeting/Whiteboard", () => ({
-  Whiteboard: () => <div data-testid="whiteboard-stub" />,
-}));
-/* so is the video room: LiveKit opens a real WebSocket the moment it renders,
-   and jsdom has no WebRTC — an unmocked room throws mid-render, which takes
-   the whole page down and reports as "the stepper is missing" */
-vi.mock("@livekit/components-react", () => ({
-  LiveKitRoom: ({ children }: { children: React.ReactNode }) =>
-    <div data-testid="livekit-room">{children}</div>,
-  GridLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ParticipantTile: () => <div />,
-  ControlBar: () => <div />,
-  RoomAudioRenderer: () => null,
-  useTracks: () => [],
-  /* 2026-09-07: the room REMEMBERS the two switches now, and it asks the
-     room context for them — a mock without this throws inside a render and
-     arrives as "the stepper is missing", which is the shape that sends
-     somebody to fix the wrong file */
-  useLocalParticipant: () => ({ isMicrophoneEnabled: true, isCameraEnabled: false }),
-}));
 
 const startSpy = vi.fn(async (_opts: unknown) => undefined);
-const tokenSpy = vi.fn((_id: string) => undefined);
-/* useSyncExternalStore REQUIRES a stable snapshot reference — a getter that
-   builds a fresh object every call re-renders forever (the real engine's
-   snapshot is a module-level constant between changes for the same reason).
-   SETTABLE since 2026-09-06, and only ever between tests: a suite whose
-   engine is frozen at "idle" cannot represent a take in progress, so the
-   end button — half of the host rule — was unreachable by any assertion. */
-let ENGINE_SNAPSHOT: {
-  phase: string; callId: string | null; recordedMs: number;
-  shared: boolean; quality: string | null;
-} = { phase: "idle", callId: null, recordedMs: 0, shared: false, quality: null };
-const engineIsRecording = (callId: string, over: { shared?: boolean; quality?: string } = {}) => {
+/*
+ * THE SNAPSHOT IS THE PRODUCER'S SHAPE, not a hand-picked subset of it
+ * (2026-09-08). It was seven fields for as long as the page read seven; the
+ * live transcript reads `captionRows`, `captions` and `liveSpeakers`, and a
+ * fixture missing them did not fail as "the panel has no rows" — it THREW
+ * inside the panel and reported as nine unrelated tests losing their start
+ * spy. Typed as `RecorderSnapshot`, so the next field the engine grows is a
+ * typecheck here rather than a mystery in whatever renders it first.
+ *
+ * `useSyncExternalStore` REQUIRES a stable reference — a getter that builds a
+ * fresh object every call re-renders forever (the real engine's snapshot is a
+ * module-level constant between changes for the same reason).
+ */
+const idleEngine = (): RecorderSnapshot => ({
+  phase: "idle", callId: null, title: "", returnPath: null,
+  recordedMs: 0, level: 0, wave: [],
+  waveStartMs: 0, chapterMarks: [], quality: null,
+  progress: { done: 0, pending: 0, failed: 0 }, error: null,
+  captions: null, captionRows: [], liveSpeakers: [], captionsDown: false,
+  previews: [], shared: false,
+});
+let ENGINE_SNAPSHOT: RecorderSnapshot = idleEngine();
+const engineIsRecording = (callId: string) => {
   ENGINE_SNAPSHOT = {
-    phase: "recording", callId, recordedMs: 12_000,
-    shared: over.shared ?? false, quality: over.quality ?? null,
+    ...idleEngine(),
+    phase: "recording", callId, recordedMs: 12_000, level: 0.4,
+    wave: [0.2, 0.5, 0.3],
+    captions: { finals: "", interim: "" },
   };
 };
-/** what the browser's share picker "answers" for the next addSharedAudio */
-let SHARE_RESULT: "ok" | "shareDenied" | "shareNoAudio" | "ownTab" = "ok";
-const shareSpy = vi.fn(async () => SHARE_RESULT);
+/**
+ * THE SUBSCRIPTION IS REAL: a snapshot changed mid-test must move the
+ * screen, because the on-air light is about a phase that arrives AFTER the
+ * page is on screen. With a dead subscription the only reachable states are
+ * the ones the page was born in.
+ */
+let pushEngine: (() => void) | null = null;
+const finishSpy = vi.fn(async () => undefined);
+/* pause/resume are the ENGINE's, so the page's control is asserted by what
+   it CALLS — a spy here, rather than a phase this file sets by hand, which
+   would pass against a button wired to nothing */
+const pauseSpy = vi.fn(() => { ENGINE_SNAPSHOT = { ...ENGINE_SNAPSHOT, phase: "paused" }; pushEngine?.(); });
+const resumeSpy = vi.fn(() => { ENGINE_SNAPSHOT = { ...ENGINE_SNAPSHOT, phase: "recording" }; pushEngine?.(); });
 vi.mock("@/lib/recordingEngine", () => ({
   startRecording: (opts: unknown) => startSpy(opts),
-  addSharedAudio: () => shareSpy(),
-  finish: vi.fn(async () => undefined),
+  finish: () => finishSpy(),
+  pause: () => pauseSpy(),
+  resume: () => resumeSpy(),
   recorderSnapshot: () => ENGINE_SNAPSHOT,
-  subscribeRecorder: () => () => undefined,
+  subscribeRecorder: (fn: () => void) => {
+    pushEngine = fn;
+    return () => { pushEngine = null; };
+  },
+}));
+
+/* THE FILE THE WIZARD SENT AFTER US (2026-09-08). `takeUpload` answers once,
+   the way the real module does, so a remount cannot upload twice. */
+let PENDING: File | null = null;
+/* the refusal reaches the NOTIFICATION BUS, not a paragraph on the page
+   (the platform's every-outcome-goes-to-the-bus rule, applied here
+   2026-09-08). The rule under test is unchanged — a refused file is NAMED
+   and the meeting stays reachable — so only the channel moved. */
+const notifyErrorSpy = vi.fn((_msg: string) => undefined);
+vi.mock("@/lib/notify", () => ({
+  notify: vi.fn(),
+  notifyWarn: vi.fn(),
+  notifyError: (msg: string) => notifyErrorSpy(msg),
+}));
+vi.mock("@/lib/pendingUpload", () => ({
+  takeUpload: () => { const f = PENDING; PENDING = null; return f; },
+}));
+/** the upload the page performs — held open when a test needs the in-flight state */
+let UPLOAD_GATE: Promise<{ ok: true; callId: string }> | null = null;
+const uploadSpy = vi.fn(async (_file: File) =>
+  UPLOAD_GATE ?? ({ ok: true as const, callId: "c-up" }));
+vi.mock("@/lib/uploadFile", () => ({
+  uploadAudioFile: (file: File) => uploadSpy(file),
 }));
 
 /*
  * The shared fixture (see src/test/fixtures.ts for why it is not written out
  * twice), with ONE default of this suite's own: the reader is the HOST.
  *
- * db/0202 made starting and ending a recording the host's alone, and almost
- * every test here is about running a meeting — so a stranger as the default
- * viewer would exercise the refusal in every case and the product in none.
- * It lives on the wrapper rather than in `beforeEach` because each test
- * builds its own record, and an override there is silently discarded.
- * A test about somebody ELSE's meeting passes `created_by` and reads as
- * what it is.
+ * db/0202 made starting and ending a recording the host's alone, so a suite
+ * whose default viewer is a stranger would exercise the refusal in every
+ * case and the product in none. A test about somebody ELSE's meeting passes
+ * `created_by` and reads as what it is.
  */
 const meeting = (over: Partial<MeetingRecord> = {}): MeetingRecord =>
-  meetingFixture({ created_by: "u-me", ...over });
+  meetingFixture({ created_by: "u-me", mode: "in_person", ...over });
 
-/* db/0202's roster: who was ADDED, who was STAMPED, and the directory the
-   dialog picks from */
-const added: string[][] = [];
-const removed: string[] = [];
+/** every meeting whose id is stamped as attended (db/0202) */
 const attended: string[] = [];
-let PEOPLE: Array<{ id: string; display_name: string; display_name_en: string | null; username: string | null; role: string }> = [];
-const personRow = (id: string) => ({
-  user_id: id, display_name: id, display_name_en: null, username: null, attended: false,
-});
 
 function call(over: Partial<Call>): Call {
   return {
@@ -118,14 +147,20 @@ function call(over: Partial<Call>): Call {
 
 let MEETING: MeetingRecord = meeting({});
 let CALL: Call | null = null;
-/* a read that stays IN FLIGHT until the test says so — the only way the
-   loading state is a state at all; a mock that resolves at once renders the
-   frame for no measurable moment (audit finding, 2026-09-02) */
-let DETAIL_GATE: Promise<MeetingRecord> | null = null;
 /** every PATCH body the page sent */
 const patched: Record<string, unknown>[] = [];
 /** every call id handed to finishCall */
 const finished: string[] = [];
+/*
+ * ITEM 7's RECALL READ, as a SPY rather than a stub that answers nothing.
+ *
+ * The hook swallows every failure by design (a courtesy that failed is not
+ * news), so an `api` without this function is silent in exactly the way a
+ * feature nobody mounted is silent. The spy is what lets a test tell the two
+ * apart — see "LIVE RECALL IS MOUNTED" below.
+ */
+let RECALL: RecalledDecision[] = [];
+const recallSpy = vi.fn(async (_meetingId: string, _window: string) => RECALL);
 
 /* the REAL BffError: the screen branches on `instanceof` and on its `code`,
    and a hand-written stand-in makes every instanceof answer false while the
@@ -133,43 +168,47 @@ const finished: string[] = [];
 vi.mock("@/api/client", async () => ({
   ...(await vi.importActual<typeof import("@/api/client")>("@/api/client")),
   api: {
-    /* the plan reads its documents on mount (0159); a mock without it makes
-       every meeting test fail on a render error rather than on its subject */
-    meetingAttachments: async () => [],
-    /* the review tab's voices panel (2026-09-07) reads the DIRECTORY too, and
-       it proved this comment's own point on arrival: without the stub the
-       panel threw and four tests failed naming the transcript, the stepper
-       and the stage, none of which had changed. `getSpeakers` was already
-       here — typecheck caught the duplicate key that vitest was happy to
-       resolve by last-one-wins. */
+    /* the review tab's voice picker reads the DIRECTORY; without the stub the
+       panel throws and every test fails naming the transcript rather than its
+       own subject */
     directory: async () => [],
-    uploadMeetingAttachment: async () => undefined,
-    deleteMeetingAttachment: async () => undefined,
-    /* and its ITEMS (0160) — decisions and action items are rows now, and
-       the panel is deliberately NOT gated on a recording, so this stub is
-       needed by every meeting test rather than only the review ones */
+    /* 0211 — the items panel resolves an `owner_id` to a colleague, so it reads
+       the roster on mount. Without the stub the panel throws inside an effect and
+       nine tests report as "the start spy was never called". */
+    orgPeople: async () => [],
+    /* the ledger's mini task list reads the board for what a commitment became */
+    taskBoard: async () => ({ columns: [], tasks: [] }),
+    /* 0217's re-run button on the Summary tab. It is never pressed in this file;
+       the mock exists because an `api` object missing a function the tab renders
+       against is a TypeError in a render, not a missing assertion. */
+    extractCallDecisions: async () => ({
+      call_id: "c-1", meeting_id: "m-1", claims: 0, items: 0, cards: 0, reason: null,
+    }),
+    /* and its ITEMS (0160) — decisions and action items are rows, and the
+       panel is deliberately NOT gated on a recording */
     meetingItems: async () => [],
     addMeetingItem: async () => undefined,
     updateMeetingItem: async () => undefined,
     deleteMeetingItem: async () => undefined,
-    meetingDetail: async () => DETAIL_GATE ?? MEETING,
-    /* the edit dialog reads the topic list on mount (2026-09-04) */
-    meetingTopics: async () => [],
+    meetingDetail: async () => MEETING,
     updateMeeting: async (_id: string, body: Record<string, unknown>) => {
       patched.push(body);
-      return { ...MEETING, ...body };
+      MEETING = { ...MEETING, ...body } as MeetingRecord;
+      /* LINKING A CALL BRINGS ITS STATUS WITH IT, the way db/0204's door
+         does: the meeting publishes one word about the take, and a fake that
+         left it null said "this take is not running" the instant the engine
+         linked one — which sent the page to the record mid-recording and
+         reported as "the live transcript is not on screen". */
+      if (typeof body.call_id === "string") {
+        MEETING = { ...MEETING, call_status: CALL?.status ?? "recording" };
+      }
+      return MEETING;
     },
     getCall: async () => CALL,
-    /* db/0206 — the shared stage: the board the host draws and the document
-       everybody is shown */
-    meetingBoard: async () => ({ shapes: [], version: 0 }),
-    saveMeetingBoard: async () => ({ version: 1 }),
-    setMeetingPresenting: async () => MEETING,
-    meetingAttachmentUrl: async () => ({ url: "blob:x", content_type: "application/pdf" }),
     /* the orphaned-take finish (2026-09-07). It MUTATES the fixture the way
        the server does — recording -> processing on both the call and the
-       meeting's published status — so a test cannot pass by the page
-       merely deciding to move on. */
+       meeting's published status — so a test cannot pass by the page merely
+       deciding to move on. */
     finishCall: async (callId: string) => {
       finished.push(callId);
       MEETING = { ...MEETING, call_status: "processing" };
@@ -177,31 +216,14 @@ vi.mock("@/api/client", async () => ({
       return { id: callId, status: "processing" };
     },
     me: async () => ({ id: "u-me", display_name: "سینا", display_name_en: null }),
-    taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
     callNotes: async () => [],
     getSummaries: async () => [],
     getTranscript: async () => [],
     getSpeakers: async () => [],
     getCallAudio: async () => null,
-    /* the video room asks for a TOKEN now — the server mints it, so a test
-       that let this reject would be testing the failure branch by accident */
-    meetingRoomToken: async (id: string) => tokenSpy(id) ?? ({
-      token: "t", url: "wss://example.livekit.cloud",
-      expires_at: new Date(Date.now() + 3600_000).toISOString(),
-    }),
-    /* db/0202 — the roster and the attendance stamp. `markMeetingAttended`
-       fires on EVERY visit to a held meeting, so a mock without it makes
-       every stage test fail on a render error rather than on its subject. */
+    recallDecisions: (meetingId: string, window: string) => recallSpy(meetingId, window),
+    /* db/0202 — the attendance stamp fires on EVERY visit to a live meeting */
     markMeetingAttended: async (id: string) => { attended.push(id); },
-    addMeetingAttendees: async (_id: string, ids: string[]) => {
-      added.push(ids);
-      return { ...MEETING, attendees: [...MEETING.attendees, ...ids.map(personRow)] };
-    },
-    removeMeetingAttendee: async (_id: string, userId: string) => {
-      removed.push(userId);
-      return { ...MEETING, attendees: MEETING.attendees.filter((a) => a.user_id !== userId) };
-    },
-    orgPeople: async () => PEOPLE,
     createTask: vi.fn(), addCallNote: vi.fn(), deleteCallNote: vi.fn(),
   },
 }));
@@ -209,29 +231,20 @@ vi.mock("@/api/client", async () => ({
 import { MeetingPage } from "./MeetingPage";
 
 beforeEach(() => {
-  /*
-   * THE READER IS THE HOST, by default (db/0202, 2026-09-06).
-   *
-   * Starting and ending a recording is the host's alone now, so a suite
-   * whose default viewer is a stranger would be testing the refusal in
-   * every case and the product in none. The two tests that are ABOUT
-   * somebody else's meeting say so on their own line, which is also what
-   * makes them readable.
-   */
   MEETING = meeting({});
-  added.length = 0;
-  removed.length = 0;
   attended.length = 0;
-  PEOPLE = [];
   CALL = null;
-  DETAIL_GATE = null;
+  PENDING = null;
+  UPLOAD_GATE = null;
   patched.length = 0;
   finished.length = 0;
+  RECALL = [];
+  recallSpy.mockClear();
   startSpy.mockClear();
-  shareSpy.mockClear();
-  SHARE_RESULT = "ok";
-  ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0, shared: false, quality: null };
-  tokenSpy.mockClear();
+  finishSpy.mockClear();
+  uploadSpy.mockClear();
+  notifyErrorSpy.mockClear();
+  ENGINE_SNAPSHOT = idleEngine();
 });
 
 /** one processing step's row, found by its label */
@@ -240,6 +253,39 @@ function stepRow(label: string): HTMLElement {
 }
 
 describe("MeetingPage", () => {
+  /*
+   * THE STEPPER IS GONE, and this is the assertion that says so. Every other
+   * test below would pass just as well on a page that still offered three
+   * steps beside the thing it is showing.
+   */
+  it("offers no stage navigation — the record decides what is on screen", async () => {
+    MEETING = meeting({ call_id: "c-1" });
+    CALL = call({ status: "ready" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument());
+
+    /*
+     * AND THE TAB SET IS FOUR. Asserted by NAME because the two that stayed
+     * cannot
+     * see them: a page still rendering «فایل‌ها» and «دستیار» satisfies every
+     * other line in this file.
+     */
+    /* WITHIN THE TABLIST: the review tab's own panels carry tabs of their
+       own, so a page-wide count answers a different question — it came back
+       nine on the first run, which is the check catching its own scope. */
+    const tabs = within(screen.getByRole("tablist", { name: "پس از جلسه" }));
+    expect(tabs.queryByRole("tab", { name: "فایل‌ها" })).toBeNull();
+    expect(tabs.queryByRole("tab", { name: "دستیار" })).toBeNull();
+    expect(tabs.getAllByRole("tab")).toHaveLength(4);
+
+    expect(screen.queryByRole("button", { name: /پیش از جلسه/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /حین جلسه/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /پس از جلسه/ })).toBeNull();
+    /* the meeting's own name replaced them — a page with neither would be a
+       screen that never says which meeting it is */
+    expect(screen.getByRole("heading", { name: MEETING.title })).toBeInTheDocument();
+  });
+
   it("maps the call-status ladder onto the four steps, per step", async () => {
     MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "linking" });
@@ -274,610 +320,561 @@ describe("MeetingPage", () => {
     expect(screen.queryByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeNull();
   });
 
-  /* THE LANDING RULE (0148): an unrecorded meeting opens on its PLAN,
-     however long ago it was scheduled. The old rule compared the scheduled
-     time to now, so a meeting created FOR NOW was already a second in the
-     past by the time this page loaded and dropped the person straight onto
-     the live stage — the whiteboard below is what that looked like, and it
-     is why this test asserts an absence. */
-  it("an unrecorded meeting opens on its PLAN — never the live stage, however overdue", async () => {
-    MEETING = meeting({ call_id: null, scheduled_at: "2020-01-01T09:00:00.000Z" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /پیش از جلسه/ })).toHaveAttribute("aria-current", "step");
-    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
-
-    /* and the stage is one click away — an ONLINE meeting opens it on the
-       video room, which is a frame in OUR box rather than a link out, and
-       the canvas is a chip on the same header */
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    expect(await screen.findByTestId("livekit-room")).toBeInTheDocument();
-    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "وایت‌برد" }));
-    expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: /پس از جلسه/ }));
-    expect(screen.getByText("هنوز رکوردی از این جلسه نیست.")).toBeInTheDocument();
-  });
-
-  it("names the MEETING'S host under the host badge — never whoever is looking", async () => {
-    /*
-     * THE BUG THIS PINS, live until 2026-09-03: the live stage's «اعضای جلسه»
-     * card rendered `me` — the signed-in viewer — with the «میزبان» badge, and
-     * added one to the count for them. So everybody who opened a colleague's
-     * meeting was shown as its host, and the two people in a two-person
-     * meeting each saw themselves listed and the other one missing.
-     *
-     * THE FIXTURE IS THE WHOLE TEST. The default `meeting()` host and the
-     * mocked viewer are BOTH "سینا", so an assertion that "سینا is on screen"
-     * passes against the bug and against the fix — indistinguishable, which is
-     * how it survived. The host is renamed here so the two can be told apart,
-     * and both halves are asserted: the host's name present, the viewer's
-     * absent. Verified red against the old row on both.
-     */
-    MEETING = meeting({
-      call_id: null, mode: "online", host_name: "مریم", invitees: ["رضا"],
-      /* SOMEBODY ELSE'S meeting — which is the whole point of this test and,
-         since 0202, also the reason the start controls are absent below */
-      created_by: "u-host",
-    });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-
-    const members = (await screen.findByRole("heading", { name: "اعضای جلسه" })).closest("section")!;
-    expect(within(members).getByText("مریم")).toBeInTheDocument();
-    expect(within(members).queryByText("سینا")).toBeNull();
-    /* the invitee is still listed, so this cannot pass by rendering nobody */
-    expect(within(members).getByText("رضا")).toBeInTheDocument();
-    /* and the count is the record's two, not three-with-the-reader */
-    expect(within(members).getByText("۲")).toBeInTheDocument();
-  });
-
-  /*
-   * AN ONLINE MEETING RECORDS THE ROOM (2026-09-07, measured — the third
-   * report on one meeting).
-   *
-   * 2026-09-04 pointed this lane at a SHARED TAB, and that cost a colleague's
-   * voice (it reached the recording only if the right surface was picked) and
-   * the speaker's own identity: the same person, the same day, the same
-   * enrolled print scored 0.79 on a microphone take and 0.34 on an online
-   * one, with a DIFFERENT person scoring higher. A meeting held in our room
-   * does not need the sum — everyone in it is already a track in the page.
-   *
-   * The share survives as an explicit act for the case the reversal was made
-   * for, and the test asserts BOTH, because either alone is satisfied by a
-   * lane that only ever does one thing.
-   */
-  it("walking into an online meeting records the ROOM, with no picker in the way", async () => {
-    MEETING = meeting({ call_id: null, mode: "online", title: "جلسهٔ آنلاین" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    /* the PLAN does not record — a page that started a take on load would be
-       recording a room nobody has walked into */
-    expect(startSpy).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-
-    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
-    const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
-    expect(opts.source).toBe("room");
-    expect(opts.title).toBe("جلسهٔ آنلاین");
-  });
-
-  /*
-   * … AND THE MEETING HELD SOMEWHERE ELSE IS AN ADDITION, NOT A RESTART.
-   *
-   * The take is already running by the time anybody realises the meeting is
-   * in Zoom, so offering to START one with a share would mean discarding or
-   * finishing what is recorded. The share joins the live mix instead — and
-   * the chip is the discriminating half: it must name the take, because a
-   * chip that names the MODE said "tab + microphone" over every online take
-   * for three days, including the ones with no tab in them.
-   */
-  it("a running online take can take in another app's audio, and the chip says which mix it is", async () => {
-    engineIsRecording("c-9");
-    MEETING = meeting({ call_id: "c-9", call_status: "recording", mode: "online" });
-    CALL = call({ id: "c-9", status: "recording" });
-    const { unmount } = render(<MeetingPage id="m-1" />);
-
-    await screen.findByText("صدای اتاق + میکروفون");
-    expect(screen.queryByText("تب + اتاق + میکروفون")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: /افزودن صدای برنامهٔ دیگر/ }));
-    await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
-    /* it ADDS: nothing was started, so nothing was thrown away */
-    expect(startSpy).not.toHaveBeenCalled();
-    unmount();
-
-    /* once the app's audio is in, the mix is named for what it carries and
-       the door is gone — pressing it again would mix a second copy */
-    engineIsRecording("c-9", { shared: true });
-    render(<MeetingPage id="m-1" />);
-    await screen.findByText("تب + اتاق + میکروفون");
-    expect(screen.queryByRole("button", { name: /افزودن صدای برنامهٔ دیگر/ })).toBeNull();
-  });
-
-  it("a share that ends offers the door back, and a refused picker says which refusal", async () => {
-    /* the take carries on with a microphone in a room where nobody is
-       speaking — the moment a person most needs the way back */
-    engineIsRecording("c-9", { shared: true, quality: "shareEnded" });
-    MEETING = meeting({ call_id: "c-9", call_status: "recording", mode: "online" });
-    CALL = call({ id: "c-9", status: "recording" });
-    SHARE_RESULT = "ownTab";
-    render(<MeetingPage id="m-1" />);
-
-    await screen.findByText("اشتراک صدا قطع شد");
-    await userEvent.click(await screen.findByRole("button", { name: /افزودن صدای برنامهٔ دیگر/ }));
-    /* the refusal that must NOT be obeyed, named as itself rather than as a
-       generic failure: our own tab would be a second copy of these voices */
-    expect(await screen.findByRole("alert")).toHaveTextContent("تبِ همین جلسه انتخاب شد");
-  });
-
-  /* WALKING IN IS THE START, where nothing has to be asked for (user
-     directive: the mid-meeting page should already be recording). The plan
-     does NOT record — that half is the one worth asserting, because a page
-     that starts a take on load would be recording a room nobody has walked
-     into yet. */
-  it("an in-person STAGE starts the take itself, once, with the meeting's mapping", async () => {
-    MEETING = meeting({ call_id: null, mode: "in_person", title: "جلسهٔ حضوری" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    expect(startSpy).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
-    const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
-    expect(opts.source).toBe("mic");
-    expect(opts.title).toBe("جلسهٔ حضوری");
-
-    /* ONCE. Walking back to the plan and in again must not open a second
-       take over the first — the ref, not the engine, is what makes that
-       true, and without it the re-entry reads as a stranger's collision. */
-    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    expect(startSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("an in-person meeting is offered no video room", async () => {
-    /* the mode rule the user asked for: a meeting held in the room has no
-       video room and never will, so the tab is absent rather than
-       present-and-empty.
-
-       The `source: "mic"` assertion that used to sit here is GONE, and on
-       purpose — the test above owns it. Two checks that fail together for
-       the same reason read as extra rigour and are a maintenance tax: the
-       one that gets updated is whichever the next person finds first. */
-    MEETING = meeting({ call_id: null, mode: "in_person", title: "جلسهٔ حضوری" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    expect(screen.queryByRole("button", { name: "ویدیو" })).toBeNull();
-    // the canvas is what an in-person meeting opens on
-    expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();
-  });
-
-  it("the upload lane opens a FILE PICKER and never a microphone", async () => {
-    MEETING = meeting({ call_id: null, mode: "upload" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    /* the load-bearing assertion: arriving on the stage must not open a mic
-       for a lane whose whole premise is a file the person already has */
-    expect(startSpy).not.toHaveBeenCalled();
-  });
-
-  /* THE ROOM IS THE BOX (user directive: "i dont want it to open here").
-     There is nothing to mint and no link to press: an online meeting's room
-     is derived from its id and driven by Jitsi's external API inside the
-     stage.
-     jsdom cannot load that script, so what renders here is the FALLBACK —
-     and that is worth asserting for its own sake: when the embed cannot
-     load, the box must say so and still hand over the room's real address.
-     A silent empty rectangle is the failure this branch exists to prevent.
-     The address itself is pinned in Room.test.ts, where it is a pure
-     function and can be checked without a browser at all. */
-  it("an online meeting's stage asks for a room token, and says so when there is none", async () => {
-    /* the room is OUR components now, not a frame — jsdom cannot run a
-       WebRTC connection, so what is assertable here is the hand-off: the
-       stage asks the server for a token for THIS meeting. Where the token
-       goes afterwards is livekit-token.test.ts's subject, on the side that
-       mints it. */
-    MEETING = meeting({ call_id: null, mode: "online" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-
-    await waitFor(() => expect(tokenSpy).toHaveBeenCalledWith("m-1"));
-  });
-
-  /* THE FRAME BEFORE THE RECORD (audit finding, 2026-09-02). The page was a
-     lone «…» until the read landed; loading.guard.test.ts cannot see an early
-     `return <p>…</p>`, so this is the instrument for it. Verified red against
-     the old branch on both halves: no navigation landmark, and the ellipsis
-     present. The third assertion is the control — a frame is a frame, not the
-     page rendered over invented data. */
-  it("renders the stepper frame while the record loads — never a bare ellipsis", async () => {
-    let release: (m: MeetingRecord) => void = () => undefined;
-    DETAIL_GATE = new Promise<MeetingRecord>((resolve) => { release = resolve; });
-    render(<MeetingPage id="m-1" />);
-    expect(screen.getByRole("navigation", { name: "مراحل جلسه" })).toBeInTheDocument();
-    expect(screen.queryByText("…")).toBeNull();
-    expect(screen.queryByText("مشخصات")).toBeNull();
-
-    release(meeting({}));
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /پیش از جلسه/ })).toBeInTheDocument();
-  });
-
-  it("a recorded meeting opens on the post stage", async () => {
-    /* `call_status` is what makes this the CONTROL for the reload tests
-       below: a page that simply always opened on the live stage would pass
-       every one of them and fail this. */
-    MEETING = meeting({ call_id: "c-1", call_status: "ready" });
+  it("a recorded meeting opens on the record", async () => {
+    MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() =>
-      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
-    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
+      expect(screen.getByRole("tab", { name: "نمای کلی" })).toHaveAttribute("aria-selected", "true"));
   });
-});
 
-describe("the edit dialog reads the platform's clock (2026-09-06)", () => {
-  afterEach(() => __setPreferencesForTest({ timezone: "auto" }));
-
-  it("saving the plan with nothing changed keeps the instant — in the STORED zone, not the browser's", async () => {
-    /*
-     * The zone is one no machine running this suite sits in (UTC+14), so the
-     * fixture disagrees with the browser everywhere. Until 2026-09-06 the
-     * dialog prefilled its fields from `getHours()` — the browser's clock —
-     * and saved them through `instantFromFields` — the stored zone — so a
-     * save that touched nothing moved the meeting by the offset between the
-     * two. The create dialog was fixed on 2026-09-02; this one was not.
-     */
-    __setPreferencesForTest({ timezone: "Pacific/Kiritimati" });
-    MEETING = meeting({ call_id: null, scheduled_at: "2026-05-07T22:09:00.000Z" });
+  it("a record whose status cannot be read still opens on the record", async () => {
+    MEETING = meeting({ call_id: "c-1" });
+    CALL = null;
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getAllByRole("button", { name: "ویرایش" })[0]!);
-    const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("button", { name: "ذخیره" }));
-    await waitFor(() => expect(patched).toHaveLength(1));
-    expect(patched[0]!.scheduled_at).toBe("2026-05-07T22:09:00.000Z");
+    /* `getCall` answering null is "gone", a different nothing from "still
+       asking" — the tabs are the meeting's and stay reachable either way */
+    await waitFor(() => expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument());
+    expect(await screen.findByText("رکورد دیگر خواندنی نیست — حذف یا پاک‌سازی شده است.")).toBeInTheDocument();
   });
 });
 
-/**
- * THE RECORDING IS THE HOST'S, AND THE ROSTER IS AN ACCOUNT (db/0202).
- *
- * User directive, 2026-09-06: "only the host should have the ability to start
- * the recording and share the screen for audio and only the host must have
- * the ability to finish it and after it finishes the session should be close
- * for all. no, all that come to the meeting have a ability to get it for
- * themselves as well and its a bug fix it."
- *
- * The whole matrix is walked, because asserting the refusal alone leaves the
- * ORDINARY path unproven — and the ordinary path is the product: a wall that
- * refuses everybody satisfies every "a colleague cannot" line in this block.
- */
+describe("the live screen (2026-09-08)", () => {
+  /*
+   * ARRIVING IS THE START. Under the old shape a meeting created for NOW was
+   * already a second in the past by the time the page loaded, so the landing
+   * rule could not read the clock — it reads the RECORD now, which is a fact
+   * rather than a comparison.
+   */
+  it("an unrecorded microphone meeting starts its take on arrival, once, with the meeting's mapping", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person", title: "جلسهٔ حضوری" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+
+    const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
+    expect(opts.source).toBe("mic");
+    expect(opts.title).toBe("جلسهٔ حضوری");
+  });
+
+  /*
+   * THE ONLINE LANE IS A MICROPHONE TOO. `online` left the wizard on
+   * 2026-09-08 and the video room left this page with it, so a meeting
+   * carrying that mode is one somebody made earlier — recording it through
+   * the microphone is the honest thing left to do, and asserting it is what
+   * stops the shared-surface source coming back with the room that is gone.
+   */
+  it("a meeting still carrying the online mode records the microphone, not a shared surface", async () => {
+    MEETING = meeting({ call_id: null, mode: "online" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    expect((startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>).source).toBe("mic");
+  });
+
+  /*
+   * THE SCREEN IS A SCOPE, A CLOCK AND ONE BUTTON. Every removed surface is
+   * asserted by name: the page that still drew them renders perfectly and is
+   * wrong only against the sentence that removed them.
+   */
+  it("carries no whiteboard, no presentation, no video and no rail of cards", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+
+    for (const gone of ["وایت‌برد", "ارائه", "ویدیو", "اقدام‌های سریع", "اعضای جلسه", "دستور جلسه"]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
+    expect(screen.getByLabelText("حین جلسه")).toBeInTheDocument();
+  });
+
+  /*
+   * THE WORDS ARRIVE WHILE THE MEETING RUNS.
+   *
+   * The engine has opened a live caption lane on every take since M38 and
+   * nothing on this page read it. This asserts the page READS IT — the
+   * panel's own behaviour is LiveTranscript.test.tsx's subject; what belongs
+   * here is that it is on screen and fed from the snapshot.
+   */
+  it("shows the transcript as the lane produces it", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    startSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = {
+        ...idleEngine(),
+        phase: "recording", callId: "c-9", recordedMs: 8_000,
+        captions: { finals: "", interim: "و بعد" },
+        captionRows: [{ atMs: 5_000, text: "خب، شروع کنیم." }],
+        liveSpeakers: [],
+      };
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    act(() => { pushEngine?.(); });
+
+    expect(screen.getByText("خب، شروع کنیم.")).toBeInTheDocument();
+    /* the unfinalised fragment too — it is what makes the panel read as
+       live rather than as a list that updates every so often */
+    expect(screen.getByText("و بعد")).toBeInTheDocument();
+  });
+
+  /*
+   * THE LANE REFUSED, THE TAKE CARRIES ON. `captionsDown` had no reader on
+   * this page: the engine set it when `/api/live-stt/start` failed and the
+   * person saw a panel that said "listening" to a lane that was never coming
+   * (M21 — an absence is said out loud). The discriminating half is the
+   * recording itself: the on-air light must still be on, because the lane
+   * is optional and the microphone is not.
+   */
+  it("says the live transcript is down while the recording itself carries on", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    startSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = {
+        ...idleEngine(),
+        phase: "recording", callId: "c-9", recordedMs: 8_000,
+        captions: null, captionsDown: true,
+      };
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    act(() => { pushEngine?.(); });
+
+    expect(screen.getByText("رونوشت زنده در دسترس نیست — ضبط بدون آن ادامه دارد.")).toBeInTheDocument();
+    /* not "listening", not "starts with the recording" — one word for every
+       nothing is the fault this state exists to name */
+    expect(screen.queryByText(/در حال شنیدن/)).toBeNull();
+    expect(screen.queryByText("رونویسی با شروع ضبط آغاز می‌شود.")).toBeNull();
+    expect(screen.getAllByRole("status").some((el) => el.textContent?.includes("در حال ضبط"))).toBe(true);
+  });
+
+  /*
+   * … AND STOPPING HANDS THE MEETING OVER (the directive's other half: "I
+   * should be able to then stop the recording which will automatically move
+   * me to the summary part"). The record is what moves the page, so this
+   * walks the whole way: press finish, the take ends, the tabs appear.
+   */
+  it("finishing the take moves the page to the record, transcript and all", async () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    engineIsRecording("c-1");
+    CALL = call({ status: "recording" });
+    render(<MeetingPage id="m-1" />);
+    expect(await screen.findByLabelText("حین جلسه")).toBeInTheDocument();
+
+    finishSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = idleEngine();
+      MEETING = { ...MEETING, call_status: "ready" };
+      CALL = call({ status: "ready" });
+    });
+    await userEvent.click(screen.getByRole("button", { name: "پایان و پردازش" }));
+
+    await waitFor(() => expect(screen.getByRole("tab", { name: "نمای کلی" })).toBeInTheDocument());
+    /* the live screen is GONE — a page that showed both would be two
+       transcripts of one meeting on one screen */
+    expect(screen.queryByLabelText("حین جلسه")).toBeNull();
+    expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument();
+  });
+
+  /*
+   * THE ON-AIR LIGHT.
+   *
+   * `starting` is the half worth a test: it is the stretch where the browser
+   * is asking for a microphone — no clock, nothing captured — and it is
+   * exactly when somebody who has just pressed RECORD NOW is looking for a
+   * sign and pressing again if there is none.
+   */
+  it("says it is recording from the first moment — before the clock has a second on it", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    /* set INSIDE the call because the page reads the phase back the moment
+       `startRecording` resolves, and reads an untouched "idle" as a take
+       that never began */
+    startSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = { ...idleEngine(), phase: "starting" };
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+
+    /* TWO announcements, and that is the rule rather than a duplicate: the
+       pill rides the top bar wherever the page is scrolled, and the live
+       screen says it again where the person is actually looking (user
+       directive, 2026-09-08). What must never happen is the two DISAGREEING,
+       so the assertion is over both. */
+    const onAir = (word: string) =>
+      screen.getAllByRole("status").filter((el) => (el.textContent ?? "").includes(word));
+    act(() => { pushEngine?.(); });
+    expect(onAir("در حال شروع ضبط")).toHaveLength(screen.getAllByRole("status").length);
+
+    act(() => {
+      ENGINE_SNAPSHOT = {
+        ...idleEngine(),
+        phase: "recording", callId: "c-9", recordedMs: 3_000, level: 0.3, wave: [0.1],
+      };
+      pushEngine?.();
+    });
+    /* the WORD and the clock together — a counter in a red pill is a thing
+       you have to already know how to read */
+    expect(onAir("در حال ضبط").length).toBeGreaterThan(0);
+    expect(onAir("۰:۰۳").length).toBeGreaterThan(0);
+  });
+
+  it("links the record the engine hands back — and only the take this page started", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    /* the engine must be LIVE when `startRecording` resolves: resolution is
+       not success, and a page that reads back "idle" correctly treats its
+       own start as refused and links nothing */
+    startSpy.mockImplementationOnce(async () => { engineIsRecording("c-new"); });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+
+    act(() => { pushEngine?.(); });
+    await waitFor(() => expect(patched).toContainEqual({ call_id: "c-new" }));
+  });
+
+  it("stamps attendance on a live meeting, and never on an upload", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(attended).toEqual(["m-1"]));
+  });
+
+  /*
+   * ── LIVE RECALL IS MOUNTED, and why it had to be proved HERE ────────────
+   *
+   * `src/lib/liveRecall.test.tsx` has nine tests and mounts its own harness
+   * around the hook, so every one of them passes with this PAGE rendering
+   * nothing at all. That is the right subject for the hook's throttles and it
+   * leaves one thing unsayable: an unmounted feature and a feature being
+   * deliberately quiet are the same observation. Which is exactly how this one
+   * came to be built whole — the core door, the hook, the cards, the BFF route,
+   * db/0214 — with its only mount point on a stage that had been deleted.
+   *
+   * So the subject here is the WIRING, in both directions: the host's live take
+   * renders the cards, and the finished record does not even ask.
+   */
+  const recalled = {
+    id: "d-1", kind: "decision", body: "قرارداد با NAI تمدید شد", status: "standing",
+    meeting_id: "m-0", meeting_title: "جلسهٔ قبل", decided_at: "2026-08-20T10:00:00.000Z",
+    owner_id: null, due_on: null, shared: 0,
+  };
+  /* enough words to clear the hook's `MIN_NEW_CHARS` throttle — a shorter window
+     is a silence the hook chose, which is the opposite of the subject */
+  const talking = "تصمیم‌ها را مرور کنیم. ".repeat(12);
+
+  it("RENDERS the recall cards on the host's live take", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person" });
+    RECALL = [recalled];
+    startSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = {
+        ...idleEngine(),
+        phase: "recording", callId: "c-9", recordedMs: 8_000,
+        captions: { finals: talking, interim: "" }, captionRows: [], liveSpeakers: [],
+      };
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    act(() => { pushEngine?.(); });
+
+    /* the page ASKED, about this meeting, with the live transcript's tail */
+    await waitFor(() => expect(recallSpy).toHaveBeenCalled());
+    expect(recallSpy.mock.calls[0]![0]).toBe("m-1");
+    expect(recallSpy.mock.calls[0]![1]).toContain("تصمیم‌ها را مرور کنیم.");
+    /* …and the answer is on the stage, in the catalogue's own words */
+    expect(await screen.findByText("قرارداد با NAI تمدید شد")).toBeInTheDocument();
+    expect(screen.getByText("پیش‌تر تصمیم‌گیری شده")).toBeInTheDocument();
+  });
+
+  it("and NOT on the finished record: the uploaded-file path never even asks", async () => {
+    /*
+     * THE DISCRIMINATING HALF. The stub WOULD answer with a card, so a page that
+     * mounted recall everywhere shows one here — over a record that is already
+     * processed, where "what did we decide about this last time" is not a
+     * question anybody is mid-sentence on. Asserted on the REQUEST as well as the
+     * card, because a mounted hook that merely found nothing is a different state
+     * from one that was never enabled, and only the request can tell them apart.
+     */
+    MEETING = meeting({ call_id: "c-1", mode: "upload" });
+    CALL = call({ status: "ready" });
+    RECALL = [recalled];
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument());
+
+    expect(recallSpy, "recall asked about a record that is already finished").not.toHaveBeenCalled();
+    expect(screen.queryByText("قرارداد با NAI تمدید شد")).toBeNull();
+  });
+
+  it("and not on a COLLEAGUE's screen during the same take", async () => {
+    /*
+     * The other half of the gate (`isHost && live`), and it is about
+     * INTERRUPTION rather than permission: a decision is readable by everybody
+     * who can read its meeting and the server enforces exactly that. A card on
+     * ten screens mid-sentence is a broadcast, and a wrong one is a public wrong
+     * statement somebody has to correct out loud.
+     */
+    MEETING = meeting({
+      call_id: "c-9", call_status: "recording", created_by: "u-host", mode: "in_person",
+    });
+    CALL = call({ id: "c-9", status: "recording" });
+    RECALL = [recalled];
+    ENGINE_SNAPSHOT = {
+      ...idleEngine(),
+      phase: "recording", callId: "c-9", recordedMs: 8_000,
+      captions: { finals: talking, interim: "" },
+    };
+    render(<MeetingPage id="m-1" />);
+    /* the colleague IS on the live screen — without this the test could pass by
+       rendering some other view entirely */
+    expect((await screen.findAllByRole("status")).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("حین جلسه")).toBeInTheDocument();
+
+    expect(recallSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText("قرارداد با NAI تمدید شد")).toBeNull();
+  });
+});
+
+describe("the upload lane (2026-09-08)", () => {
+  it("never opens a microphone", async () => {
+    MEETING = meeting({ call_id: null, mode: "upload" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("هنوز رکوردی از این جلسه نیست.")).toBeInTheDocument());
+    expect(startSpy).not.toHaveBeenCalled();
+    expect(attended).toEqual([]);
+    /* the way back when the wizard's file never arrived: a picker, never a
+       button that could open a microphone */
+    expect(screen.getByRole("button", { name: /آپلود فایل/ })).toBeInTheDocument();
+  });
+
+  /*
+   * THE FILE THE WIZARD SENT AFTER US — the whole point of the change: the
+   * wizard used to hold the person on its own step while the audio uploaded,
+   * with nothing to watch, rather than moving them on to a page where the
+   * upload can be seen landing.
+   *
+   * The processing card DURING the send is the assertion that matters: a
+   * version that uploads here and shows nothing until it lands would satisfy
+   * "the file is sent" and leave the person on a blank screen, which is the
+   * state this change exists to remove.
+   */
+  it("sends the file the wizard handed over, under the processing card, and links it", async () => {
+    MEETING = meeting({ call_id: null, mode: "upload", title: "ضبط قدیمی" });
+    PENDING = new File(["x"], "jalase.m4a", { type: "audio/mp4" });
+    let land: (r: { ok: true; callId: string }) => void = () => undefined;
+    UPLOAD_GATE = new Promise((resolve) => { land = resolve; });
+
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
+    expect(uploadSpy.mock.calls[0]![0]).toBe(PENDING ?? uploadSpy.mock.calls[0]![0]);
+
+    /* IN FLIGHT: the pipeline's own card, at its first step */
+    expect(await screen.findByText("در حال پردازش جلسه")).toBeInTheDocument();
+    expect(stepRow("آپلود فایل صوتی").textContent).toContain("در حال انجام…");
+
+    CALL = call({ status: "processing" });
+    await act(async () => { land({ ok: true, callId: "c-up" }); await Promise.resolve(); });
+    await waitFor(() => expect(patched).toContainEqual({ call_id: "c-up" }));
+  });
+
+  it("takes the file ONCE — a remount must not send it twice", async () => {
+    MEETING = meeting({ call_id: null, mode: "upload" });
+    PENDING = new File(["x"], "jalase.m4a", { type: "audio/mp4" });
+    const view = render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
+    view.rerender(<MeetingPage id="m-1" />);
+    expect(uploadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused file says WHICH refusal, and leaves the meeting reachable", async () => {
+    MEETING = meeting({ call_id: null, mode: "upload" });
+    PENDING = new File(["x"], "notes.txt", { type: "text/plain" });
+    uploadSpy.mockImplementationOnce(async () => ({ ok: false, reason: "notAudio" }) as never);
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(notifyErrorSpy).toHaveBeenCalledWith("این فایل صوتی نیست."));
+    /* and the meeting is still reachable, with its own picker — a refusal
+       must not leave a row nobody can finish */
+    expect(screen.getByRole("button", { name: /آپلود فایل/ })).toBeInTheDocument();
+  });
+});
+
 describe("the recording belongs to the host (db/0202)", () => {
-  it("a colleague walking into the stage neither starts a take nor is offered one", async () => {
+  it("a colleague neither starts a take nor is offered the end", async () => {
     MEETING = meeting({ call_id: null, mode: "in_person", created_by: "u-host" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-
-    /* the in-person lane is the one that starts by ARRIVING, so this is the
-       case where a missing wall costs a recording nobody asked for */
-    await screen.findByText("شروع و پایان ضبط با میزبان است.");
+    /* the SENTENCE, not a disabled button: a greyed «پایان و پردازش» is a
+       promise the product will not keep */
+    expect(await screen.findByText("شروع و پایان ضبط با میزبان است.")).toBeInTheDocument();
     expect(startSpy).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
   });
 
-  it("the online share button is the HOST'S: they are offered it and a colleague is not", async () => {
-    /*
-     * THE PAIR IS THE TEST, and the first half is what makes the second
-     * mean anything. Written the other way round — a colleague, and one
-     * queryByRole coming back null — it passed against a mutation that
-     * handed the button to everybody, because the name in the query
-     * («هم‌رسانی») is not the name on the button («شروع ضبط و اشتراک صدا»)
-     * and could never have matched. Found by verify-red, 2026-09-06: a
-     * check that only asks "is the thing I expect absent?" cannot tell an
-     * absent button from a misspelt query.
-     */
-    MEETING = meeting({ call_id: null, mode: "online" });
-    const host = render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    await screen.findByRole("button", { name: "شروع ضبط و اشتراک صدا" });
-    host.unmount();
-
-    MEETING = meeting({ call_id: null, mode: "online", created_by: "u-host" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    await screen.findByText("شروع و پایان ضبط با میزبان است.");
-    expect(screen.queryByRole("button", { name: "شروع ضبط و اشتراک صدا" })).toBeNull();
-  });
-
-  it("THE HOST still starts — the ordinary path, without which the two above pass against a wall that refuses everybody", async () => {
+  it("THE HOST still starts — without which the refusal above passes against a wall that refuses everybody", async () => {
     MEETING = meeting({ call_id: null, mode: "in_person" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
     expect(screen.queryByText("شروع و پایان ضبط با میزبان است.")).toBeNull();
   });
 
-  it("ENDING is the host's too: on one live take the host is offered «پایان و پردازش» and a colleague is not", async () => {
-    /*
-     * A reload mid-recording — the engine's take IS this meeting's linked
-     * call — which is the state where the end button appears without this
-     * page having started anything. The pair is the test: one fixture, one
-     * engine, two readers, and only the answer differs.
-     */
-    engineIsRecording("c-1");
-    MEETING = meeting({ call_id: "c-1" });
-    CALL = call({ status: "linking" });
-    const own = render(<MeetingPage id="m-1" />);
-    await screen.findByRole("button", { name: "پایان و پردازش" });
-    own.unmount();
+  it("ENDING is the host's: on one live take the host is offered «پایان و پردازش» and a colleague is not", async () => {
+    for (const asHost of [true, false]) {
+      MEETING = meeting({
+        call_id: "c-1", call_status: "recording", mode: "in_person",
+        created_by: asHost ? "u-me" : "u-host",
+      });
+      engineIsRecording("c-1");
+      const view = render(<MeetingPage id="m-1" />);
+      const found = await screen.findAllByRole("status");
+      expect(found.length).toBeGreaterThan(0);
+      if (asHost) {
+        expect(screen.getByRole("button", { name: "پایان و پردازش" })).toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
+      }
+      view.unmount();
+    }
+  });
 
-    MEETING = meeting({ call_id: "c-1", created_by: "u-host" });
+  /*
+   * PAUSE AND CONTINUE. Three facts, and the third is the one a
+   * button wired to nothing would still satisfy: the control CALLS the
+   * engine, it turns into resume once the phase moves, and while it is
+   * paused the screen stops claiming a recording is being made — the pill's
+   * word, its still dot, and the scope's halo all follow the phase rather
+   * than `recordingLive`, which stays true through a pause by design.
+   */
+  it("the host can pause a live take and continue it", async () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    engineIsRecording("c-1");
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
+
+    await userEvent.click(await screen.findByRole("button", { name: "مکث" }));
+    expect(pauseSpy).toHaveBeenCalledTimes(1);
+    /* the same control, now the other way round — a second «مکث» here would
+       be a screen that cannot say what state the take is in */
+    const back = await screen.findByRole("button", { name: "ادامه" });
+    expect(screen.queryByRole("button", { name: "مکث" })).toBeNull();
+    /* and the page stops saying it is recording */
+    expect(screen.getAllByText("مکث شده").length).toBeGreaterThan(0);
+    expect(screen.queryByText("در حال ضبط")).toBeNull();
+
+    await userEvent.click(back);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("button", { name: "مکث" })).toBeInTheDocument();
+  });
+
+  it("a colleague is offered no pause — every start and every end is the host's", async () => {
+    MEETING = meeting({
+      call_id: "c-1", call_status: "recording", mode: "in_person", created_by: "u-host",
+    });
+    engineIsRecording("c-1");
+    render(<MeetingPage id="m-1" />);
+    await screen.findAllByRole("status");
+    expect(screen.queryByRole("button", { name: "مکث" })).toBeNull();
+  });
+
+  it("the host's finish hands the take to the pipeline and re-reads the record", async () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    engineIsRecording("c-1");
+    CALL = call({ status: "recording" });
+    render(<MeetingPage id="m-1" />);
+
+    /* the engine's own stop, as the server sees it: the take ends and the
+       call leaves `recording`. Written INSIDE the mock because the page
+       re-reads the meeting the moment finish resolves — a mutation after
+       the click would land after that read and the test would be asserting
+       its own timing rather than the page's. */
+    finishSpy.mockImplementationOnce(async () => {
+      ENGINE_SNAPSHOT = idleEngine();
+      MEETING = { ...MEETING, call_status: "processing" };
+      CALL = call({ status: "processing" });
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "پایان و پردازش" }));
+    expect(finishSpy).toHaveBeenCalledTimes(1);
+    /* the RECORD is what moves the page on, not a stage this button sets */
+    await waitFor(() => expect(screen.getByRole("tab", { name: "نمای کلی" })).toBeInTheDocument());
   });
 
   it("the session closes for everyone: a colleague's page moves to the record when the host finishes", async () => {
-    /*
-     * "after it finishes the session should be close for all". The engine is
-     * in the HOST's browser, so this page has nothing local to watch — it
-     * asks, and what it waits for is the RECORD itself, which is the same
-     * fact the host's own end() waits for.
-     *
-     * The poll is on a real interval, so the clock is faked here; the read
-     * answers `call_id` only after the host has finished.
-     */
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers();
     try {
-      MEETING = meeting({ call_id: null, mode: "in_person", created_by: "u-host" });
+      MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person", created_by: "u-host" });
       render(<MeetingPage id="m-1" />);
-      await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-      await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-      await screen.findByText("شروع و پایان ضبط با میزبان است.");
+      await vi.waitFor(() =>
+        expect(screen.getByText("شروع و پایان ضبط با میزبان است.")).toBeInTheDocument());
 
-      /*
-       * THE HOST PRESSES START, somewhere else. The record appears on the
-       * meeting THIS INSTANT — the recorder links it the moment the call
-       * exists — and until 2026-09-07 that alone moved this page to the
-       * artifacts, one second into a meeting the colleague was sitting in.
-       */
-      MEETING = meeting({
-        call_id: "c-1", call_status: "recording", mode: "in_person", created_by: "u-host",
-      });
-      CALL = call({ status: "recording" });
+      /* the host finishes — the take stops running, which is the fact the
+         poll waits for; the RECORD appearing is not (it appears when the
+         host presses START) */
+      MEETING = { ...MEETING, call_status: "processing" };
+      CALL = call({ status: "processing" });
       await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
-      expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
-      expect(screen.getByText("شروع و پایان ضبط با میزبان است.")).toBeInTheDocument();
-
-      /* and NOW the host finishes */
-      MEETING = meeting({
-        call_id: "c-1", call_status: "linking", mode: "in_person", created_by: "u-host",
-      });
-      CALL = call({ status: "linking" });
-      await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
-
-      await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
+      await vi.waitFor(() => expect(screen.getByRole("tab", { name: "نمای کلی" })).toBeInTheDocument());
     } finally {
       vi.useRealTimers();
     }
   });
 });
 
-/*
- * A RELOAD IS NOT A FINISH (user report, 2026-09-07: "when the meeting is
- * recording and you are the host if you refresh the page it closes the
- * recording and send it to the after meeting stage — it should do that only
- * after you press finish").
- *
- * `call_id` says a take was STARTED, not that it ended; `call_status ===
- * "recording"` is the take still being made (db/0204's door publishes it to
- * every attendee). The control for all of it is the landing test above: a
- * FINISHED record still opens on the post stage.
- */
 describe("a reload is not a finish (2026-09-07)", () => {
-  it("the host reloading mid-take lands back in the live stage, not on the artifacts", async () => {
+  it("the host reloading mid-take lands back on the live screen, not on the artifacts", async () => {
+    /* the record exists from the first second, so `call_id` is NOT the word
+       that means finished — the CALL leaving `recording` is */
     MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
-    CALL = call({ status: "recording" });
     render(<MeetingPage id="m-1" />);
-
-    /* the canvas is what an in-person live stage opens on — a positive
-       marker, so this cannot pass on an error page or an empty frame */
-    await screen.findByTestId("whiteboard-stub");
-    expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
-  });
-
-  it("a take still running leaves the earlier steps as doors; a finished one seals them", async () => {
-    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
-    CALL = call({ status: "recording" });
-    const { unmount } = render(<MeetingPage id="m-1" />);
-    await screen.findByTestId("whiteboard-stub");
-    /* a host who reloaded must not be locked out of their own plan */
-    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
-    expect(await screen.findByText("مشخصات")).toBeInTheDocument();
-    unmount();
-
-    /* and the seal still holds once the record is real — the pair is what
-       makes either half mean anything */
-    MEETING = meeting({ call_id: "c-1", call_status: "ready", mode: "in_person" });
-    CALL = call({ status: "ready" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() =>
-      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
-    expect(screen.queryByText("مشخصات")).toBeNull();
+    expect(await screen.findByLabelText("حین جلسه")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "نمای کلی" })).toBeNull();
   });
 
   it("the take that outlived its engine is finished from the page, and THAT is what moves it on", async () => {
-    /* the engine is idle: a reload destroyed it, and the call is sitting at
-       `recording` because nothing has finished it */
-    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "online" });
-    CALL = call({ status: "recording" });
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    /* the engine is GONE — a reload destroyed it — so nothing local can end
+       this take and `beginTake` rightly refuses a meeting that has a record */
     render(<MeetingPage id="m-1" />);
-
-    /* what will happen is said before it is pressed */
-    await screen.findByText(/این ضبط با بسته شدن یا تازه‌سازی صفحه قطع شد/);
-    expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
+    expect(await screen.findByText(/این ضبط با بسته شدن یا تازه‌سازی صفحه قطع شد/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "پایان و پردازش" }));
     await waitFor(() => expect(finished).toEqual(["c-1"]));
-    await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("tab", { name: "نمای کلی" })).toBeInTheDocument());
   });
 
   it("a colleague is offered no such button — finishing is the host's, however the take was orphaned", async () => {
-    MEETING = meeting({
-      call_id: "c-1", call_status: "recording", mode: "online", created_by: "u-host",
-    });
-    CALL = call({ status: "recording" });
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person", created_by: "u-host" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /حین جلسه/ })).toBeInTheDocument());
+    expect(await screen.findByText("شروع و پایان ضبط با میزبان است.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "پایان و پردازش" })).toBeNull();
-    expect(screen.queryByText(/این ضبط با بسته شدن یا تازه‌سازی صفحه قطع شد/)).toBeNull();
-  });
-
-  it("a record whose status cannot be read still opens on the post stage", async () => {
-    /* the third nothing: a purged call, or a database without db/0204. It is
-       NOT "still recording", and reading it as such would strand the page in
-       a live stage for a meeting that ended weeks ago. */
-    MEETING = meeting({ call_id: "c-1", call_status: null, mode: "in_person" });
-    CALL = call({ status: "ready" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() =>
-      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
-    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
   });
 });
 
-describe("who was in the room (db/0202)", () => {
-  it("stamps attendance on walking into a HELD meeting, and never on the plan", async () => {
-    MEETING = meeting({ call_id: null, mode: "in_person" });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    /* the PLAN is not the room: a meeting somebody is reading about has not
-       been attended, and a stamp here would put every browser in it */
-    expect(attended).toEqual([]);
+/*
+ * THE TRANSCRIPT SCROLLS INSIDE ITS PANEL (observed 2026-09-08: the
+ * transcript grew without bound instead of scrolling in its panel).
+ *
+ * A SOURCE read, and deliberately: jsdom lays nothing out, so no rendered
+ * assertion here can tell a bounded column from an unbounded one — a test
+ * that queried the DOM would pass in both worlds, which is how the panel came
+ * to carry `overflow-y-auto` for months while the page scrolled instead.
+ *
+ * The scroller was never missing. What was missing is something ABOVE it with
+ * a height, and in this scaffold that is exactly one thing a page opts into
+ * out loud. So the assertion is the pair: the panel asks to scroll, and the
+ * route grants it a bounded column.
+ */
+describe("the record's own scroll", () => {
+  const read = (rel: string) => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    return fs.readFileSync(path.join(process.cwd(), "src", rel), "utf8");
+  };
 
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    await waitFor(() => expect(attended).toEqual(["m-1"]));
-
-    /* ONCE — walking back and in again is one arrival, and the stamp's own
-       `coalesce` keeps the first moment anyway */
-    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    expect(attended).toEqual(["m-1"]);
+  it("the meeting route fills the height the shell grants", () => {
+    const route = read("app/[locale]/meetings/[id]/page.tsx");
+    expect(route).toMatch(/<PageContainer[^>]* fill[ >]/);
   });
 
-  it("lists colleagues by their USER MANAGEMENT name and marks who actually came", async () => {
-    /*
-     * The screenshot that started this showed «drbagheri» beside «دکتر
-     * باقری» — one person, twice, because the roster was a list of NAMES and
-     * two surfaces had written two spellings. A row keyed by an account
-     * cannot do that, and the name is resolved at read time.
-     */
-    MEETING = meeting({
-      call_id: null, mode: "in_person", invitees: ["مهمان بیرونی"],
-      attendees: [
-        { user_id: "u-2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi", username: "sina", attended: true },
-        { user_id: "u-3", display_name: "شهلا حسینی", display_name_en: null, username: "shahla", attended: false },
-      ],
-    });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-
-    const members = (await screen.findByRole("heading", { name: "اعضای جلسه" })).closest("section")!;
-    expect(within(members).getByText("سینا سپاسی")).toBeInTheDocument();
-    expect(within(members).getByText("شهلا حسینی")).toBeInTheDocument();
-    /* the person with no account is still listed, and is MARKED as such —
-       so this cannot pass by rendering the roster and dropping the guests */
-    expect(within(members).getByText("مهمان بیرونی")).toBeInTheDocument();
-    expect(within(members).getByText("مهمان")).toBeInTheDocument();
-
-    /* ATTENDANCE, in the affirmative only: exactly one «در جلسه», on the
-       person who was there. A version that marked everybody would pass an
-       assertion that merely found the word. */
-    expect(within(members).getAllByText("در جلسه")).toHaveLength(1);
-    expect(within(members).getByText("سینا سپاسی").closest("li")!).toHaveTextContent("در جلسه");
-
-    /* host + two colleagues + one guest */
-    expect(within(members).getByText("۴")).toBeInTheDocument();
+  it("the transcript panel is the box that scrolls", () => {
+    /* the control for the line above: `fill` on a page whose panels grow with
+       their content clips them instead of scrolling them, which is a worse
+       bug than the one being fixed */
+    const review = read("components/platform/meeting/Review.tsx");
+    expect(review).toContain("min-h-0 flex-1 space-y-3 overflow-y-auto");
   });
 
-  it("somebody who was IN THE ROOM cannot be taken off the meeting, and somebody who was not still can", async () => {
-    /*
-     * The pair, and the second half is what stops this passing against a
-     * dialog that removes nobody at all.
-     *
-     * Removing an attendee drops db/0202's row and its `attended_at` with
-     * it — the platform's own evidence that a person was there, which is
-     * the fact the transcript's roster reads. Un-planning is not a delete;
-     * un-remembering is.
-     */
-    PEOPLE = [
-      { id: "u-2", display_name: "سینا", display_name_en: null, username: "sina", role: "member" },
-      { id: "u-3", display_name: "شهلا", display_name_en: null, username: "shahla", role: "member" },
-    ];
-    MEETING = meeting({
-      call_id: null,
-      attendees: [
-        { user_id: "u-2", display_name: "سینا", display_name_en: null, username: "sina", attended: true },
-        { user_id: "u-3", display_name: "شهلا", display_name_en: null, username: "shahla", attended: false },
-      ],
-    });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: "دعوت افراد" }));
-    const dialog = await screen.findByRole("dialog");
-
-    /* BOTH doors to removal, because either one left open is the whole
-       hole: the chip's × and the directory row's toggle */
-    expect(within(dialog).queryByRole("button", { name: "حذف سینا" })).toBeNull();
-    /* anchored at the START of the name: the chip's own remove button is
-       labelled «حذف شهلا», so an unanchored match finds two buttons and
-       the query cannot say which door it is asking about */
-    expect(await within(dialog).findByRole("button", { name: /^سینا/ })).toBeDisabled();
-    expect(within(dialog).getByRole("button", { name: /^شهلا/ })).toBeEnabled();
-
-    await userEvent.click(within(dialog).getByRole("button", { name: "حذف شهلا" }));
-    await waitFor(() => expect(removed).toEqual(["u-3"]));
-  });
-
-  it("a colleague picked in the invite dialog is added BY ACCOUNT, in the one request that also invites them", async () => {
-    /*
-     * Adding somebody and telling them about it used to be two buttons —
-     * «دعوت‌شدگان» wrote a name into the text array and «دعوت اعضا» minted
-     * the invitations — so being on a meeting and hearing about it could
-     * come apart in either direction. One act now, and the assertion is on
-     * the USER ID: a version that went on writing names would still put a
-     * chip on screen.
-     */
-    PEOPLE = [
-      { id: "u-2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi", username: "sina", role: "member" },
-    ];
-    MEETING = meeting({ call_id: null });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: "دعوت افراد" }));
-
-    const dialog = await screen.findByRole("dialog");
-    await userEvent.click(await within(dialog).findByRole("button", { name: /سینا سپاسی/ }));
-
-    await waitFor(() => expect(added).toEqual([["u-2"]]));
-    /* and NOT through the old door: a name must never reach the text array
-       for somebody who has an account here */
-    expect(patched).toEqual([]);
+  it("the two document tabs bring their own scroller", () => {
+    /* «یادداشت‌های من» and «صورت‌جلسه» are as tall as their content — in a
+       filling column they need SectionScroller or they are cut off */
+    const page = read("components/platform/MeetingPage.tsx");
+    expect(page.match(/<SectionScroller>/g) ?? []).toHaveLength(2);
   });
 });

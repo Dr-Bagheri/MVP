@@ -84,11 +84,26 @@ function jwksUrl(): string | undefined {
  * rejects every token is the failure this whole change exists to end, and it
  * would be a bitter way to reintroduce it.
  */
+/**
+ * The same value as `jwksUrl()`, narrowed to `string`.
+ *
+ * `createAuth` now REQUIRES a jwks url (review F1), and `assertVerification
+ * Configured()` has already refused to boot without one — but that runs as a
+ * statement, so the compiler cannot see it. This keeps the refusal in one
+ * place rather than letting a `!` at the call site quietly become the check.
+ */
+function requireJwksUrl(): string {
+  const url = jwksUrl();
+  if (!url) throw new Error("api: SUPABASE_JWKS_URL or SUPABASE_URL is required");
+  return url;
+}
+
 function assertVerificationConfigured(): void {
-  if (!process.env.SUPABASE_JWT_SECRET && !jwksUrl()) {
+  if (!jwksUrl()) {
     throw new Error(
-      "api: no token verification configured — set SUPABASE_JWKS_URL or SUPABASE_URL "
-      + "(asymmetric signing keys), or SUPABASE_JWT_SECRET (legacy shared secret)");
+      "api: no token verification configured — set SUPABASE_JWKS_URL, or SUPABASE_URL "
+      + "to have it derived. The legacy SUPABASE_JWT_SECRET path was removed with the "
+      + "HS256 branch (review F1); a shared secret can no longer verify anything.");
   }
 }
 
@@ -123,17 +138,17 @@ export async function main(): Promise<void> {
     /**
      * BOTH signing paths, and the secret is no longer required.
      *
-     * A project on asymmetric signing keys has no shared secret at all, so
-     * `requireEnv("SUPABASE_JWT_SECRET")` would refuse to boot the very
-     * configuration that is now correct. It stays supported because a project
-     * on legacy signing still uses it and the test suite mints those.
+     * `SUPABASE_JWT_SECRET` is GONE (review F1, 2026-09-08) along with the
+     * HS256 branch that read it. Rotating the secret at Supabase stopped
+     * Supabase ISSUING those tokens; it did not stop this api ACCEPTING them,
+     * so a stale value in the deploy store meant tokens signed with a retired
+     * key were still honoured, silently.
      *
      * `SUPABASE_JWKS_URL` is derived from `SUPABASE_URL` when not given
      * explicitly — one fewer thing to get subtly wrong in a deployment, and
      * the derived form is the one Supabase documents.
      */
-    jwtSecret: process.env.SUPABASE_JWT_SECRET,
-    jwksUrl: jwksUrl(),
+    jwksUrl: requireJwksUrl(),
     issuer: process.env.SUPABASE_JWT_ISSUER,
     /*
      * The upload surface (Part 5). Absent config = uploads answer with a
@@ -151,6 +166,14 @@ export async function main(): Promise<void> {
      * the normal email/password or OAuth flow.
      */
     platformBootstrapEmail: process.env.PLATFORM_ROOT_BOOTSTRAP_EMAIL,
+    /**
+     * M52: the demo seeder curates a new demo org to this model — the same
+     * env rung the worker's summarizer falls back to — so a seeded demo has
+     * a servable model even where its owner never opened the picker. Read
+     * here, once, beside the worker's own read of it; the engine takes it
+     * as a value.
+     */
+    defaultModel: process.env.WORKER_SUMMARY_MODEL,
     /**
      * `tools` and `toolDeps` are OMITTED so the server builds the shipped set
      * — the four read tools and the three write tools.

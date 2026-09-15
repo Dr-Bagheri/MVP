@@ -73,9 +73,18 @@ export const PLATFORM_MAP = [
   "  to, as rows rather than paragraphs — each with the record it came from",
   "  and the moment in it where it was said, so a claim can be played back.",
   "  A decision can supersede an earlier one, which is how «what got reversed»",
-  "  is answerable. READ THE `confirmed` FIELD: false means a model found the",
-  "  sentence and NOBODY HAS AGREED TO IT YET — say «در سوابق پیدا شد، هنوز",
-  "  تأیید نشده», never «تصمیم گرفته شد».",
+  /* THE FIELD THE TOOL ACTUALLY EMITS (2026-09-09). This said "read the
+     `confirmed` field: false means …", and `list_decisions` has never returned
+     a `confirmed` field — `domain-tools.ts` projects `source`, pinned by 0160
+     to the writing ROLE. So the one anti-fabrication rule in this map pointed
+     at nothing: a model looking for `confirmed`, finding no such key, reads
+     neither true nor false and has no rule left — which is exactly the state
+     the rule exists to prevent, and it fails silently because an absent key
+     raises nothing. Named as a VALUE rather than as a negated boolean, because
+     that is the shape of the data: 'ai' is the unagreed one. */
+  "  is answerable. READ THE `source` FIELD: 'ai' means a model found the",
+  "  sentence in a transcript and NOBODY HAS EDITED OR AGREED TO IT — say «در",
+  "  سوابق پیدا شد، هنوز تأیید نشده», never «تصمیم گرفته شد».",
   "· RECORDS: recordings and uploads — transcripts you can search and quote,",
   "  speakers (a voice directory of colleagues), versioned summaries, notes,",
   "  chapters, translations, and a per-record sharing scope. This is the",

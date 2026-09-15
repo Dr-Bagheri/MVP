@@ -86,7 +86,8 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
     description:
       "Search across the transcripts and summaries this user may see. Use it to "
       + "find earlier calls on the same subject before writing. Returns snippets "
-      + "with the call they came from and, for transcript hits, a timestamp.",
+      + "with the call they came from (id, title, call_date) and, for transcript "
+      + "hits, a timestamp.",
     parameters: Type.Object({
       query: Type.String({ description: "Words to search for. Persian or English." }),
       call_id: Type.Optional(Type.String({ description: "Restrict to one call." })),
@@ -183,24 +184,36 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
         return { calls: [], count: 0, note: "no subject to relate on" };
       }
 
+      /*
+       * "Related" means EARLIER (2026-09-08): the tool's own description says
+       * so, and a summary citing a meeting that happened after this one is
+       * the kind of reference the prompt forbids. Filtered in SQL when the
+       * call's start is known, excluded there too; the JS exclusion below
+       * stays as the belt.
+       */
       const hits = await createTranscriptsRepo(db).search(identity, query, {
         limit: MAX_RELATED_CALLS * 3,
+        excludeCallId: args.call_id,
+        startedBefore: call.started_at ?? undefined,
       });
       // Collapse to calls, drop the call being written about, keep first-seen
       // order (search already ranked them).
-      const seen = new Map<string, { call_id: string; title: string; snippet: string }>();
+      const seen = new Map<string, { call_id: string; title: string; call_date: string | null; snippet: string }>();
       for (const hit of hits) {
         if (hit.call_id === args.call_id) continue;
         if (!seen.has(hit.call_id)) {
           seen.set(hit.call_id, {
             call_id: hit.call_id,
             title: hit.call_title,
+            // ISO, so the model can cite "as agreed in «X» on <date>"
+            call_date: hit.call_date ? new Date(hit.call_date).toISOString() : null,
             snippet: hit.snippet,
           });
         }
         if (seen.size >= MAX_RELATED_CALLS) break;
       }
-      const calls = [...seen.values()];
+      // most recent first — "last time" is the nearest earlier meeting
+      const calls = [...seen.values()].sort((a, b) => (b.call_date ?? "").localeCompare(a.call_date ?? ""));
       return { calls, count: calls.length, related_on: query };
     },
   };
@@ -295,8 +308,11 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
    *
    * TWO THINGS IT REFUSES TO BLUR:
    *
-   *   · `confirmed` travels on every row. An unconfirmed extraction is a
-   *     CLAIM, and an agent that reports one as a decision has fabricated a
+   *   · `source` travels on every row, and it is the field that carries this
+   *     (2026-09-10: the comment here named `confirmed`, which this tool has
+   *     never projected — the rule read as enforced while the model was being
+   *     pointed at a field that does not arrive). `source = 'ai'` is a model's
+   *     CLAIM, and an agent that reports one as settled has fabricated a
    *     decision on the organisation's behalf. The description says so in
    *     words the model reads, and the field says so in data it cannot skip.
    *   · `status` travels too, so «برگشت خورد» is answerable. A ledger whose

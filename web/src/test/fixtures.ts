@@ -1,4 +1,4 @@
-import type { MeetingRecord } from "@/api/types";
+import type { MeetingRecord, OrgPersonRecord } from "@/api/types";
 
 /**
  * ONE meeting fixture, shared.
@@ -26,6 +26,26 @@ export function meetingFixture(over: Partial<MeetingRecord> = {}): MeetingRecord
     host_name: "سینا", host_name_en: null,
     video_url: null, video_provider: null,
     minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
+    ...over,
+  };
+}
+
+/**
+ * ONE person fixture, shared, for the same reason the meeting has one.
+ *
+ * Seven suites had written their own `OrgPersonRecord` literals, and when the
+ * roster learned `avatar_url` all seven surfaced on a single typecheck — which
+ * is the drift this file exists to catch, arriving on schedule. They call this
+ * now, so the next field the roster gains is one edit rather than ten.
+ *
+ * `avatar_url: null` is the DEFAULT on purpose: it is the state every person
+ * is in until somebody uploads a photo, and it is the branch that renders the
+ * initial. A test about the picture passes one in.
+ */
+export function personFixture(over: Partial<OrgPersonRecord> = {}): OrgPersonRecord {
+  return {
+    id: "u-1", display_name: "سینا", display_name_en: null,
+    role: "member", username: "sina", avatar_url: null,
     ...over,
   };
 }

@@ -99,7 +99,6 @@ export function useAgent(handle: string | null | undefined): AgentCard | null {
 export const ECHO = "echo";
 
 const PORTRAIT: Readonly<Record<string, string>> = {
-  echo: "/agents/echo.png",
   roya: "/agents/roya.png",
   ava: "/agents/ava.png",
 };
@@ -113,6 +112,27 @@ const SIZES = {
   xl: { box: "h-14 w-14", text: "text-xl" },
 } as const;
 
+/**
+ * ECHO WEARS THE HOUSE MARK, ONE STEP SMALLER.
+ *
+ * The assistant is the surface talking back, not a colleague with a portrait —
+ * so its turns are signed by the product's own mark rather than by a face and
+ * a name. Roya and Ava keep both, because between THEM a reader still has to
+ * tell one speaker from the other (db/0169).
+ *
+ * Deliberately smaller than `SIZES[size]`: a mark is a signature on the line,
+ * not a participant in the conversation, and at the portrait's size it read as
+ * a third agent. Both images stay in the DOM with the rail's own classes, so a
+ * theme applied before hydration never flashes the wrong one — the same reason
+ * IconRail carries the pair.
+ */
+const BRAND_SIZES = {
+  sm: "h-3.5 w-3.5",
+  md: "h-4 w-4",
+  lg: "h-5 w-5",
+  xl: "h-9 w-9",
+} as const;
+
 export function AgentAvatar({ handle, size = "md" }: {
   handle: string;
   size?: keyof typeof SIZES;
@@ -124,6 +144,33 @@ export function AgentAvatar({ handle, size = "md" }: {
 
   const name = handle === ECHO ? t("echo") : agent === null ? `@${handle}` : copy(agent).name;
   const portrait = PORTRAIT[handle];
+
+  if (handle === ECHO) {
+    const mark = BRAND_SIZES[size];
+    return (
+      <span
+        data-agent-avatar={handle}
+        title={name}
+        aria-hidden
+        className={`grid ${mark} shrink-0 place-items-center`}
+      >
+        <img
+          src="/brand/neurai-mark.png"
+          alt=""
+          width={40}
+          height={40}
+          className={`neurai-mark-dark ${mark} select-none object-contain`}
+        />
+        <img
+          src="/brand/neurai-mark-light-transparent.png"
+          alt=""
+          width={40}
+          height={40}
+          className={`neurai-mark-light ${mark} select-none object-contain`}
+        />
+      </span>
+    );
+  }
 
   if (portrait !== undefined) {
     return (

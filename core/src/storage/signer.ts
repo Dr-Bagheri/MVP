@@ -162,7 +162,19 @@ export function createStorageSigner(config: StorageSignerConfig): StorageSigner 
         response = await doFetch(url, {
           method: "PUT",
           headers: { "content-type": contentType },
-          body,
+          /*
+           * THE CAST, and why it is not laziness. TS 5.7
+           * narrowed the DOM lib's `BufferSource` to `ArrayBufferView<ArrayBuffer>`,
+           * so a `Uint8Array<ArrayBufferLike>` — which is what every producer in
+           * this repo hands us — stopped being a legal fetch body under
+           * `lib: dom`. core/ checks under @types/node and accepts it as it
+           * always did; web/ now pulls this file into its own graph (uploads.ts,
+           * reached by the demo-seed engine's `import type { UploadsRepo }`) and
+           * does not. Same bytes, same runtime call, two disagreeing declarations
+           * — so the disagreement is narrowed here rather than by widening the
+           * signature everything upstream already satisfies.
+           */
+          body: body as unknown as Uint8Array<ArrayBuffer>,
         });
       } catch {
         throw new StorageSignError("storage: upload request failed");

@@ -33,36 +33,35 @@ const isCard = (cls: string): boolean =>
   /\brounded-(?:xl|2xl)\b/.test(cls) && /\bborder\b/.test(cls) && /\bbg-surface\b|\bbg-surface-2(?:\/\d+)?\b/.test(cls);
 
 const REMAINING: Record<string, number> = {
-  // ── floating layers: the island shadow, R10's business ────────────────
-  "components/DateTimeFields.tsx": 2,          // the date and time popovers
-  "components/Select.tsx": 1,                  // the listbox panel
-  "components/platform/AvatarMenu.tsx": 1,     // the account menu panel
-  "components/platform/NotificationBell.tsx": 1, // the bell's panel
-  "components/platform/chat/Composer.tsx": 1,  // the emoji panel
-  "components/platform/TaskBoard.tsx": 1,      // the column-tone popover
-  "components/platform/tasks/JalaliPicker.tsx": 1, // the calendar popover
-  // the two floating toolbars, and (2026-09-07) the line a VIEWER gets in
-  // place of the tools — same floating layer, same reason: the board is
-  // the host's now (db/0206) and a colleague is told so rather than shown
-  // eleven buttons that would be refused
-  "components/platform/meeting/Whiteboard.tsx": 3,
-  // ── dialog panels drawn by hand, NOT on Overlay: R8's second pass ────
-  "components/platform/SetMemberPassword.tsx": 1,
-  "components/platform/TourOverlay.tsx": 1,
-  "components/platform/WorkflowBuilder.tsx": 1,
-  "components/platform/WorkflowRunDialog.tsx": 1,
-  "app/[locale]/platform/page.tsx": 1,
-  // ── the two dialog panels the theme DOES own (R8): the corner is the dialog's,
-  //    the ground is the surface — a dialog is a floating card, not a card ──
-  "components/platform/Overlay.tsx": 1,        // the Overlay panel
-  "components/rowActions.tsx": 1,              // the confirm dialog's panel
+  // ── THE FLOATING LAYERS LEFT THIS LIST ON 2026-09-08 ──────────────────
+  //
+  // R23 (glass) took the border off every panel in the product: a menu, a
+  // popover and a hand-rolled dialog all wear `.glass-chrome` now — the
+  // translucent sheet plus their own island shadow — so the recipe this guard
+  // counts is simply not written in them any more. Sixteen entries went, each
+  // removed because the guard fired in the STALE-ENTRY direction, which is the
+  // direction that keeps a list from quietly becoming bigger than the tree it
+  // describes.
+  //
   // ── fields wearing a card's corner: R5's business ────────────────────
+  //
+  // These STAY, and the reason is the one distinction R23 preserves: a card's
+  // edge is decorative and a FIELD's is a control boundary. Every sheet lost
+  // its outline; a text box did not, because on a translucent panel the ground
+  // inside an unbordered field is the ground behind it.
   "components/platform/tasks/TaskDetail.tsx": 2,  // the title and description editors
-  "components/platform/tasks/TaskDialogs.tsx": 2, // the label field (177) and the label popover (347)
+  "components/platform/tasks/TaskDialogs.tsx": 1, // the label field (the label popover is glass now)
+  // The minutes' own edit box, and the same distinction: this is the <textarea>
+  // a presenter rewrites the summary in, not a panel around it.
+  "components/platform/meeting/Summary.tsx": 1,   // the summary's edit box (R5)
   // ── the shell, the assistant's composer (the detail frame, R18, stands on
   //    Overlay since 2026-09-06 and draws no card of its own — its entry left
   //    when the guard fired in the stale-entry direction) ──
-  "components/platform/IconRail.tsx": 1,
+  // IconRail's entry LEFT on 2026-09-08 with the shape it named: the rail is
+  // 72px of labelled glyphs now, so the 248px sidebar's workspace card and
+  // person card are gone and it draws none. Deleted rather than zeroed — a
+  // zero row reads as coverage and is a hole, and this list fires in the
+  // stale-entry direction, which is how it caught the change.
   "components/platform/Hub.tsx": 1,            // the assistant is a structural exception by ruling
 };
 
@@ -115,20 +114,47 @@ describe("R7: three surfaces", () => {
     ).toEqual([]);
   });
 
-  it("the tile is a card: the token's corner, the card's shadow", () => {
+  it("the tile is a card: the token's corner, the card family's depth, no border", () => {
     /*
      * globals.css uses no theme(), so `.tile` carries a literal — and it
      * carried 20 for three days after the token moved to 18. Read the rule
      * body itself rather than trusting the comment beside it.
+     *
+     * The SHADOW half moved from `--shadow-card` to `--shadow-glass` with R23
+     * (2026-09-08), and the check's MEANING did not change: a tile wears
+     * whatever a card wears, and a card wears the glass depth now. The two
+     * assertions under it are new — a sheet's boundary is the lit lip inside
+     * that shadow, so a `border:` creeping back onto `.tile` is the bordered
+     * look returning one declaration at a time, which is exactly how `.tile`
+     * drifted to a 20px corner in the first place.
      */
     const css = readFileSync(join(SRC, "app/globals.css"), "utf8");
     const tile = css.match(/\n\.tile \{([\s\S]*?)\n\}/);
     expect(tile, ".tile rule").not.toBeNull();
     const body = tile![1]!.replace(/\/\*[\s\S]*?\*\//g, "");
     expect(body).toMatch(new RegExp(`border-radius:\\s*${SCAFFOLD.radius.modal}px;`));
-    expect(body).toMatch(/box-shadow:\s*var\(--shadow-card\);/);
-    /* and the three shapes exist where the components expect them */
+    expect(body).toMatch(/box-shadow:\s*var\(--shadow-glass\);/);
+    expect(body).toMatch(/backdrop-filter:\s*var\(--glass-filter\);/);
+    expect(body, "a sheet has no outline").not.toMatch(/(?:^|\s)border:/);
+    /* and the shapes exist where the components expect them */
     expect(css).toMatch(/\n  \.card-row \{/);
     expect(css).toMatch(/\n  \.well \{/);
+    expect(css).toMatch(/\n  \.glass \{/);
+    expect(css).toMatch(/\n  \.glass-chrome \{/);
+    /*
+     * The QUIET sheet (2026-09-08): the shell's third tone, for a column that
+     * is chrome by position and page by tone. Its alpha is asserted as a
+     * RELATIONSHIP rather than a value — the requirement is that it sits
+     * between the page ground and the chrome, and a literal here would go
+     * stale the first time either end is tuned. Both themes must declare it,
+     * or one of them silently inherits the other's.
+     */
+    expect(css).toMatch(/\n  \.glass-soft \{/);
+    const soft = [...css.matchAll(/--glass-soft-alpha:\s*([\d.]+);/g)].map((m) => Number(m[1]));
+    const chrome = [...css.matchAll(/--glass-alpha:\s*([\d.]+);/g)].map((m) => Number(m[1]));
+    expect(soft.length, "both themes declare the quiet alpha").toBeGreaterThanOrEqual(2);
+    expect(chrome.length, "both themes declare the sheet alpha").toBeGreaterThanOrEqual(2);
+    expect(Math.max(...soft), "the quiet sheet is not quieter than the chrome")
+      .toBeLessThan(Math.min(...chrome));
   });
 });

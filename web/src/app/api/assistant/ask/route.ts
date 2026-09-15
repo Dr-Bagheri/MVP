@@ -1,4 +1,5 @@
 import { coreStream, errorResponse, readJson } from "@/server/core";
+import { plausibleZone } from "../zone";
 
 /**
  * Vercel kills a function at its plan's default duration — ~10s on the
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
          is two edits in this file and the reason askForward.guard.test.ts now
          checks that they always come in pairs. */
       live_text?: string;
+      /* M24 — the browser's RESOLVED zone. Sent by client.ts on every ask
+         and read by core since the field existed; this route dropped it for
+         weeks, so the assistant reasoned in UTC beside screens rendering
+         Tehran. Shape-checked in zone.ts, never validated against a list. */
+      timezone?: string;
     };
 
     const upstream = await coreStream("/v1/assistant/ask", {
@@ -71,6 +77,7 @@ export async function POST(request: Request) {
       client_tools: body.client_tools,
       context: body.context,
       live_text: body.live_text,
+      timezone: plausibleZone(body.timezone),
     });
     return new Response(upstream.body, {
       headers: {

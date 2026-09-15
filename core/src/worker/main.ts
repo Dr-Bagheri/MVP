@@ -160,7 +160,10 @@ export async function main(): Promise<void> {
       // exactly the pre-M39 step (matching is best-effort either way)
       createLinkSpeakersStep({ db, queue, lifecycle, ml, storage }),
       /* 0217: the same repo the summarizer writes the ledger through, so the
-         step can deliver what that pass landed */
+         step can deliver what that pass landed. The decisions/actions the
+         pipeline lands come from the summarizer's own model pass — NOT from the
+         prose slicer (`extractItemsForCall`), which stays on the repo for the
+         Summary tab's re-run button and the demo seed. */
       createSummarizeStep({ db, lifecycle, summarizer, queue, meetings }),
       // M35: signals — briefs and digests, each run AS the owner
       createSignalStep({ db }),

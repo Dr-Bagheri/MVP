@@ -8,6 +8,8 @@ import type { TaskCardRecord, TaskColumnRecord } from "@/api/types";
 import { IconCheck, IconPlus } from "@/components/icons";
 import { digits } from "@/lib/format";
 import { SkeletonLines } from "@/components/scaffold";
+import { notifyError } from "@/lib/notify";
+import { useSeededName } from "@/lib/seededNames";
 
 /**
  * تسک‌ها — the meeting's own slice of the shared board, drawn as the
@@ -24,9 +26,11 @@ export function MeetingTasksBoard({ callId }: {
   const t = useTranslations("meetings");
   const tTasks = useTranslations("tasks");
   const locale = useLocale();
+  /* the meeting's mini-board draws the SAME columns as /tasks — see
+     TaskViews for why every render site and not only the board itself */
+  const seededName = useSeededName();
   const [board, setBoard] = useState<{ columns: TaskColumnRecord[]; tasks: TaskCardRecord[] } | null | "failed">(null);
   const [draft, setDraft] = useState("");
-  const [writeError, setWriteError] = useState(false);
 
   const load = useCallback(() => {
     void api.taskBoard()
@@ -45,14 +49,13 @@ export function MeetingTasksBoard({ callId }: {
   const add = () => {
     const title = draft.trim();
     if (title === "" || firstColumn === undefined) return;
-    setWriteError(false);
     void api.createTask({ title, column_id: firstColumn.id, call_id: callId })
       .then(() => { setDraft(""); load(); })
-      .catch(() => setWriteError(true));
+      .catch(() => notifyError(t("writeFailed")));
   };
 
   const toggleDone = (task: TaskCardRecord, done: boolean) => {
-    void api.updateTask(task.id, { done }).then(load).catch(() => setWriteError(true));
+    void api.updateTask(task.id, { done }).then(load).catch(() => notifyError(t("writeFailed")));
   };
 
   return (
@@ -68,10 +71,6 @@ export function MeetingTasksBoard({ callId }: {
           </Link>
         </div>
       </div>
-
-      {writeError ? (
-        <p role="alert" className="text-xs text-danger">{t("writeFailed")}</p>
-      ) : null}
 
       <div className="flex gap-2">
         <input
@@ -101,10 +100,10 @@ export function MeetingTasksBoard({ callId }: {
             .filter((task) => task.column_id === col.id && !task.archived)
             .sort((a, b) => a.position - b.position);
           return (
-            <section key={col.id} aria-label={col.name}
+            <section key={col.id} aria-label={seededName(col.name)}
               className="card flex w-[260px] shrink-0 flex-col p-2.5">
               <header className="flex items-center justify-between px-1 py-1">
-                <span className="text-sm font-semibold text-fg">{col.name}</span>
+                <span className="text-sm font-semibold text-fg">{seededName(col.name)}</span>
                 <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle">
                   {digits(cards.length, locale)}
                 </span>

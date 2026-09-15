@@ -2407,3 +2407,284 @@ makes the code load-bearing rather than ceremonial.
 schema is ready for it (`chat_id` is stored separately from
 `telegram_user_id`), and the question it opens — whose authority applies when
 four linked people are in one room — is not answered here.
+## M53 — A workflow can read the board, and a card can carry its body [2026-09-08, task 7/8: the tasks digest Echo installs on a person's behalf]
+
+Three small constraining choices, recorded together because one feature
+needed all three and each is a new door.
+
+**1. `search scope:"tasks"` is the owner's board, read-only.** The step
+calls the SAME read the assistant's `list_tasks` makes —
+`createTasksRepo(db).board(identity, { seed: false })` — under the run
+owner's RLS, and emits OPEN cards only (not done, not archived) with the
+column and folder resolved to their NAMES. `seed:false` is the rule, not
+a preference: a read must not build the board it did not find, and a
+3 a.m. run on the agent role would 500 trying. The output is content
+(fenced downstream like every search); the truncation past `limit` is
+stated as `more`, never silent. Validator: `SEARCH_SCOPES` in
+core/src/api/workflow-graph.ts; executor: worker/workflow-step.ts.
+
+**2. `notify` may carry a body: `from` binds an earlier step's WHOLE
+output.** With it, the step writes what signal-step's `writeCard` writes
+— a conversation holding the text as an assistant turn, and the
+`agent_card` pointing at it (`session_id`) — so a digest is readable from
+the bell and can be asked about in place. Without it, the title-only
+card every existing graph gets. An ask's output is opaque content to the
+validator, so the binding is `{{s2}}` (not `{{s2.text}}`, which is refused
+at publish); the executor unwraps `{ text }`. A body that resolves to
+nothing is `binding_unresolved`, never an empty card. The text is NOT
+fenced: it is read by its own owner and never put before a model here.
+
+**3. A weekly schedule's first firing honours its weekday, in UTC.**
+`workflowRuns.schedule()` used an SQL expression that computed next_due
+from `at_minute` alone — `weekday` was stored and never read, so
+"Mondays 08:00" created on a Wednesday fired Thursday and every seventh
+day after (0111's advance adds whole weeks, so a wrong first firing is a
+wrong schedule). `nextDueAfter(now, cadence, atMinute, weekday)` is pure,
+exported, tested on fixed clocks, and its value is INSERTED as a
+parameter. Weekly without a weekday is refused by name. v1 timing stays
+UTC on the record (P4's rule); every surface that shows it says "UTC".
+Read door: `GET /v1/workflows/:ref/schedule` → `workflowRuns.schedules()`
+(RLS-shaped: own, admins the org's), consumed by the BFF
+`web/src/app/api/workflows/[ref]/schedule/route.ts` (GET + POST) and the
+detail page's "Upcoming" slot.
+
+**The starter and the chain.** `tasks_digest` (`wf-starter-tasks-digest`)
+is manual-triggered on purpose — its cadence is a `workflow_schedule` row
+attached after install — and sits in `AGENT_STARTERS.echo`, the one
+group allowed to be shorter than seven (the assistant's shelf, not an
+agent page's menu; the test names the exception). The assistant's
+`schedule_workflow` client tool (consent card, `effect:"write"`) closes
+the chain install → schedule → enable → run, and the DEFAULT_ASSISTANT_
+PROMPT OFFERS it when a "what next?" lands on a task from a recurring
+meeting. Not decided here: local-time scheduling (a person's zone on the
+row), editing/removing a schedule from the page, and a digest that reads
+the meeting's own minutes.
+
+## M52 — Seed a demo organisation: the console builds one the product could have built (a fourth platform-console tab that creates a complete, rehearsable organisation on a chosen date, in English or Persian, shows the presenter's credentials once, lists what exists, and can re-seed or remove one)
+
+Six constraining choices. They are recorded together because the feature is
+one act — "make me an organisation I can demo in twenty minutes" — and each
+choice is what stops that act from producing something the product cannot
+otherwise contain.
+
+**1. A demo organisation is written by the PRODUCT'S OWN HANDS, under the
+demo owner's identity.** The board goes through `createTasksRepo`, the folders
+and meetings through `createMeetingsRepo`, the directory through
+`createDirectoryRepo`, the glossary through `createOrgRepo`, the presenter's
+preferences through `createMembersRepo`, the calls through
+`uploads.createCall`, the roster and the transcript through the WORKER's own
+`upsertSpeakers` and `writeTranscript`, and the meeting's decisions and action
+items through `meetings.extractItems` — which slices the summary the seed just
+wrote and badges each row `ai` because it runs on the agent role (db/0160).
+Everything runs `db.withIdentity(owner)` on `echo_app`, so RLS, db/0011's
+column trigger and db/0093's speaker-link wall are the walls a person meets.
+
+This is a change of altitude from `db/scripts/seed-demo*.mjs`, which write the
+same rows as the database owner and remain the local path. The reason to pay
+for it: **a demo organisation created from the console must be one the product
+could have produced.** A seed that writes rows the product cannot is a demo of
+something we do not ship, and it fails silently — everything renders, and the
+first customer to try the same act meets a refusal the demo never showed.
+
+What it costs, stated rather than discovered: `created_at` on most rows is the
+moment of seeding, not the fictional past. Only what a reader actually reads a
+date on — a call's `started_at`, a card's deadline, a meeting's
+`scheduled_at` — is moved onto the timeline, because those are what a repo or
+the owner's own grant can move. Four writes have no repo and are the file
+`demo-seed/writes.ts` with a reason each: the backdate, the part row
+(`uploads.registerPart` would ENQUEUE `process_part` and spend Soniox money
+re-transcribing a seeded transcript over its own timings), the speaker sample
+window, and the summary.
+
+**2. The content is a typed PACK per language, and the two packs are the same
+demo by test.** `content.en.ts` and `content.fa.ts` carry the people, the
+board, the folders, the dialogue, the summaries and the glossary; nothing in
+the engine knows a sentence. `content-packs.test.ts` asserts their structure
+field by field — same person keys and usernames, same directory title codes,
+same twenty-three cards with the same priorities and assignees, same two
+records with the same line numbers — because **a structural difference between
+them is a feature that exists in one language and not the other**, which is
+the failure Persian-first exists to prevent. Its control asserts the STRINGS
+differ, or the Persian pack would be the English one.
+
+The packs carry no absolute date. The pricing call promises the quote "by
+Tuesday" and never "by Tuesday the ninth": the audio is synthesised once, and
+a spoken calendar date would contradict the board on every demo after the
+ninth with nothing in the product able to correct it.
+
+**3. Speech is generated ONCE, offline, and the seed COPIES it.**
+`core/scripts/demo-audio-build.mjs` synthesises each line with Soniox
+Text-to-Speech (`tts-rt-v2`; the same three voices — Emma, Adrian, Nina —
+in both languages, cached per line so a re-run re-spends only on changed
+text; edge-tts until 2026-09-09), normalises to 16 kHz mono 16-bit PCM, measures every clip TWICE (ffprobe's
+duration and the PCM byte count must agree within 5 ms, or the splice drifts
+and every click-to-seek after the drift lands late), splices with 700 ms gaps,
+and writes the parts to `core/assets/demo-audio/<language>/<record>.wav` —
+the four recordings SHIP IN THE REPOSITORY and are the source of truth. The
+measured timings are committed into the pack AS DATA, in generated
+`audio.<lang>.ts` modules, each part carrying the sha256 of the bytes it was
+measured from. Seeding is then a storage copy plus rows that already know
+where the audio landed: deterministic, free, and unable to fail because a TTS
+endpoint was rate-limiting at the moment somebody is standing in front of a
+customer.
+
+**Production needs no manual upload** [amended 2026-09-09]. `_demo/<language>/
+<record>/part-N.wav` in `call-audio` is a CACHE, not a deliverable: the first
+seed on a deployment finds the object absent, reads the bundled file
+(`demo-seed/assets.ts`, resolved from the module's own URL and decoded so a
+path with spaces still resolves), verifies its sha256 against the pack's
+measurement, uploads it once with `x-upsert` (`DemoStorage.upload`, logged as
+`demo_audio_asset_uploaded`), and copies; every later seed finds it present
+and copies. A bundled file whose hash disagrees with the pack is NEVER
+uploaded — `demo_audio_asset_mismatch` is warned, the record is seeded without
+audio, and the result names the path and both hashes — because the alternative
+is a recording whose click-to-seek lands on the wrong sentence for every demo
+after it. The generator's own upload is a convenience that warms the dev
+project's cache; nothing depends on anyone remembering to run it.
+
+**A missing artefact is a WARNING, never a failure** (rule 12). The record is
+seeded, the part row carries `missing`, the player is grey, and the result
+NAMES the object key, the bundled path it looked at, and the script that
+produces it. A demo whose transcripts
+and summaries are all there and whose player is grey can still be given; a
+seed that refused because a wav was absent cannot. Its control in the tests is
+the same seed with the artefact present — without that, a version that always
+reported "no audio" would satisfy every assertion about the missing case.
+
+**4. The timeline is derived from ONE calendar day, and it is pure.**
+`demo-seed/timeline.ts`: the weekly one-on-one at demo − 7 days 09:00 Tehran;
+the pricing call at demo − 4 days 14:00 Tehran, moved EARLIER to the Thursday
+when it lands on the Iranian weekend (earlier and not later, because the
+recording has to be in the past on the demo day); the presenter's one open
+card due the first Tuesday ON OR AFTER the demo day at 13:00 UTC — the same
+Tuesday when the demo runs on one, because that is what "by Tuesday" means to
+the person who said it and pushing it a week would make the recording and the
+card disagree in front of the customer. Zones go through `Intl`, never a
+hard-coded +03:30: a constant offset is a fact about this year written into
+code that outlives it, and the failure mode is a meeting an hour out, which
+reads as a product bug rather than as a stale constant.
+
+The upcoming meeting has TWO branches and both are deliberate. Seeded FOR
+TODAY — the rehearsed case — it is `offset` minutes from NOW, because
+"starting in twenty minutes" is the thing being demonstrated. Seeded for any
+other day there is no "now" to be relative to, so it is that day at 09:00
+Tehran plus the offset. "Today" is decided IN TEHRAN, which is what a UTC
+comparison gets wrong for three and a half hours every night.
+
+**5. The accounts are minted BEFORE the door, and the unwind names what it
+could not remove.** `echo.app_user.id` IS the `auth.users.id` for a human
+(db/0171 replaced the foreign key with a trigger that still demands the
+identity), so core creates the five identities through the Supabase Auth admin
+API — the only caller of `POST /auth/v1/admin/users` in the codebase — and
+then `echo.platform_create_demo_org` seats every one of them in ONE statement
+run. One transaction because the intermediate state, an organisation with no
+owner, is one the product has no name for: RLS reads the actor's org, and an
+org whose only member does not exist yet is invisible to everybody including
+the person who just made it.
+
+That ordering creates the one state worth designing for — identities with no
+organisation — and `create` unwinds it, NAMING any that would not go, because
+an orphaned auth user is a real thing an operator has to delete by hand and
+the only way they learn about it is if we say so. Past the door's commit the
+unwind stops: the organisation exists, it is flagged `demo`, it is in the tab,
+and it can be removed from the same screen — so a content failure reports its
+id and leaves it standing rather than reversing a dozen repositories' writes
+with no transaction around them.
+
+**The password is 24 characters from a CSPRNG, returned once, and stored
+nowhere** — not in a row, not in a log, not in the audit reason (asserted both
+in core's tests and in db/test/125). Every other member gets one from the same
+generator and it is discarded unread. There is deliberately NO route that
+could fetch one later, which is why the panel warns on `beforeunload` and is
+dismissed only by an explicit press.
+
+**6. `echo.org.demo jsonb` is a CAPABILITY, not a label.** It records
+`{seeded_at, language, demo_date, seeded_by, reseeded_at}` — a column and not
+a table because it is one value per organisation with no lifetime of its own,
+and as a table it would need policies, grants, a purge line and an entry in
+every coverage check: four places to get wrong for one fact.
+
+Its presence is what makes `echo.platform_clear_demo_org` safe to point at an
+organisation at all. **A door that empties an organisation must be unable to
+name a customer's**, and the cheapest way to make a wrong state
+unrepresentable is to require a flag only this feature ever writes. The clear
+keeps the ACCOUNTS — the credentials were shown once and a re-seed that voided
+them would make that panel a lie — and it deletes DYNAMICALLY: every `echo`
+table carrying `org_id` except `app_user` and `deletion_record`, read from the
+catalogue, retrying the ones that fail on a foreign key until nothing is left,
+with the one real cycle (workflow ↔ workflow_version) broken by nulling the
+pointer first, as the purge breaks it.
+
+Enumerating the list instead was refused on the evidence: `platform_purge_org`
+enumerates, and its list has been WRONG twice — 0132's regeneration, and 0145,
+where thirteen tables the purge had never learned made it RAISE for any org
+that had used those features. **An enumeration is a promise somebody has to
+keep by hand on every new table; the catalogue keeps itself.** The FK graph
+decides the order, so nobody has to know it, and a cycle is a named refusal
+rather than a silent partial clear. db/test/125 asserts the outcome the same
+way 102 asserts the purge's — derived from the catalogue, with a negative
+control proving the probe can see rows when there are rows.
+
+**Removal reuses the console's own doors**: soft-delete, the objects-first
+purge sweep, `platform_purge_org` — plus the one thing those cannot do,
+removing the auth identities this feature minted. Those are ours (nothing is
+deliverable at `@demo.neurai.invalid`), nobody else will ever clear them, and
+five per demo is how a Supabase project fills with accounts no organisation
+explains. Identities that refuse to go come back NAMED.
+
+**7. The demo has a CONVERSATION HISTORY, and it is written by the hub's own
+writers** [amended 2026-09-09]. A seeded organisation opened the assistant
+sidebar on "No conversations yet" — the product's home surface IS the
+conversation (M22), so the one screen whose whole claim is "this team has been
+working in here for weeks" was the one screen that said nobody ever had.
+
+The pack carries five, in the same shape as everything else: five KEYS, five
+different shapes of ask (a question with a one-paragraph answer; one whose
+answer came back as a table; one where the presenter asked the agent to write
+something and then changed it twice; one about a specific recorded meeting;
+one abandoned after a single message), mirrored field for field between the
+two languages and asserted by `content-packs.test.ts` with the same
+strings-must-differ control. They are written OF this organisation — its
+customers, its codename, its board with the real owners and priorities, its
+two recordings — and a test requires every thread to name one of the pack's
+own people, customers or codenames, with a negative control proving generic
+prose fails it.
+
+They go through `createSessionsRepo`: `resolveForAsk` with no session id is
+the ONLY way a thread comes into existence in this product, and it is what
+titles the row — so **the pack carries no title**, because a seeded thread
+whose name did not match its first question is a thread the hub could not have
+produced. The cost is accepted and tested: the first turn has to read like a
+title.
+
+Two things are deliberately absent from every assistant turn. There is no
+`agent_run`: a run is the audit record of one model invocation (invariant 5)
+and none of these answers was invoked, so minting one would put a status, a
+token count and a step trace on an audit surface for an execution that never
+happened — the fabricated-provenance failure the transcript already refuses
+with `source: "demo_seed"`. And `tool_calls` stays empty for the same reason.
+
+The timeline places them: `dayBeforeAt` puts each thread a whole number of
+days before the demo date at a Tehran wall time, and a conversation that talks
+about a recording declares which one (`afterRecord`), because the pricing call
+MOVES off the Iranian weekend and "three days before" is only safely after it
+because `demo-timeline.test.ts` checks it on every demo date of a year. The
+prose carries no relative day either — "the demo is tomorrow" is wrong on
+every demo date but one and nothing in the product can correct it.
+
+`writes.ts` gains its fifth write, `backdateConversation`, for the reason that
+file exists: `append` stamps `last_message_at = now()` by design, and the
+sidebar's order depends on it. It moves the SESSION's two stamps only.
+db/0016 grants `echo_app` `select, insert` on `echo.agent_message` and nothing
+else, so each turn keeps its seeding timestamp — and a migration granting
+`update` there was refused: widening the wall on the table that holds every
+person's private conversations, to make a demo tidier, buys nothing a reader
+sees (the sidebar reads `last_message_at`, the thread view renders no per-turn
+time at all).
+
+**Not decided here:** a third content language (one entry in `packs.ts` and a
+file, plus a generator run); seeding a demo into an EXISTING organisation
+(deliberately impossible — the clear door's safety rests on `demo` being
+non-null); and whether a demo organisation should expire on its own, which is
+a scheduled deletion and therefore a named operation with an explicit actor,
+never a silent background writer (D12).

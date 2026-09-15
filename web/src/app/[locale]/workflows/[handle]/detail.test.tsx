@@ -111,6 +111,8 @@ vi.mock("@/api/client", () => ({
   api: {
     workflows: async () => CARDS,
     engineWorkflows: async () => [],
+    /* no schedule attached: the Upcoming slot falls back to the trigger sentence */
+    workflowSchedules: async () => [],
     /* a run belonging to ANOTHER workflow: the panel is empty because the
        filter works, not because nothing came back */
     workflowRuns: async () => [

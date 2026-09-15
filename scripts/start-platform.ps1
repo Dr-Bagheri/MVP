@@ -38,7 +38,26 @@ function Get-StoreSecret([string]$name, [bool]$required) {
 Write-Host "Fetching secrets from the encrypted store (names only are ever shown)..."
 $env:DATABASE_URL_APP    = Get-StoreSecret "echo_platform_db_app_url"   $true
 $env:DATABASE_URL_AGENT  = Get-StoreSecret "echo_platform_db_agent_url" $true
-$env:SUPABASE_JWT_SECRET = Get-StoreSecret "echo_platform_jwt_secret"   $true
+# OPTIONAL, not required (review F3). The $true here refused to start a
+# correctly-configured ES256 project: this secret is the LEGACY shared-key
+# path, and core has treated it as optional since the JWKS branch landed.
+#
+# The refusal is a two-line interaction thirty lines apart, which is why
+# auditing Get-StoreSecret alone reads as harmless: Write-Error is
+# NON-TERMINATING by default, and line 20's $ErrorActionPreference = "Stop" is
+# what promotes it. If that preference is ever relaxed this stops being a
+# refusal and becomes a silent empty secret, which is worse.
+#
+# Checked before changing, because making a producer optional moves the
+# decision to the consumer: with $false the secret arrives as "" rather than
+# absent, and core/src/api/main.ts asserts
+# `!process.env.SUPABASE_JWT_SECRET && !jwksUrl()` - a FALSINESS test - so ""
+# reads as absent and an empty string cannot enable the HS256 branch.
+#
+# When review F1 lands and that branch is deleted, this line goes entirely.
+# Not in the same change: removing the export while F1 is in flight breaks the
+# launcher for anyone whose project still verifies HS256.
+$env:SUPABASE_JWT_SECRET = Get-StoreSecret "echo_platform_jwt_secret"   $false
 $env:OPENROUTER_API_KEY  = Get-StoreSecret "openrouter_key"             $true
 $env:SUPABASE_URL        = Get-StoreSecret "echo_platform_supabase_url" $true
 $env:SUPABASE_SERVICE_KEY = Get-StoreSecret "echo_platform_supabase_secret_key" $true

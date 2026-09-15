@@ -50,9 +50,38 @@
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { iso, isoOrNull } from "./vocabulary.ts";
 import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
+import { hasSessionOrigin } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import type { PriorConversation } from "../agent/history.ts";
+
+/**
+ * db/0221 — who opened a conversation.
+ *
+ * `agent` is the four background writers (signal-step's brief and digest,
+ * meeting-prep, mail-poll, workflow-step's notify): each needs a session so
+ * its text has somewhere to live and its card has something to point at, and
+ * none of them is a conversation the person had. Default `user`, so the ask
+ * route and every existing row keep meaning what they meant.
+ */
+export type SessionOrigin = "user" | "agent";
+
+/**
+ * The one spelling of "is this in the person's conversation LIST?".
+ *
+ * It lives in the DATABASE (`echo.session_belongs_in_history`) and this is
+ * the call, not a copy: db/0048 is the standing lesson — `run_is_truncated`
+ * was one rule written three times and the three disagreed, and the fix was a
+ * function both halves call. 0221's own self-check calls this same function,
+ * so a check here cannot pass against a rule the migration proved differently.
+ *
+ * The rule has two arms because the brief invites a reply («می‌توانید همین‌جا
+ * درباره‌اش بپرسید»): they opened it, OR they have spoken in it. Filtering on
+ * `origin = 'user'` alone would bury a thread the moment its card scrolled
+ * away — a new way to lose somebody's words, in a change made to tidy a list.
+ */
+const IN_HISTORY =
+  `echo.session_belongs_in_history(agent_session.origin, agent_session.id)`;
 
 /**
  * One page of conversations. 50 is generous for a sidebar and small enough
@@ -234,6 +263,25 @@ export function createSessionsRepo(db: Db) {
       if (before !== null && Number.isNaN(Date.parse(before))) {
         throw new ValidationError("before must be an ISO timestamp");
       }
+      /*
+       * ── A BRIEF IS NOT A CONVERSATION YOU HAD (db/0221, 2026-09-09)
+       *
+       * Four rehearsal meetings put four «خلاصهٔ آمادهٔ …» rows in the
+       * sidebar. They are real sessions with real messages — signal-step's
+       * post-call brief writes one so its `agent_card` has somewhere to point
+       * — but the person never had those conversations, and this list is the
+       * history of the ones they did.
+       *
+       * The row is EXCLUDED, not deleted: the card still opens it, the thread
+       * still reads, and the run behind it keeps its `agent_run` row, its
+       * steps and its spend. Tidying a sidebar by dropping an audit trail
+       * would be a worse bug than the one being fixed.
+       *
+       * Degrades to today's behaviour before the migration lands, per this
+       * repo's `hasCallTags` precedent — a filter that cannot be applied must
+       * not 500 the assistant's first screen.
+       */
+      const withOrigin = await hasSessionOrigin(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // LEFT JOIN LATERAL rather than a correlated scalar subquery: same
@@ -249,6 +297,7 @@ export function createSessionsRepo(db: Db) {
              ) c on true
             where ($1::boolean is true) = (archived_at is not null)
               and ($3::timestamptz is null or last_message_at < $3::timestamptz)
+              ${withOrigin ? `and ${IN_HISTORY}` : ""}
             order by last_message_at desc nulls last, created_at desc
             limit $2`,
           [options.archived === true, limit, before],
@@ -380,6 +429,25 @@ export function createSessionsRepo(db: Db) {
      * `carriedConversations` — not a second spelling of the rule, but the
      * reason `turnsEach` means six things somebody said rather than six rows
      * of which four are codes.
+     *
+     * ── AND `origin` IS READ, NOT FILTERED ON (decided 2026-09-09) ──
+     *
+     * db/0221's four background workers open sessions nobody typed into and
+     * write one `assistant` turn each (a post-call brief, a meeting prep note,
+     * a drafted reply to an arriving email, a workflow step). The obvious
+     * change was a fourth bound — `and origin = 'user'` — and it was REFUSED:
+     * those sessions are real work, they are meant to be visible, and an
+     * assistant asked "what did you draft for Sara?" should have the draft.
+     *
+     * What they must not do is arrive looking like something the person said.
+     * That is a FRAMING problem, so the column is selected and handed to
+     * `carriedConversations`, which says in the heading when a thread has no
+     * human turn in it, and the route fences the block as untrusted data.
+     * Nothing here decides what to leave out; it decides what to admit.
+     *
+     * Gated on `hasSessionOrigin` like `list` above, and for the same reason:
+     * naming a column the catalogue does not have yet would 500 every ask
+     * until the migration lands. Absent, the heading is simply the plain one.
      */
     async recentConversations(
       identity: Identity,
@@ -397,14 +465,16 @@ export function createSessionsRepo(db: Db) {
       const hours = Math.min(Math.max(Math.trunc(options.withinHours), 1), 24 * 7);
       const limit = Math.min(Math.max(Math.trunc(options.limit), 1), 10);
       const turns = Math.min(Math.max(Math.trunc(options.turnsEach), 1), 40);
+      const withOrigin = await hasSessionOrigin(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // The sessions are chosen FIRST and the turns fetched per session
           // (lateral, as `list` does): the other order reads every message the
           // person owns and then throws nearly all of them away.
-          `select s.id, s.title, m.seq, m.role, m.content, m.author
+          `select s.id, s.title, s.origin, m.seq, m.role, m.content, m.author
              from (
-               select id, title, last_message_at
+               select id, title, last_message_at,
+                      ${withOrigin ? "origin" : "null::text as origin"}
                  from echo.agent_session
                 where archived_at is null
                   and id is distinct from $1::uuid
@@ -433,7 +503,11 @@ export function createSessionsRepo(db: Db) {
         const id = String(row.id);
         let convo = out[out.length - 1];
         if (convo === undefined || convo.id !== id) {
-          convo = { id, title: String(row.title), rows: [] };
+          /* `agent` only when the column said so: anything else — `user`, or a
+             null from the pre-migration branch above — is "not known to be a
+             background thread", and the heading must not claim it is one */
+          const origin = row.origin === "agent" ? ("agent" as const) : undefined;
+          convo = { id, title: String(row.title), rows: [], ...(origin ? { origin } : {}) };
           out.push(convo);
         }
         (convo.rows as { role: "user" | "assistant" | "tool"; content: string; author: string | null }[])
@@ -455,6 +529,18 @@ export function createSessionsRepo(db: Db) {
      */
     async resolveForAsk(
       identity: Identity, sessionId: string | null, question: string,
+      /**
+       * db/0221 — `agent` when a BACKGROUND job needs a home for its text.
+       *
+       * Deliberately a parameter and not a second method: the four workers
+       * want exactly this function's behaviour (open one, title it, hand back
+       * the id), and a `resolveForBackgroundWrite` would be a copy that stops
+       * matching the first time either grows a rule. The default is `user`, so
+       * the ask route — every caller who does NOT pass it — keeps meaning what
+       * it meant, and a new background writer that forgets the option produces
+       * the visible bug rather than a silent one.
+       */
+      origin: SessionOrigin = "user",
     ): Promise<{ id: string; created: boolean }> {
       if (sessionId) {
         const id = assertUuid(sessionId, "session id");
@@ -470,11 +556,18 @@ export function createSessionsRepo(db: Db) {
         if (!rows[0]) throw new NotFoundError("conversation not found");
         return { id, created: false };
       }
+      // The column is written only where it exists; before db/0221 lands an
+      // agent-opened session is indistinguishable from a person's, which is
+      // exactly today's behaviour and not a new failure.
+      const withOrigin = await hasSessionOrigin(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
-          `insert into echo.agent_session (org_id, actor_id, title, context)
-           values ($1, $2, $3, '{}'::jsonb) returning id`,
-          [identity.orgId, identity.userId, titleFrom(question)],
+          `insert into echo.agent_session (org_id, actor_id, title, context${
+            withOrigin ? ", origin" : ""})
+           values ($1, $2, $3, '{}'::jsonb${withOrigin ? ", $4::text" : ""}) returning id`,
+          withOrigin
+            ? [identity.orgId, identity.userId, titleFrom(question), origin]
+            : [identity.orgId, identity.userId, titleFrom(question)],
         ),
       );
       const created = rows[0];

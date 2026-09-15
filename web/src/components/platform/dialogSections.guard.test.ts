@@ -16,7 +16,9 @@ import { DIALOG_BODY, PANEL_SECTIONS, RAIL_SECTIONS } from "./tasks/panelStyle";
  * an allow-list entry for a deleted subject reads as coverage and is a hole.
  */
 const ONE_BLOCK: Record<string, string> = {
-  "meeting/InviteDialog.tsx": "a search box over a list, then two sections that already draw their own hairlines",
+  /* meeting/InviteDialog.tsx left on 2026-09-08 with the plan stage that was
+     its only door — the entry goes with the file, because this guard fails on
+     a listed subject that no longer exists. */
   "InvitePeople.tsx": "one list of colleagues over one footer",
   /* 2026-09-08: ProjectDetail left this list. Its one dialog was the
      members list, and the roster is edited in the rail now — the panel

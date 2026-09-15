@@ -26,7 +26,7 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { DataTable } from "@/components/DataTable";
 import { Avatar } from "@/components/Avatar";
 import { IconKey, IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
-import { personName } from "@/lib/format";
+import { personName, personPhoto } from "@/lib/format";
 import { SetMemberPassword } from "@/components/platform/SetMemberPassword";
 
 /**
@@ -419,7 +419,7 @@ export default function UsersPage() {
                         there is one) stops being re-made here. The NAME stays
                         the caller's: which of a person's two names to show is
                         a locale question. */}
-                    <Avatar name={personName(u, locale)} size="md" />
+                    <Avatar name={personName(u, locale)} src={personPhoto(u)} size="md" />
                     <span className="block min-w-0 leading-tight">
                       <span className="block truncate font-medium text-fg">
                         {personName(u, locale)}

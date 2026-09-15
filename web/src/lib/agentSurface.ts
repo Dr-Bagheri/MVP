@@ -12,6 +12,7 @@ import { recorderControls } from "@/components/echo/recorderControls";
 import { announceChange } from "@/lib/refreshBus";
 import { liveConversation } from "@/lib/liveConversation";
 import type { ConnectorProvider } from "@/api/types";
+import { resolveColleague, UUID_RE } from "@/lib/resolveColleague";
 
 /** What this web surface advertises on every ask. One list, one truth. */
 export const SURFACE_TOOLS: readonly string[] = [
@@ -72,6 +73,7 @@ export const SURFACE_TOOLS: readonly string[] = [
   "list_workflow_runs",
   "set_workflow_enabled",
   "install_workflow_starter",
+  "schedule_workflow",
   "list_skills",
   "list_agents",
   "list_invitations",
@@ -131,12 +133,30 @@ export const SURFACE_TOOLS: readonly string[] = [
 
 /** Routes the agent may navigate to — the same set a human can click to. */
 /** exported for the seam test: core's navigate enum must stay inside it */
-/* the destinations the executor will perform. Kept in step with core's
-   `navigate` enum by route-map.test.ts, which checks BOTH against the app
-   directory — the pair used to agree with each other and with nothing else. */
-export const NAVIGABLE = /^\/(assistant|meetings|tasks|projects|chat|integrations|profile|echo(\/(record|upload|calls|records|summaries|archive))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
+/*
+ * The destinations the executor will perform. Kept in step with core's
+ * `navigate` enum by routeMap.guard.test.ts, which checks BOTH against the app
+ * directory — the pair used to agree with each other and with nothing else.
+ *
+ * THE `echo` FAMILY CAME OUT ON 2026-09-08 (review F19). `/echo`,
+ * `/echo/record`, `/echo/upload`, `/echo/calls`, `/echo/records`,
+ * `/echo/summaries` and `/echo/archive` were still listed here months after
+ * that route tree was deleted — seven dead addresses the executor would
+ * happily navigate to.
+ *
+ * The tell is worth keeping: `projects` and `chat` were ADDED to this very
+ * regex while the dead branch sat two alternations away. Somebody edited this
+ * line and did not audit it, which is why the guard now checks every literal
+ * this pattern admits against the route tree rather than only the enum's
+ * members. A list nobody audits is the defect; the seven addresses were the
+ * symptom.
+ */
+export const NAVIGABLE = /^\/(assistant|meetings|tasks|projects|chat|integrations|profile|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/* the colleague resolver and its id shape live in one lib now
+   (2026-09-08) so the meeting's action items and these tools agree on
+   who a name means — exact match or nobody, loose matches named and
+   never chosen */
 /* deliberately loose: this decides whether a string is an ADDRESS for
    somebody outside the organisation or a NAME the platform failed to
    resolve — and the server validates the address itself. A strict pattern
@@ -189,55 +209,6 @@ async function resolveMember(handle: string): Promise<
   };
 }
 
-/**
- * The same question, asked where an ORDINARY member can ask it (0167).
- *
- * `resolveMember` above reads `/v1/admin/members`, which an admin may do and
- * a member may not — right for the two tools that change somebody's role or
- * status, since only an admin can perform those anyway. Messaging a colleague
- * is every member's, so it resolves through the org directory instead: same
- * people, no admin gate, and the fields a person actually types.
- *
- * Using the admin list here would have made this feature work perfectly for
- * whoever built it and fail with a 403 for everyone else — the shape that is
- * invisible from the developer's own account.
- */
-async function resolveColleague(handle: string): Promise<
-  { ok: true; id: string; name: string } | { ok: false; detail: string }
-> {
-  const { api } = await import("@/api/client");
-  const trimmed = handle.trim();
-  /* an id is already an answer (the older tool descriptions asked for one) */
-  if (UUID_RE.test(trimmed)) return { ok: true, id: trimmed, name: trimmed };
-  const rows = await api.orgPeople();
-  /* «@sina» and «sina» name the same colleague — the handle is what the
-     chat's mention picker offers, so it is what a person will say */
-  const lowered = trimmed.replace(/^@/, "").toLowerCase();
-  const matches = (row: { display_name: string; display_name_en: string | null; username?: string | null }) =>
-    row.display_name.toLowerCase() === lowered
-    || (row.display_name_en ?? "").toLowerCase() === lowered
-    || (row.username ?? "").toLowerCase() === lowered;
-  const exact = rows.filter(matches);
-  if (exact.length === 1) return { ok: true, id: exact[0]!.id, name: exact[0]!.display_name };
-  /* the LOOSE matches are named and never chosen (2026-09-06): a lone
-     substring hit used to be accepted, and a message «به سینا» went to the
-     one colleague whose name CONTAINS سینا — with the consent card naming
-     the handle, not the person. See resolveMember. */
-  const loose = rows.filter((row) =>
-    row.display_name.toLowerCase().includes(lowered)
-    || (row.display_name_en ?? "").toLowerCase().includes(lowered));
-  if (loose.length === 0) return { ok: false, detail: "no colleague matched that name" };
-  const names = loose.slice(0, 5).map((r) => r.username ? `@${r.username}` : r.display_name).join("، ");
-  return {
-    ok: false,
-    /* names them, because "3 matched" leaves the model with nothing to ask
-       about and it will guess one */
-    detail: loose.length === 1
-      ? `no exact match — the closest is ${names}; confirm with the user`
-      : `several colleagues matched: ${names} — ask the user which`,
-  };
-}
-
 /* the label palette, mirrored from the board's own (TaskDialogs.LABEL_COLORS)
    so a model cannot invent a colour the theme has no answer for */
 const TASK_LABEL_COLOURS = [
@@ -247,8 +218,8 @@ const TASK_LABEL_COLOURS = [
 /** the eight hands, mapped to the connector door they open */
 const CONNECTOR_HANDS: Record<string, { provider: ConnectorProvider; action: string; keys: readonly string[] }> = {
   send_slack_message: { provider: "slack", action: "send_message", keys: ["channel", "text"] },
-  send_telegram_message: { provider: "telegram", action: "send_message", keys: ["chat", "text"] },
-  /* `colleague` is resolved to a user id below, not passed through: the
+  send_telegram_message: { provider: "telegram", action: "send_message", keys: ["chat", "text"] },
+  /* `colleague` is resolved to a user id below, not passed through: the
      server turns that into the chat the bot answers them in (db/0216) */
   send_whatsapp_message: { provider: "whatsapp", action: "send_message", keys: ["to", "text", "template", "language"] },
   create_jira_issue: { provider: "jira", action: "create_issue", keys: ["project", "summary", "description"] },
@@ -485,11 +456,35 @@ export async function executeClientTool(
       return { ok: true, detail: `navigated to ${path || "/"}` };
     }
     case "start_recording": {
-      const title = typeof a.title === "string" ? a.title.trim().slice(0, 120) : "";
-      // The recorder honors ?agentStart=<title>: it prefills and starts via
-      // its OWN start() — the human path, from any page (M33 rule 2).
-      surface.push(`/echo/record?agentStart=${encodeURIComponent(title)}`);
-      return { ok: true, detail: title ? `recording "${title}" starting` : "recording starting" };
+      /*
+       * THIS TOOL HAS NO HOST, AND IT SAYS SO (review F19).
+       *
+       * It used to `push("/echo/record?agentStart=<title>")` and return
+       * `{ ok: true, detail: "recording starting" }`. The Echo surface was
+       * deleted on 2026-09-04, so that address 404s — and the tool reported
+       * SUCCESS while navigating the person to a dead page. *It did not
+       * happen* and *it is happening* rendered identically, and the one who
+       * was wrong was the one being trusted.
+       *
+       * The route is not the whole of it. `<Recorder>` — the component that
+       * honours `?agentStart=` — has no call site anywhere in `web/src`
+       * either. And a take is no longer a free-standing thing to start: it
+       * belongs to a MEETING, which is why `MeetingPage` calls
+       * `startRecording()` itself and `FloatingRecorder` says in as many
+       * words that the meeting's own page "is where a take is started now".
+       *
+       * So there is nothing to point this at, and inventing a destination
+       * would be the same lie one address over. It refuses, and the refusal
+       * NAMES THE REAL PATH — a refusal a person can act on is a result
+       * (M21: forfeits are loud, never silent). Give it a host and this
+       * becomes three lines again.
+       */
+      return {
+        ok: false,
+        detail:
+          "I can't start a recording on my own — a take belongs to a meeting now. " +
+          "Open the meeting and press record, and I can pause, resume and finish it from there.",
+      };
     }
     case "pause_recording": {
       const controls = recorderControls.current;
@@ -1129,6 +1124,43 @@ export async function executeClientTool(
         return { ok: true, detail: `installed ${hit.name}` };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the workflow could not be installed") };
+      }
+    }
+
+    case "schedule_workflow": {
+      /*
+       * The chain's middle link (2026-09-08): install → schedule → enable →
+       * run. Times are UTC on the record and the model is told so in the
+       * tool's description; nothing here converts, because a guess about
+       * the person's zone would be a hidden fact the row cannot carry. The
+       * ref is a HANDLE or id — the same string run_workflow takes — so the
+       * starter's fixed handle (wf-starter-tasks-digest) works right after
+       * install without a second lookup.
+       */
+      const ref = typeof a.workflow === "string" ? a.workflow.trim() : "";
+      const cadence = typeof a.cadence === "string" ? a.cadence.trim().toLowerCase() : "";
+      if (!ref) return { ok: false, detail: "which workflow?" };
+      if (cadence !== "daily" && cadence !== "weekly" && cadence !== "monthly") {
+        return { ok: false, detail: "cadence must be daily, weekly or monthly" };
+      }
+      const weekday = typeof a.weekday === "number" && Number.isInteger(a.weekday)
+        && a.weekday >= 0 && a.weekday <= 6 ? a.weekday : undefined;
+      if (cadence === "weekly" && weekday === undefined) {
+        return { ok: false, detail: "a weekly schedule needs a weekday (0 = Sunday … 6 = Saturday, UTC)" };
+      }
+      const atMinute = typeof a.at_minute === "number" && Number.isInteger(a.at_minute)
+        && a.at_minute >= 0 && a.at_minute < 1440 ? a.at_minute : undefined;
+      try {
+        const { api } = await import("@/api/client");
+        const result = await api.scheduleWorkflow(ref, {
+          cadence,
+          ...(weekday === undefined ? {} : { weekday }),
+          ...(atMinute === undefined ? {} : { at_minute: atMinute }),
+        });
+        announceChange("workflows");
+        return { ok: true, detail: `scheduled ${cadence}; first run ${result.next_due} (UTC)` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the workflow could not be scheduled") };
       }
     }
 

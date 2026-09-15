@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { routing, dirFor } from "@/i18n/routing";
 import { CrumbTitleProvider } from "@/components/platform/CrumbTitle";
 import { AssistantSidebar } from "@/components/platform/AssistantSidebar";
+import { Toaster } from "@/components/platform/Toaster";
 import { FloatingRecorder } from "@/components/echo/FloatingRecorder";
 import { TourOverlay } from "@/components/platform/TourOverlay";
 import { PersianDigitsTyping } from "@/components/PersianDigitsTyping";
@@ -59,17 +60,31 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} dir={dirFor(locale)} suppressHydrationWarning>
-      <head>
+      <body className={`${vazirmatn.variable} font-sans`}>
         {/*
           Theme applied before paint so dark never flashes light. The script is
           BUILT from the same constants the toggle writes (src/lib/theme.ts) —
           it used to be a hand-written string with a different key and the
           opposite default, which meant this script caused the flash it exists
           to prevent, and a stored preference lost every first paint.
+
+          IT IS MARKUP INSIDE A WRAPPER RATHER THAN A <script> ELEMENT, and
+          that is load-bearing. React 19 will not create a script node on the
+          client — it substitutes a <div> and logs "Scripts inside React
+          components are never executed when rendering on the client" — every
+          time this layout is BUILT rather than hydrated, which is every client
+          navigation that swaps the locale segment and every Fast Refresh. As
+          innerHTML the tag reaches the browser verbatim inside the streamed
+          HTML, where the PARSER runs it before a single row of the page is
+          parsed; on a later client re-render the same string is inert, which
+          is exactly right — the theme is already on <html> by then and
+          `storeTheme` owns every change after that.
+
+          It sits at the top of <body> rather than in <head> only because a
+          wrapper element is illegal in the head; the stylesheets above it
+          still block paint, so nothing has been drawn when it runs.
         */}
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript() }} />
-      </head>
-      <body className={`${vazirmatn.variable} font-sans`}>
+        <div hidden dangerouslySetInnerHTML={{ __html: `<script>${themeBootScript()}</script>` }} />
         <NextIntlClientProvider messages={messages}>
           {/*
             EVERY RADIX PANEL LEARNS THE DIRECTION HERE. Radix reads `dir`
@@ -104,6 +119,14 @@ export default async function LocaleLayout({
               width the sidebar used to publish. It publishes nothing now — the panel
                   floats over the page (2026-09-03). */}
           <AssistantSidebar />
+          {/* EVERY message the platform has for the person (2026-09-08) —
+              one stack, rising in the middle of the screen. Mounted HERE
+              rather than in the shell or the assistant for the same reason
+              the assistant is: this layout is the only thing above every
+              route that never remounts, and it is above the signed-OUT ones
+              too — sign-in, reset and join have failures to report and the
+              assistant is not drawn on any of them. */}
+          <Toaster />
           {/* the mini recorder (2026-08-22; docked 2026-08-23): a live take
               stays visible and controllable on every page except the
               recorder's own — portalled into the top bar's slot beside the

@@ -7,9 +7,10 @@
  * a product whose value is "you need not re-listen to the call" means a user
  * can act on half a summary believing it is the whole one.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { NotFoundError } from "../src/api/errors.ts";
+import { resetCapabilityCache } from "../src/db/capabilities.ts";
 import { createSessionsRepo, titleFrom } from "../src/api/sessions.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
@@ -190,6 +191,7 @@ describe("the floor", () => {
     await expect(createSessionsRepo(db).setFloor(IDENTITY, SESSION, ["roya"])).rejects.toBeInstanceOf(NotFoundError);
   });
 });
+
 /**
  * THE SESSION'S OTHER CONVERSATIONS (user directive, 2026-09-08: "make the
  * memory per session not per thread").
@@ -276,5 +278,107 @@ describe("the other conversations of this session", () => {
     /* tool rows are codes, not speech: dropped here so `turnsEach` counts
        six things somebody said and not six rows of which four are codes */
     expect(sql).toContain("role <> 'tool'");
+  });
+});
+
+/**
+ * A BRIEF IS NOT A CONVERSATION YOU HAD (db/0221, 2026-09-09).
+ *
+ * Four rehearsal meetings put four «خلاصهٔ آمادهٔ …» rows in the sidebar: the
+ * post-call brief opens a session so its `agent_card` has something to point
+ * at, and `resolveForAsk(identity, null, title)` is the same call the ask
+ * route makes when a person starts a conversation.
+ *
+ * WHAT IS ASSERTED HERE AND WHAT IS NOT. The RULE — who is in the list — is a
+ * database function, and db/test/126 walks its three arms against real rows
+ * under real RLS (opened-by-her in, brief-she-ignored out, brief-she-answered
+ * in), verified red by six mutations. Re-deciding it against a fake here would
+ * be a test that agrees with itself; what this file owns is the WIRING: that
+ * the repo asks the database's rule instead of spelling a second one, and that
+ * a background job's session is opened as the background job's.
+ */
+describe("a brief the agent wrote is not a conversation you had", () => {
+  const listRows = (sql: string) =>
+    (sql.includes("from echo.agent_session") && sql.includes("message_count")
+      ? [{
+        id: SESSION, title: "t", last_message_at: null, archived_at: null,
+        created_at: new Date("2026-09-09T00:00:00Z"), message_count: 0,
+      }]
+      : []);
+
+  /** The catalogue probe `hasSessionOrigin` runs before the query it gates. */
+  const withColumn = (present: boolean) => (sql: string) =>
+    (sql.includes("information_schema.columns") ? (present ? [{ present: 1 }] : []) : listRows(sql));
+
+  const listSql = (log: { sql: string }[]) =>
+    log.find((l) => l.sql.includes("message_count"))!.sql;
+
+  beforeEach(() => resetCapabilityCache());
+  afterEach(() => resetCapabilityCache());
+
+  it("asks the DATABASE's rule rather than spelling a second one", async () => {
+    /*
+     * db/0048 is the standing lesson: `run_is_truncated` was one rule written
+     * three times and the three disagreed. So the assertion is on the SQL,
+     * because a re-spelling IS the defect — a predicate here that happened to
+     * agree with the function today is exactly what drifts tomorrow.
+     */
+    const { db, log } = fakeDb(withColumn(true));
+    await createSessionsRepo(db).list(IDENTITY);
+    const sql = listSql(log);
+    expect(sql).toContain("echo.session_belongs_in_history(");
+    // No local copy of either arm, in any spelling.
+    expect(sql).not.toContain("origin = 'user'");
+    expect(sql).not.toContain("origin <> 'agent'");
+    expect(sql).not.toContain("from echo.agent_message m where m.session_id");
+  });
+
+  it("does NOT filter before the migration lands — and still returns the list", async () => {
+    /*
+     * The forfeit, said out loud (M21). A query naming a column the catalogue
+     * has not got 500s the assistant's first screen for every request until
+     * the migration runs, and deploys and migrations arrive in either order.
+     *
+     * This is also the negative control for the test above: asserting only
+     * that the predicate is PRESENT cannot tell "the repo consults the rule"
+     * from "this string appears in every query the repo writes". A case where
+     * it must be ABSENT is what makes the presence mean something — and the
+     * row coming back is what stops a degraded path being a broken one.
+     */
+    const { db, log } = fakeDb(withColumn(false));
+    const rows = await createSessionsRepo(db).list(IDENTITY);
+    expect(listSql(log)).not.toContain("session_belongs_in_history");
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a background job's session is opened as the background job's", async () => {
+    const { db, log } = fakeDb((sql) =>
+      (sql.includes("information_schema.columns") ? [{ present: 1 }] : [{ id: SESSION }]));
+    await createSessionsRepo(db).resolveForAsk(IDENTITY, null, "خلاصهٔ آماده", "agent");
+    const write = log.find((l) => l.sql.includes("insert into echo.agent_session"))!;
+    expect(write.params?.[3]).toBe("agent");
+  });
+
+  it("but a person's own ask still opens a conversation of theirs", async () => {
+    /*
+     * The control that matters most, and the one a fix aimed at the sidebar
+     * gets wrong: marking EVERY new session 'agent' hides the defect's rows
+     * and empties the sidebar for everybody, and every assertion above still
+     * passes. The default has to be proven, not assumed from a signature.
+     */
+    const { db, log } = fakeDb((sql) =>
+      (sql.includes("information_schema.columns") ? [{ present: 1 }] : [{ id: SESSION }]));
+    await createSessionsRepo(db).resolveForAsk(IDENTITY, null, "چه خبر؟");
+    const write = log.find((l) => l.sql.includes("insert into echo.agent_session"))!;
+    expect(write.params?.[3]).toBe("user");
+  });
+
+  it("writes no origin at all before the migration lands", async () => {
+    const { db, log } = fakeDb((sql) =>
+      (sql.includes("information_schema.columns") ? [] : [{ id: SESSION }]));
+    await createSessionsRepo(db).resolveForAsk(IDENTITY, null, "خلاصهٔ آماده", "agent");
+    const write = log.find((l) => l.sql.includes("insert into echo.agent_session"))!;
+    expect(write.sql).not.toContain("origin");
+    expect(write.params).toHaveLength(3);
   });
 });

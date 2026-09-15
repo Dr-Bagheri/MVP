@@ -213,18 +213,127 @@ describe("the wait", () => {
    */
 
   it("swaps to a caret once words are arriving — the two waits are different", () => {
-    render(<ConversationThread messages={[assistant("m1", "بله،", { streaming: true })]} />);
+    const typing = render(
+      <ConversationThread messages={[assistant("m1", "بله،", { streaming: true })]} />,
+    );
     /* a spinner under a half-written sentence claims nothing is happening;
        a caret in front of an empty one claims words are arriving */
     expect(screen.queryByText("در حال فکر کردن…")).toBeNull();
-    expect(screen.getByText("▍")).toBeTruthy();
+    /* the caret is DRAWN, not typed — asserting the ▍ glyph was asserting the
+       font, and it stopped being findable the moment the caret became a box */
+    expect(typing.container.querySelector(".stream-caret")).toBeTruthy();
   });
 
   it("shows neither once the answer is finished", () => {
     /* the control: without it, a version that always renders the line passes
        both positive assertions above */
-    render(<ConversationThread messages={[assistant("m1", "بله، فردا.")]} />);
+    const done = render(<ConversationThread messages={[assistant("m1", "بله، فردا.")]} />);
     expect(screen.queryByText("در حال فکر کردن…")).toBeNull();
-    expect(screen.queryByText("▍")).toBeNull();
+    expect(done.container.querySelector(".stream-caret")).toBeNull();
+  });
+
+  /**
+   * ── THE WAIT NAMES ITS WORK ─────────────────────────────────────────────
+   *
+   * 21st.dev's pending-search state is a shimmering label that says what the
+   * call is doing. The line said «در حال فکر کردن…» for the whole of every
+   * turn, including the seconds spent reading a transcript.
+   *
+   * The PAIR is the assertion: the generic word is the control, and without
+   * it a version that hard-codes «در حال جست‌وجو…» passes the positive half.
+   */
+  it("says what it is doing while a tool runs, and the general word otherwise", () => {
+    const searching = render(
+      <ConversationThread
+        messages={[{
+          ...assistant("m1", "", { streaming: true }),
+          tool_calls: [
+            { id: "t1", name: "search_transcripts", label: "جست‌وجو", state: "started" },
+          ],
+        }]}
+      />,
+    );
+    expect(screen.getByText("در حال جست‌وجو…")).toBeTruthy();
+    expect(screen.queryByText("در حال فکر کردن…")).toBeNull();
+    /* the mark stays — it was removed once and reported back (2026-09-04),
+       and it is what carries the wait under reduced motion */
+    expect(searching.container.querySelector(".thinking-spin")).toBeTruthy();
+    /* the label is the thing that is alive, not just a coloured span */
+    expect(screen.getByText("در حال جست‌وجو…").className).toContain("text-shimmer");
+    searching.unmount();
+
+    render(<ConversationThread messages={[assistant("m2", "", { streaming: true })]} />);
+    expect(screen.getByText("در حال فکر کردن…")).toBeTruthy();
+  });
+
+  /**
+   * ── THE ANSWER IS MARKDOWN, THE QUESTION IS NOT ─────────────────────────
+   *
+   * An assistant AUTHORS — it emits headings, lists and tables because that
+   * is how a model writes, and unrendered they are punctuation the reader has
+   * to look past. A member TYPES, so their asterisks are asterisks: rendering
+   * a question's `**` as bold rewrites what somebody wrote, and it is the
+   * direction nobody would report.
+   *
+   * The PAIR is the assertion. Either half alone passes against a version
+   * that runs both through one renderer.
+   */
+  it("renders an answer as markdown and leaves the question's own characters alone", () => {
+    const { container } = render(
+      <ConversationThread
+        messages={[
+          user("m1", "**این** را پررنگ کن"),
+          assistant("m2", "### سرفصل\n\n- **نخست** یک\n- دوم دو"),
+        ]}
+      />,
+    );
+
+    expect(container.querySelector("h4")?.textContent).toBe("سرفصل");
+    expect(container.querySelector("li > strong")?.textContent).toBe("نخست");
+    /* the question, character for character — including its asterisks */
+    expect(screen.getByText("**این** را پررنگ کن")).toBeTruthy();
+  });
+
+  /**
+   * The `neurai-block` islands are OURS and still parse first: the markdown
+   * renderer only ever sees what the block parser left as prose. Without this,
+   * a change that pointed the whole answer at markdown would render a block's
+   * JSON as a code fence and look entirely reasonable doing it.
+   */
+  it("leaves a neurai-block island to its own component", () => {
+    const answer = [
+      "پیش از جدول:",
+      "```neurai-block",
+      '{ "kind": "checklist", "items": [{ "text": "یک", "done": true }] }',
+      "```",
+    ].join("\n");
+    const { container } = render(<ConversationThread messages={[assistant("m1", answer)]} />);
+
+    expect(container.querySelector("pre")).toBeNull();
+    expect(screen.getByText("یک")).toBeTruthy();
+    expect(screen.getByText("پیش از جدول:")).toBeTruthy();
+  });
+
+  /**
+   * The two inline seams, asserted as the SHAPE that produces them rather
+   * than as pixels: the wrapper stops being a box (`contents`), the answer's
+   * first paragraph shares the speaker's line, and the last one goes inline
+   * only WHILE STREAMING, which is the only time there is a caret to keep
+   * beside it. The settled case is the control — without it, "always inline"
+   * passes the streaming assertion.
+   */
+  it("keeps the name in lane, and the caret in lane only while streaming", () => {
+    const live = render(
+      <ConversationThread messages={[assistant("m1", "یک", { streaming: true })]} />,
+    );
+    const streaming = live.container.querySelector("div.contents")!;
+    expect(streaming.className).toContain("[&>p:first-child]:inline");
+    expect(streaming.className).toContain("[&>p:last-child]:inline");
+    live.unmount();
+
+    const done = render(<ConversationThread messages={[assistant("m1", "یک")]} />);
+    const settled = done.container.querySelector("div.contents")!;
+    expect(settled.className).toContain("[&>p:first-child]:inline");
+    expect(settled.className).not.toContain("[&>p:last-child]:inline");
   });
 });

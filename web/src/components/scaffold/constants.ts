@@ -45,12 +45,35 @@
  * read as roomier and less organised than the same screen of theirs.
  */
 export const SCAFFOLD = {
-  /** Icon rail — M22, unchanged. */
-  railWidth: 60,
+  /**
+   * THE ICON RAIL — a LABELLED column now.
+   *
+   * 60 was the width of a rail that drew glyphs and nothing else. A word under
+   * the glyph needs room to be a word rather than an ellipsis, and 72 is the
+   * reference's own (Plane's category rail, measured off the screenshot the
+   * directive arrived with). The rail no longer has a second, wider state, so
+   * this is the one number the shell reserves — which is the point of the
+   * change: the labelled 248px sidebar it replaces was spending a fifth of a
+   * laptop screen on a menu, and that space is the home page's session list
+   * now.
+   */
+  railWidth: 72,
   /** Section menu (Settings, Management, apps that need one). */
   menuWidth: 248,
-  /** Top bar: breadcrumb + identity. */
-  topBarHeight: 62,
+  /*
+   * Top bar: breadcrumb + identity.
+   *
+   * 50, NOT the 62 measured off the reference on 2026-09-02 — a user
+   * directive over a measurement, and recorded as such so nobody "corrects"
+   * it back: "make the top header line shorter … just take less space at the
+   * top" (2026-09-08).
+   *
+   * 50 is the compact control (34) plus 8 above and below, which is why it is
+   * this number and not a rounder one: the bar holds `.btn-sm`, `.btn-icon-sm`
+   * and `input-sm`, all 34, so anything under 50 stops being padding and
+   * starts being a crop. R4 owns the 34; this owes it the room.
+   */
+  topBarHeight: 50,
   /** Content column, centered; wide variant for data-dense tables. */
   /*
    * THE THREE PAGE SIZES (user directive, 2026-09-02: "now we have three sets

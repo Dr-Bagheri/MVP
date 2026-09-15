@@ -44,10 +44,27 @@ const SIZE = {
   lg: { box: "h-12 w-12", text: "text-base" },
 } as const;
 
+/**
+ * THE RING is a prop and not something a caller passes through `className`.
+ *
+ * There is no tailwind-merge here, so `className="ring-2 ring-surface"` on top
+ * of the shell's own `ring-1 ring-border-strong` ships BOTH rules and lets the
+ * stylesheet's source order pick the winner — which is not the caller's
+ * intent, it is an accident that happens to look right. Two values is all the
+ * product needs: the hairline that stands beside a name, and the surface-
+ * coloured cut that separates one mark from the mark it overlaps in a stack.
+ */
+const RING = {
+  hairline: "ring-1 ring-border-strong",
+  /** for an overlapped stack: a 2px punch in the page's own ground */
+  surface: "ring-2 ring-surface",
+} as const;
+
 export function Avatar({
   name,
   src,
   size = "md",
+  ring = "hairline",
   className = "",
 }: {
   /** the resolved display name — the caller owns which of the two names to
@@ -57,6 +74,7 @@ export function Avatar({
   /** a photo when the person has one */
   src?: string | null;
   size?: keyof typeof SIZE;
+  ring?: keyof typeof RING;
   className?: string;
 }) {
   const { box, text } = SIZE[size];
@@ -64,7 +82,7 @@ export function Avatar({
      scripts) is TWO code units, and slicing one of them renders the
      replacement character — a mark that is the same for every such person */
   const initial = (Array.from(name.trim())[0] ?? "?").toUpperCase();
-  const shell = `grid shrink-0 place-items-center overflow-hidden rounded-full ring-1 ring-border-strong ${box} ${className}`;
+  const shell = `grid shrink-0 place-items-center overflow-hidden rounded-full ${RING[ring]} ${box} ${className}`;
 
   if (src) {
     return (

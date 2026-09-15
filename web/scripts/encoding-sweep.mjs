@@ -44,9 +44,67 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-  encoding: "utf8",
-}).trim();
+/**
+ * THREE EXIT CODES, AND THEY ARE DELIBERATELY NOT TWO (review F5).
+ *
+ *   0 — swept, clean
+ *   1 — swept, corruption found
+ *   2 — COULD NOT SWEEP
+ *
+ * The sweep used to die on an unhandled `execFileSync` throw outside a git
+ * work tree: a stack trace, exit 1, and a caller that cannot tell "corruption
+ * found" from "the tool never ran". Exiting 1 with a nicer message would not
+ * have fixed that — 1 is what a real finding exits with, so both arrive at the
+ * shell as one number. That is this file's own complaint pointed at itself.
+ *
+ * **There is no directory-walk fallback, by design.** This sweep enumerates
+ * through git *because* `.gitignore` was corrupt underneath a ripgrep sweep
+ * that skipped dotfiles. A walk reintroduces exactly the blindness the tool
+ * exists to remove, silently, while printing PASSED. If you are here to add
+ * one: that is the bug, not the fix.
+ */
+function cannotSweep(reason, remedy) {
+  console.error(`\nENCODING SWEEP COULD NOT RUN — ${reason}`);
+  if (remedy) console.error(`\n  ${remedy}`);
+  console.error(
+    "\nThis is NOT a pass. The corpus was never enumerated, so nothing was" +
+      "\nchecked. There is no fallback on purpose: this sweep reads the files" +
+      "\ngit tracks precisely because a text-grep sweep skipped the dotfile" +
+      "\nthat was corrupt.\n",
+  );
+  process.exit(2);
+}
+
+/**
+ * Run git, and turn its three distinct failures into three distinct messages.
+ * They have three different remedies, so one message would send two of the
+ * three readers to the wrong place. The last case quotes git's own stderr
+ * rather than inventing a sentence for a failure nobody has seen yet — a
+ * message you make up for an unknown case is a guess wearing the costume of a
+ * diagnosis.
+ */
+function git(args, label) {
+  try {
+    return execFileSync("git", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      cannotSweep("git is not on PATH", "Install git, or run this from a shell that has it.");
+    }
+    const stderr = String(error?.stderr ?? "");
+    if (/not a git repository|does not appear to be a git repository/i.test(stderr)) {
+      cannotSweep(
+        `this directory is not inside a git work tree (${process.cwd()})`,
+        "Run the sweep from a real checkout. Do NOT `git init` a scratch copy to" +
+          " satisfy it —\n  a fresh index makes the sweep report zero files, which" +
+          " this script also refuses.",
+      );
+    }
+    cannotSweep(`git ${label} failed`, stderr.trim() || String(error?.message ?? error));
+  }
+  return "";
+}
+
+const repoRoot = git(["rev-parse", "--show-toplevel"], "rev-parse").trim();
 
 /**
  * Files allowed to contain the signatures, WITH the reason — an exclusion on
@@ -140,13 +198,30 @@ function controlBytes(bytes) {
   return [...seen].join(" ");
 }
 
-const files = execFileSync("git", ["ls-files", "-z"], {
-  cwd: repoRoot,
-  encoding: "utf8",
-  maxBuffer: 32 * 1024 * 1024,
-})
+const files = git(["-C", repoRoot, "ls-files", "-z"], "ls-files")
   .split("\0")
   .filter(Boolean);
+
+/*
+ * AN EMPTY INDEX IS A REFUSAL, NOT A PASS — and this is the state that would
+ * actually have bitten somebody.
+ *
+ * `git init` with no `git add -A` is exactly what a person does when they read
+ * "this directory is not inside a git work tree" and try to satisfy it. The
+ * work tree then exists, `ls-files` returns nothing, and the old code swept
+ * zero files and printed `ENCODING SWEEP PASSED — 0 tracked text files`.
+ *
+ * A green banner over an unexamined tree, produced by following the fix's own
+ * advice. That is the `.gitignore` shape rebuilt inside the tool written to
+ * prevent it.
+ */
+if (files.length === 0) {
+  cannotSweep(
+    "git ls-files returned no files",
+    "The work tree exists but nothing is tracked yet — a fresh `git init` with" +
+      " no `git add`.\n  Zero files is not a clean corpus; it is no corpus.",
+  );
+}
 
 const findings = [];
 let scanned = 0;

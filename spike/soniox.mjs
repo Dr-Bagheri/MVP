@@ -12,11 +12,26 @@ const BASE = "https://api.soniox.com";
 const FILE = process.argv[2] ?? "two_speakers.wav";
 const LANGUAGE = process.argv[3] ?? "fa";
 
+// Where the NeurAI interpreter is, and where its data lives, are properties of
+// the MACHINE — so there is no default (review F4). NEURAI_DATA_DIR rides the
+// ambient environment; it is not overridden here. The full argument for having
+// no default at all is at db/scripts/lib/neurai-python.mjs.
+function neuraiPython() {
+  const set = process.env.NEURAI_PYTHON;
+  if (!set) {
+    throw new Error(
+      'NEURAI_PYTHON is not set. Point it at the python.exe of the NeurAI server venv on THIS machine, e.g.\n' +
+      '  $env:NEURAI_PYTHON = "C:\\path\\to\\neurai-mvp\\server\\.venv\\Scripts\\python.exe"',
+    );
+  }
+  return set;
+}
+
 function secret(name) {
   return execFileSync(
-    "C:\\Users\\amirreza\\AppData\\Local\\NeurAI\\venv\\Scripts\\python.exe",
+    neuraiPython(),
     ["-c", `from neurai.security import get_secret; print(get_secret('${name}'))`],
-    { env: { ...process.env, NEURAI_DATA_DIR: "C:\\Users\\amirreza\\.neurai" }, encoding: "utf8" },
+    { env: process.env, encoding: "utf8" },
   ).trim();
 }
 

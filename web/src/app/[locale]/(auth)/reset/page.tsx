@@ -6,6 +6,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
 import { PasswordInput } from "@/components/PasswordInput";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The recovery link's landing page — **the consumer that did not exist.**
@@ -37,7 +38,6 @@ export default function ResetPasswordPage() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
 
   useEffect(() => {
@@ -61,7 +61,6 @@ export default function ResetPasswordPage() {
     event.preventDefault();
     if (!ready || tokenHash === null) return;
     setBusy(true);
-    setError(null);
     try {
       await api.resetPassword(tokenHash, next, linkType);
       /*
@@ -80,7 +79,7 @@ export default function ResetPasswordPage() {
         setExpired(true);
         return;
       }
-      setError(cause instanceof BffError ? (cause.detail ?? t("failed")) : t("failed"));
+      notifyError(cause instanceof BffError ? (cause.detail ?? t("failed")) : t("failed"));
     } finally {
       setBusy(false);
     }
@@ -133,11 +132,6 @@ export default function ResetPasswordPage() {
           />
           {mismatch ? <span className="mt-1 block text-xs text-danger">{t("mismatch")}</span> : null}
         </Field>
-        {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
         <button className="btn-primary w-full" disabled={!ready}>
           {busy ? t("saving") : t("setPassword")}
         </button>

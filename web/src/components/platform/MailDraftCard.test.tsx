@@ -62,7 +62,7 @@ const DRAFT: MailDraft = {
   provider: "google",
   source_ref: "msg-1",
   thread_ref: "t-1",
-  to_address: "amirreza@example.com",
+  to_address: "nadia@example.com",
   subject: "Re: meeting",
   body: "سلام، سه‌شنبه ساعت ۱۰ مناسب است.",
   status: "pending",
@@ -86,7 +86,7 @@ describe("MailDraftCard", () => {
 
   it("shows who it goes to, what it says, and that the mailbox has it", () => {
     render(<MailDraftCard draft={DRAFT} />);
-    expect(screen.getByText("amirreza@example.com")).toBeTruthy();
+    expect(screen.getByText("nadia@example.com")).toBeTruthy();
     expect(screen.getByText("Re: meeting")).toBeTruthy();
     expect(screen.getByText(DRAFT.body)).toBeTruthy();
   });
@@ -111,7 +111,7 @@ describe("MailDraftCard", () => {
     await waitFor(() => expect(screen.queryByText(SEND)).toBeNull());
     /* and it does not vanish: a card that disappears on success leaves the
        person wondering whether it went */
-    expect(screen.getByText("amirreza@example.com")).toBeTruthy();
+    expect(screen.getByText("nadia@example.com")).toBeTruthy();
   });
 
   it("reads a 409 as already decided, not as a failure to retry", async () => {

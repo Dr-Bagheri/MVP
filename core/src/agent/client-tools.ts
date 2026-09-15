@@ -410,7 +410,25 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
         + " (e.g. 2026-09-07T17:00:00+03:30), resolved against the current instant"
         + " in your instructions. Optional.",
       ),
-      priority: strEnum(["low", "medium", "high", "critical"], "How urgent it is. Optional."),
+      /*
+       * SET IT, DON'T DEFAULT IT (reported 2026-09-08: the agent had no way to
+       * set the priority of a task it created). The parameter was
+       * always here and the enum was always right; what it lacked was a
+       * sentence saying what each level MEANS, so the model omitted it and
+       * every card the agent made arrived «medium» — a board on which
+       * everything is medium is a board with no priority at all, and the home
+       * page's P-codes then say P3 four times.
+       */
+      priority: strEnum(
+        ["low", "medium", "high", "critical"],
+        "How urgent it is — shown as P1 (critical), P2 (high), P3 (medium),"
+        + " P4 (low). Read it off what the person said rather than defaulting:"
+        + " critical = blocking someone or a deadline already passed; high ="
+        + " a named deadline in the next few days, or the words urgent/asap;"
+        + " medium = ordinary work with no date pressure; low = a nice-to-have"
+        + " or someday. Set it on every task you create; omit ONLY when there"
+        + " is genuinely nothing in what they said to judge by.",
+      ),
       project: str(
         "The PROJECT it belongs to, by name as list_projects returns it — the"
         + " card is filed in that project's folder and counts toward it. Optional.",
@@ -523,7 +541,11 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       ),
       new_title: str("A new title, when renaming it."),
       description: str("A new description."),
-      priority: strEnum(["low", "medium", "high", "critical"], "How urgent it is."),
+      priority: strEnum(
+        ["low", "medium", "high", "critical"],
+        "How urgent it is — P1 (critical), P2 (high), P3 (medium), P4 (low),"
+        + " judged as in create_task.",
+      ),
       due: str("ISO 8601 deadline."),
       /* the column by NAME, because that is what a person says. list_task_columns
          gives the board's own wording when you need to be sure. */
@@ -828,9 +850,32 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     name: "install_workflow_starter",
     label: { fa: "نصب گردش‌کار آماده", en: "Installing a workflow" },
     description:
-      "Install one of the shipped workflow templates into this organization. "
-      + "Admin work: a member's request is refused by the server.",
+      "Install one of the shipped workflow templates into this organization "
+      + "(installing publishes and switches it on). Admin work: a member's "
+      + "request is refused by the server. Keys include tasks_digest — a "
+      + "digest of the person's open tasks grouped by urgency, delivered to "
+      + "their bell; it has no trigger of its own, so after installing it "
+      + "call schedule_workflow to give it a cadence (weekly before a "
+      + "recurring meeting) and run_workflow to deliver one now.",
     parameters: obj({ starter: str("The template's key or its name.") }, ["starter"]),
+    effect: "write",
+  },
+  {
+    name: "schedule_workflow",
+    label: { fa: "زمان‌بندی گردش‌کار", en: "Scheduling a workflow" },
+    description:
+      "Give a workflow a standing cadence, run as this person. Times are "
+      + "UTC: at_minute is minutes after midnight UTC (480 = 08:00 UTC); a "
+      + "weekly cadence needs weekday (0 = Sunday … 6 = Saturday). To land "
+      + "a digest before a Monday-morning meeting, pick the weekday and an "
+      + "at_minute an hour or two earlier. The workflow must be installed "
+      + "and switched on for the schedule to fire.",
+    parameters: obj({
+      workflow: str("The workflow's handle (e.g. wf-starter-tasks-digest) or its id."),
+      cadence: strEnum(["daily", "weekly", "monthly"]),
+      weekday: num("0 = Sunday … 6 = Saturday, UTC. Required for weekly."),
+      at_minute: num("Minutes after midnight UTC, 0..1439. Default 480 (08:00 UTC)."),
+    }, ["workflow", "cadence"]),
     effect: "write",
   },
   {

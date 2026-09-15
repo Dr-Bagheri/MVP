@@ -114,6 +114,20 @@ export async function hasSegmentLanguage(db: Db): Promise<boolean> {
   return hasColumn(db, "transcript_segment", "language");
 }
 
+/**
+ * db/0221 (2026-09-09): a session says who OPENED it.
+ *
+ * Gated rather than read straight — unlike `current_agent` (0175) and `floor`
+ * (0194), which this file's own header says should have been. The sidebar is
+ * the first thing the assistant page asks for, and a query naming a column the
+ * catalogue does not have yet 500s it for every request until the migration
+ * lands. The safe default is the behaviour we are fixing (every session in the
+ * list), which is untidy for a few minutes and never a broken page.
+ */
+export async function hasSessionOrigin(db: Db): Promise<boolean> {
+  return hasColumn(db, "agent_session", "origin");
+}
+
 async function hasFunction(db: Db, qualified: string): Promise<boolean> {
   const key = `fn:${qualified}`;
   const cached = cache.get(key);

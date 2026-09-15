@@ -3,7 +3,11 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import fa from "./fa.json";
 import en from "./en.json";
-import { WIDGET_SPECS } from "@/lib/widgetRegistry";
+/* the PRODUCER, imported rather than re-typed. Not published by core's
+   package exports, so this is a relative path — the same arrangement the
+   audit-copy test uses, and the swap-back condition is a real export. */
+import { CAPABILITIES } from "../../../core/src/api/capabilities.ts";
+import { WORKFLOW_PROPOSAL_KINDS } from "../../../core/src/api/vocabulary.ts";
 
 /**
  * **Every translation key a component asks for must exist in BOTH locales.**
@@ -128,29 +132,86 @@ describe("translation keys", () => {
     expect(faKeys.filter((k) => !enKeys.includes(k))).toEqual([]);
     expect(enKeys.filter((k) => !faKeys.includes(k))).toEqual([]);
   });
-  /**
-   * The dashboard's widget titles, derived from the REGISTRY rather than
-   * listed here.
+  /*
+   * THE WIDGET-TITLE CHECK IS GONE, and with it the import that stopped this
+   * whole file from being collected (2026-09-08).
    *
-   * `Dashboard.tsx` builds this key as `t(\`widget.${spec.labelKey}\`)`, and
-   * the scanner above skips computed keys on purpose (see the header). That
-   * exemption is where `dashboard.widget.ask` lived: the card rendered the
-   * literal string "dashboard.widget.ask" as its title on the platform's own
-   * landing page, and neither check above could see it — the parity test
-   * cannot either, because the key was missing from BOTH locales, which is
-   * perfectly symmetrical.
+   * It read `WIDGET_SPECS` from `@/lib/widgetRegistry` — a producer that is
+   * not in the tree. The dashboard was parked on 2026-08-27 and there is no
+   * component left that builds `t(`widget.${spec.labelKey}`)`, so the
+   * assertion had no subject: `dashboard.widget.*` are eleven keys nothing
+   * renders.
    *
-   * A computed key is only unscannable when its inputs are unknown. These
-   * are a closed set the registry exports, so the coverage list is derived
-   * from the producer instead of hand-written beside it — the same reason
-   * the vocabulary guard derives its unions.
+   * Deleted rather than pointed at a hand-written list, for the reason the
+   * comment it replaces gave in the first place — the coverage list must be
+   * derived from the producer, and when the producer is gone the honest
+   * move is to drop the check with it. What it cost meanwhile was the whole
+   * file: an unresolvable import fails COLLECTION, so the four real
+   * assertions here — key existence in both locales, parity, the capability
+   * copy, the proposal copy — were not running at all while this looked
+   * like one broken test.
    */
-  it("has a title for every widget the registry declares, in both locales", () => {
-    const missing = WIDGET_SPECS.flatMap((spec) => [
-      ...(lookup(fa as Messages, "dashboard", `widget.${spec.labelKey}`) === undefined
-        ? [`fa: dashboard.widget.${spec.labelKey}`] : []),
-      ...(lookup(en as Messages, "dashboard", `widget.${spec.labelKey}`) === undefined
-        ? [`en: dashboard.widget.${spec.labelKey}`] : []),
+
+  /**
+   * A LABEL AND A HINT FOR EVERY CAPABILITY CORE DECLARES (review F16).
+   *
+   * `CAPABILITIES` declares ten; the catalogues carried copy for eight.
+   * `workflows.run` and `workflows.manage` shipped with none, so the Member
+   * privileges screen rendered `management.privilege_workflows_run` as
+   * literal text — on a security surface whose whole job is to say plainly
+   * what a role may do.
+   *
+   * Three instruments missed it and each for a structural reason worth
+   * keeping: the key scanner above SKIPS computed keys by design and these
+   * are computed from the server's own capability key; locale parity is
+   * SYMMETRIC and the keys were absent from both files, so the two agreed
+   * perfectly; and `t()` on a miss renders the key path rather than
+   * throwing, so the page rendered and the build stayed green.
+   *
+   * Derived from the producer, never hand-listed beside it — an eleventh
+   * capability with no copy fails HERE rather than on somebody's screen.
+   *
+   * NOTE FOR VERIFYING THIS: delete a key from ONE locale and the parity test
+   * catches it, which proves nothing about this check — parity is exactly why
+   * the original four survived. Delete it from BOTH and only this test fails.
+   */
+  it("has a label and a hint for every capability core declares, in both locales", () => {
+    /* the vacuum guard: an import that resolved to an empty array would make
+       every assertion below pass over nothing */
+    expect(CAPABILITIES.length, "capabilities declared by core").toBeGreaterThan(8);
+    const missing = CAPABILITIES.flatMap((cap) => {
+      const suffix = cap.key.replace(/\./g, "_");
+      return [`privilege_${suffix}`, `privilegeHint_${suffix}`].flatMap((key) => [
+        ...(lookup(fa as Messages, "management", key) === undefined
+          ? [`fa: management.${key} (capability ${cap.key})`] : []),
+        ...(lookup(en as Messages, "management", key) === undefined
+          ? [`en: management.${key} (capability ${cap.key})`] : []),
+      ]);
+    });
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * THE SAME SHAPE, ONE PRODUCER OVER — and it is why F16 is not a
+   * four-string finding.
+   *
+   * The run page renders `` t(`proposal_${proposal.proposal}`) `` in the
+   * `workflows` namespace. `WORKFLOW_PROPOSAL_KINDS` has three members and
+   * that namespace carried two, so a `draft_mail` proposal rendered its key
+   * path as its label.
+   *
+   * Note the trap this one sets for a reader: a plain grep for
+   * `proposal_draft_mail` RETURNS A HIT, because the `builder` namespace has
+   * always had it. The question is never "does the string exist in the file"
+   * — it is "does it exist in the namespace the component binds".
+   */
+  it("has a label for every workflow proposal kind, in the namespace the run page binds", () => {
+    expect(WORKFLOW_PROPOSAL_KINDS.length, "proposal kinds declared by core").toBeGreaterThan(2);
+    const missing = WORKFLOW_PROPOSAL_KINDS.flatMap((kind) => [
+      ...(lookup(fa as Messages, "workflows", `proposal_${kind}`) === undefined
+        ? [`fa: workflows.proposal_${kind}`] : []),
+      ...(lookup(en as Messages, "workflows", `proposal_${kind}`) === undefined
+        ? [`en: workflows.proposal_${kind}`] : []),
     ]);
     expect(missing).toEqual([]);
   });

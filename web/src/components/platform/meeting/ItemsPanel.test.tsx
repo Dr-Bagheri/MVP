@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  /* the two keys with a placeholder render it, so an assertion can see
+     WHICH owner the hint names — a key-only stub would pass for any name */
+  useTranslations: () => (key: string, vars?: Record<string, string>) =>
+    vars === undefined ? key : `${key}:${Object.values(vars).join(",")}`,
   useLocale: () => "fa",
 }));
 
@@ -11,6 +14,7 @@ const addMeetingItem = vi.fn();
 const updateMeetingItem = vi.fn();
 const deleteMeetingItem = vi.fn();
 const createTask = vi.fn();
+const orgPeople = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
@@ -19,13 +23,7 @@ vi.mock("@/api/client", () => ({
     updateMeetingItem: (...a: unknown[]) => updateMeetingItem(...a),
     deleteMeetingItem: (...a: unknown[]) => deleteMeetingItem(...a),
     createTask: (...a: unknown[]) => createTask(...a),
-    /* 0211: the panel resolves an `owner_id` to a name, so it reads the
-       roster. Two colleagues, because one is a fixture that cannot tell a
-       resolved name from a lucky first row. */
-    orgPeople: async () => [
-      { id: "u-1", display_name: "سینا سپاسی", display_name_en: null, role: "member", username: "sina" },
-      { id: "u-2", display_name: "بهناز بهجتی", display_name_en: null, role: "member", username: "behnaaz" },
-    ],
+    orgPeople: (...a: unknown[]) => orgPeople(...a),
   },
 }));
 
@@ -45,6 +43,8 @@ beforeEach(() => {
   updateMeetingItem.mockReset();
   deleteMeetingItem.mockReset();
   createTask.mockReset();
+  orgPeople.mockReset();
+  orgPeople.mockResolvedValue([]);
 });
 
 describe("ItemsPanel", () => {
@@ -178,7 +178,10 @@ describe("ItemsPanel", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "convertRemainingToTasks" })).toBeNull());
     expect(createTask).toHaveBeenCalledTimes(1);
-    expect(createTask).toHaveBeenCalledWith({ title: "هنوز مانده", call_id: "c1" });
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ title: "هنوز مانده", call_id: "c1" }));
+    /* and the task says where it came from — the description names the
+       meeting's own page, which is what the board's chip leads back to */
+    expect(createTask.mock.calls[0]?.[0]).toMatchObject({ description: expect.stringContaining("/meetings/m1") });
     /* said the other way round too — the count alone would pass if the loop
        converted the finished item INSTEAD of the outstanding one */
     expect(createTask).not.toHaveBeenCalledWith(expect.objectContaining({ title: "انجام شده" }));
@@ -186,6 +189,158 @@ describe("ItemsPanel", () => {
        outstanding — without this the button could be pressed forever, making
        a new task each time */
     expect(updateMeetingItem).toHaveBeenCalledWith("m1", "open", { done: true });
+  });
+
+  it("makes ONE task from ONE action item, assigned to the owner the directory matches exactly", async () => {
+    /*
+     * 2026-09-08: the owner the summary wrote («— مسئول: سینا») becomes the
+     * task's assignee — through the same exact-match resolver the assistant's
+     * tools use. Two rows, only one pressed: a per-item button that converted
+     * the neighbour too would pass a count of "at least one".
+     */
+    meetingItems.mockResolvedValue([
+      row({ id: "a1", kind: "action", body: "مهاجرت حساب‌ها", owner: "سینا" }),
+      row({ id: "a2", kind: "action", body: "تست A/B", owner: null }),
+    ]);
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا", display_name_en: null, username: "sina" },
+      /* the LOOSE neighbour — a name that CONTAINS the owner must not win */
+      { id: "u-3", display_name: "سینا احمدی", display_name_en: null, username: "sina2" },
+    ]);
+    createTask.mockResolvedValue({ id: "t1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" callId="c1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    const [first] = await screen.findAllByRole("button", { name: "itemMakeTask" });
+    fireEvent.click(first!);
+
+    await waitFor(() => expect(updateMeetingItem).toHaveBeenCalledWith("m1", "a1", { done: true }));
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({
+      title: "مهاجرت حساب‌ها", call_id: "c1", assignees: ["u-2"],
+    }));
+    expect(createTask).not.toHaveBeenCalledWith(expect.objectContaining({ title: "تست A/B" }));
+    /* the owner resolved, so no hand-assign hint */
+    expect(screen.queryByRole("note")).toBeNull();
+    /* the pressed item's button is gone (it is ticked); the neighbour keeps its own */
+    expect(screen.getAllByRole("button", { name: "itemMakeTask" })).toHaveLength(1);
+  });
+
+  it("still makes the task when the owner is nobody in the directory — and says whose name it was", async () => {
+    /*
+     * An owner the summary wrote who is not a member (an outside invitee, a
+     * misspelling) must not block the task and must not be GUESSED: the task
+     * lands unassigned and the hint names the string so the presenter can
+     * assign by hand without re-reading the summary.
+     */
+    meetingItems.mockResolvedValue([
+      row({ id: "a1", kind: "action", body: "مهاجرت حساب‌ها", owner: "رضا" }),
+    ]);
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "رضا کریمی", display_name_en: null, username: "reza" },
+    ]);
+    createTask.mockResolvedValue({ id: "t1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" callId="c1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "itemMakeTask" }));
+
+    await screen.findByRole("note");
+    expect(screen.getByRole("note").textContent).toBe("itemOwnerUnresolved:رضا");
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask.mock.calls[0]?.[0]).not.toHaveProperty("assignees");
+    expect(updateMeetingItem).toHaveBeenCalledWith("m1", "a1", { done: true });
+  });
+
+  it("uses the SERVER's owner_id, and does not then claim the owner was unmatched", async () => {
+    /*
+     * 0211, fixed 2026-09-10 — ONE ROW CONTRADICTING ITSELF.
+     *
+     * The extraction already resolves a spoken name against the org roster, WITH
+     * a fold, and stores who it meant in `owner_id`; that column is the whole
+     * reason db/0211's fields were grafted into this panel. `makeTask` ignored it
+     * and re-resolved the free-text `owner` through `resolveColleague`, which is
+     * an UNFOLDED EXACT match — so a row displaying «سینا محمدی» (displaying it
+     * only because `owner_id` had resolved it) produced a task with no assignee
+     * and painted "the owner could not be matched" beside that very name.
+     *
+     * THE FIXTURE IS BUILT SO THE TWO PATHS DISAGREE, which is the only way this
+     * can be a test. The meeting heard «سینا»; the roster holds two colleagues
+     * whose names merely CONTAIN it, so `resolveColleague` refuses by design (a
+     * loose match is never chosen — a wrong assignee looks exactly like a right
+     * one). `owner_id` is the only source that can answer, so an assignee here
+     * proves which one was read.
+     */
+    meetingItems.mockResolvedValue([
+      row({ id: "a1", kind: "action", body: "مهاجرت حساب‌ها", owner: "سینا", owner_id: "u-2" }),
+    ]);
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا محمدی", display_name_en: null, username: "sinam" },
+      { id: "u-3", display_name: "سینا احمدی", display_name_en: null, username: "sinaa" },
+    ]);
+    createTask.mockResolvedValue({ id: "t1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" callId="c1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "itemMakeTask" }));
+
+    await waitFor(() => expect(updateMeetingItem).toHaveBeenCalledWith("m1", "a1", { done: true }));
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ assignees: ["u-2"] }));
+    /* THE HALF THAT WAS THE VISIBLE DEFECT. The task landing assigned and the
+       note appearing anyway were one bug with two faces, and a test that only
+       checked the assignee would have left the sentence on screen. */
+    expect(screen.queryByRole("note"), "a resolved owner is not an unmatched one").toBeNull();
+  });
+
+  it("falls back to the spoken name only when the server resolved NOBODY", async () => {
+    /*
+     * The negative control for the test above, and it is what makes `owner_id`
+     * mean something: a reading that simply stopped looking at `owner` would
+     * satisfy that test and would lose every row the prose slicer wrote, which
+     * fills `owner` and leaves `owner_id` null. Same roster, same spoken name —
+     * only the column changes, and now the exact-match refusal is the answer.
+     */
+    meetingItems.mockResolvedValue([
+      row({ id: "a1", kind: "action", body: "مهاجرت حساب‌ها", owner: "سینا", owner_id: null }),
+    ]);
+    orgPeople.mockResolvedValue([
+      { id: "u-2", display_name: "سینا محمدی", display_name_en: null, username: "sinam" },
+      { id: "u-3", display_name: "سینا احمدی", display_name_en: null, username: "sinaa" },
+    ]);
+    createTask.mockResolvedValue({ id: "t1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" callId="c1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "itemMakeTask" }));
+
+    await screen.findByRole("note");
+    expect(screen.getByRole("note").textContent).toBe("itemOwnerUnresolved:سینا");
+    expect(createTask.mock.calls[0]?.[0]).not.toHaveProperty("assignees");
+  });
+
+  it("convert-all carries each item's owner too", async () => {
+    meetingItems.mockResolvedValue([
+      row({ id: "a1", kind: "action", body: "الف", owner: "سینا" }),
+      row({ id: "a2", kind: "action", body: "ب", owner: null }),
+    ]);
+    orgPeople.mockResolvedValue([{ id: "u-2", display_name: "سینا", display_name_en: null, username: "sina" }]);
+    createTask.mockResolvedValue({ id: "t1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" callId="c1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "convertRemainingToTasks" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "convertRemainingToTasks" })).toBeNull());
+
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ title: "الف", assignees: ["u-2"] }));
+    const second = createTask.mock.calls.find((c) => (c[0] as { title: string }).title === "ب")?.[0];
+    expect(second).toBeTruthy();
+    expect(second).not.toHaveProperty("assignees");
   });
 
   it("offers no convert button when nothing is outstanding", async () => {

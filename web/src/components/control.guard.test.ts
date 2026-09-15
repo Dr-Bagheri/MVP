@@ -163,7 +163,47 @@ function sources(dir: string, out: string[] = []): string[] {
  * family exactly, the same shape as an encoding sweep that skips its own
  * dotfiles. The fix is the same too: know what you are inside of before you
  * decide what a character means.
+ *
+ * ── AND THE SAME FAMILY AGAIN, ONE LEVEL IN (2026-09-10) ──────────────────
+ *
+ * Being string-aware is not the same as being right about where a string
+ * STARTS. `Review.tsx` sanitises a download filename with
+ *
+ *     .replace(/[backslash, slash, colon, star, question, quote, angles,
+ *              pipe, and a spelled control range]/g, "-")
+ *
+ * and that `"` is inside a REGEX LITERAL. The scanner opened a string on it and
+ * never found a partner, so every quote in the remaining 340 lines of the file
+ * meant the opposite of what it said: comments stopped being blanked, tag
+ * scanning lost track of where a tag ended, and the guard reported ONE
+ * hand-rolled control in the file — an `aria-hidden` speaker mark inside a list
+ * row, which is not a control at all — while being blind to anything real after
+ * line 334. `HomeSidebar.tsx` has the identical line.
+ *
+ * Recording that phantom as a worklist row would have been the exact mistake
+ * the test below this one exists to forbid: lowering the guard to match what a
+ * broken instrument saw.
+ *
+ * THE FIX IS NOT A REGEX PARSER. Deciding whether `/` opens a regex or divides
+ * needs the grammar (`=> /re/.test(x)` and `<Icon />` differ only in what came
+ * before), and every heuristic for it breaks on JSX. What IS certain is the
+ * other half: in TypeScript a `"` or `'` string CANNOT cross a newline. So a
+ * quote only opens a string when its partner is on the same line; otherwise it
+ * is just a character. Any mistake is then capped at one line and can never
+ * cascade, which is the property that was actually missing. Template literals
+ * are unchanged — those legitimately span lines.
  */
+/** The partner of a `"`/`'` on the SAME line, or -1. Escapes respected. */
+function closesOnLine(text: string, start: number, quote: string): number {
+  for (let j = start + 1; j < text.length; j += 1) {
+    const ch = text[j]!;
+    if (ch === "\n") return -1;
+    if (ch === "\\") { j += 1; continue; }
+    if (ch === quote) return j;
+  }
+  return -1;
+}
+
 function codeOnly(text: string): string {
   let out = "";
   let i = 0;
@@ -174,6 +214,12 @@ function codeOnly(text: string): string {
     if (quote !== null) {
       if (ch === "\\") { out += text.slice(i, i + 2); i += 2; continue; }
       if (ch === quote) quote = null;
+      out += ch; i += 1; continue;
+    }
+    if ((ch === '"' || ch === "'") && closesOnLine(text, i, ch) === -1) {
+      /* not a string: a quote inside a regex literal (or a stray apostrophe in
+         JSX text). Taken as an ordinary character, so nothing downstream
+         inherits a string that never ends. */
       out += ch; i += 1; continue;
     }
     if (ch === '"' || ch === "'" || ch === "`") { quote = ch; out += ch; i += 1; continue; }
@@ -412,6 +458,48 @@ describe("controls share one shape", () => {
      */
     expect(truncatedTags, "tags too long to scan — the verdict above excluded them")
       .toEqual([]);
+  });
+
+  it("does not inherit a string from a QUOTE INSIDE A REGEX (2026-09-10)", () => {
+    /*
+     * The instrument's second honesty check, and like the one above it exists
+     * because this guard lied rather than because somebody imagined a way it
+     * could. Review.tsx and HomeSidebar.tsx both sanitise a download filename
+     * with a character class that contains a double quote; `codeOnly` read that
+     * quote as the start of a string, found no partner, and from there to the
+     * end of the file every quote meant its opposite — comments stopped being
+     * blanked and tag boundaries stopped being found. The guard then reported
+     * ONE hand-rolled control in Review.tsx (an `aria-hidden` speaker mark
+     * inside a list row, which is not pressable and never was a control) and
+     * was blind to anything real in the 340 lines after it.
+     *
+     * Recording that phantom as a worklist row is precisely what the test above
+     * forbids: lowering the guard to match what a broken instrument saw.
+     *
+     * WHAT THE FIXTURE HAS TO SHOW, because the obvious one does not. The
+     * quote state only decides one thing: whether a `/*` is a comment. So a
+     * fixture whose control merely sits after the regex proves nothing — the
+     * class attribute is still there to be read, and the old scanner passes it.
+     * The damage is to the COMMENT STRIPPER, and its shape is a comment after
+     * the regex being read as code. That is a defect in the direction that
+     * matters: prose about a control counted as a control.
+     *
+     * The regex line therefore carries an ODD number of quotes — the real one
+     * does, because its `"-"` replacement supplies two more — since an even
+     * count silently re-pairs and nothing is ever wrong. Verified red against
+     * the previous `codeOnly`: it answered 2.
+     */
+    const commentAfterRegex = [
+      'const name = (t: string) => t.replace(/["]/g, "-");',
+      '/* <button className="h-9 rounded-xl" /> */',
+      '<a href="/x" className="h-8 rounded-lg" />',
+    ].join("\n");
+    expect(handRolled(codeOnly(commentAfterRegex))).toBe(1);
+
+    /* the control in the other direction: an ordinary same-line string is a
+       string as before, so a commented-out control stays invisible and this
+       check cannot be satisfied by a stripper that simply stopped working */
+    expect(handRolled(codeOnly('/* <button className="h-9 rounded-xl" /> */'))).toBe(0);
   });
 
   it("reads a tag whose attributes contain a comparison, rather than stopping at it", () => {

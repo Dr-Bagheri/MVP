@@ -7,6 +7,7 @@ import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
 import { OAuthButtons } from "../OAuthButtons";
 import { PasswordInput } from "@/components/PasswordInput";
+import { notifyError } from "@/lib/notify";
 
 /**
  * Self-registration — **and this form registered nobody.**
@@ -38,14 +39,12 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [confirmEmail, setConfirmEmail] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
-    setError(null);
     try {
       const result = await api.signUp({
         email,
@@ -70,7 +69,7 @@ export default function SignUpPage() {
       // genuinely pending row — a joiner — earns the waiting screen.
       router.push(result.member?.status === "active" ? "/" : "/pending");
     } catch (cause) {
-      setError(refusalText(cause, t));
+      notifyError(refusalText(cause, t));
     } finally {
       setBusy(false);
     }
@@ -128,11 +127,6 @@ export default function SignUpPage() {
               autoComplete="new-password"
             />
         </Field>
-        {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
         <button
           className="btn-primary w-full"
           disabled={busy || !email || !password || !displayName}

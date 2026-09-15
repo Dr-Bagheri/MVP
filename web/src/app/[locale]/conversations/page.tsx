@@ -130,7 +130,7 @@ export default function ConversationsPage() {
             /* the ASSISTANT PAGE, not the orb (2026-08-27): the dock stands
                down on this surface, so handing the conversation to it would
                be a row that clicks into nothing */
-            onRowClick={(s) => router.push({ pathname: "/assistant", query: { c: s.id } })}
+            onRowClick={(s) => router.push({ pathname: "/", query: { c: s.id } })}
             /* THE TABLE'S OWN MENU, not a text link in a cell (audit finding,
                2026-09-02: an underlined red «حذف» sat in the row while every
                other DataTable — members, invitations, models, search,

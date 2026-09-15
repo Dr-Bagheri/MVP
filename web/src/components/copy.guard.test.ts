@@ -61,13 +61,13 @@ const ALLOWED: Record<string, string[]> = {
   "app/[locale]/management/users/page.tsx": ["adminOnlyNote"],
   // STATE — the pending screen's one sentence is the screen
   "app/[locale]/(auth)/pending/page.tsx": ["pendingHint"],
-  // STATE — a record still processing says so once; an empty whiteboard says
-  // what it is for while it holds nothing
+  // STATE — a record still processing says so once
   "components/platform/meeting/Review.tsx": ["processingNote"],
-  "components/platform/meeting/Whiteboard.tsx": ["whiteboardHint"],
-  // CONSEQUENCE — the share picker's one trap (an unticked audio box carries
-  // no sound), said BEFORE the picker opens, only on an online meeting
-  "components/platform/MeetingPage.tsx": ["shareHint"],
+  /* the whiteboard's empty-canvas line and the meeting page's share hint left
+     with the surfaces they described (2026-09-08): the canvas, the
+     presentation and the shared-tab lane are gone from the live screen. */
+  // CONSEQUENCE — a take that outlived its page processes only what it caught
+  "components/platform/MeetingPage.tsx": ["takeInterrupted"],
   // ARRIVAL — the guest door and a new organisation
   "app/[locale]/join/[code]/page.tsx": ["joinHint"],
   "components/platform/CreateOrg.tsx": ["newOrgHint"],
@@ -80,6 +80,11 @@ const ALLOWED: Record<string, string[]> = {
      changed — which is the allowed kind at its sharpest. */
   "components/platform/ProjectDetail.tsx": ["renameNote"],
   "components/platform/tasks/TaskDialogs.tsx": ["scheduleExplain"],
+  /* CONSEQUENCE — the scheduling dialog's one line says WHERE the thing being
+     created goes ("it waits under «Upcoming» until you record it"), which is
+     the fact a reader cannot get from the title «Schedule meeting» and the one
+     that decides whether they press it. */
+  "components/platform/Meetings.tsx": ["scheduleMeetingSubtitle"],
   // CONSEQUENCE — what deleting a member does (emptied, handle retired for
   // good), said beside the field that asks for the reason
   "components/platform/MemberDetail.tsx": ["deleteMemberNote"],

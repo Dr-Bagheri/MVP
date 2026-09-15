@@ -23,9 +23,10 @@ export const MAX_MB = 50;
 /**
  * Five hours (2026-09-06, the long-file lane): the primary transcriber's own
  * ceiling (`ML_SONIOX_MAX_DURATION_MS`), which the pipeline now judges per
- * lane instead of holding every file to the fallback's 35 minutes. It was 240
- * here while the pipeline refused above 35 — a promise the screen made and
- * the server broke on every file between the two. The byte cap above still
+ * lane instead of holding every file to the fallback's ceiling (90 minutes
+ * since 2026-09-08, 35 before it). It was 240 here while the pipeline refused
+ * above 35 — a promise the screen made and the server broke on every file
+ * between the two. The byte cap above still
  * binds a single upload: five hours fits in fifty megabytes only at a low
  * bitrate, and the limits line says both numbers.
  */

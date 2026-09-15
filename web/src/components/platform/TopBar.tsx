@@ -1,20 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useLocale } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import type { User } from "@/api/types";
-import { IconMoon, IconSearch, IconSun } from "@/components/icons";
+import { IconMoon, IconSun } from "@/components/icons";
 import { storeTheme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
-import { formatDate } from "@/lib/format";
-import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { ChatIcon } from "./icons";
+import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
+import { registerPageMenuAnchor } from "./pageMenuAnchor";
 import { registerPresenceAnchor } from "./presenceAnchor";
-import { registerRecorderAnchor } from "./recorderAnchor";
 
 /**
  * The platform top bar (M22): en/fa switcher · global search · avatar.
@@ -26,45 +25,6 @@ import { registerRecorderAnchor } from "./recorderAnchor";
  * folds into the avatar menu (it is a set-once-a-year control) and search
  * collapses to its icon. Both are visible from `md` up.
  */
-/**
- * Today's date and the current time, in the bar (user directive). The date
- * follows the CALENDAR preference through the same `formatDate` every other
- * date uses (one formatter, one truth); the time follows the timezone
- * preference. Rendered only after mount: the server has neither the
- * viewer's clock nor their preference, and a hydration mismatch here would
- * be a nightly flicker.
- */
-function Clock() {
-  const locale = useLocale();
-  const timezone = useTimezonePreference();
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const timer = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
-  if (now === null) return null;
-  const time = new Intl.DateTimeFormat(locale === "fa" ? "fa-IR" : "en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    ...(timezone === "auto" ? {} : { timeZone: timezone }),
-  }).format(now);
-  return (
-    /* boxed like its neighbours (user directive): the bar's controls all
-       wear the same bordered pill, and the clock was the one bare element.
-       audit finding, 2026-09-02: that box was hand-rolled (h-9, 12px corner,
-       11.5px) beside a bar of 8px-cornered controls — the theme's compact
-       size says the same thing and cannot drift from it. A span wearing
-       `.btn btn-sm` is Meetings.tsx:526's own idiom: this is a readout, not
-       a control, so it takes the shape without becoming pressable. */
-    <span className="btn btn-sm hidden cursor-default gap-1.5 border border-border font-medium text-fg-muted lg:inline-flex">
-      <span>{formatDate(now.toISOString(), locale)}</span>
-      <span aria-hidden>·</span>
-      <span>{time}</span>
-    </span>
-  );
-}
-
 /* `isPlatformRoot` stays in the signature and is unused HERE: the platform
    console's own guard reads it, and every caller passes it. Dropping the prop
    would make those callers wrong about a fact that is still true. */
@@ -88,12 +48,12 @@ export function TopBar({
     anchorCleanupRef.current = node ? registerPresenceAnchor(node) : () => undefined;
   }, []);
   useEffect(() => () => anchorCleanupRef.current(), []);
-  const recorderCleanupRef = useRef<() => void>(() => undefined);
-  const setRecorderAnchorRef = useCallback((node: HTMLDivElement | null) => {
-    recorderCleanupRef.current();
-    recorderCleanupRef.current = node ? registerRecorderAnchor(node) : () => undefined;
+  const pageMenuCleanupRef = useRef<() => void>(() => undefined);
+  const setPageMenuAnchorRef = useCallback((node: HTMLDivElement | null) => {
+    pageMenuCleanupRef.current();
+    pageMenuCleanupRef.current = node ? registerPageMenuAnchor(node) : () => undefined;
   }, []);
-  useEffect(() => () => recorderCleanupRef.current(), []);
+  useEffect(() => () => pageMenuCleanupRef.current(), []);
   /*
    * Switching locale re-renders the SAME route under the other prefix, so the
    * user stays where they were. Sending them home on a language change would
@@ -132,8 +92,177 @@ export function TopBar({
           cell holding a place for a control that no longer exists. With the
           orb gone the reservation is a hole in the middle of the bar, so the
           trail takes the free space and the controls sit at the end. */}
-      <div className="relative z-20 flex h-topbar items-center gap-2 border-b border-border bg-surface px-3 md:px-4">
+      {/* NO RULE UNDER THE BAR. `border-b border-border bg-surface` drew
+          the app as a
+          stack of panes; the bar is a translucent sheet now and the page
+          scrolls UNDER it, which is what makes the blur mean something —
+          against an opaque strip a backdrop filter has nothing to filter. */}
+      {/*
+        THE INNER CORNER. The bar's own top-END corner and the rail's
+        top-START one
+        already curve; this is the third corner of the same chrome — the one
+        on the INSIDE of the L, where this bar's underside meets the rail's
+        edge and the page starts.
+
+        It lives here and not on `main` because the corner belongs to the
+        page, and the page is the gap between two elements rather than an
+        element with a border-radius to give. A square of chrome hangs below
+        the bar's start edge and `.chrome-notch`'s radial mask removes the
+        quarter nearest the page, so the chrome curves around the corner.
+
+        `start-0` is the rail's inline-end edge exactly — this header is the
+        rail's flex sibling, so its own start IS the seam, with no width to
+        repeat and drift from `w-rail`.
+
+        md ONLY: below it the rail is not rendered, the bar spans the window,
+        and a notch at start-0 would be a bite out of the window's own edge.
+      */}
+      <span
+        aria-hidden
+        data-platform-corner
+        className="chrome-notch pointer-events-none absolute start-0 top-full hidden h-[18px] w-[18px] md:block"
+      />
+      {/*
+        THE CORNER IS THE RAIL'S NEIGHBOUR, SO IT IS `md` ONLY (2026-09-08).
+
+        `rounded-se-2xl` is one half of the app's top edge — the other half is
+        the rail's `rounded-ss-2xl`, and the pair only means something where
+        both are drawn. Below `md` the rail is not rendered and this bar spans
+        the whole window, so the unqualified class curved ONE end of a
+        full-width strip and left the other square: the asymmetry the two-
+        element rule exists to prevent, arrived from the other direction.
+
+        The same reasoning the `.chrome-notch` above is already written with
+        («below md there is no rail, so a notch would bite the window's own
+        edge»), applied to the corner that notch curves around.
+      */}
+        {/*
+          THE SEARCH BOX IS CENTRED ON THE WINDOW. The CLOCK is gone with the
+          same sentence — the
+          date and the time were the other half of this cluster, and what is
+          left is the door into everything.
+
+          Centred ABSOLUTELY, and against the WINDOW rather than against this
+          bar: the header is the rail's flex sibling, so its own start edge is
+          the rail's inline-end edge and `left-1/2` here would sit half a rail
+          off the middle of the screen.
+
+          The layer is stretched between TWO edges — `start-[-w-rail]` and
+          `end-0` — never given a WIDTH.
+
+          It was `w-screen` pulled back by `w-rail`, and that was measurably
+          wrong: the field's centre sat 254px right of the window's on a 1920
+          screen. `w-screen` is `100vw`, and `100vw` is not the width of this
+          window — it is the width of the INITIAL containing block. It ignores
+          page zoom, so under a 1.25 zoom the layer measured 2400px inside a
+          1920px window and its centre landed 240px late; and it includes the
+          classic scrollbar, so even at 1× the axis drifts by half a gutter on
+          any platform that reserves one. A centring rule that depends on
+          whether the reader has zoomed is not a centring rule.
+
+          `fixed inset-x-0` was tried next and is WORSE HERE, for a reason worth
+          writing down: the bar carries `backdrop-filter`, and a filtered
+          ancestor becomes the containing block for its fixed descendants — so
+          `fixed` resolved against the BAR, not the viewport, and the layer came
+          back 1841px starting at the rail's edge. The glass is not negotiable
+          and neither is the centring, so `fixed` is simply the wrong tool on
+          this element.
+
+          Two edges need no width and therefore no unit that can be wrong. `end-0`
+          is this bar's own end, which IS the window's end; `start` is pulled
+          back by exactly `w-rail`, the token the rail itself renders at, so the
+          layer's start edge is the window's start edge. What is between them is
+          the window, measured by layout rather than by a viewport unit, in every
+          zoom and on every scrollbar. Below md the rail is not rendered and the
+          pull is zero, which is the same sentence with nothing to subtract.
+
+          `start-*`/`end-*` and not `left`/`right`: in Persian the rail is the
+          window's right edge, and the physical form would pull the layer off the
+          far side. The layer takes no pointer events so the trail underneath it
+          stays clickable; the field itself takes them back.
+
+          It hangs off the HEADER and not off the glass strip inside it, which
+          is the last correction and worth a line: an absolutely positioned
+          element resolves its offsets against its containing block's PADDING
+          box, and the strip carries `px-4` — so `end-0` landed a padding inside
+          the window's edge and the axis came back 14px late. The header has no
+          padding of its own, so its padding box IS the bar, and the two edges
+          mean what they say.
+        */}
+        <div
+          className="pointer-events-none absolute inset-y-0 start-0 end-0 z-30 flex items-center justify-center md:start-[calc(theme(width.rail)*-1)]"
+        >
+          <div className="pointer-events-auto">
+            {/*
+              GLOBAL SEARCH IS BACK IN THE BAR (the reference adoption): the
+              reference keeps one search box in
+              its toolbar, and it reads as the product's front door. Submit
+              goes to the search surface with the query — the box is a door,
+              not a second implementation of search.
+            */}
+            {/* audit finding, 2026-09-02: this box was a `rounded-xl bg-surface`
+                frame — the 16px TILE corner and the card's own ground — around
+                an `h-9 text-xs` field, so the product's one search box wore
+                none of `.input` and put a second radius in a bar whose other
+                controls are 8/11px. `.input` supplies the corner, the recessed
+                `bg-field` ground, the border, the inline padding and the type;
+                only the width and the focus-within (the ring belongs to the
+                form, the focus to the field inside it) are written here. */}
+            {/* ONE HEIGHT ACROSS THE ROW.
+
+                `.input` is the 40px field; every control at the other end
+                is `.btn-sm` at 34 — so the bar's one field was the only
+                element in it standing 6px taller than everything else.
+                `.input-sm` is the theme's own compact field, the same token
+                as `.btn-sm`, and it exists for exactly this: a field and a
+                button standing in one toolbar row must be level. (The clock
+                the directive paired it with is gone; the height it settled
+                is the bar's, not the pair's.)
+
+                And it is 20rem wide rather than 14: the placeholder is the
+                hint («جستجو در رکوردها، گفتگوها، تسک‌ها…» / "Search records,
+                conversations, tasks…") and at 224px it was cut mid-word, which
+                turns a promise about what can be searched into an ellipsis. */}
+            {/* IT ANSWERS IN PLACE NOW.
+
+                The box was a `<form>` written HERE that did one thing: on
+                Enter, `router.push("/search")`. That is a door with a keyhole
+                and no window — the query went away to be answered somewhere
+                else, and "is this record even in here" cost a page.
+
+                The field kept its shape, its width and its submit; what moved
+                into `GlobalSearch` is the whole of what it does after a
+                keystroke, because a panel that has to be portalled, debounced,
+                arrow-walked and closed on an outside click is not markup a
+                layout file should carry. The door still leads to `/search` —
+                it is the last row in the panel, and Enter on a query with no
+                hits still goes there. */}
+            <GlobalSearch />
+          </div>
+        </div>
+      <div className="glass-chrome relative z-20 flex h-topbar items-center gap-2 px-3 md:rounded-se-2xl md:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          {/*
+            THE PAGE'S OWN MENU, BELOW lg ONLY.
+
+            The mirror of the presence cradle at the other end of the bar: a
+            slot the shell owns and a page fills, with exactly one owner at a
+            time. Home puts its conversations hamburger here; it used to draw
+            its own strip directly under this bar, which is a second row of
+            chrome on the screen with the least room for one — and the two
+            rows were three rules on the start edge and empty space on the
+            start edge, stacked.
+
+            `empty:hidden` so the gap does not open on every route that fills
+            nothing, and `lg:hidden` because from `lg` up Home's column is on
+            screen and its door is not a door to anywhere the reader is not
+            already standing.
+          */}
+          <div
+            ref={setPageMenuAnchorRef}
+            data-page-menu-cradle
+            className="flex items-center empty:hidden lg:hidden"
+          />
           {/* The avatar LEFT this bar (user directive, 2026-09-02): the
               person and their way out live at the foot of the rail, where
               the reference puts them, and two doors to one profile is two
@@ -142,80 +271,6 @@ export function TopBar({
               The trail takes the free space rather than a fixed slot: it is
               the only element here whose width is content, and it must be
               able to truncate rather than push the controls off the bar. */}
-          {/*
-            THE CLOCK AND THE SEARCH BOX MOVED TO THIS SIDE (user directive,
-            2026-09-05: "put the date and time and also search at the other
-            side in the top menu, near to the main menu").
-
-            They were at the far end of the bar, in the cluster with the
-            theme, the locale pair and the bell — which is where a person
-            looks for SETTINGS, and neither of these is one. Against the rail
-            they read as what they are: where you are and when, and the door
-            into everything.
-
-            Order matters and is deliberate: the clock is a fixed width and
-            the trail is the only element here whose width is its content, so
-            the trail keeps `flex-1` and stays the thing that truncates. Put
-            the other way round, a long breadcrumb would push the search box
-            off the bar.
-          */}
-          <Clock />
-          {/*
-            GLOBAL SEARCH IS BACK IN THE BAR (user directive, 2026-08-31,
-            the reference adoption): the reference keeps one search box in
-            its toolbar, and it reads as the product's front door. Submit
-            goes to the search surface with the query — the box is a door,
-            not a second implementation of search.
-          */}
-          {/* audit finding, 2026-09-02: this box was a `rounded-xl bg-surface`
-              frame — the 16px TILE corner and the card's own ground — around
-              an `h-9 text-xs` field, so the product's one search box wore
-              none of `.input` and put a second radius in a bar whose other
-              controls are 8/11px. `.input` supplies the corner, the recessed
-              `bg-field` ground, the border, the inline padding and the type;
-              only the width and the focus-within (the ring belongs to the
-              form, the focus to the field inside it) are written here. */}
-          {/* ONE HEIGHT ACROSS THE ROW (user directive, 2026-09-06: "for the
-              search box and the date and time, make them the same size in
-              height as well, and make the search box a bit longer so you can
-              see all the hint in it and a little more").
-
-              `.input` is the 40px field; the clock beside it is `.btn-sm` at
-              34 and so is every control at the other end — so the bar's one
-              field was the only element in it standing 6px taller than
-              everything else. `.input-sm` is the theme's own compact field,
-              the same token as `.btn-sm`, and it exists for exactly this: a
-              field and a button standing in one toolbar row must be level.
-
-              And it is 20rem wide rather than 14: the placeholder is the
-              hint («جستجو در رکوردها، گفتگوها، تسک‌ها…» / "Search records,
-              conversations, tasks…") and at 224px it was cut mid-word, which
-              turns a promise about what can be searched into an ellipsis. */}
-          <form
-            role="search"
-            className="input-sm hidden w-80 min-w-0 items-center gap-2 focus-within:border-accent lg:flex"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const q = new FormData(e.currentTarget).get("q");
-              if (typeof q === "string" && q.trim() !== "") {
-                /* `/search`, which is where the surface lives. It pushed
-                   `/echo/search` — an address Echo's route no longer serves
-                   as a section, so the platform's one search box led
-                   nowhere. Echo's own search row is gone (this bar is the
-                   door now), which is exactly why the door had to be
-                   pointed at the room. */
-                router.push({ pathname: "/search", query: { q: q.trim() } });
-              }
-            }}
-          >
-            <IconSearch width={14} height={14} className="shrink-0 text-fg-subtle" />
-            <input
-              name="q"
-              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-fg-subtle"
-              placeholder={tPlatform("searchEverything")}
-              aria-label={tPlatform("searchEverything")}
-            />
-          </form>
           <Breadcrumbs />
         </div>
 
@@ -223,17 +278,12 @@ export function TopBar({
           {/* Conversations moved UNDER the hub's prompt box (user directive,
               round 2) — the bar carries no twin of it. */}
 
-          {/* the mini recorder docks here while a take is live (user
-              directive, 2026-08-23): beside the calendar/clock, DOM-first in
-              this end cluster = the centre-side position in BOTH directions
-              (LTR lays the cluster out left→right, RTL right→left — first
-              child lands nearest the centre either way). Empty and invisible
-              when nothing is rolling. */}
-          <div
-            ref={setRecorderAnchorRef}
-            id="neurai-topbar-recorder"
-            className="flex min-w-0 items-center empty:hidden"
-          />
+          {/* THE MINI RECORDER NO LONGER DOCKS HERE (user report, 2026-09-09:
+              "the in call is now behind the search bar"). The search box is
+              centred on the WINDOW, on a full-width absolute layer that
+              crosses this cluster, so a pill in the bar and the field were one
+              strip and the field's layer won. The pill floats over the
+              assistant column instead — see FloatingRecorder. */}
 
           {/*
             THE ASSISTANT'S DOOR, BELOW md ONLY (2026-09-03).
@@ -304,7 +354,7 @@ export function TopBar({
             href="/chat"
             title={tPlatform("chat")}
             aria-label={tPlatform("chat")}
-            className="btn btn-icon-sm hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
+            className="btn btn-icon-sm glass-raised hidden text-fg-muted hover:text-fg md:inline-flex"
           >
             {/* the RAIL'S own glyph, imported rather than redrawn: the entry
                 left the rail and the picture follows it */}
@@ -316,7 +366,7 @@ export function TopBar({
             onClick={() => storeTheme(theme === "dark" ? "light" : "dark")}
             title={tPlatform("themeToggle")}
             aria-label={tPlatform("themeToggle")}
-            className="btn btn-icon-sm hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
+            className="btn btn-icon-sm glass-raised hidden text-fg-muted hover:text-fg md:inline-flex"
           >
             {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
           </button>
@@ -325,7 +375,7 @@ export function TopBar({
               things that are not it. It hides with the controls it separates:
               below md the locale pair folds away and a rule with nothing on
               one side of it is a mark that means nothing. */}
-          <span className="mx-0.5 hidden h-5 w-px bg-border md:block" aria-hidden />
+          <span className="mx-0.5 hidden h-5 w-px bg-fg/10 md:block" aria-hidden />
 
           {/* audit finding, 2026-09-02: the two segments were a 36px,
               12px-cornered group written by hand — invisible to the control
@@ -342,10 +392,14 @@ export function TopBar({
                 type="button"
                 onClick={() => switchTo(l)}
                 aria-current={l === locale ? "true" : undefined}
-                className={`btn btn-sm border font-medium ${
+                /* the segment marks itself by FILL, not by an outline —
+                   the same move the rest of the platform made on 2026-09-08.
+                   A bordered resting segment is two hairlines in a row of
+                   controls that otherwise has none. */
+                className={`btn btn-sm font-medium ${
                   l === locale
-                    ? "border-accent bg-accent-soft font-semibold text-accent"
-                    : "border-border text-fg-muted hover:text-fg"
+                    ? "bg-accent-soft font-semibold text-accent"
+                    : "text-fg-muted hover:bg-surface-2/60 hover:text-fg"
                 }`}
               >
                 {l}

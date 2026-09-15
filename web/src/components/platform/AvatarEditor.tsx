@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The profile photo, edited in place (user directive, 2026-08-16): no
@@ -39,10 +40,8 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   async function crop(file: File) {
-    setFailed(false);
     const url = URL.createObjectURL(file);
     try {
       const img = await loadImage(url);
@@ -59,7 +58,7 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
       ctx.drawImage(img, sx, sy, side, side, 0, 0, CROP_SIZE, CROP_SIZE);
       setPreview(canvas.toDataURL("image/jpeg", 0.85));
     } catch {
-      setFailed(true);
+      notifyError(t("photoError"));
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -68,14 +67,13 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
   async function save(avatar_url: string | null) {
     if (busy) return;
     setBusy(true);
-    setFailed(false);
     try {
       // adopt the SERVER's row — the photo everyone else will see is the one
       // it stored, not the one this tab remembers
       onSaved(await api.updateProfile({ avatar_url }));
       setPreview(null);
     } catch {
-      setFailed(true);
+      notifyError(t("photoError"));
     } finally {
       setBusy(false);
     }
@@ -189,11 +187,6 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
         </div>
       ) : null}
 
-      {failed ? (
-        <p role="alert" className="mt-2 text-xs text-danger">
-          {t("photoError")}
-        </p>
-      ) : null}
     </div>
   );
 }

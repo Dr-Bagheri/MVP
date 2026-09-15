@@ -8,7 +8,7 @@ import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
 import { SkeletonLines } from "@/components/scaffold";
 import { IconCheck, IconClose } from "@/components/icons";
-import { digits, personName } from "@/lib/format";
+import { digits, personName, personPhoto } from "@/lib/format";
 
 /**
  * INVITE COLLEAGUES TO A ROOM OR A MEETING (0189).
@@ -98,7 +98,7 @@ export function InvitePeople({ kind, targetId, meId, onClose, onFailed }: {
                 on ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2"
               }`}
             >
-              <Avatar name={personName(person, locale)} size="xs" />
+              <Avatar name={personName(person, locale)} src={personPhoto(person)} size="xs" />
               <span className="min-w-0 flex-1 truncate">{personName(person, locale)}</span>
               {on ? <IconCheck width={12} height={12} /> : null}
             </button>

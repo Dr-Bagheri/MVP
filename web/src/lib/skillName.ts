@@ -52,14 +52,33 @@ export function useSkillStarters(): (skill: {
 }) => string[] {
   const t = useTranslations("skills");
   return (skill) => {
-    if (skill.level === "system" && SYSTEM_SKILL_KEYS[skill.slug]) {
-      try {
-        const raw = t.raw(`starters_${skill.slug}`);
-        if (Array.isArray(raw) && raw.every((q) => typeof q === "string")) {
-          return raw as string[];
-        }
-      } catch {
-        // no catalogue entry for this slug — the wire's own words serve
+    /*
+     * ASK THE CATALOGUE WE ARE ABOUT TO READ (review F15).
+     *
+     * This used to guard on `SYSTEM_SKILL_KEYS[skill.slug]` — a different list
+     * that happens to sit nearby. It declares five slugs; the starters
+     * catalogue carries three, because `summarizer` and `translator`
+     * deliberately ship none. So the guard answered a question about one list
+     * and the next line acted on the other, and every render of the assistant
+     * menu emitted `MISSING_MESSAGE: Could not resolve
+     * skills.starters_summarizer` — in both locales.
+     *
+     * The `try`/`catch` that wrapped this could never fire: use-intl's `raw`
+     * reports the miss through `onError` (`console.error` by default) and
+     * RETURNS the key path; it does not throw. The fallback still happened one
+     * line down, because `Array.isArray("skills.starters_translator")` is
+     * false. The right answer, reached by accident, with two errors on the
+     * console that no assertion could see — every test here read the return
+     * value, and the return value was correct in both versions.
+     *
+     * `t.has` resolves the same path and reports nothing. Asking is silent;
+     * reading is not. `SYSTEM_SKILL_KEYS` keeps its real job in
+     * `useSkillName` above.
+     */
+    if (skill.level === "system" && t.has(`starters_${skill.slug}`)) {
+      const raw = t.raw(`starters_${skill.slug}`);
+      if (Array.isArray(raw) && raw.every((q) => typeof q === "string")) {
+        return raw as string[];
       }
     }
     return skill.starter_questions;

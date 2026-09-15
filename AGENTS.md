@@ -407,7 +407,7 @@ release gate — this file's author), **backend** (core/, ml/, schema), **fronte
 session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
 
 - No `git commit` / `git push` from build sessions; the publisher reviews and
-  pushes. Local tree: `C:\Users\amirreza\Desktop\mvp`.
+  pushes.
 - **Claim before you build** (after two sessions built one screen for an
   hour on crossed messages): before starting any multi-hour piece, announce
   "starting X now" to the session owning adjacent files and wait for the
@@ -513,7 +513,7 @@ neurai.pt on Cloudflare DNS (one.com mailboxes preserved via MX copy).
 start-platform.cmd is now LOCAL DEV ONLY; the PC serves nothing. The
 old rule "one session runs the stack" applies to the SERVER now:
 service control via systemd over SSH, key ~/.ssh/neurai_hetzner. Supabase facts a session must know:
-project aqgpxnyuxukwgphrxslw; **tokens are ES256** (kid 4800f423...,
+project ref in `ECHO_DEV_PROJECT_REF` / the DPAPI store; **tokens are ES256** (kid 4800f423...,
 P-256; legacy HS256 rotated out — core verifies via JWKS, code in
 core/src/api/jwt.ts, SUPABASE_URL env required); built-in email sender
 rate-limits (~2-4/hr) — dashboard Add-user bypasses email; Site URL
@@ -611,7 +611,7 @@ sessions) for the cross-session narrative.
 - 2026-08-12: **ARCHITECTURE LOCKED by the user** (v1.0, M1–M18) after three
   review rounds + the measured Phase-0 spike. Build tracks running: web/
   (Front-end), core/ (Backend), ml/ (Backend 2), schema+RLS (Backend 3).
-  Dev Supabase live (aqgpxnyuxukwgphrxslw; keys in DPAPI store under
+  Dev Supabase live (ref and keys in the DPAPI store under
   echo_platform_*). Soniox funded; quality numbers land post-lock.
 - 2026-08-12 (later): **web/ Phase A serving** — full screen set captured,
   awaiting the user's visual-direction verdict. **db/ schema green on the dev

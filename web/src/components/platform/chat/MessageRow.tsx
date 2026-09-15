@@ -9,7 +9,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { IconAsk } from "@/components/icons";
-import { dayKeyOf, digits, formatDate, formatRelativeDate, formatTime, personName } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, formatRelativeDate, formatTime, personName, personPhoto } from "@/lib/format";
 import { MessageBody } from "./MessageBody";
 
 /**
@@ -179,7 +179,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
         <div className="flex items-center gap-2">
           {message.author_kind === "agent"
             ? <AgentAvatar handle={message.agent_handle ?? ""} size="sm" />
-            : <Avatar name={name} size="xs" />}
+            : <Avatar name={name} src={personPhoto(person)} size="xs" />}
           {/* <bdi>, not a span: a Persian name in an English row and a Latin
               one in a Persian row both drag their neighbours' punctuation to
               the wrong end of the line */}
@@ -197,7 +197,11 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
         </div>
       ) : null}
 
-      <p
+      {/* A DIV, NOT A `<p>` — an agent's turn renders markdown, and a list, a
+          table or a fence inside a paragraph is invalid HTML that React
+          reparents at hydration. Nothing else about the line changes: the
+          direction rule, the gutter and the two tones are the same. */}
+      <div
         /* THE SCREEN'S direction, never the message's (user, 2026-09-05:
            "in the fa version, in the chat box, all text must come from right
            to left, even English ones"). `auto` — and the Persian-if-any-
@@ -212,11 +216,19 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
       >
         {message.deleted
           ? t("removedMessage")
-          : <MessageBody body={message.body ?? ""} people={people} locale={locale} />}
+          : (
+            <MessageBody
+              body={message.body ?? ""}
+              people={people}
+              locale={locale}
+              /* an agent AUTHORS; a colleague TYPES — see MessageBody */
+              markdown={message.author_kind === "agent"}
+            />
+          )}
         {message.edited_at !== null && !message.deleted ? (
           <span className="ms-1 text-[10px] text-fg-subtle">{t("edited")}</span>
         ) : null}
-      </p>
+      </div>
 
       {/* THE REACTIONS, under the words — the count is the whole point, so it
           is a chip with a number and not a bare glyph */}

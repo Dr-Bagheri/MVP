@@ -12,12 +12,21 @@
 
 $ErrorActionPreference = "Stop"
 
-$server = "root@178.105.251.216"
+# The server and the path to the backend's get_key.py are properties of the
+# DEPLOYMENT and the MACHINE, not of this repository, so neither has a default:
+# an address in the repo is infrastructure disclosure, and a home directory is
+# somebody's username. Set both before running.
+#   $env:NEURAI_SERVER  = "root@<host>"
+#   $env:NEURAI_GET_KEY = "C:\path\to\Neurai-Echo\backend\scripts\get_key.py"
+$server = $env:NEURAI_SERVER
+$get    = $env:NEURAI_GET_KEY
+if (-not $server) { Write-Error "NEURAI_SERVER is not set (expected 'root@<host>')" }
+if (-not $get)    { Write-Error "NEURAI_GET_KEY is not set (path to the backend's get_key.py)" }
+
 $sshKey = Join-Path $env:USERPROFILE ".ssh\neurai_hetzner"
 
 $env:NEURAI_DATA_DIR = Join-Path $env:USERPROFILE ".neurai"
 $py  = Join-Path $env:LOCALAPPDATA "NeurAI\venv\Scripts\python.exe"
-$get = "C:\Users\amirreza\Desktop\Neurai-Echo\backend\scripts\get_key.py"
 if (-not (Test-Path $py))  { Write-Error "Secret-store python not found at $py" }
 if (-not (Test-Path $get)) { Write-Error "get_key.py not found at $get" }
 
@@ -98,6 +107,16 @@ $literals = [ordered]@{
 # from SUPABASE_URL. The var ships only when the store actually holds one;
 # requiring it here refused to deploy the exact configuration that is now
 # correct (core/src/api/main.ts makes the same choice).
+#
+# AND IT GOES ENTIRELY WHEN REVIEW F1 LANDS. Once core stops accepting HS256,
+# this writes live key material onto a host for no consumer - the residual half
+# of F1's exposure rather than a tidiness question. Deliberately NOT removed
+# ahead of F1: core still reads the var today, so dropping it here first would
+# break every deployment that has not moved to JWKS.
+#
+# All four producers and consumers, so the next person need not grep:
+# scripts/start-platform.ps1 (now optional, review F3) and this file PRODUCE
+# it; core/src/api/main.ts and core/test/api-boot.test.ts CONSUME it.
 $optional = [ordered]@{
   SUPABASE_JWT_SECRET  = "echo_platform_jwt_secret"
 }

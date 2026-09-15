@@ -12,8 +12,15 @@ update echo.app_user set username = 'sara'
  where id = '02000000-0000-4000-8000-000000000002';
 update echo.app_user set username = 'sara'
  where id = '05000000-0000-4000-8000-000000000005';
+-- the PROPERTY, never the census (rule 9's count trap): a third 'sara' in
+-- some other org — a seeded demo organisation carries one — is exactly what
+-- per-org uniqueness permits, and a literal count would report the rule
+-- broken the day it is most true.
 select t.ok(
-  (select count(*) from echo.app_user where username = 'sara') = 2,
+  (select count(*) from echo.app_user
+    where username = 'sara'
+      and id in ('02000000-0000-4000-8000-000000000002',
+                 '05000000-0000-4000-8000-000000000005')) = 2,
   'the same handle exists in two orgs — uniqueness is per org, so no cross-tenant oracle');
 
 select t.denied(

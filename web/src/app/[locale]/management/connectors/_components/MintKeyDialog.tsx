@@ -8,6 +8,7 @@ import type { User } from "@/api/types";
 import { Field } from "@/components/ui";
 import { Dialog } from "./Dialog";
 import { SecretOnce } from "./SecretOnce";
+import { notifyError } from "@/lib/notify";
 
 type Phase =
   | { step: "form" }
@@ -61,7 +62,6 @@ export function MintKeyDialog({
   const [actorId, setActorId] = useState("");
   const [allowAssistant, setAllowAssistant] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const actor = members.find((m) => m.id === actorId);
 
@@ -70,26 +70,24 @@ export function MintKeyDialog({
     setName("");
     setActorId("");
     setAllowAssistant(false);
-    setError(null);
   }
 
   async function mint() {
     const trimmed = name.trim();
     if (trimmed === "") {
-      setError(t("nameRequired"));
+      notifyError(t("nameRequired"));
       return;
     }
     if (actorId === "") {
-      setError(t("actorRequired"));
+      notifyError(t("actorRequired"));
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       const created = await api.createGatewayKey(trimmed, allowAssistant, actorId);
       setPhase({ step: "minted", token: created.token, name: created.name });
     } catch {
-      setError(t("failed"));
+      notifyError(t("failed"));
     } finally {
       setBusy(false);
     }
@@ -195,8 +193,6 @@ export function MintKeyDialog({
               {t("capabilitiesImmutable")}
             </p>
           </div>
-
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
 
           <div className="flex justify-end gap-2">
             <button

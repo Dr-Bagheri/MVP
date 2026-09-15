@@ -1,3 +1,4 @@
+import { personFixture } from "@/test/fixtures";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -62,14 +63,14 @@ const LABELS: TaskLabelRecord[] = [
   { id: "lab-2", name: "محصول", color: "blue" },
 ];
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner", username: "u-me" },
+  personFixture({ id: "u-me", display_name: "سینا", display_name_en: null, role: "owner", username: "u-me" }),
 ];
 
 /** producer-shaped (core/src/api/tasks.ts CARD_ROWS) */
 function card(over: Partial<TaskCardRecord>): TaskCardRecord {
   return {
     id: "t-1", column_id: "col-todo", topic_id: null, call_id: null,
-    call_title: null, title: "اجرای اسکریپت", priority: "medium", labels: [],
+    call_title: null, meeting_id: null, meeting_title: null, title: "اجرای اسکریپت", priority: "medium", labels: [],
     due_at: null, done: false, position: 1, archived: false,
     created_by: "u-me", assignee_ids: [], label_ids: [], checklist_done: 0,
     checklist_total: 0, comment_count: 0, created_at: "2026-08-31T10:00:00Z",
@@ -188,6 +189,23 @@ async function holdAndDrop(cardEl: HTMLElement, target: HTMLElement): Promise<vo
   } finally {
     document.elementFromPoint = original;
   }
+}
+
+/**
+ * A LIFT THAT IS STILL IN THE AIR — the half of the gesture `holdAndDrop`
+ * skips past. Returns the release, so a test can look at the board while a
+ * card is being carried and then put it down.
+ */
+async function liftOver(cardEl: HTMLElement, target: HTMLElement): Promise<() => void> {
+  const original = document.elementFromPoint;
+  document.elementFromPoint = () => target;
+  fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 40)); });
+  await act(async () => { fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1 }); });
+  return () => {
+    fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
+    document.elementFromPoint = original;
+  };
 }
 
 describe("TaskBoard", () => {
@@ -459,6 +477,67 @@ describe("TaskBoard", () => {
       updateTaskColumn,
       "dragging one card repositioned its whole column",
     ).not.toHaveBeenCalled();
+  });
+
+  it("the carried card rides ON THE BODY, not inside its column", async () => {
+    /*
+     * User report, 2026-09-09: "dragging a task should animate to be hover on
+     * top of the cards and not inside the container cards."
+     *
+     * The card used to be transformed WHERE IT SAT with a `z-50`, and neither
+     * half of that could work on this board: the column's card list is
+     * `overflow-y-auto`, so the card was clipped at its edge, and every column
+     * wears `.glass` — a `backdrop-filter` is a stacking context, so no
+     * z-index inside one can rise above the column beside it. Both are facts
+     * about LAYOUT, which jsdom does not have; what this test can hold is the
+     * fact that makes them irrelevant — the thing under the hand is parked on
+     * the body, outside every column. If it is ever put back inside one, the
+     * clipping and the stacking come back with it.
+     */
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    const release = await liftOver(cardEl, columnRegion("در حال انجام"));
+
+    const ghost = document.querySelector("[data-drag-ghost]");
+    expect(ghost, "nothing was raised for the hand to carry").not.toBeNull();
+    expect(ghost!.parentElement, "the carried card is still inside a column").toBe(document.body);
+    expect(ghost!.closest("[data-column]")).toBeNull();
+    /* and it is not a second card as far as anything reading the page is
+       concerned — the real one is still in the tree */
+    expect(ghost!.getAttribute("aria-hidden")).toBe("true");
+    expect(ghost!.querySelector("[data-card]")).toBeNull();
+
+    await act(async () => { release(); });
+    expect(document.querySelector("[data-drag-ghost]"), "the ghost outlived the drop").toBeNull();
+  });
+
+  it("the column under the pointer MAKES SPACE, and gives it back", async () => {
+    /* the other half of the same report: "should make space for it in the
+       other columns". The space is the card's own measured height, held open
+       at the top of the column — which is where a dropped card lands, since
+       `moveTask` writes a position ahead of everything already there. */
+    boardTasks = [
+      card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo" }),
+      card({ id: "t-2", title: "بازبینی قرارداد", column_id: "col-doing" }),
+    ];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    const doing = columnRegion("در حال انجام");
+    expect(doing.querySelector("[data-slot]"), "a slot before anything was lifted").toBeNull();
+
+    const release = await liftOver(cardEl, doing);
+    expect(doing.querySelector("[data-slot]"), "the column made no room").not.toBeNull();
+    /* the column it CAME from keeps the card's own box instead of a second
+       slot — one card in the air, one space, wherever the pointer has it */
+    expect(columnRegion("برای انجام").querySelector("[data-slot]")).toBeNull();
+
+    await act(async () => { release(); });
+    await waitFor(() => expect(doing.querySelector("[data-slot]")).toBeNull());
   });
 
   it("THE CONTROL: dragging a COLUMN still moves the column", async () => {

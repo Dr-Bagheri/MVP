@@ -8,13 +8,15 @@ import { ProjectDetail } from "./ProjectDetail";
 import { ProjectDialog } from "./ProjectDialog";
 import { useHoldDrag, type HoldDragHandlers } from "./board/holdDrag";
 import { ConfirmDialog } from "@/components/rowActions";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import {
-  BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER, BOARD_HEADER_END,
-  BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardTone,
+  BOARD_CARD, BOARD_CARDS, BOARD_CARD_SLOT, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
+  BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardSlot,
+  BoardTone,
 } from "./board/boardStyle";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
+import { useSeededName } from "@/lib/seededNames";
 import type {
   OrgPersonRecord, ProjectRecord,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord,
@@ -26,7 +28,7 @@ import {
   IconPeople3, IconPlus,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
-import { dayKeyOf, digits, formatDate, monthGridAt, personName } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, monthGridAt, personName, personPhoto } from "@/lib/format";
 
 /** what `api.taskBoard()` answers — the shape this screen reads it for */
 type Board = {
@@ -103,7 +105,6 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
   const [sort, setSort] = useState<Sort>("recent");
   const [dueToday, setDueToday] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   /** a project dropped on a column, waiting for the person to confirm what moves */
   const [pendingMove, setPendingMove] = useState<{ project: ProjectRecord; columnId: string; tasks: TaskCardRecord[] } | null>(null);
   const [moving, setMoving] = useState(false);
@@ -185,7 +186,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         await api.updateTask(task.id, { column_id: pendingMove.columnId, position: -Date.now() });
       }
     } catch {
-      setError(t("writeFailed"));
+      notifyError(t("writeFailed"));
     } finally {
       setMoving(false);
       setPendingMove(null);
@@ -294,12 +295,6 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         ) : null}
       </div>
 
-      {error !== null ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {error}
-        </p>
-      ) : null}
-
       {/* ── the views ────────────────────────────────────────────────── */}
       {rows === null ? (
         <SkeletonCards count={3} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" height="h-36" />
@@ -407,8 +402,19 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
   onMove: (project: ProjectRecord, columnId: string) => void;
 }) {
   const t = useTranslations("projects");
-  /** the card in the air, and the column under the pointer (holdDrag) */
-  const [lifted, setLifted] = useState<{ id: string; over: string | null } | null>(null);
+  /* R17 says this board and the task board are ONE board. That has to reach
+     the column's NAME too: these are the task board's own columns, read from
+     its own endpoint, and TaskBoard localizes the four seeded ones — so
+     without this the same column read «بک‌لاگ» here and "Backlog" one click
+     away, which is the two-spellings defect wearing a heading. */
+  const seededName = useSeededName();
+  /** the card in the air: which one, the column it came from, the column
+      under the pointer, and its measured height — the board holds a slot that
+      size open where the card is going (holdDrag). R17: the same four facts
+      the task board keeps, because it is the same gesture. */
+  const [lifted, setLifted] = useState<
+    { id: string; from: string; over: string | null; height: number } | null
+  >(null);
   return (
     /* THE BOARD, from the board's own module (R17, user ruling 2026-09-05:
        "two same kanban tables … supposed to be the same but they are
@@ -425,13 +431,13 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
             key={col.id}
             data-column={col.id}
             className={`${BOARD_COLUMN} ${lifted !== null && lifted.over === col.id ? "ring-2 ring-accent/60" : ""}`}
-            aria-label={col.name}
+            aria-label={seededName(col.name)}
           >
             <header className={BOARD_HEADER}>
               <span className={BOARD_HEADER_START}>
                 <BoardTone tone={col.tone} />
                 <h2 className={BOARD_TITLE}>
-                  <bdi>{col.name}</bdi>
+                  <bdi>{seededName(col.name)}</bdi>
                 </h2>
               </span>
               <span className={BOARD_HEADER_END}>
@@ -439,15 +445,22 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
               </span>
             </header>
             <div className={BOARD_CARDS}>
+              {/* the space made for a card on its way in from another column */}
+              {lifted !== null && lifted.over === col.id && lifted.from !== col.id
+                ? <BoardSlot height={lifted.height} />
+                : null}
               {here.map((p) => (
                 <DraggableProjectCard
                   key={p.id}
                   project={p}
                   people={people}
                   locale={locale}
-                  lifted={lifted !== null && lifted.id === p.id}
-                  onLift={() => setLifted({ id: p.id, over: null })}
-                  onOver={(over) => setLifted((cur) => (cur !== null && cur.id === p.id ? { id: cur.id, over } : cur))}
+                  carried={
+                    lifted === null || lifted.id !== p.id ? "no"
+                      : lifted.over === col.id || lifted.over === null ? "slot" : "away"
+                  }
+                  onLift={(size) => setLifted({ id: p.id, from: col.id, over: col.id, height: size.height })}
+                  onOver={(over) => setLifted((cur) => (cur !== null && cur.id === p.id ? { ...cur, over } : cur))}
                   onDrop={(over) => {
                     setLifted(null);
                     if (over !== null && over !== col.id) onMove(p, over);
@@ -473,18 +486,18 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
 
 /** the kanban's card with a hand on it — one hook per card, which is why it
     is its own component rather than a loop body */
-function DraggableProjectCard({ project, people, locale, lifted, onLift, onOver, onDrop, onCancel }: {
+function DraggableProjectCard({ project, people, locale, carried, onLift, onOver, onDrop, onCancel }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
   locale: string;
-  lifted: boolean;
-  onLift: () => void;
+  carried: "no" | "slot" | "away";
+  onLift: (size: { width: number; height: number }) => void;
   onOver: (columnId: string | null) => void;
   onDrop: (columnId: string | null) => void;
   onCancel: () => void;
 }) {
   const drag = useHoldDrag({ onLift, onOver, onDrop, onCancel });
-  return <ProjectCard project={project} people={people} locale={locale} compact drag={drag} lifted={lifted} />;
+  return <ProjectCard project={project} people={people} locale={locale} compact drag={drag} carried={carried} />;
 }
 
 /** the board's list view, one row per project */
@@ -530,7 +543,7 @@ function ProjectList({ projects, cardsOf, people, locale }: {
                 stack the header draws further down */}
             <span className="flex shrink-0 items-center gap-0 [&>*+*]:-ms-1.5">
               {members.slice(0, 3).map((m) => (
-                <Avatar key={m.id} name={personName(m, locale)} size="xs" />
+                <Avatar key={m.id} name={personName(m, locale)} src={personPhoto(m)} size="xs" />
               ))}
             </span>
           </Link>
@@ -634,7 +647,7 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
   );
 }
 
-function ProjectCard({ project, people, locale, compact = false, drag, lifted = false }: {
+function ProjectCard({ project, people, locale, compact = false, drag, carried = "no" }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
   locale: string;
@@ -644,7 +657,10 @@ function ProjectCard({ project, people, locale, compact = false, drag, lifted = 
   compact?: boolean;
   /** the kanban's hand (holdDrag) — absent on the list and the calendar */
   drag?: HoldDragHandlers;
-  lifted?: boolean;
+  /** "slot" while this card is in the air over its own column, "away" once the
+      pointer has taken it to another one — see TaskBoard's Card for why the
+      element is emptied rather than unmounted */
+  carried?: "no" | "slot" | "away";
 }) {
   const t = useTranslations("projects");
   const ratio = progressOf(project);
@@ -676,7 +692,9 @@ function ProjectCard({ project, people, locale, compact = false, drag, lifted = 
         compact
           ? /* on the board it is the board's card — the box a task sits in,
                read from the same module (R17) */
-            `${BOARD_CARD} flex flex-col gap-1.5 ${lifted ? "relative z-50 cursor-grabbing ring-2 ring-accent shadow-island" : ""}`
+            `${BOARD_CARD} flex flex-col gap-1.5 ${
+              carried === "away" ? "hidden" : carried === "slot" ? BOARD_CARD_SLOT : ""
+            }`
           : "tile flex flex-col gap-3 p-4 transition-colors hover:border-accent/40"
       }
     >
@@ -731,10 +749,13 @@ function ProjectCard({ project, people, locale, compact = false, drag, lifted = 
       <div className="flex items-center justify-between gap-2">
         {/* the roster, overlapped the way a shared thing reads — a
             negative logical margin on every avatar but the first, so the
-            stack leans the right way in both directions */}
-        <div className="flex items-center gap-0 [&>*+*]:-ms-1.5">
+            stack leans the right way in both directions. 4px, not 6: the
+            mark is 20px with its initial at the centre and a 2px surface
+            ring on the circle in front, so a deeper overlap cuts the letter
+            behind it in half (PeopleStack in Meetings.tsx has the sums) */}
+        <div className="flex items-center gap-0 [&>*+*]:-ms-1">
           {members.slice(0, 4).map((m) => (
-            <Avatar key={m.id} name={personName(m, locale)} size="xs" className="ring-2 ring-surface" />
+            <Avatar key={m.id} name={personName(m, locale)} src={personPhoto(m)} size="xs" ring="surface" />
           ))}
           {members.length > 4 ? (
             <span className="badge-num ms-1 text-[11px] text-fg-muted">

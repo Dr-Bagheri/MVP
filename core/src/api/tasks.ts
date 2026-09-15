@@ -100,6 +100,18 @@ export interface OrgPersonRecord {
    * email may not.
    */
   username: string | null;
+  /**
+   * Their profile picture as a `data:` URL, or null for the initials.
+   *
+   * Same shape the account's own mark reads (`MeRecord.avatar_url`, and the
+   * only shape `PATCH /v1/members/:id` accepts): an https URL is refused on
+   * purpose, so the product never renders an image it does not hold from an
+   * origin someone else picked.
+   *
+   * It rides the ROSTER and nothing else — see `people()` below for why a
+   * record that merely names a person does not carry it.
+   */
+  avatar_url: string | null;
 }
 
 export interface TaskColumnRecord {
@@ -122,6 +134,12 @@ export interface TaskCardRecord {
       card can say «از جلسه: …» without a second fetch */
   call_id: string | null;
   call_title: string | null;
+  /** the MEETING that owns the record (2026-09-08): resolved through
+      echo.meeting.call_id under the reader's own RLS, so a task made from an
+      action item can lead back to the meeting page rather than the raw call;
+      both null when the call has no meeting or the meeting is not readable */
+  meeting_id: string | null;
+  meeting_title: string | null;
   title: string;
   priority: TaskPriority;
   labels: string[];
@@ -175,6 +193,7 @@ const DEFAULT_COLUMNS: ReadonlyArray<{ name_fa: string; tone: TaskColumnTone }> 
 
 const CARD_ROWS = `
   select t.id, t.column_id, t.topic_id, t.call_id, c.title as call_title,
+         mt.id as meeting_id, mt.title as meeting_title,
          t.title, t.priority, t.labels, t.due_at, t.done_at, t.position,
          t.archived_at, t.created_by, t.created_at, t.recurrence_id,
          coalesce(ch.total, 0) as checklist_total,
@@ -184,6 +203,14 @@ const CARD_ROWS = `
          coalesce(lbl.ids, '{}') as label_ids
     from echo.task t
     left join echo.call c on c.id = t.call_id
+    /* the newest live meeting on the record — LEFT and LATERAL so a task
+       from a plain upload stays a task, and a second meeting re-using the
+       call (rare, allowed) cannot double the card */
+    left join lateral (
+      select m.id, m.title from echo.meeting m
+       where m.call_id = t.call_id and m.archived_at is null
+       order by m.created_at desc limit 1
+    ) mt on true
     left join lateral (
       select count(*) as total, count(*) filter (where done) as done
         from echo.task_checklist_item i where i.task_id = t.id
@@ -222,6 +249,8 @@ function toCard(row: Record<string, unknown>): TaskCardRecord {
     topic_id: (row.topic_id as string | null) ?? null,
     call_id: (row.call_id as string | null) ?? null,
     call_title: (row.call_title as string | null) ?? null,
+    meeting_id: (row.meeting_id as string | null) ?? null,
+    meeting_title: (row.meeting_title as string | null) ?? null,
     recurrence_id: (row.recurrence_id as string | null) ?? null,
     title: String(row.title),
     priority: row.priority as TaskPriority,
@@ -1092,11 +1121,21 @@ export function createTasksRepo(db: Db) {
     );
   }
 
-  /** the org roster for the assignee picker — names and role, nothing else */
+  /**
+   * The org roster: names, role, handle — and the PHOTO.
+   *
+   * The photo is here rather than on each record that names a person
+   * (`MeetingAttendee`, a comment's author, a project's member list) for one
+   * measured reason: an avatar is a `data:` URL of about 8 KB, so a meeting
+   * list carrying it per attendee per row sends the same picture back a dozen
+   * times in one response. The roster is fetched ONCE per surface and every
+   * mark on the screen resolves against it by `id`, which is also what makes
+   * a person's face the same face wherever they appear.
+   */
   async function people(identity: Identity): Promise<OrgPersonRecord[]> {
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
-        `select id, display_name, display_name_en, role, username
+        `select id, display_name, display_name_en, role, username, avatar_url
            from echo.app_user
           where org_id = echo.actor_org_id() and status = 'active'
           order by display_name`,
@@ -1107,6 +1146,7 @@ export function createTasksRepo(db: Db) {
         display_name_en: (r.display_name_en as string | null) ?? null,
         role: String(r.role ?? "member"),
         username: (r.username as string | null) ?? null,
+        avatar_url: (r.avatar_url as string | null) ?? null,
       }));
     });
   }
@@ -1242,3 +1282,5 @@ export function createTasksRepo(db: Db) {
     setRecurrence,
   };
 }
+
+export type TasksRepo = ReturnType<typeof createTasksRepo>;

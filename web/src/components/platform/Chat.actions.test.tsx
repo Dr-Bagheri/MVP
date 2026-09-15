@@ -1,3 +1,4 @@
+import { personFixture } from "@/test/fixtures";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,8 +97,8 @@ function message(over: Partial<ChatMessageRecord>): ChatMessageRecord {
 }
 
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "sina" },
-  { id: "u-2", display_name: "مریم", display_name_en: null, role: "member", username: "maryam" },
+  personFixture({ id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "sina" }),
+  personFixture({ id: "u-2", display_name: "مریم", display_name_en: null, role: "member", username: "maryam" }),
 ];
 
 import { Chat } from "./Chat";

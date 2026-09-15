@@ -28,14 +28,13 @@ export { NotActivatedError, UnauthenticatedError } from "./errors.ts";
 export interface AuthOptions {
   db: Db;
   /**
-   * Shared secret for legacy HS256 projects — from env, never a literal
-   * (invariant 7). OPTIONAL: a project on asymmetric signing keys has none,
-   * and requiring it would refuse to start the configuration that is now
-   * correct.
+   * JWKS endpoint. **REQUIRED** (review F1, 2026-09-08).
+   *
+   * A `jwtSecret` for legacy HS256 projects stood beside this and is gone with
+   * the branch that read it. Required rather than optional-with-a-runtime-check
+   * so a caller who forgets it fails at `tsc`, not at the first request.
    */
-  jwtSecret?: string | undefined;
-  /** JWKS endpoint for ES256 projects. At least one of the two is required. */
-  jwksUrl?: string | undefined;
+  jwksUrl: string;
   /** Optional issuer/audience pinning. */
   issuer?: string | undefined;
   /**
@@ -62,8 +61,8 @@ export interface AuthedRequest {
  */
 const LAST_SEEN_STALE_SECONDS = 300;
 
-export function createAuth({ db, jwtSecret, jwksUrl, issuer, isPlatformRoot }: AuthOptions) {
-  const verify = createVerifier({ secret: jwtSecret, jwksUrl, issuer });
+export function createAuth({ db, jwksUrl, issuer, isPlatformRoot }: AuthOptions) {
+  const verify = createVerifier({ jwksUrl, issuer });
 
   /** Skip the round trip entirely for callers we stamped recently. */
   const stampedAt = new Map<string, number>();

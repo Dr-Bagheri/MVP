@@ -1125,6 +1125,37 @@ export const STARTER_WORKFLOWS = {
       ],
     },
   },
+  /*
+   * ── Echo's own shelf (2026-09-08) ──────────────────────────────────
+   *
+   * The first starter the ASSISTANT installs on a person's behalf rather
+   * than one an agent's page offers: when a task came out of a recurring
+   * meeting, Echo offers to put a digest of the open board in the bell
+   * before the next one. Manual trigger on purpose — the cadence is a
+   * `workflow_schedule` row attached AFTER install (the agent's
+   * schedule_workflow tool / POST /v1/workflows/:ref/schedule), so the
+   * same starter serves a weekly Monday-morning digest and a one-off
+   * "run it now". `search scope:"tasks"` is the owner's board read-only;
+   * `notify.from` carries the ask's text into the card, which is the
+   * whole point of a digest — a title-only card would say "Tasks digest"
+   * and nothing else.
+   */
+  tasks_digest: {
+    handle: "wf-starter-tasks-digest",
+    name: "خلاصهٔ کارها پیش از جلسهٔ هفتگی",
+    description: "پیش از جلسهٔ هفتگی، کارهای باز شما به ترتیب فوریت جمع می‌شود — چه چیزی عقب افتاده، چه چیزی همین هفته موعد دارد، و چه چیزی می‌تواند صبر کند.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "tasks", limit: 50 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "از فهرست کارهای باز در ادامه یک خلاصهٔ کوتاه بنویس، دسته‌بندی‌شده بر اساس فوریت: اول «از موعد گذشته»، بعد «موعد این هفته»، بعد «بقیه». برای هر کار عنوان، ستون و موعدش را بیاور و اگر مسئول دارد نامش را. فقط از همین فهرست استفاده کن و چیزی اضافه نکن. متن ساده بنویس، بدون مارک‌داون. به زبان خودِ کارها و کاربر بنویس: اگر عنوان کارها انگلیسی است، به انگلیسی جواب بده (Reply in English when the tasks are in English)؛ اگر فارسی است، به فارسی. اگر کاری باز نیست، همین را در یک جمله بگو." },
+        { id: "s3", kind: "notify", card: "workflow_result", from: "{{s2}}" },
+      ],
+    },
+  },
 } as const;
 export type StarterKey = keyof typeof STARTER_WORKFLOWS;
 
@@ -1146,7 +1177,12 @@ export type StarterKey = keyof typeof STARTER_WORKFLOWS;
  * real, and the 21 assignments partitioning the registry — an unassigned
  * starter is a shelf item no door leads to.
  */
-export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep" | "sales" | "interview" | "manager" | "recorder" | "commitments", readonly StarterKey[]>> = {
+export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep" | "sales" | "interview" | "manager" | "recorder" | "commitments" | "echo", readonly StarterKey[]>> = {
+  /* Echo's own shelf (2026-09-08): the platform assistant is not one of
+     the seven-a-piece agents — it installs a starter when a conversation
+     calls for one (the recurring-meeting nudge in runtime.ts). Not a
+     seven; the test names it as the one group allowed to be short. */
+  echo: ["tasks_digest"],
   /* the 2026-08-29 wave: the recording itself as a subject. Seeded as
      system agents in db/0139. `recorder` is about the take that just
      happened; `commitments` reads ACROSS takes, which is why its starters

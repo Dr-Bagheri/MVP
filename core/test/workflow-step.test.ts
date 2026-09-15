@@ -441,3 +441,128 @@ describe("the fence and the contract", () => {
     expect(JSON.parse(contract)).toEqual({ topics: ["متن"] });
   });
 });
+
+/* ── 6. the tasks scope and the card that carries its body (2026-09-08) ─── */
+
+const DIGESTY = {
+  entry: "s1",
+  steps: [
+    { id: "s1", kind: "search", scope: "tasks", limit: 50 },
+    { id: "s2", kind: "ask", from: "{{s1}}", instruction: "خلاصه کن." },
+    { id: "s3", kind: "notify", card: "workflow_result", from: "{{s2}}" },
+  ],
+};
+
+const COLUMN_TODO = "c0000000-0000-4000-8000-000000000001";
+const COLUMN_DOING = "c0000000-0000-4000-8000-000000000002";
+const FOLDER_WEEKLY = "f0000000-0000-4000-8000-000000000001";
+
+/** a board the way tasks.ts's CARD_ROWS returns it — its own column names */
+function boardRows(sql: string): unknown[] | undefined {
+  if (/from echo\.task_column/i.test(sql)) {
+    return [
+      { id: COLUMN_TODO, name: "برای انجام", tone: "neutral", position: 1 },
+      { id: COLUMN_DOING, name: "در حال انجام", tone: "info", position: 2 },
+    ];
+  }
+  if (/from echo\.task_topic/i.test(sql)) return [{ id: FOLDER_WEEKLY, name: "جلسهٔ هفتگی" }];
+  if (/from echo\.task t/i.test(sql)) {
+    const base = {
+      call_id: null, call_title: null, recurrence_id: null, labels: [], position: 1,
+      archived_at: null, created_by: OWNER, label_ids: [], checklist_done: 0,
+      checklist_total: 0, comment_count: 0, created_at: "2026-09-01T00:00:00.000Z",
+    };
+    return [
+      { ...base, id: "t1", column_id: COLUMN_DOING, topic_id: FOLDER_WEEKLY,
+        title: "Send the Q3 numbers", priority: "high", due_at: "2026-09-12T00:00:00.000Z",
+        done_at: null, assignee_ids: [OWNER], call_title: "Weekly sync" },
+      { ...base, id: "t2", column_id: COLUMN_TODO, topic_id: null,
+        title: "Book the room", priority: "normal", due_at: null, done_at: null, assignee_ids: [] },
+      /* DONE — must not appear in a digest of what is still open */
+      { ...base, id: "t3", column_id: COLUMN_DOING, topic_id: null,
+        title: "Already shipped", priority: "low", due_at: null,
+        done_at: "2026-09-02T00:00:00.000Z", assignee_ids: [] },
+    ];
+  }
+  return undefined;
+}
+
+describe("search scope:\"tasks\" — the owner's board, open cards, names not ids", () => {
+  it("emits open tasks with column and folder resolved, and leaves the done pile out", async () => {
+    const base = scenario({ graph: DIGESTY });
+    const { db, calls } = scriptedDb((sql, params) => boardRows(sql) ?? base(sql, params));
+    const { queue, sent } = fakeQueue();
+    await createWorkflowStep({ db, queue }).handle(payload("s1"), { attempt: 1, log: silentLog });
+
+    const outputInsert = writes(calls).find((c) => /workflow_step_output/i.test(c.sql));
+    const output = JSON.parse(String(outputInsert!.params[3])) as { results: Record<string, unknown>[] };
+    expect(output.results.map((r) => r.id)).toEqual(["t1", "t2"]);
+    expect(output.results[0]).toEqual({
+      id: "t1", title: "Send the Q3 numbers", column: "در حال انجام", priority: "high",
+      deadline: "2026-09-12T00:00:00.000Z", assignees: [OWNER], folder: "جلسهٔ هفتگی",
+      labels: [], from_meeting: "Weekly sync",
+    });
+    expect(output.results[1]).toMatchObject({ column: "برای انجام", folder: null });
+    expect(sent[0]!.body.stepId).toBe("s2");
+  });
+
+  it("reads the board and NEVER seeds it — a read tool must not write (list_tasks's rule)", async () => {
+    const base = scenario({ graph: DIGESTY });
+    /* an empty board: the seeding branch would insert the default columns */
+    const { db, calls } = scriptedDb((sql, params) =>
+      /from echo\.task_column|from echo\.task_topic|from echo\.task t/i.test(sql) ? [] : base(sql, params));
+    const { queue } = fakeQueue();
+    await createWorkflowStep({ db, queue }).handle(payload("s1"), { attempt: 1, log: silentLog });
+    expect(writes(calls).filter((c) => /task_column/i.test(c.sql))).toEqual([]);
+    const outputInsert = writes(calls).find((c) => /workflow_step_output/i.test(c.sql));
+    expect(JSON.parse(String(outputInsert!.params[3]))).toEqual({ results: [] });
+  });
+});
+
+describe("notify — the card carries the bound text (2026-09-08)", () => {
+  const SESSION = "5e000000-0000-4000-8000-000000000005";
+  const DIGEST = "Overdue:\n- Send the Q3 numbers (in progress, due 12 Sep)\n\nThis week:\n- Book the room";
+
+  it("with `from`, writes a conversation holding the text and a card pointing at it — signal-step's shape", async () => {
+    const base = scenario({ graph: DIGESTY, outputs: { s2: { text: DIGEST } } });
+    const { db, calls } = scriptedDb((sql, params) => {
+      if (/insert into echo\.agent_session/i.test(sql)) return [{ id: SESSION }];
+      if (/insert into echo\.agent_message/i.test(sql)) {
+        return [{ id: "m1", session_id: SESSION, seq: 0, role: "assistant",
+          content: String(params[3]), tool_calls: [], agent_run_id: null, author: null,
+          created_at: "2026-09-08T08:00:00.000Z" }];
+      }
+      return base(sql, params);
+    });
+    const { queue } = fakeQueue();
+    await createWorkflowStep({ db, queue }).handle(payload("s3"), { attempt: 1, log: silentLog });
+
+    const message = writes(calls).find((c) => /insert into echo\.agent_message/i.test(c.sql))!;
+    expect(message.params[0]).toBe(SESSION);
+    expect(message.params[2]).toBe("assistant");
+    expect(message.params[3]).toBe(DIGEST);          // the text, as-is — not fenced
+    const card = writes(calls).find((c) => /insert into echo\.agent_card/i.test(c.sql))!;
+    expect(card.sql).toMatch(/session_id/);
+    expect(card.params).toEqual([ORG, OWNER, "workflow_result", "پذیرش", SESSION]);
+  });
+
+  it("control: without `from`, the title-only card — no conversation is opened", async () => {
+    const { db, calls } = scriptedDb(scenario({ graph: LINEAR, stepStatus: { s1: "done" } }));
+    const { queue } = fakeQueue();
+    await createWorkflowStep({ db, queue }).handle(payload("s2"), { attempt: 1, log: silentLog });
+    expect(writes(calls).some((c) => /agent_session|agent_message/i.test(c.sql))).toBe(false);
+    const card = writes(calls).find((c) => /insert into echo\.agent_card/i.test(c.sql))!;
+    expect(card.sql).not.toMatch(/session_id/);
+    expect(card.params).toEqual([ORG, OWNER, "workflow_result", "پذیرش"]);
+  });
+
+  it("a body that resolves to nothing is the named forfeit, never an empty card", async () => {
+    const base = scenario({ graph: DIGESTY, outputs: { s2: { text: "   " } } });
+    const { db, calls } = scriptedDb(base);
+    const { queue } = fakeQueue();
+    await createWorkflowStep({ db, queue }).handle(payload("s3"), { attempt: 1, log: silentLog });
+    expect(writes(calls).some((c) => /agent_card|agent_session/i.test(c.sql))).toBe(false);
+    const failed = writes(calls).find((c) => /update echo\.workflow_run/i.test(c.sql) && /binding_unresolved/.test(JSON.stringify(c.params)));
+    expect(failed, "the run is failed with binding_unresolved").toBeDefined();
+  });
+});

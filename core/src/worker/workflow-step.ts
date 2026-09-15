@@ -39,6 +39,8 @@
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
+import { createSessionsRepo } from "../api/sessions.ts";
+import { createTasksRepo } from "../api/tasks.ts";
 import type { Identity } from "../agent/types.ts";
 import { resolveIdentity, UnknownActorError } from "../db/actor.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
@@ -593,6 +595,35 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
             order by call_id, version desc limit $1`, [limit]));
       return { kind: "output", output: { results: rows.map((r) => ({ call_id: r.call_id, body: r.body.slice(0, 2000) })) } };
     }
+    if (scope === "tasks") {
+      /*
+       * THE OWNER'S BOARD, read exactly the way the assistant's list_tasks
+       * reads it (platform-tools.ts): `seed:false`, because a read must not
+       * build the board it did not find. Open cards only — a digest of
+       * what is still to do has no use for the done pile — and the columns
+       * and folders resolved to their NAMES, so the model downstream never
+       * sees an id it would have to guess the meaning of.
+       */
+      const board = await createTasksRepo(db).board(identity, { seed: false });
+      const columnOf = new Map(board.columns.map((c) => [c.id, c.name]));
+      const folderOf = new Map(board.topics.map((t) => [t.id, t.name]));
+      const open = board.tasks.filter((task) => !task.done && !task.archived);
+      const results = open.slice(0, limit).map((task) => ({
+        id: task.id,
+        title: task.title,
+        column: columnOf.get(task.column_id) ?? null,
+        priority: task.priority,
+        deadline: task.due_at,
+        assignees: task.assignee_ids,
+        folder: task.topic_id === null ? null : folderOf.get(task.topic_id) ?? null,
+        labels: task.labels,
+        from_meeting: task.call_title,
+      }));
+      const output: Record<string, unknown> = { results };
+      /* the truncation is a fact the digest should be able to state */
+      if (open.length > results.length) output.more = open.length - results.length;
+      return { kind: "output", output };
+    }
     // transcript — needs its call, from the binding
     const of = context.step.of;
     if (typeof of !== "string") {
@@ -925,19 +956,73 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
     return { kind: "output", output: { applied: true, title: proposal.payload.title } };
   },
 
-  /** a dock card into the OWNER's own channel — titles only */
+  /**
+   * A dock card into the OWNER's own channel. Title-only when nothing is
+   * bound (every graph before 2026-09-08); with `from`, the bound step's
+   * text becomes the card's BODY the way signal-step's writeCard delivers a
+   * brief — a conversation holding the text as an assistant turn, and the
+   * card pointing at it — so a digest is readable from the bell and can be
+   * asked about in place. The text is not fenced: nobody but its owner reads
+   * it, and it is never put in front of a model here.
+   */
   async notify(context) {
     const kind = String(context.step.card);
+    const title = context.run.workflow_name.slice(0, 200);
+    const body = await notifyBody(context);
+    if (body === null) {
+      await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `insert into echo.agent_card (org_id, owner_id, kind, title)
+           values ($1, $2, $3, $4)`,
+          [context.identity.orgId, context.identity.userId, kind, title],
+        ));
+      return { kind: "effect" };
+    }
+    const sessions = createSessionsRepo(context.db);
+    /* db/0221: agent-opened — the notify's body needs a home the card can
+       point at, and a workflow run is the plainest machine-initiated write in
+       the product. The `workflow_run` keeps the audit trail; this row only
+       holds the text. */
+    const conversation = await sessions.resolveForAsk(context.identity, null, title, "agent");
+    await sessions.append(context.identity, {
+      sessionId: conversation.id, role: "assistant", content: body,
+    });
     await context.db.withIdentity(context.identity, (tx: SqlTx) =>
       tx.unsafe(
-        `insert into echo.agent_card (org_id, owner_id, kind, title)
-         values ($1, $2, $3, $4)`,
-        [context.identity.orgId, context.identity.userId, kind,
-          context.run.workflow_name.slice(0, 200)],
+        `insert into echo.agent_card (org_id, owner_id, kind, title, session_id)
+         values ($1, $2, $3, $4, $5)`,
+        [context.identity.orgId, context.identity.userId, kind, title, conversation.id],
       ));
     return { kind: "effect" };
   },
 };
+
+/**
+ * The text a notify carries, or null when the step binds nothing. The
+ * validator lets a notify bind an earlier step's WHOLE output (an ask's is
+ * opaque content, so `{{s2}}` is the binding — `{{s2.text}}` does not
+ * publish); an ask's recorded output is `{ text }`, and that is unwrapped
+ * here so the card reads as prose. Any other shape is rendered as JSON, so
+ * a card is never blank because the author bound a search. A body that
+ * resolves to nothing at all is the named forfeit, not an empty card.
+ */
+async function notifyBody(context: ExecutionContext): Promise<string | null> {
+  if (typeof context.step.from !== "string") return null;
+  const inner = context.step.from.trim().replace(/^\{\{|\}\}$/g, "");
+  const path = parseBindingPath(inner);
+  if (!path) throw new RunFailure("binding_unresolved", `malformed binding {{${inner}}}`);
+  const { value } = await resolveBinding(context, path);
+  const picked = typeof value === "object" && value !== null && !Array.isArray(value)
+    && typeof (value as { text?: unknown }).text === "string"
+    && Object.keys(value).length === 1
+    ? (value as { text: string }).text
+    : value;
+  const text = typeof picked === "string" ? picked : JSON.stringify(picked);
+  if (typeof text !== "string" || text.trim() === "") {
+    throw new RunFailure("binding_unresolved", `notify.from ${inner} resolved to nothing`);
+  }
+  return text.slice(0, 24_000);
+}
 
 /** decide's evaluation — a pure READ of recorded state, so redelivery can
     reconstruct the same jump deterministically */

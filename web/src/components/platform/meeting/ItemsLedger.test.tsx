@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * 0211 — what a meeting item gained: the colleague who owes it, the day it is
@@ -46,6 +46,8 @@ const row = (over: Record<string, unknown> = {}) => ({
 const draw = () => render(<ItemsPanel meetingId="m1" locale="fa" />);
 
 beforeEach(() => { meetingItems.mockReset(); });
+/* a pinned clock must not outlive the one test that pins it */
+afterEach(() => { vi.useRealTimers(); });
 
 describe("a row says who owes it and by when (0211)", () => {
   it("names the RESOLVED colleague, never their id", async () => {
@@ -65,6 +67,18 @@ describe("a row says who owes it and by when (0211)", () => {
     await waitFor(() => expect(screen.getByText("مهمان")).toBeInTheDocument());
   });
 
+  /* the reader's own day key — the shape `due_on` is and the shape the panel
+     compares against. Built from NOW rather than written out, because the whole
+     point of the boundary cases below is that they sit ON the boundary, and a
+     literal stops doing that tomorrow. */
+  const dayKey = (offsetDays: number): string => {
+    const at = new Date();
+    at.setDate(at.getDate() + offsetDays);
+    const pad = (v: number) => String(v).padStart(2, "0");
+    return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+  };
+  const metaOf = (el: HTMLElement) => el.parentElement?.querySelector(".badge-num");
+
   it("marks an overdue commitment and leaves a future one alone", async () => {
     meetingItems.mockResolvedValue([
       row({ id: "i1", body: "دیرکرد", due_on: "2020-01-01" }),
@@ -73,11 +87,68 @@ describe("a row says who owes it and by when (0211)", () => {
     draw();
     const late = await screen.findByText("دیرکرد");
     const soon = await screen.findByText("بعداً");
-    const metaOf = (el: HTMLElement) => el.parentElement?.querySelector(".badge-num");
     /* the PAIR. "an overdue row is red" alone passes against a panel that
        paints every deadline red, which tells a reader nothing. */
     expect(metaOf(late)?.className ?? "").toContain("text-danger");
     expect(metaOf(soon)?.className ?? "").not.toContain("text-danger");
+  });
+
+  it("a commitment due TODAY is not overdue — the compare is a DAY, not an instant", async () => {
+    /*
+     * THE DEFECT THE TEST ABOVE COULD NOT SEE (fixed 2026-09-10), and the
+     * fixture is exactly why it could not: 2020 and 2099 are on the correct side
+     * of the line whichever comparison is written, so that test stayed green
+     * against code which turned every commitment due today red at 13:00 local,
+     * every day, for everyone.
+     *
+     * `overdue` compared `dayAsInstant(due_on)` — which plants a day at local
+     * NOON, deliberately, so that no zone can move it — against `new Date()`.
+     * Noon is in the past from one o'clock onward, so today became yesterday.
+     * db/0211 chose a DATE for `due_on` precisely to keep the clock out of a
+     * deadline, and the comparison had put it straight back in.
+     *
+     * Three rows, because the rule has two edges and only the middle one is the
+     * bug: yesterday is late, today is not, tomorrow is not.
+     *
+     * THE CLOCK IS PINNED AT HALF PAST ONE, and that is not tidiness. The instant
+     * compare only went wrong AFTER local noon — run at nine in the morning this
+     * test would have passed against the defect, which is the same "green for the
+     * wrong reason" the 2020/2099 fixture was. Only `Date` is faked: the queries
+     * below poll on real timers, and faking those hangs them.
+     */
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 8, 10, 13, 30) });
+    meetingItems.mockResolvedValue([
+      row({ id: "i1", body: "دیروز", due_on: dayKey(-1) }),
+      row({ id: "i2", body: "امروز", due_on: dayKey(0) }),
+      row({ id: "i3", body: "فردا", due_on: dayKey(1) }),
+    ]);
+    draw();
+    const yesterday = await screen.findByText("دیروز");
+    const today = await screen.findByText("امروز");
+    const tomorrow = await screen.findByText("فردا");
+    expect(metaOf(yesterday)?.className ?? "", "yesterday is late").toContain("text-danger");
+    /* the load-bearing one: a day somebody chose, read ON that day */
+    expect(metaOf(today)?.className ?? "", "a deadline is not missed on the day it falls")
+      .not.toContain("text-danger");
+    expect(metaOf(tomorrow)?.className ?? "").not.toContain("text-danger");
+    vi.useRealTimers();
+  });
+
+  it("a commitment already done, or superseded, is never late", async () => {
+    /* the other two thirds of the rule, which "it is red once the day has
+       passed" passes without: a finished item and a replaced one both keep a due
+       day that is now behind us, and painting either red asks somebody to chase
+       work that is settled */
+    meetingItems.mockResolvedValue([
+      row({ id: "i1", body: "جایگزین", due_on: dayKey(-5), status: "superseded" }),
+      row({ id: "i2", body: "مانده", due_on: dayKey(-5) }),
+    ]);
+    draw();
+    const replaced = await screen.findByText("جایگزین");
+    const standing = await screen.findByText("مانده");
+    expect(metaOf(replaced)?.className ?? "").not.toContain("text-danger");
+    /* the control — without it this passes against a panel that paints nothing */
+    expect(metaOf(standing)?.className ?? "").toContain("text-danger");
   });
 
   it("says a decision was superseded rather than hiding it", async () => {

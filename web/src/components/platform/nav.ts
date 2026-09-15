@@ -73,12 +73,37 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * assistant — the day's work first and the assistant beside it, rather
    * than the assistant second because it used to own the landing page.
    */
-  { href: "/", key: "dashboard", inBar: true },
+  /*
+   * HOME IS THE AGENT.
+   *
+   * The key changed with the room. `dashboard` named a board of tiles; what
+   * lives at `/` now is the assistant with the day's own facts laid out under
+   * its prompt, and a rail entry that still said «داشبورد» would be pointing
+   * at a page that no longer exists under a name nobody would look for.
+   *
+   * `/assistant` survives as a redirect here, so every bookmark, every
+   * `?c=<session>` link out of the history table and every agent-authored
+   * destination still resolves — a rail entry is a door, not the room.
+   */
+  { href: "/", key: "home", inBar: true },
   /* 0145 — meetings (the reference adoption). */
-  { href: "/meetings", key: "meetings", inBar: false },
-  /* 0144 — the task board (the reference adoption). Rail only: M22's
-     four-item bar ceiling has no free slot, and tasks are a desk surface. */
-  { href: "/tasks", key: "tasks", inBar: false },
+  /*
+   * IN THE BAR (2026-09-08, fixing the mobile view against the new rail).
+   *
+   * The `inBar` flags were set when the rail listed a different set of rooms
+   * and the ceiling was genuinely full. The 2026-09-08 rail dropped
+   * workflows, agents, chat and the assistant, which left the bar holding
+   * TWO of its four slots — Home and Management — while the day's work sat
+   * behind «More». The ceiling is a limit, not a target, and a bar with a
+   * hole in it is the one place a phone had room to spare.
+   */
+  { href: "/meetings", key: "meetings", inBar: true },
+  /* 0144 — the task board (the reference adoption). */
+  /* AND TASKS BESIDE IT, for the same reason and in the settled order
+     (2026-09-02: «dashboard, meetings, tasks»). The bar reads the way the
+     rail reads, top to bottom, which is the only arrangement that does not
+     have to be remembered twice. */
+  { href: "/tasks", key: "tasks", inBar: true },
   /*
    * PROJECTS IS NOT IN THE RAIL (user directive, 2026-09-05: "remove projects
    * from the menu too").
@@ -121,18 +146,26 @@ export const NAV_PRIMARY: readonly NavItem[] = [
      there — correct, since the lit row would name a destination the menu no
      longer offers. */
   /*
-   * Workflows, Integrations and Agents came OUT of the assistant's section
-   * menu and onto the rail (user directive): they are surfaces of their own,
-   * and a person looking for their integrations was opening the assistant to
-   * find them. The rail names surfaces; that is what these are.
+   * WORKFLOWS AND AGENTS LEFT THE RAIL.
+   *
+   * They are BUTTONS on the home page's sidebar, and what those buttons do is
+   * why the rail entries had to go rather than sit beside them: a rail entry
+   * navigates AWAY from Home, and the whole point of the buttons is that they
+   * open the list in Home's view pane with the conversations still beside it.
+   * Two doors to one room that behave differently is worse than one door.
+   *
+   * The addresses stay and REDIRECT into the pane, so the breadcrumb, the
+   * agents' own navigate tool, the Ctrl+Shift shortcuts and every bookmark
+   * still resolve — a rail entry is a door, not the room.
+   *
+   * Integrations stays: it is nobody's sidebar button, and after the 2026-09-03
+   * ruling it belongs beside the agents that use it.
    */
-  { href: "/workflows", key: "workflows", inBar: false },
   /* INTEGRATIONS LEFT THE RAIL (user directive, 2026-09-02: "put the
      integrations into the settings"). It is a Settings section now — the
      page keeps its address, and `SETTINGS_SECTIONS` is what makes the
      Settings tile light up while you stand on it, so the rail learns the
      move from the registry rather than from a second hand-kept list. */
-  { href: "/agents", key: "agents", inBar: false },
   /*
    * INTEGRATIONS IS A RAIL DESTINATION AGAIN (user directive, 2026-09-03: "i
    * need the integrations to come to the menu from the setting under the
@@ -172,7 +205,15 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * a promise, and one that costs a round trip is a slower promise than the
    * one beside it.
    */
-  { href: "/management/general", key: "management", inBar: true, match: "/management" },
+  /*
+   * MANAGEMENT LEFT THE BAR in the same pass, and this is the trade the
+   * ceiling forces: four slots, one of them «More», and the three that
+   * remain go to the rooms a person opens on a phone during the day. The
+   * org's configuration is an administrator's surface reached from a desk —
+   * it keeps its rail tile, its territory and its place in the More sheet,
+   * which lists every destination the bar does not.
+   */
+  { href: "/management/general", key: "management", inBar: false, match: "/management" },
 ];
 
 /**
@@ -197,9 +238,9 @@ export const NAV_UTILITY: readonly NavItem[] = [
 export const NAV_BAR: readonly NavItem[] = NAV_PRIMARY.filter((i) => i.inBar);
 
 /**
- * M22's bottom bar is FOUR items — Hub · Echo · Management · More. Three
- * primaries plus More, which leaves a slot for the second app and keeps the
- * ≤5 ceiling the proposal argued for.
+ * M22's bottom bar is FOUR items — Home · Meetings · Tasks · More since
+ * 2026-09-08, when the flags were rebalanced against the new rail. Three
+ * primaries plus More, which keeps the ≤5 ceiling the proposal argued for.
  *
  * The ceiling is asserted in `nav.test.ts`, NOT here. The first draft of this
  * file tried a type-level count and it could never have worked: `.filter()`

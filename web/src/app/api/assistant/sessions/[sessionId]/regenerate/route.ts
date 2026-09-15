@@ -1,4 +1,5 @@
 import { coreStream, errorResponse, readJson } from "@/server/core";
+import { plausibleZone } from "../../../zone";
 
 /** Same reason as ask/route.ts: an agent run outlives Vercel's default
  *  function duration, and a killed function reads as a dropped stream. */
@@ -14,10 +15,14 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
   try {
-    const body = (await readJson(request)) as { model?: string; locale?: string };
+    /* M24 — the zone travels with regenerate for the same reason it travels
+       with ask: the no-replay path rebuilds the time line, and a re-answer
+       reasoning in UTC beside the original's Tehran is the two-clocks bug. */
+    const body = (await readJson(request)) as { model?: string; locale?: string; timezone?: string };
     const upstream = await coreStream(`/v1/assistant/sessions/${sessionId}/regenerate`, {
       model: body.model,
       locale: body.locale,
+      timezone: plausibleZone(body.timezone),
     });
     return new Response(upstream.body, {
       headers: {

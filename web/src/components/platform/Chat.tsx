@@ -18,6 +18,7 @@ import { filterChipClass } from "./sectionTabs";
 import { digits } from "@/lib/format";
 import { MessageRow } from "./chat/MessageRow";
 import { Composer } from "./chat/Composer";
+import { notifyError, notifyWarn } from "@/lib/notify";
 
 /**
  * THE TEAM CHANNEL (0184; its actions and invitations 0189).
@@ -69,11 +70,9 @@ export function Chat({ meId, isAdmin, people }: {
   const [messages, setMessages] = useState<ChatMessageRecord[] | null>(null);
   const [live, setLive] = useState<ChatLiveState>("off");
   const [typing, setTyping] = useState<string | null>(null);
-  const [failedAgent, setFailedAgent] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessageRecord | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const epoch = useRefreshEpoch("chat");
   const loadChannels = useCallback(() => {
@@ -137,7 +136,6 @@ export function Chat({ meId, isAdmin, people }: {
     acked.current = 0;
     setMessages(null);
     setTyping(null);
-    setFailedAgent(null);
     setReplyTo(null);
     loadMessages(current, "open");
   }, [current, loadMessages]);
@@ -161,8 +159,17 @@ export function Chat({ meId, isAdmin, people }: {
         return;
       }
       if (event.channel_id !== currentRef.current) return;
-      if (event.type === "agent_typing") { setFailedAgent(null); setTyping(event.handle); }
-      if (event.type === "agent_failed") { setTyping(null); setFailedAgent(event.handle); }
+      if (event.type === "agent_typing") setTyping(event.handle);
+      if (event.type === "agent_failed") {
+        setTyping(null);
+        /* NEVER A MESSAGE IN THE ROOM. A tidy apology written into the
+           thread would be indistinguishable a week later from something the
+           agent said — the honest record is the question standing there
+           unanswered, and the toast (2026-09-08, replacing a warning line
+           under the last message) is the platform saying so rather than the
+           agent. */
+        notifyWarn(t("agentFailed", { name: event.handle }));
+      }
     },
   }), [loadMessages, loadChannels]);
 
@@ -208,7 +215,7 @@ export function Chat({ meId, isAdmin, people }: {
          answering leaves the person to retype into a room where their next
          message replies to nothing. */
       setReplyTo(answering);
-      setError(t("sendFailed"));
+      notifyError(t("sendFailed"));
     }
   };
 
@@ -230,7 +237,6 @@ export function Chat({ meId, isAdmin, people }: {
     setMessages([]);
     setReplyTo(null);
     setTyping(null);
-    setFailedAgent(null);
     tip.current = 0;
     acked.current = 0;
   };
@@ -238,7 +244,7 @@ export function Chat({ meId, isAdmin, people }: {
   const react = (message: ChatMessageRecord, emoji: string, on: boolean) => {
     void api.reactToChatMessage(message.id, emoji, on)
       .then((updated) => setMessages((cur) => mergeBySeq(cur ?? [], [updated])))
-      .catch(() => setError(t("writeFailed")));
+      .catch(() => notifyError(t("writeFailed")));
   };
 
   return (
@@ -314,7 +320,7 @@ export function Chat({ meId, isAdmin, people }: {
                         if (channel.joined) leaveRoom();
                         loadChannels();
                       })
-                      .catch(() => setError(t("writeFailed")));
+                      .catch(() => notifyError(t("writeFailed")));
                   },
                 },
                 {
@@ -331,7 +337,7 @@ export function Chat({ meId, isAdmin, people }: {
                   onSelect: () => {
                     void api.updateChatChannel(channel.id, { archived: true })
                       .then(() => { leaveRoom(); loadChannels(); })
-                      .catch(() => setError(t("writeFailed")));
+                      .catch(() => notifyError(t("writeFailed")));
                   },
                 },
               ]}
@@ -354,12 +360,6 @@ export function Chat({ meId, isAdmin, people }: {
           </button>
         </div>
       </div>
-
-      {error !== null ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {error}
-        </p>
-      ) : null}
 
       {/* ── the room: a FIXED box that scrolls inside itself ─────────── */}
       <section className={`tile flex ${ROOM_HEIGHT} flex-col`} aria-label={t("room")}>
@@ -407,15 +407,6 @@ export function Chat({ meId, isAdmin, people }: {
                 </span>
               </p>
             ) : null}
-            {failedAgent !== null ? (
-              /* AN ANNOTATION, NEVER A MESSAGE. A tidy apology written into the
-                 room would be indistinguishable a week later from something the
-                 agent said — the honest record is the question standing there
-                 unanswered. */
-              <p role="status" className="py-1.5 text-[11px] text-warning">
-                {t("agentFailed", { name: failedAgent })}
-              </p>
-            ) : null}
           </div>
         </div>
 
@@ -446,7 +437,7 @@ export function Chat({ meId, isAdmin, people }: {
           targetId={channel.id}
           meId={meId}
           onClose={() => setInviting(false)}
-          onFailed={() => { setInviting(false); setError(t("writeFailed")); }}
+          onFailed={() => { setInviting(false); notifyError(t("writeFailed")); }}
         />
       ) : null}
     </div>
@@ -463,8 +454,10 @@ function NewChannelDialog({ onClose, onCreated }: {
   const [topic, setTopic] = useState("");
   const [busy, setBusy] = useState(false);
   const [taken, setTaken] = useState(false);
-  /* a refused write keeps the dialog and its draft — see ProjectDialog */
-  const [refused, setRefused] = useState(false);
+  /* A refused write keeps the dialog and its draft — see ProjectDialog. It
+     says so in a TOAST now (2026-09-08); the name conflict beside it stays
+     on the field, because that one names an input the person has to change
+     and a message in the middle of the screen cannot point at it. */
 
   return (
     <Overlay onClose={onClose} label={t("newChannel")} size="sm">
@@ -490,7 +483,6 @@ function NewChannelDialog({ onClose, onCreated }: {
             placeholder={t("channelTopicPlaceholder")} className="input w-full" />
         </label>
       </div>
-      {refused ? <p role="alert" className="mt-3 text-xs text-danger">{t("writeFailed")}</p> : null}
       <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
         <button type="button" onClick={onClose} className="btn text-fg-muted hover:text-fg">
           {tCommon("cancel")}
@@ -500,7 +492,6 @@ function NewChannelDialog({ onClose, onCreated }: {
           disabled={name.trim() === "" || busy}
           onClick={() => {
             setBusy(true);
-            setRefused(false);
             void api.createChatChannel({ name: name.trim(), topic: topic.trim() })
               .then(onCreated)
               .catch((error: unknown) => {
@@ -508,7 +499,7 @@ function NewChannelDialog({ onClose, onCreated }: {
                 /* the server names the field; a conflict belongs ON it, not
                    in a toast that leaves the person guessing which input */
                 if ((error as { code?: string }).code === "chat_name_taken") setTaken(true);
-                else setRefused(true);
+                else notifyError(t("writeFailed"));
               });
           }}
           className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50"

@@ -16,7 +16,7 @@ import { TwoPane, type PaneGroup } from "@/components/platform/TwoPane";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
 import { digits, modelLabel, personName } from "@/lib/format";
 import { signOutThisDevice } from "@/lib/signOut";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 
@@ -172,6 +172,11 @@ export default function ProfilePage({
 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [saving, setSaving] = useState(false);
+  /* FIELD ERRORS ONLY, from 2026-09-08. A refusal that names an input
+     (`username` is taken) belongs ON that input — a sentence in the middle
+     of the screen cannot point at which of eight boxes to change. Everything
+     the server refuses WITHOUT naming a field is a toast now, like every
+     other refused write on the platform. */
   const [error, setError] = useState<FormError | null>(null);
 
   function adopt(user: Me) {
@@ -276,7 +281,9 @@ export default function ProfilePage({
       adopt(await api.updateProfile(patch));
       notify(t("saved"));
     } catch (cause) {
-      setError(toFormError(cause, t));
+      const refusal = toFormError(cause, t);
+      if (refusal.field !== null) setError(refusal);
+      else notifyError(refusal.message);
     } finally {
       setSaving(false);
     }
@@ -513,21 +520,6 @@ export default function ProfilePage({
                 see it, and it is the SERVER's sentence: core/ owns the
                 username rule and is the only thing that knows whether a
                 handle is taken or permanently retired. */}
-            {error && error.field === null ? (
-              /* audit finding, 2026-09-02 (the FormPanel gutter finding names
-                 this line): `md:px-8` was a frozen copy of the panel's OLD
-                 32px gutter. FormRow took the fixed-160/380 layout and moved
-                 to `px-5`, so from md up this refusal sat 12px inside every
-                 label it stands under — the sentence a person is reading
-                 indented further than the fields it is about. It shares the
-                 rows' gutter now, because it sits among the ROWS. */
-              <div className="px-5 py-3">
-                <p role="alert" className="text-sm text-danger">
-                  {error.message}
-                </p>
-              </div>
-            ) : null}
-
             <PanelFooter>
               {/* the outcome rides the NOTIFICATION bus (platform rule,
                   2026-09-02): a pill beside the button is a second place to
@@ -668,7 +660,7 @@ export default function ProfilePage({
                     void api
                       .updateProfile({ assistant_context: !me.assistant_context })
                       .then(adopt)
-                      .catch(() => setError({ field: null, message: t("saveFailed") }));
+                      .catch(() => notifyError(t("saveFailed")));
                   }}
                 />
               </FormRow>

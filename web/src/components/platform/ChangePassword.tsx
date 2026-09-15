@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
-import { Chip } from "@/components/ui";
 import { PasswordInput } from "@/components/PasswordInput";
+import { notifyError, notifySuccess } from "@/lib/notify";
 
 /**
  * Change your own password, from inside the product.
@@ -26,8 +26,6 @@ export function ChangePassword() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   /*
    * The confirmation field is checked HERE and only here — it is the one rule
@@ -42,16 +40,14 @@ export function ChangePassword() {
     event.preventDefault();
     if (!ready) return;
     setBusy(true);
-    setError(null);
-    setDone(false);
     try {
       await api.changePassword(current, next);
-      setDone(true);
+      notifySuccess(t("changed"));
       setCurrent("");
       setNext("");
       setConfirm("");
     } catch (cause) {
-      setError(refusalText(cause, t));
+      notifyError(refusalText(cause, t));
     } finally {
       setBusy(false);
     }
@@ -99,21 +95,7 @@ export function ChangePassword() {
           </div>
         </FormRow>
 
-        {error ? (
-          /* audit finding, 2026-09-03: the same frozen `md:px-8` the panel
-             footer carried, copied one screen over — this refusal sits among
-             the ROWS, so it takes the rows' `px-5` gutter and stops standing
-             12px inside the fields it is about. profile's copy of this line
-             was corrected first; this was the last one. */
-          <div className="px-5 py-3">
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          </div>
-        ) : null}
-
         <PanelFooter>
-          {done ? <Chip tone="success">{t("changed")}</Chip> : null}
           <button className="btn-primary" disabled={!ready}>
             {busy ? t("saving") : t("save")}
           </button>

@@ -6,9 +6,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  ACTION_OWNER_ADDENDUM,
   composeSummaryInput,
   SUMMARY_TEMPLATE_ADDENDA,
 } from "../src/worker/summarizer.ts";
+import { splitOwner } from "../src/api/meetings.ts";
 import { SUMMARY_TEMPLATES } from "../src/api/vocabulary.ts";
 
 describe("composeSummaryInput", () => {
@@ -46,6 +48,26 @@ describe("composeSummaryInput", () => {
     });
     expect(withBad).toBe(bare);
     expect(withBad).not.toContain("sales_call_do_not_exist");
+  });
+
+  it("asks for the owner marker on every run, in the shape the slicer reads", () => {
+    /*
+     * The two ends of one wire (rule 10): the prompt names the marker and
+     * the slicer parses it. If either drifts — the prompt asks for «مسئول -»
+     * and the parser reads «— مسئول:» — every owner is silently lost. So the
+     * example the prompt shows the model is fed to the parser here.
+     */
+    const input = composeSummaryInput({ hasSkill: true, transcript: "متن" });
+    expect(input).toContain(ACTION_OWNER_ADDENDUM);
+    expect(input.indexOf(ACTION_OWNER_ADDENDUM)).toBeLessThan(input.indexOf("<<<TRANSCRIPT"));
+    const marker = /«(— مسئول: نام)»/.exec(ACTION_OWNER_ADDENDUM)?.[1];
+    const markerEn = /«(— owner: name)»/.exec(ACTION_OWNER_ADDENDUM)?.[1];
+    expect(marker).toBeTruthy();
+    expect(markerEn).toBeTruthy();
+    expect(splitOwner(`مهاجرت حساب‌ها ${marker!.replace("نام", "سینا")}`)).toEqual({ body: "مهاجرت حساب‌ها", owner: "سینا" });
+    expect(splitOwner(`Migrate accounts ${markerEn!.replace("name", "Sina")}`)).toEqual({ body: "Migrate accounts", owner: "Sina" });
+    // and it restates the floor: no owner is no marker, never a guess
+    expect(ACTION_OWNER_ADDENDUM).toMatch(/حدس نزن/);
   });
 
   it("a blank instruction is absence, not an empty framing line", () => {

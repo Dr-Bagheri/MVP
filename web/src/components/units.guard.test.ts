@@ -128,7 +128,9 @@ describe("units say what a rule is about", () => {
     const BUILT_IN = /^(\d+(\.\d+)?|px|full|auto|screen|dvh|fit|min|max|\[.*\])$/;
 
     const unknown: string[] = [];
-    for (const sel of [".btn", ".btn-sm", ".btn-icon", ".btn-icon-sm", ".input", ".input-sm"]) {
+    for (const sel of [
+      ".btn", ".btn-sm", ".btn-icon", ".btn-icon-sm", ".btn-icon-lg", ".input", ".input-sm",
+    ]) {
       const rule = body(sel);
       for (const m of rule.matchAll(/(?:^|\s)(w|h|min-h)-([\w[\]().%-]+)/g)) {
         const [prefix, name] = [m[1]! as "w" | "h" | "min-h", m[2]!];

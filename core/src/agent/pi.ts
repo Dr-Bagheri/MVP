@@ -61,15 +61,48 @@ export interface PiRunResult {
   error?: string;
 }
 
-/** The M5 catalogue source: filter this, don't build one. */
-export function catalogue(provider = "openrouter"): { id: string; name: string; reasoning: boolean }[] {
+export interface CatalogueEntry {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  /**
+   * USD per million tokens, as the catalogue states it. Optional because it
+   * is someone else's metadata: a model whose entry omits pricing must read
+   * as "not stated", never as "free" — a zero here would put 0.00 next to a
+   * model that bills like any other.
+   */
+  cost?: { input: number; output: number };
+  /** Context window in tokens, when the catalogue states one. */
+  contextWindow?: number;
+}
+
+/**
+ * The M5 catalogue source: filter this, don't build one.
+ *
+ * Cost and context window are carried through (2026-09-09) because the model
+ * screens could not answer the only two questions anyone actually asks of a
+ * model list. The admin's add-dialog listed three hundred names with no price
+ * beside any of them, so "which of these should the org run" was a question
+ * the UI made unanswerable — and the one visible ordering was the alphabet.
+ * The numbers were in the catalogue the whole time; this function was
+ * dropping them on the floor.
+ */
+export function catalogue(provider = "openrouter"): CatalogueEntry[] {
   const list = getBuiltinModels(provider as never) as unknown as {
     id: string; name?: string; reasoning?: boolean;
+    cost?: { input?: number; output?: number };
+    contextWindow?: number;
   }[];
   return list.map((m) => ({
     id: m.id,
     name: m.name ?? m.id,
     reasoning: Boolean(m.reasoning),
+    // present ONLY when both halves are real numbers: a half-known price is
+    // not a price, and rendering one side of it invites the wrong comparison
+    ...(typeof m.cost?.input === "number" && typeof m.cost?.output === "number"
+      ? { cost: { input: m.cost.input, output: m.cost.output } }
+      : {}),
+    ...(typeof m.contextWindow === "number" ? { contextWindow: m.contextWindow } : {}),
   }));
 }
 
@@ -117,9 +150,38 @@ export function resolveModel(ref: PiModelRef): { model: unknown; reasoningRequir
 /**
  * Some providers reject reasoning-disabled requests outright. Pi sends none
  * by default, so a reasoning-capable model needs an explicit level.
+ *
+ * ── WHY MEDIUM (2026-09-09) ────────────────────────────────────────────────
+ *
+ * This was `"low"` from the day the spike found the 400s, and `"low"` was
+ * never a judgement about how hard our work is — it was the smallest value
+ * that makes a reasoning-mandatory model answer at all. It then stayed,
+ * because nothing here has ever been about the level and nothing asserted it.
+ *
+ * The level is not a dial between "cheap" and "good": both OpenAI's own
+ * guidance and Pi's model notes assign it by TASK SHAPE — `low` for
+ * speed-first drafting and simple tool use, `medium` for agentic work,
+ * research and judgement. Every run that reaches this function is the second
+ * kind. The assistant plans over a dozen tools and hands work to colleagues;
+ * the summarizer reads a transcript and is held to an anti-fabrication
+ * instruction; the mail drafter writes in somebody's name; the workflow
+ * executor decides which step comes next. `low` was asking a model to
+ * coordinate tools at the setting documented for not coordinating them.
+ *
+ * THE COST IS REAL AND IS THE POINT OF SAYING IT OUT LOUD: reasoning tokens
+ * are billed as output and count against `MAX_OUTPUT_TOKENS`, so a medium run
+ * spends more per call and leaves less of the 8192 ceiling for the answer.
+ * That ceiling is now the thing to watch — if answers start arriving cut
+ * short, this is the line that did it, and the fix is the ceiling rather than
+ * a return to a level chosen for a different reason.
+ *
+ * A per-model table (Pi publishes one) is the better shape and is NOT built:
+ * it needs a fact per model that nothing here reads today, and a hand-written
+ * table of thirty models is the ranking-goes-stale problem in a second file.
+ * One documented default beats a table nobody maintains.
  */
-export function reasoningFor(reasoningRequired: boolean): "low" | undefined {
-  return reasoningRequired ? "low" : undefined;
+export function reasoningFor(reasoningRequired: boolean): "medium" | undefined {
+  return reasoningRequired ? "medium" : undefined;
 }
 
 /**

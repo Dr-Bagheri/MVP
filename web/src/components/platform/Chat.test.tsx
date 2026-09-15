@@ -1,3 +1,4 @@
+import { personFixture } from "@/test/fixtures";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -94,11 +95,11 @@ function message(over: Partial<ChatMessageRecord>): ChatMessageRecord {
 }
 
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "sina" },
-  { id: "u-2", display_name: "مریم", display_name_en: null, role: "member", username: "maryam" },
+  personFixture({ id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "sina" }),
+  personFixture({ id: "u-2", display_name: "مریم", display_name_en: null, role: "member", username: "maryam" }),
   /* a colleague with NO handle — the picker must not offer them, because a
      mention of a handle nobody holds badges nobody */
-  { id: "u-3", display_name: "رضا", display_name_en: null, role: "member", username: null },
+  personFixture({ id: "u-3", display_name: "رضا", display_name_en: null, role: "member", username: null }),
 ];
 
 import { Chat } from "./Chat";
@@ -172,6 +173,61 @@ describe("the room", () => {
     expect(within(log).getAllByText("دستیار")).toHaveLength(1);
   });
 
+  /**
+   * ── AN AGENT AUTHORS, A COLLEAGUE TYPES ─────────────────────────────────
+   *
+   * The room is a place people type in, so a member's «۱. شیر بخر» stays the
+   * sentence they wrote — turning it into an ordered list rewrites somebody's
+   * words, and it is the direction nobody would report. An agent's turn is
+   * authored, so its structure renders.
+   *
+   * The PAIR is the assertion: either half alone passes against a version
+   * that runs every message through one renderer.
+   */
+  it("renders an agent's markdown and leaves a colleague's characters alone", async () => {
+    MESSAGES = [
+      message({ id: "m-1", seq: 1, author_kind: "user", author_id: "u-2", body: "**این** را ببین" }),
+      message({
+        id: "m-2", seq: 2, author_kind: "agent", author_id: null,
+        agent_handle: "roya", body: "- **نخست** یک\n- دوم دو",
+      }),
+    ];
+    const { container } = render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const log = await screen.findByRole("log", { name: "پیام‌ها" });
+
+    expect(await within(log).findByText("مریم")).toBeInTheDocument();
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+    expect(container.querySelector("li > strong")?.textContent).toBe("نخست");
+    /* the colleague's line, character for character */
+    expect(within(log).getByText("**این** را ببین")).toBeInTheDocument();
+  });
+
+  /**
+   * The mentions survive the markdown, because they go into the parse tree
+   * rather than over its output — so a handle inside a LIST ITEM still chips.
+   * A handle inside a FENCE deliberately does not: a fence is quoted text, and
+   * chipping there would claim somebody was summoned by an example. The fence
+   * is the discriminating half — without it, "chip every handle" passes.
+   */
+  it("chips a handle inside an agent's list, and not one inside its code fence", async () => {
+    MESSAGES = [
+      message({
+        id: "m-1", seq: 1, author_kind: "agent", author_id: null, agent_handle: "roya",
+        body: "- بپرس از @maryam\n\n```\nبنویس @sina\n```",
+      }),
+    ];
+    const { container } = render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const log = await screen.findByRole("log", { name: "پیام‌ها" });
+    await within(log).findByText("دستیار");
+
+    /* the chip renders the person's NAME, which is what makes it a chip and
+       not the handle it was typed as */
+    expect(within(log).getByText("مریم")).toBeInTheDocument();
+    /* inside the fence the handle is still the characters somebody wrote */
+    expect(container.querySelector("pre")?.textContent).toContain("@sina");
+    expect(within(log).queryByText("سینا")).toBeNull();
+  });
+
   it("reads right-to-left on the Persian screen — a message that opens in Latin included", async () => {
     /*
      * User, 2026-09-05: "in the fa version, in the chat box, all text must
@@ -188,8 +244,10 @@ describe("the room", () => {
     render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
     const latin = await within(log).findByText("OK team");
-    expect(latin.closest("p")).toHaveAttribute("dir", "rtl");
-    expect(within(log).getByText("سلام رؤیا").closest("p")).toHaveAttribute("dir", "rtl");
+    /* `[dir]` rather than `p`: the line is a DIV since an agent's turn renders
+       markdown, and the direction is the thing under test either way */
+    expect(latin.closest("[dir]")).toHaveAttribute("dir", "rtl");
+    expect(within(log).getByText("سلام رؤیا").closest("[dir]")).toHaveAttribute("dir", "rtl");
   });
 
   it("keeps a removed message in the room, and says it was removed", async () => {
@@ -208,7 +266,16 @@ describe("the room", () => {
     expect(within(log).getByText("پیام سوم")).toBeInTheDocument();
   });
 
-  it("renders an agent's failure as an ANNOTATION, never as a message", async () => {
+  /*
+   * 2026-09-08: the annotation left the LOG and became a toast, and the
+   * load-bearing half of this test is untouched by that. What it has always
+   * been about is the negative: an agent that could not answer must not
+   * leave a row in the transcript, because a tidy apology written into the
+   * thread is indistinguishable a week later from something the agent said.
+   * The row count is still the assertion; the sentence is now looked for on
+   * the screen rather than inside the log.
+   */
+  it("says an agent failed WITHOUT writing a message into the room", async () => {
     MESSAGES = [message({ id: "m-1", seq: 1, body: "@roya یک خلاصه بده" })];
     render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
@@ -222,7 +289,10 @@ describe("the room", () => {
     emit!({ type: "agent_failed", channel_id: "c-1", handle: "roya" });
 
     await waitFor(() =>
-      expect(within(log).getByText(/نتوانست پاسخ بدهد/)).toBeInTheDocument());
+      expect(screen.getByText(/نتوانست پاسخ بدهد/)).toBeInTheDocument());
+    /* and NOT in the transcript — the toast is the platform speaking, the
+       log is the room's record */
+    expect(within(log).queryByText(/نتوانست پاسخ بدهد/)).toBeNull();
     /* THE LOAD-BEARING HALF: no new message row. A bubble would look tidier
        and would be, a week later, indistinguishable from something Roya
        said. Counted by the timestamps, because only a real message has one. */
@@ -362,7 +432,10 @@ describe("the room dialog and the day (2026-09-06)", () => {
     await userEvent.type(await screen.findByLabelText("نام اتاق"), "طراحی");
     await userEvent.click(screen.getByRole("button", { name: "ساخت اتاق" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("alert").textContent).toBe("ذخیره نشد — دوباره تلاش کنید.");
+    /* the sentence is the platform's toast (2026-09-08), which rises OVER
+       this dialog rather than inside it; what this test is about — the
+       dialog and the typed name surviving the refusal — is the line below */
+    expect((await screen.findByRole("alert")).textContent).toBe("ذخیره نشد — دوباره تلاش کنید.");
     expect(within(dialog).getByLabelText("نام اتاق")).toHaveValue("طراحی");
   });
 

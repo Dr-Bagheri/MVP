@@ -31,6 +31,20 @@
  *    against the roster by core — never a person the model picked because a
  *    commitment ought to have one. «یکی باید این را انجام دهد» is a real
  *    thing to have heard, and it lands with no owner.
+ *
+ * ── AND A THIRD ───────────────────────────────────────────────────────────
+ *
+ * 3. ANSWER IN THE MEETING'S LANGUAGE. This prompt was written entirely in
+ *    Persian, and a model answers the language it is addressed in: an English
+ *    meeting's decisions came back as Persian `text`, which then failed rule 1
+ *    by construction — a quote cannot be checkable against the transcript by a
+ *    person reading both if it has been translated on the way out. These rows
+ *    are read in the ledger beside the summary, and db/0219 and db/0222 already
+ *    settled the same question for the summarizer: state the rule FIRST and in
+ *    BOTH languages rather than selecting a prompt by a detected `language`
+ *    that is one value for a meeting held in two. 0222's reasoning applies
+ *    unchanged here, so its shape is used unchanged: the language sentence
+ *    opens the prompt, said twice, and every rule below is said twice after it.
  */
 
 /** one claim, as the model is asked to shape it */
@@ -54,18 +68,50 @@ export interface ExtractedClaim {
  */
 export function composeExtractionInput(transcript: string, today: string): string {
   return [
+    /* THE LANGUAGE RULE FIRST, in both languages — db/0222's shape exactly.
+       The first line is what a model takes its own language from, so this one
+       has to be the line that refuses to pick one. */
+    "زبانِ جوابْ همان زبانِ جلسه است: متن پیاده‌شدهٔ انگلیسی → تصمیم‌ها و تعهدهای"
+      + " انگلیسی؛ متن فارسی → فارسی. اگر جلسه دوزبانه بود، زبانی را بنویس که"
+      + " تصمیم‌ها به آن گرفته شده‌اند. هیچ جمله‌ای را ترجمه نکن — `text` باید عینِ"
+      + " حرفِ گوینده باشد تا کسی که هر دو را می‌خواند بتواند راستی‌اش را بسنجد."
+      + " زبان خودت را بر جلسه تحمیل نکن.",
+    "(Answer in the language the meeting was held in: an English transcript"
+      + " yields English decisions and commitments, a Persian transcript Persian"
+      + " ones. If the meeting was bilingual, use the language the decisions were"
+      + " made in. Translate nothing — `text` must be the speaker's own words, so"
+      + " that a person reading the transcript and the row together can check it."
+      + " Never impose your own language on the meeting.)",
+    "",
     "تو خواننده‌ی دقیقِ صورت‌جلسه‌ای. از متن گفتگوی زیر دو چیز را بیرون بکش:",
     "۱) تصمیم‌ها: چیزهایی که در همین جلسه قطعی شد.",
     "۲) تعهدها: کاری که یک نفر مشخص قبول کرد انجام دهد.",
+    "(You are a careful reader of meeting records. Pull two things out of the"
+      + " conversation below: DECISIONS — what was settled in this meeting — and"
+      + " COMMITMENTS — work a named person agreed to do.)",
     "",
     "قواعد سخت‌گیرانه:",
     "- عین جمله‌ی گوینده را نگه دار؛ خلاصه و بازنویسی نکن.",
     "- اگر چیزی قطعی نشد، آن را ننویس. فهرست خالی جوابِ درستی است.",
     "- برای تعهد، نامِ گوینده را همان‌طور که در متن آمده بنویس. اگر معلوم نیست، null بگذار؛ اسم حدس نزن.",
+    "- «Speaker 2» و «گویندهٔ ۲» نامِ کسی نیستند؛ اسمِ داخلیِ خودِ سامانه‌اند. اگر"
+      + " فقط همین را داری، owner_name را null بگذار.",
     `- تاریخ‌ها را به شکل YYYY-MM-DD بنویس. امروز ${today} است. اگر تاریخی گفته نشد، null بگذار.`,
     "- start و end را بر حسب میلی‌ثانیه از ابتدای جلسه بنویس؛ اگر معلوم نیست، null بگذار.",
     "",
+    "(Strict rules: keep the speaker's own sentence — do not summarise or"
+      + " reword it. If nothing was settled, write nothing; an empty list is a"
+      + " correct answer. For a commitment, write the owner's name exactly as the"
+      + " transcript spells it, and null when it is not clear — never guess a"
+      + " name. \"Speaker 2\" is not a person's name, it is this system's own"
+      + " placeholder for a voice: if that is all you have, owner_name is null."
+      + ` Write dates as YYYY-MM-DD; today is ${today}, and null when no date was`
+      + " said. Write start and end as milliseconds from the beginning of the"
+      + " meeting, null when unknown.)",
+    "",
     "فقط JSON بده، بدون هیچ متن دیگری:",
+    "(Reply with JSON only, and nothing else. The field NAMES below are part of"
+      + " the schema and stay English in every language.)",
     '{"items":[{"kind":"decision|commitment","text":"...","detail":"...",' +
       '"owner_name":null,"due_on":null,"start_ms":null,"end_ms":null}]}',
     "<<<TRANSCRIPT",

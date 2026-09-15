@@ -127,7 +127,7 @@ export function TourOverlay() {
         style={{ top, left, width: right - left, height: bottom - top }}
       />
 
-      <div style={cardStyle} className="z-[72] rounded-2xl border border-border bg-surface p-4 shadow-2xl">
+      <div style={cardStyle} className="z-[72] glass-solid rounded-2xl p-4 shadow-2xl">
         {/* group-label role: no tracking on Persian (2026-09-03) */}
         <p className="text-group-label font-semibold text-accent">
           {t("stepOf", {

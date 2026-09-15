@@ -8,6 +8,7 @@ import { useRouter } from "@/i18n/routing";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { IconClose } from "@/components/icons";
 import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
+import { notifyError } from "@/lib/notify";
 
 /**
  * "Run this template on…" — the source picker, MOVED here from the workflows
@@ -42,7 +43,6 @@ export function WorkflowRunDialog({
   const [provider, setProvider] = useState<ConnectorProvider | null>(null);
   const [items, setItems] = useState<Record<string, ConnectorItem[]>>({});
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const sourceLabel = sourceKind === "calendar_event" ? t("calendarSource") : t("mailSource");
   const source = sourceKind === "calendar_event" ? "calendar" : "mail";
@@ -71,13 +71,12 @@ export function WorkflowRunDialog({
     if (provider === null || items[provider] !== undefined) return;
     let live = true;
     setLoading(true);
-    setError(null);
     api.connectorItems(provider, source)
       .then((loaded) => {
         if (live) setItems((current) => ({ ...current, [provider]: loaded }));
       })
       .catch(() => {
-        if (live) setError(t("sourceLoadFailed"));
+        if (live) notifyError(t("sourceLoadFailed"));
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -86,11 +85,10 @@ export function WorkflowRunDialog({
   }, [provider, source, items, t]);
 
   async function connect(entry: ConnectorProvider) {
-    setError(null);
     try {
       window.location.assign(await api.connectorAuthorization(entry, locale));
     } catch {
-      setError(t("connectFailed"));
+      notifyError(t("connectFailed"));
     }
   }
 
@@ -105,7 +103,7 @@ export function WorkflowRunDialog({
       onClick={onClose}
     >
       <div
-        className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl"
+        className="max-h-[85dvh] w-full max-w-lg overflow-y-auto glass-solid rounded-2xl p-5 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start gap-3">
@@ -211,7 +209,7 @@ export function WorkflowRunDialog({
                    of these params and ran nothing. `run=1` starts it —
                    choosing the item IS the instruction. */
                 onPick={(item) => router.push({
-                  pathname: "/assistant",
+                  pathname: "/",
                   query: {
                     workflow: slug,
                     connectorProvider: provider!,
@@ -224,7 +222,6 @@ export function WorkflowRunDialog({
           </div>
         )}
 
-        {error ? <p role="status" className="mt-3 text-sm text-danger">{error}</p> : null}
       </div>
     </div>
   );

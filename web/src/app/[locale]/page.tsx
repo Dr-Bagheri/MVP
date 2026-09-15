@@ -1,38 +1,36 @@
-import { Dashboard } from "@/components/platform/Dashboard";
+import { Suspense } from "react";
+import { Home } from "@/components/platform/home/Home";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { PageContainer } from "@/components/scaffold";
 
 /**
- * NeurAI's landing page is the DASHBOARD again (user directive, 2026-08-29:
- * "now bring back the dashboard as well").
- *
- * It comes back as the same BOARD — the grid, the four tile sizes, the drag,
- * the add menu — carrying a different catalogue: the platform's own surfaces
- * in miniature (people, records, a record button, integrations, four agents,
- * workflows, the connected calendar). And without the colours: the three
- * gradient families went with the same directive, so a card's identity is
- * its icon and its title.
+ * THE LANDING PAGE IS THE AGENT.
  *
  * The route's history in one line: `/` redirected to `/calls` while Echo was
  * the product, became the assistant hub when Echo became an app inside a
- * platform, became the dashboard on 2026-08-25, was the assistant's door
- * again while the board was parked, and is the board once more.
+ * platform, became the dashboard on 2026-08-25, was the assistant's door again
+ * while the board was parked, was the board once more from 2026-08-29 — and is
+ * the assistant again, this time with the board's own facts folded into its
+ * empty state rather than living at a second address.
  *
- * NO SECTION MENU (user directive, 2026-08-26). A dashboard is a board, and
- * a column of links beside it competes with the tiles for the same job —
- * every destination the menu offered is a tile away, and the board wants the
- * full width to look like a board rather than a page with a sidebar.
+ * NO PageContainer HERE. `Home` is a two-column row that takes the shell's full
+ * height — its sidebar draws its own edge and its own scroller, and a centred
+ * column around the pair would inset the menu as well as the conversation.
  *
- * No Suspense boundary here either: this page reads no search params, so
- * nothing forces a client bailout the way the assistant's `?c=` resume does.
+ * **The Suspense boundary is required, not decorative.** `Hub` and
+ * `HomeSidebar` read `?c=` / `?workflow=` / `?agent=` through
+ * `useSearchParams()`. Next prerenders this route, and a component reading
+ * search params forces a client bailout — without a boundary ABOVE it the
+ * production build fails outright while the dev server renders the page
+ * perfectly. The fallback is `null` rather than a skeleton home: the idle
+ * screen is the first impression, and a placeholder that approximates it would
+ * flash a second, wrong version of it.
  */
-export default function DashboardPage() {
+export default function HomePage() {
   return (
     <PlatformShell>
-      {/* 2026-09-03: two page sizes now, and `small` is the default */}
-      <PageContainer>
-        <Dashboard />
-      </PageContainer>
+      <Suspense fallback={null}>
+        <Home />
+      </Suspense>
     </PlatformShell>
   );
 }

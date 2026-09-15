@@ -114,9 +114,9 @@ describe("THE acceptance case: a second call about the same subject", () => {
   const twoCalls = (sql: string) => {
     if (sql.includes("websearch_to_tsquery")) {
       return [
-        { call_id: CALL_1, call_title: "مذاکره قرارداد", kind: "summary",
+        { call_id: CALL_1, call_title: "مذاکره قرارداد", call_date: "2026-08-10T09:00:00.000Z", kind: "summary",
           start_ms: null, end_ms: null, snippet: "قیمت پیشنهادی…" },
-        { call_id: CALL_2, call_title: "مذاکره قرارداد — جلسه دوم", kind: "transcript",
+        { call_id: CALL_2, call_title: "مذاکره قرارداد — جلسه دوم", call_date: "2026-08-12T09:00:00.000Z", kind: "transcript",
           start_ms: 1_000, end_ms: 2_000, snippet: "…" },
       ];
     }
@@ -143,6 +143,23 @@ describe("THE acceptance case: a second call about the same subject", () => {
     await run("list_related_calls", db, { call_id: CALL_2 });
     const search = log.find((l) => l.sql.includes("websearch_to_tsquery"))!;
     expect(search.params?.[0]).toBe("مذاکره قرارداد — جلسه دوم");
+  });
+
+  it("asks the search for EARLIER calls only, excluding this one — and cites each with an ISO date (2026-09-08)", async () => {
+    /*
+     * "Related" means prior: a summary that cites a meeting held AFTER this
+     * one is the reference the prompt forbids. The exclusion and the
+     * before-filter are SQL parameters (the wall); the date rides the
+     * projection so the model can write "as agreed in «X» on <date>".
+     */
+    const { db, log } = fakeDb(twoCalls);
+    const result = await run("list_related_calls", db, { call_id: CALL_2 }) as {
+      calls: { call_id: string; call_date: string | null }[];
+    };
+    const search = log.find((l) => l.sql.includes("websearch_to_tsquery"))!;
+    expect(search.params?.[4]).toBe(CALL_2);
+    expect(search.params?.[5]).toBe("2026-08-12T09:00:00.000Z");   // callRow's started_at
+    expect(result.calls[0]!.call_date).toBe("2026-08-10T09:00:00.000Z");
   });
 
   it("returns an EMPTY list, not an error, when there is nothing prior", async () => {

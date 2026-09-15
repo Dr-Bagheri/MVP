@@ -266,7 +266,7 @@ DAG (M7) knows retry-with-backoff from dead-letter without parsing prose.
 | `audio_source_forbidden` | 403 | false | `audio_path` without `ML_ALLOW_LOCAL_PATHS`, or `audio_url` host not allow-listed |
 | `download_failed` | 502 | true | the pre-signed URL did not yield bytes |
 | `unsupported_media` | 415 | false | ffmpeg cannot decode it — it is not audio |
-| `media_too_long` | 413 | false | over the LANES' ceiling (2026-09-06): the largest among the configured lanes — Soniox `ML_SONIOX_MAX_DURATION_MS` (default 5 h), the fallback ASR `ML_MAX_DURATION_MS` (default 35 min). Judged once before any lane is paid; a lane that is asked past its own ceiling refuses with this type and the ladder tries the next |
+| `media_too_long` | 413 | false | over the LANES' ceiling (2026-09-06): the largest among the configured lanes — Soniox `ML_SONIOX_MAX_DURATION_MS` (default 5 h), the fallback ASR `ML_MAX_DURATION_MS` (default 90 min). Judged once before any lane is paid; a lane that is asked past its own ceiling refuses with this type and the ladder tries the next |
 | `transcode_failed` | 500 | true | ffmpeg failed on decodable input |
 | `stt_unavailable` | 503 | true | no lane is configured |
 | `stt_failed` | 502 | true | every lane attempted and failed; `attempts` details each |
@@ -287,7 +287,7 @@ DAG (M7) knows retry-with-backoff from dead-letter without parsing prose.
 | `ML_REQUIRE_WORD_TIMESTAMPS` | `0` | §3 — degrade-and-flag, in **every** deployment profile. `1` (refuse instead) is sanctioned **only** for CI and acceptance runs, where a contract regression should fail loudly rather than degrade quietly. Never set it in a deployment |
 | `ML_ALLOW_LOCAL_PATHS` | `0` | enables `audio_path` |
 | `ML_URL_ALLOWLIST` | — | comma-separated hosts `audio_url` may be fetched from. Empty = any host **only** when `ML_ALLOW_LOCAL_PATHS=1` (dev); in production an empty allow-list rejects every URL |
-| `ML_MAX_DURATION_MS` | `2100000` | 35 minutes — the FALLBACK lane's ceiling, and the pipeline's when no lane is configured (2026-09-06) |
+| `ML_MAX_DURATION_MS` | `5400000` | 90 minutes — the FALLBACK lane's ceiling, and the pipeline's when no lane is configured. Was 35 min (a retired 30-minute part plus slack) until 2026-09-08, which refused whole hour-long takes whenever the primary lane was down |
 | `ML_SONIOX_MAX_DURATION_MS` | `18000000` | 5 hours — the primary lane's ceiling, the provider's own limit. The VAD reads the file as a stream (thirty seconds at a time) so a five-hour recording never sits in memory |
 | `ML_MAX_BYTES` | `524288000` | 500 MB |
 | `ML_WORK_DIR` | OS temp | per-job scratch, deleted in a `finally` |

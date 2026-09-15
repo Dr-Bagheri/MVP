@@ -21,6 +21,7 @@ import {
   useIntegrationCopy,
   type IntegrationEntry,
 } from "./integrationsCatalogue";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The data sources this product reads — what is connected, and what could be
@@ -133,7 +134,9 @@ export function Integrations() {
   const [tab, setTab] = useState<"available" | "connected">("available");
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
   const [me, setMe] = useState<Me | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  /* The connect refusal is a toast (2026-09-08). It was a red line pinned
+     under the tile grid, which is a long way from the tile that was pressed
+     on a shelf this tall. */
   const [query, setQuery] = useState("");
   /** "" = every app; otherwise the one provider whose rows are shown */
   const [app, setApp] = useState<ConnectorProvider | "">("");
@@ -146,11 +149,10 @@ export function Integrations() {
   }, []);
 
   async function connect(provider: ConnectorProvider) {
-    setError(null);
     try {
       window.location.assign(await api.connectorAuthorization(provider, locale));
     } catch {
-      setError(tw("connectFailed"));
+      notifyError(tw("connectFailed"));
     }
   }
 
@@ -514,7 +516,6 @@ export function Integrations() {
                     );
                   })}
             </div>
-            {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
           </div>
 
       {/*

@@ -245,6 +245,13 @@ const ProjectsIcon = (p: SVGProps<SVGSVGElement>) => (
 );
 
 export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
+  /* HOME — the agent's own room, and the rail's first entry (2026-09-08).
+     The ROBOT rather than the house: the page behind it is a conversation
+     with a prompt box, and a house on a rail whose other entries are all
+     nouns of the product reads as "back to the start" rather than as the
+     name of the thing you arrive at. `hub` keeps the house it always had
+     for the mobile bar's own use. */
+  home: AssistantIcon,
   dashboard: BoardIcon,
   tasks: TasksIcon,
   projects: ProjectsIcon,

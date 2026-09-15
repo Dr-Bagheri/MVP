@@ -92,7 +92,7 @@ export function DateField({ value, onChange, id }: {
       </button>
 
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto rounded-xl border-border bg-surface p-2 shadow-island">
+      <PopoverContent align="start" className="w-auto glass-chrome rounded-xl p-2 shadow-island">
         <div className="w-72">
           <div className="mb-2 flex flex-wrap gap-1.5">
             {preset(t("dateToday"), 0)}
@@ -217,7 +217,7 @@ export function TimeField({ value, onChange, id }: {
       </button>
 
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto rounded-xl border-border bg-surface p-2 shadow-island">
+      <PopoverContent align="start" className="w-auto glass-chrome rounded-xl p-2 shadow-island">
         {/*
           HOUR FIRST, MINUTES SECOND — and "first" here means LEFT, in both
           locales (user directive, 2026-09-03: "hour should be the first and

@@ -23,27 +23,40 @@
  * Deliberately NOT mocked, and deliberately spawns a real node: a fake
  * runtime cannot reproduce a runtime's parser.
  */
-import { createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { makeKey, signES256, startJwksServer } from "./helpers/es256.ts";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const entrypoint = path.join(packageRoot, "src", "api", "main.ts");
 
 /** A port nothing else in this repo uses, so a stray server can't fake a pass. */
 const PORT = 8137;
-const BOOT_SECRET = "boot-smoke";
+
+/**
+ * A REAL JWKS LISTENER, ON A REAL SOCKET (review F1).
+ *
+ * This is the one test that runs the product under its PRODUCTION RUNTIME, in
+ * a spawned process — so `vi.stubGlobal("fetch", …)` cannot reach it. That is
+ * not an inconvenience, it is the reason this listener is worth having: the
+ * child really dials this URL over TCP and really verifies an ES256 signature,
+ * which no in-process fake can demonstrate.
+ *
+ * F1 offered a second option — "leave it on HS256 as an explicitly commented
+ * carve-out" — and it is self-cancelling: a carve-out on HS256 requires
+ * keeping the very branch F1 deletes. There was only ever one answer.
+ */
+const KEY = makeKey("boot-key");
+const jwks = await startJwksServer([KEY]);
 
 /** A structurally valid token, so the request fails in the DATA layer. */
 function boomToken(): string {
-  const b64 = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
-  const head = b64({ alg: "HS256", typ: "JWT" });
-  const body = b64({ sub: "11111111-1111-4111-8111-111111111111", exp: Math.floor(Date.now() / 1000) + 600 });
-  const sig = createHmac("sha256", Buffer.from(BOOT_SECRET, "utf8"))
-    .update(`${head}.${body}`).digest().toString("base64url");
-  return `${head}.${body}.${sig}`;
+  return signES256(KEY, {
+    sub: "11111111-1111-4111-8111-111111111111",
+    exp: Math.floor(Date.now() / 1000) + 600,
+  });
 }
 
 interface BootResult {
@@ -66,7 +79,8 @@ async function bootAndProbe(): Promise<BootResult> {
       // pass a "does it start" check and fail the user.
       DATABASE_URL_APP: "postgresql://u:p@127.0.0.1:1/db",
       DATABASE_URL_AGENT: "postgresql://u:p@127.0.0.1:1/db",
-      SUPABASE_JWT_SECRET: BOOT_SECRET,
+      /* the child fetches this over a socket — see the listener above */
+      SUPABASE_JWKS_URL: jwks.url,
       PORT: String(PORT),
       HOST: "127.0.0.1",
       // NOT "silent": this test now asserts that a 500 is logged, and a
@@ -149,6 +163,16 @@ describe("the api process boots under the production runtime", () => {
   beforeAll(async () => {
     booted = await bootAndProbe() as BootResult & { faultStatus: number };
   }, 40_000);
+
+  afterAll(async () => { await jwks.close(); });
+
+  it("the child really fetched the JWKS over a socket", () => {
+    /* the load-bearing assertion, and the one a stubbed fetch could not make:
+       a hit here means a separate OS process resolved this URL and parsed the
+       key document. Without it, "it verified a token" is a claim about this
+       process rather than about the product's runtime. */
+    expect(jwks.hits(), "the spawned api fetched the JWKS document").toBeGreaterThan(0);
+  });
 
   it("starts, serves /health, and walls an unauthenticated request", () => {
     const result = booted!;

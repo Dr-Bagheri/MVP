@@ -38,6 +38,22 @@ import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } f
  *
  * jsdom has no layout; the test mocks `elementFromPoint` to name the column.
  *
+ * THE CARD FLOATS OVER THE BOARD, not inside its column (user, 2026-09-09:
+ * "dragging a task should animate to be hover on top of the cards and not
+ * inside the container cards"). The first version transformed the card WHERE
+ * IT SAT and gave it `z-50`, which cannot work here for two reasons that both
+ * had to be found in the browser: the column's card list is `overflow-y-auto`,
+ * so the card was CLIPPED at the list's edge, and every column wears `.glass`
+ * — `backdrop-filter` makes an element a stacking context AND the containing
+ * block for `position: fixed` descendants, so neither a z-index nor a fixed
+ * position could lift the card out of its own column. What travels with the
+ * pointer is therefore a CLONE appended to `document.body`: outside every
+ * column's clip and every column's stacking context, tilted and raised so it
+ * reads as picked up. The real card stays in the tree and becomes the empty
+ * slot it left behind (the board draws it), which is also what opens the gap
+ * in the column under the pointer — `onLift` reports the card's measured size
+ * so a slot the same height can be held open there.
+ *
  * THE NATIVE DRAG, settled in a real browser (2026-09-05, the third report:
  * "moving cards by hand still not working"). A card sits inside a column, and
  * the column was an HTML5 drag source for reordering. Press on the card, move
@@ -73,8 +89,55 @@ export function columnAt(x: number, y: number): string | null {
   return hit?.closest<HTMLElement>("[data-column]")?.dataset.column ?? null;
 }
 
+/** the tilt and the swell a card rises into when it is picked up */
+const CARRY = "rotate(2.5deg) scale(1.03)";
+
+/**
+ * THE CARRIED CARD: a copy of `el` at `box`, fixed to the VIEWPORT and parked
+ * on `document.body`. A copy and not the card itself because the card is
+ * React's — moving that node between parents would leave the tree and the DOM
+ * disagreeing about where a card is, and React would put it back on the next
+ * render. It takes no hits (the hit-test looks straight through it for the
+ * column underneath) and no part of a screen reader's attention: the real card
+ * is still in the tree and still says everything this one shows.
+ *
+ * TWO ELEMENTS, and that is the whole reason the pickup can be animated. The
+ * OUTER one carries the pointer's translation and has no transition, so the
+ * card is exactly under the hand on every frame; the INNER one carries the
+ * tilt and the swell and DOES have one, so the card rises into the hand over
+ * 140ms instead of snapping. Put both on one element and the transition
+ * applies to the following too — the card then trails the pointer by a tenth
+ * of a second, which reads as lag and not as weight.
+ */
+function raise(el: HTMLElement, box: DOMRect): HTMLElement {
+  const layer = document.createElement("div");
+  layer.setAttribute("data-drag-ghost", "");
+  layer.setAttribute("aria-hidden", "true");
+  layer.style.cssText =
+    `position:fixed;left:${box.left}px;top:${box.top}px;` +
+    `width:${box.width}px;height:${box.height}px;margin:0;` +
+    `pointer-events:none;z-index:80;will-change:transform;`;
+
+  const face = el.cloneNode(true) as HTMLElement;
+  face.removeAttribute("data-card");
+  face.style.cssText +=
+    `;margin:0;width:100%;height:100%;box-sizing:border-box;` +
+    `transform-origin:50% 50%;transform:none;cursor:grabbing;` +
+    `transition:transform 140ms cubic-bezier(.2,.8,.3,1), box-shadow 140ms ease-out;` +
+    /* the drop the theme gives a floating layer (R8's island) and the accent
+       edge the board used to draw as a ring, written out rather than classed:
+       this node lives on the body, outside anything that would style it */
+    `box-shadow:0 22px 45px -12px rgb(0 0 0 / .35), 0 0 0 1px rgb(var(--accent) / .55);`;
+  layer.appendChild(face);
+  /* on the NEXT frame, or the browser coalesces it with the first paint and
+     there is no change to transition from */
+  requestAnimationFrame(() => { face.style.transform = CARRY; });
+  return layer;
+}
+
 export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
-  onLift: () => void;
+  /** the lifted card's measured box, so the board can hold a slot its size */
+  onLift: (size: { width: number; height: number }) => void;
   onOver: (columnId: string | null) => void;
   onDrop: (columnId: string | null) => void;
   onCancel: () => void;
@@ -83,7 +146,8 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
     phase: Phase; x0: number; y0: number; pointerId: number; touch: boolean;
     timer: ReturnType<typeof setTimeout> | null; el: HTMLElement | null;
     over: string | null; swallow: boolean; detach: (() => void) | null;
-  }>({ phase: "idle", x0: 0, y0: 0, pointerId: -1, touch: false, timer: null, el: null, over: null, swallow: false, detach: null });
+    ghost: HTMLElement | null;
+  }>({ phase: "idle", x0: 0, y0: 0, pointerId: -1, touch: false, timer: null, el: null, over: null, swallow: false, detach: null, ghost: null });
   /* the latest callbacks, read at event time — the handlers below are stable */
   const fns = useRef({ onLift, onOver, onDrop, onCancel });
   fns.current = { onLift, onOver, onDrop, onCancel };
@@ -96,6 +160,7 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
     const s = st.current;
     if (s.timer !== null) { clearTimeout(s.timer); s.timer = null; }
     if (s.detach !== null) { s.detach(); s.detach = null; }
+    if (s.ghost !== null) { s.ghost.remove(); s.ghost = null; }
     if (s.el !== null) { s.el.style.transform = ""; s.el.style.pointerEvents = ""; }
     window.removeEventListener("touchmove", preventScroll);
     document.body.classList.remove("select-none");
@@ -107,9 +172,14 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
     if (s.phase !== "pressed" || s.el === null) return;
     if (s.timer !== null) { clearTimeout(s.timer); s.timer = null; }
     s.phase = "lifted";
+    const box = s.el.getBoundingClientRect();
+    s.ghost = raise(s.el, box);
+    document.body.appendChild(s.ghost);
+    /* the card under the ghost stops taking hits even before the board turns
+       it into a slot — one frame of a card that is in two places is a flicker */
     s.el.style.pointerEvents = "none";
     window.addEventListener("touchmove", preventScroll, { passive: false });
-    fns.current.onLift();
+    fns.current.onLift({ width: box.width, height: box.height });
   }, [preventScroll]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
@@ -140,8 +210,8 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
         if (s.touch) { putBack(); return; }
         lift();
       }
-      if (s.phase !== "lifted" || s.el === null) return;
-      s.el.style.transform = `translate3d(${ev.clientX - s.x0}px, ${ev.clientY - s.y0}px, 0)`;
+      if (s.phase !== "lifted" || s.ghost === null) return;
+      s.ghost.style.transform = `translate3d(${ev.clientX - s.x0}px, ${ev.clientY - s.y0}px, 0)`;
       const over = columnAt(ev.clientX, ev.clientY);
       if (over !== s.over) { s.over = over; fns.current.onOver(over); }
     };

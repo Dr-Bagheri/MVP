@@ -98,14 +98,85 @@ export interface ModelsOptions {
  * only ordered.
  */
 export const SUGGESTED_MODELS: readonly string[] = [
-  // The user's chosen lineup (2026-08-16 directive): these five ARE the
-  // org's allow-list on the live deployment; the ranking matches it so the
-  // picker leads with what the org actually runs.
+  /*
+   * Re-picked 2026-09-09.
+   *
+   * The previous five were set on 2026-08-16 and never revisited. By now
+   * `openai/gpt-5.2` (1.75/14 per M) sat at rank 2 while `openai/gpt-5.6-terra`
+   * — a later model, pi-verified, 1.05M context — costs 1/6, and the head of
+   * the list was a PREVIEW id at 2/12. `meta-llama/llama-4-scout` has no
+   * reasoning and is not on any current tool-calling ranking; it was the
+   * cheap rung and it is the wrong one.
+   *
+   * What the picks are grounded in, so a later reader can re-check rather
+   * than re-guess:
+   *  - OpenRouter's tool-calling collection ranking (weekly real usage),
+   *  - Pi's own release notes: the gpt-5.6 family carries verified metadata
+   *    and thinking levels; Pi's tiny system prompt makes it model-agnostic,
+   *    so raw tool-calling reliability is what matters, not harness tuning,
+   *  - price and context from the bundled catalogue itself.
+   *
+   * Anthropic is barred by product rule, so the models most rankings put at
+   * the very top are simply not candidates here — see EXCLUDED_PROVIDERS.
+   *
+   * Still a JUDGEMENT, not a measurement: nothing here was benchmarked by us.
+   * The liveness seam named below (per-model `agent_run` errors as reputation)
+   * is still the real fix.
+   */
+  // flagship agentic: 1M context, verified thinking levels, half gpt-5.2's price
+  "openai/gpt-5.6-terra",
+  // top of OpenRouter's tool-calling list for long-horizon agents; 1M context
+  "z-ai/glm-5.2",
+  // 1M context, lowest observed hallucination, a fifth of the flagship's cost
+  "deepseek/deepseek-v4-pro",
+  // the Google rung, now the current one rather than a preview id
+  "google/gemini-3.6-flash",
+  // the cheap/fast rung: 0.1/0.6 per M, and #2 on the tool-calling ranking
+  "openai/gpt-5.6-luna",
+];
+
+/**
+ * THE PICKER'S ORDER, and the shortlist the "add a model" dialog opens on.
+ *
+ * `SUGGESTED_MODELS` is the org's lineup — five, chipped as such. This is the
+ * wider ranked shelf, and it exists because the ADD dialog was ordering the
+ * rest of the catalogue alphabetically: an admin opening it saw
+ * `ai21/jamba-large-1.7` (retired provider), three `aion-labs` and four
+ * `amazon/nova` before anything they would plausibly choose. That is the same
+ * failure the comment above records for the members' picker, still live one
+ * dialog over — fixing one instance does not fix its siblings.
+ *
+ * Ordering only. Nothing is removed from the catalogue, and the dialog's
+ * search still reaches every model — this decides what shows FIRST, and what
+ * an empty search box shows at all.
+ */
+export const RECOMMENDED_MODELS: readonly string[] = [
+  ...SUGGESTED_MODELS,
+  "openai/gpt-5.6-sol",
+  "x-ai/grok-4.5",
+  "moonshotai/kimi-k2.6",
+  "deepseek/deepseek-v4-flash",
+  "google/gemini-3.5-flash",
+  "qwen/qwen3.7-max",
+  "minimax/minimax-m3",
+  "z-ai/glm-5.1",
+  "openai/gpt-5.4",
+  "moonshotai/kimi-k3",
+  "qwen/qwen3.7-plus",
+  "nvidia/nemotron-3-ultra-550b-a55b",
+  "tencent/hy3",
+  "mistralai/mistral-large-2512",
+  "minimax/minimax-m2.7",
+  "x-ai/grok-4.3",
+  "qwen/qwen3.6-plus",
+  "openai/gpt-5.4-mini",
+  "z-ai/glm-4.7",
+  // the previous lineup, kept on the shelf: an org already running one of
+  // these must still find it without typing the id from memory.
   "google/gemini-3.1-pro-preview",
   "openai/gpt-5.2",
   "google/gemini-3.1-flash-lite",
   "deepseek/deepseek-v3.2",
-  "meta-llama/llama-4-scout",
 ];
 
 /**
@@ -157,6 +228,146 @@ const isExcluded = (id: string): boolean => {
   return EXCLUDED_PROVIDERS.includes(vendor) || normalized.includes("claude");
 };
 
+/**
+ * ── WHAT IS NOT A MODEL ────────────────────────────────────────────────────
+ *
+ * The catalogue's 335 entries are not 335 models. Some are ROUTING PLANS
+ * (`:batch`, `:free`), some are MOVING ALIASES (`~openai/gpt-latest`,
+ * `openai/gpt-chat-latest`), some are META-ROUTERS that pick a model for you
+ * (`openrouter/auto`, `openrouter/fusion`, and a bare `auto` with no vendor
+ * at all), and one is a tool-schema variant (`-customtools`).
+ *
+ * This is the `:online` lesson generalised. That suffix was "a transport
+ * feature wearing an identity's clothes" and it killed every ask for four
+ * seconds a request until someone read the id closely. The same clothes are
+ * all over the catalogue, and the admin picker was offering them as choices:
+ * an org could allow `openai/gpt-5.2:batch` and get a model that answers on
+ * a different latency contract entirely.
+ *
+ * A moving alias is excluded for a different reason than the rest: it
+ * RESOLVES ELSEWHERE AND SILENTLY. An org that allowed `~openai/gpt-latest`
+ * has allowed whatever OpenAI ships next, which is not a decision an admin
+ * can be said to have made.
+ */
+const NOT_A_MODEL: readonly RegExp[] = [
+  /:[a-z]+$/, // a routing plan (:batch, :free, :online)
+  /^~/, // the catalogue's own alias spelling
+  /^openrouter\//, // meta-routers: they pick a model, they are not one
+  /-latest$/, // resolves to whatever ships next
+  /-customtools$/, // a tool-schema variant of a model already listed
+];
+
+const isNotAModel = (id: string): boolean =>
+  !id.includes("/") || NOT_A_MODEL.some((pattern) => pattern.test(id));
+
+/**
+ * A SNAPSHOT TAIL: a date, not an identity. `-2024-11-20`, `-08-2024`,
+ * `-0905`, `-2507`, `-20260420`. Every one of these names *when* a model was
+ * cut, and the catalogue carries the plain id beside it for all but a few.
+ */
+const SNAPSHOT = /-(\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}|\d{2}-\d{2}|\d{8}|\d{6}|\d{4})$/;
+
+/**
+ * ── LATEST OF EACH MODEL ──────────────────────
+ *
+ * "Latest of each model, not biggest" — and the "not biggest" half is the
+ * load-bearing one. `openai/gpt-5.4-pro` is 30/180 per million; an admin who
+ * picks the newest FLAGSHIP for an assistant that runs on every mail poll has
+ * repriced the org by thirty times without being shown a number. So this
+ * ranks by recency within a family and says nothing about size.
+ *
+ * A FAMILY is the id with its version numbers blanked: `openai/gpt-5.6-luna`
+ * and `openai/gpt-5.4-luna` are one family, `-luna` and `-terra` are two.
+ * Within a family the highest version wins, and the plain id beats a dated
+ * snapshot of itself.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT DO is decide that a family is obsolete.
+ * `o4-mini` and `llama-3.3-70b` survive as the latest of theirs even though
+ * OpenAI and Meta have both moved on, because the only rule that would cut
+ * them ("the vendor has a newer generation") also cuts `qwen3-coder-next`,
+ * which is current and distinct. Listing a superseded family is a small
+ * cost now that every row states its price and context window — an admin can
+ * see 16k and $0.50 and draw the obvious conclusion. Guessing wrong about
+ * which families are dead is the larger cost, and it is the failure this
+ * file already records twice.
+ *
+ * Version comparison is DECIMAL, not semver: `grok-4.5` beats `grok-4.20`.
+ * Segment-wise integer comparison ranks 4.20 above 4.5 and would have hidden
+ * xAI's current model behind an April-20 joke release. These are marketing
+ * version numbers and they are read the way they are printed.
+ */
+function versionOf(id: string): number[] {
+  let stem = id;
+  const snapshots: number[] = [];
+  // strip qualifier tails until nothing more comes off — `-preview` and a
+  // date can both be present (`gemini-2.5-pro-preview-05-06`)
+  for (;;) {
+    const before = stem;
+    stem = stem.replace(/-preview$/, "");
+    const dated = stem.match(SNAPSHOT);
+    if (dated) {
+      snapshots.push(Number(dated[1]!.replace(/-/g, "")));
+      stem = stem.slice(0, dated.index);
+    }
+    if (stem === before) break;
+  }
+  return [
+    ...(stem.match(/\d+(?:\.\d+)*/g) ?? []).map(Number),
+    // a PLAIN id outranks a dated cut of itself: `openai/gpt-4o` over
+    // `openai/gpt-4o-2024-11-20`. The plain id is the vendor's own pointer at
+    // the family and the one a person recognises.
+    snapshots.length === 0 ? 1 : 0,
+    ...snapshots,
+    // and a shipped id outranks a preview of the same version
+    id.endsWith("-preview") ? 0 : 1,
+  ];
+}
+
+/** The family key: the id with every version number blanked out. */
+function familyOf(id: string): string {
+  let stem = id;
+  for (;;) {
+    const before = stem;
+    stem = stem.replace(/-preview$/, "").replace(SNAPSHOT, "");
+    if (stem === before) break;
+  }
+  return stem.replace(/\d+(?:\.\d+)*/g, "#");
+}
+
+function newerVersion(a: number[], b: number[]): boolean {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const difference = (a[i] ?? -1) - (b[i] ?? -1);
+    if (difference !== 0) return difference > 0;
+  }
+  return false;
+}
+
+/**
+ * Keep the latest of each family, plus everything `keep` names.
+ *
+ * `keep` is not a convenience — it is what stops this filter from breaking
+ * the screen it serves. The curation view is ALSO the table an admin removes
+ * a model from, so a filter that hides an allowed model takes away the only
+ * control for un-allowing it: the org would be running a model it could no
+ * longer see, let alone stop. The suggested shelf is kept for the milder
+ * version of the same problem — a lineup naming a model the list omits is
+ * two screens disagreeing about one org.
+ */
+export function latestOfEachFamily<T extends { id: string }>(
+  models: T[], keep: (id: string) => boolean,
+): T[] {
+  const best = new Map<string, { model: T; version: number[] }>();
+  for (const model of models) {
+    if (isNotAModel(model.id)) continue;
+    const family = familyOf(model.id);
+    const version = versionOf(model.id);
+    const held = best.get(family);
+    if (!held || newerVersion(version, held.version)) best.set(family, { model, version });
+  }
+  const chosen = new Set([...best.values()].map((entry) => entry.model.id));
+  return models.filter((m) => chosen.has(m.id) || keep(m.id));
+}
+
 /** A stored preference the product will not serve is not a preference. */
 function servablePreference(id: string | null): string | null {
   return id !== null && isExcluded(id) ? null : id;
@@ -186,11 +397,14 @@ export function firstServable(...candidates: (string | null | undefined)[]): str
   return null;
 }
 
-/** Suggested first (in the order above), then everything else unchanged. */
+/** Recommended first (in the order above), then everything else unchanged. */
 function bySuggestion<T extends { id: string }>(models: T[]): T[] {
   const rank = (id: string): number => {
-    const at = SUGGESTED_MODELS.indexOf(id);
-    return at === -1 ? SUGGESTED_MODELS.length : at;
+    // RECOMMENDED_MODELS opens with SUGGESTED_MODELS, so the lineup still
+    // leads — the wider list only decides what comes after it, instead of
+    // letting the alphabet decide.
+    const at = RECOMMENDED_MODELS.indexOf(id);
+    return at === -1 ? RECOMMENDED_MODELS.length : at;
   };
   // A STABLE sort: models outside the suggested list keep catalogue order
   // relative to each other rather than being shuffled by an arbitrary tie
@@ -289,7 +503,11 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
      * rather than watching a checked box produce nothing.
      */
     async curation(identity: Identity): Promise<{
-      models: { id: string; name: string; allowed: boolean; suggested: boolean; tools?: boolean }[];
+      models: {
+        id: string; name: string; allowed: boolean; suggested: boolean;
+        recommended: boolean; tools?: boolean;
+        cost?: { input: number; output: number }; contextWindow?: number;
+      }[];
       curated: boolean;
     }> {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
@@ -304,14 +522,38 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
       if (!row) throw new NotFoundError("member not found");
       const allowed = row.allowed_models ?? [];
       const curated = allowed.length > 0;
-      const offered = catalogue().filter((m) => !isExcluded(m.id));
+      /*
+       * The exclusion FIRST and unconditionally, then the catalogue's own
+       * noise. `latestOfEachFamily` is presentation — it decides which of
+       * four cuts of one model an admin is shown — so it must never be the
+       * thing that keeps a barred provider out; that is `isExcluded`'s job
+       * and it runs before this line, as it does everywhere else.
+       *
+       * Already-allowed and shelf models survive the filter (see the
+       * function's own note): an org running an old snapshot must still find
+       * the row that removes it.
+       */
+      const offered = latestOfEachFamily(
+        catalogue().filter((m) => !isExcluded(m.id)),
+        (id) => allowed.includes(id) || RECOMMENDED_MODELS.includes(id),
+      );
       const capability = await capabilityOf();
       return {
         models: bySuggestion(offered).map((m) => ({
           id: m.id,
           name: m.name,
+          /* the two facts that make a row answerable. Passed through rather
+             than formatted: "$1.75 / $14 per M" is a decision about language
+             and locale, and this is the wire. */
+          ...(m.cost ? { cost: m.cost } : {}),
+          ...(m.contextWindow !== undefined ? { contextWindow: m.contextWindow } : {}),
           allowed: !curated || allowed.includes(m.id),
           suggested: SUGGESTED_MODELS.includes(m.id),
+          /* the shelf flag, distinct from the chip: `suggested` is the org's
+             five, `recommended` is "worth showing before the admin has typed
+             anything". Served rather than re-derived in the UI so one list
+             decides both the ORDER and the shortlist. */
+          recommended: RECOMMENDED_MODELS.includes(m.id),
           ...(capability.known ? { tools: capability.toolCapable.has(m.id) } : {}),
         })),
         curated,

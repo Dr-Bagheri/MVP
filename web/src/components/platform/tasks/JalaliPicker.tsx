@@ -58,7 +58,7 @@ export function JalaliPicker({ value, onPick, onClose }: {
   );
 
   return (
-    <div className="w-[268px] rounded-2xl border border-border bg-surface p-3 shadow-island">
+    <div className="w-[268px] glass-chrome rounded-2xl p-3 shadow-island">
       <div className="mb-2 flex flex-wrap items-center justify-center gap-1.5">
         {preset(t("dueToday"), 0)}
         {preset(t("dueTomorrow"), 1)}

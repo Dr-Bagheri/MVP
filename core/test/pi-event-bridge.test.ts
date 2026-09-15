@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { bridgeAgentEvent, loopConfig, loopInput, MAX_OUTPUT_TOKENS } from "../src/agent/pi.ts";
+import {
+  bridgeAgentEvent, loopConfig, loopInput, MAX_OUTPUT_TOKENS, reasoningFor,
+} from "../src/agent/pi.ts";
 
 /**
  * The Pi event bridge — the seam that silently ate every assistant answer.
@@ -163,5 +165,45 @@ describe("loopInput carries the conversation", () => {
       { role: "assistant", text: "پاسخ" },
     ]);
     expect(context.messages).toHaveLength(1);
+  });
+});
+
+/**
+ * THE THINKING LEVEL, which nothing had ever asserted.
+ *
+ * It was `"low"` for a month — not as a judgement about our work, but
+ * because `low` was the smallest value that stops a reasoning-mandatory model
+ * answering 400, and the spike that found the 400s had no reason to look
+ * further. A value chosen to clear an error and then left standing as a
+ * setting is the shape this repo keeps meeting; what makes it survive is that
+ * no test can tell "somebody decided this" from "somebody needed any value
+ * here at all".
+ *
+ * So the assertion is the LEVEL, not merely its presence: a test that only
+ * checked "a level is sent" passes against every one of them, including the
+ * one that was wrong.
+ */
+describe("the thinking level", () => {
+  it("asks for MEDIUM — the level documented for agentic tool use", () => {
+    // Every run reaching this function coordinates tools. `low` is the
+    // documented setting for speed-first drafting, which none of them are.
+    expect(reasoningFor(true)).toBe("medium");
+  });
+
+  it("sends NOTHING for a model that does not take one", () => {
+    // The other half, and it is not decoration: a level on a model that
+    // takes none is the mirror of the 400 this function exists to prevent.
+    expect(reasoningFor(false)).toBeUndefined();
+  });
+
+  it("travels on the loop config, so a run cannot quietly drop it", () => {
+    // `loopConfig` is where the value actually reaches Pi. Asserting the
+    // function alone would stay green if the config stopped calling it.
+    const args = {
+      model: { provider: "openrouter", id: "m" }, systemPrompt: "s",
+      userText: "u", tools: [],
+    };
+    expect(loopConfig(args, { id: "m" }, true).reasoning).toBe("medium");
+    expect(loopConfig(args, { id: "m" }, false).reasoning).toBeUndefined();
   });
 });

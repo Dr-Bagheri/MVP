@@ -72,6 +72,12 @@ export const IconAgent = (p: SVGProps<SVGSVGElement>) => (
 export const IconMic = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" /><path d="M12 18v3" /></svg>
 );
+/* the hamburger — three rules on the same 24 grid as the rest of the set,
+   at the 3.5/20.5 inset `IconRows` already uses so the two read as siblings
+   rather than as two people's idea of "full width". */
+export const IconMenu = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17" /></svg>
+);
 export const IconRows = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3.5" y="4.5" width="17" height="5.4" rx="1.6" /><rect x="3.5" y="14.1" width="17" height="5.4" rx="1.6" /></svg>
 );
@@ -198,6 +204,15 @@ export const IconChevronRight = (p: SVGProps<SVGSVGElement>) => (
 export const IconChevronEnd = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m9 5.5 6.5 6.5L9 18.5" /></svg>
 );
+/**
+ * COLLAPSE A PANEL to the edge it is pinned to — a chevron travelling toward a
+ * wall, which is what the assistant's header button actually does: the column
+ * narrows to its strip, it is not closed. Points to inline-END, so compose
+ * with `rtl:-scale-x-100` at the call site the way the chevrons above do.
+ */
+export const IconCollapseEnd = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="m8 6 6 6-6 6" /><path d="M18.5 5v14" /></svg>
+);
 export const IconUpload = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 16V4" /><path d="m7.5 8.5 4.5-4.5 4.5 4.5" /><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15" /></svg>
 );
@@ -212,6 +227,13 @@ export const IconPeople3 = (p: SVGProps<SVGSVGElement>) => (
 );
 export const IconTag = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M3.5 11V4.5A1 1 0 0 1 4.5 3.5H11a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8l-5.5 5.5a2 2 0 0 1-2.8 0L4.1 12.4a2 2 0 0 1-.6-1.4Z" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /></svg>
+);
+/* THE PAPERCLIP — the composer's own control since 2026-09-08, when the ⊕ and
+   its three submenus became one act. `IconUpload` was the near-miss already in
+   the set and it is the wrong word: an arrow into a tray is a file leaving for
+   somewhere, and this one stays in the sentence being written. */
+export const IconPaperclip = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M20 11.5 12.2 19.3a5 5 0 0 1-7.1-7.1l8-8a3.4 3.4 0 0 1 4.8 4.8l-8 8a1.8 1.8 0 0 1-2.5-2.5l7.3-7.3" /></svg>
 );
 
 /* ---------------------------------------------------------------------------
@@ -392,6 +414,33 @@ export const IconVideo = (p: SVGProps<SVGSVGElement>) => (
     is trusted (the summary's grounding flags). Deliberately not the danger
     trash/close family: nothing is destroyed and nothing failed; a claim is
     unsupported, which is a thing to look at, not a thing to undo. */
+/* =========================================================================
+   THE STATUS TRIO — the four things a toast can be saying
+   =========================================================================
+   `warn` below was already one of them; these are the other three, drawn as
+   a family: one 9-radius circle, one glyph inside it, the same 1.7 stroke as
+   every other icon here. They exist because the toast (2026-09-08) has to
+   say *worked / for your information / failed* at a glance, and the set had
+   only a bare tick and a caution triangle — a bare tick beside a bare cross
+   in a stack of cards reads as a checklist, not as an outcome.
+
+   The triangle stays the odd one out ON PURPOSE: warn is the only one of the
+   four that is not an outcome, and its shape is the reason it is legible
+   without colour, which matters on the one screen a colour-blind reader is
+   most likely to be looking at in a hurry.
+   ======================================================================= */
+/** it worked */
+export const IconCheckCircle = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="m8.2 12.3 2.6 2.6 5-5.4" /></svg>
+);
+/** for your information */
+export const IconInfoCircle = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M12 11v5.2" /><circle cx="12" cy="7.9" r="1" fill="currentColor" stroke="none" /></svg>
+);
+/** it failed */
+export const IconErrorCircle = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="m9.2 9.2 5.6 5.6M14.8 9.2l-5.6 5.6" /></svg>
+);
 export const IconWarn = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 3.8 21 19.4a1.4 1.4 0 0 1-1.2 2.1H4.2A1.4 1.4 0 0 1 3 19.4L12 3.8Z" /><path d="M12 9.5v4.4" /><circle cx="12" cy="17.4" r="1" fill="currentColor" stroke="none" /></svg>
 );
@@ -413,11 +462,14 @@ export const ICONS = {
   "ask": IconAsk,
   "calendar": IconCalendar,
   "check": IconCheck,
+  "checkCircle": IconCheckCircle,
   "chevronEnd": IconChevronEnd,
   "chevronRight": IconChevronRight,
   "chip": IconChip,
   "clock": IconClock,
   "close": IconClose,
+  "collapseEnd": IconCollapseEnd,
+  "errorCircle": IconErrorCircle,
   "copy": IconCopy,
   "dots": IconDots,
   "download": IconDownload,
@@ -434,6 +486,7 @@ export const ICONS = {
   "mail": IconMail,
   "send": IconSend,
   "mailPlus": IconMailPlus,
+  "menu": IconMenu,
   "merge": IconMerge,
   "mic": IconMic,
   "micOff": IconMicOff,
@@ -445,6 +498,7 @@ export const ICONS = {
   "pause": IconPause,
   "pencil": IconPencil,
   "people3": IconPeople3,
+  "paperclip": IconPaperclip,
   "pin": IconPin,
   "sun": IconSun,
   "moon": IconMoon,
@@ -455,6 +509,7 @@ export const ICONS = {
   "pulse": IconPulse,
   "redact": IconRedact,
   "resize": IconResize,
+  "infoCircle": IconInfoCircle,
   "retry": IconRetry,
   "rows": IconRows,
   "search": IconSearch,

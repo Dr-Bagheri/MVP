@@ -269,6 +269,48 @@ export function timeInstructions(now: Date, zone: string): string {
     + ` (a meeting at nine in the morning is "…T09:00:00${offset}", never a bare date).`,
     "A Jalali date the person gives you is a date in that calendar: convert it,"
     + " do not read its numbers as Gregorian.",
+    /*
+     * AND THE SAME FACT ON THE WAY OUT (observed 2026-09-09: a call
+     * history table whose "When" column read `2026-09-09T13:22:47.105Z`,
+     * thirteen rows of it). Every date the tools return is the wire's ISO
+     * instant in UTC, and a model with no rule about PRESENTING one copies
+     * it into the answer verbatim — correct to the millisecond, in a zone
+     * that is not the reader's, in a shape nobody reads at a glance.
+     *
+     * The rule above is about parsing what the person says; this one is
+     * about writing what they read, and the two are separate lessons: the
+     * prompt could tell the model exactly which instant "Monday" was and
+     * still get a UTC string back, because nothing had said not to.
+     *
+     * ISO stays where ISO belongs — tool arguments — and that exception is
+     * named, or the model would start writing "the ninth of September" into
+     * a `scheduled_at` field.
+     */
+    /*
+     * AND IN THE LANGUAGE OF THE ANSWER (observed 2026-09-09: an English
+     * answer whose table read «جمعه, ۲۰ شهریور» and «امروز ساعت ۱۹:۴۳»).
+     *
+     * The rule above said "their zone and calendar" and then showed two
+     * examples, the Jalali one first and neither labelled — so a model with no
+     * statement of WHICH copied the shape in front of it, and an English
+     * reader got a Persian date. Nothing else in the prompt covered it: the
+     * language rule is about the answer's prose, and a date is a rendering
+     * decision the model makes per cell.
+     *
+     * So the calendar is tied to the thing that already decides the answer's
+     * language, rather than to a preference this function cannot see: whoever
+     * the answer is written FOR is who its dates are written for.
+     */
+    "When you SHOW a time to the person, write it the way a person writes one —"
+    + " in their zone, day and month named, the clock only when it matters, and"
+    + " \"today\"/\"yesterday\" where that is the clearer thing to say."
+    + " THE DATE IS WRITTEN IN THE LANGUAGE OF YOUR ANSWER, in that language's"
+    + ` calendar and digits: an English answer takes the Gregorian form ("${gregorian}"),`
+    + ` a Persian answer the Jalali one («${jalali}»). Never mix them — a Jalali`
+    + " month or a Persian digit inside an English answer is wrong however"
+    + " correct the instant is, and so is the reverse."
+    + " Never put a raw ISO or UTC timestamp in"
+    + " front of them, in prose or in a table cell; ISO is for tool arguments only.",
   ].join(" ");
 }
 
@@ -276,7 +318,21 @@ export function languageInstruction(locale: unknown): string {
   const mirror =
     "Always reply in the language of the user's most recent message: an English"
     + " message gets an English answer, a Persian message gets a Persian answer —"
-    + " and when the user switches language mid-conversation, switch with them.";
+    + " and when the user switches language mid-conversation, switch with them."
+    /*
+     * WHY THE SOURCE CLAUSE (observed 2026-09-09: an English question about
+     * the last weekly meeting answered in Persian, citing a Persian
+     * transcript). The mirror rule was already here and already correct; what
+     * beat it was the RETRIEVED TEXT. A turn that reads a Persian call and
+     * then writes the answer is a turn whose immediate context is Persian, and
+     * the model follows the page in front of it rather than the sentence it
+     * was asked. So the rule has to name that case, because it is the only one
+     * where "the language of the message" is ambiguous in practice.
+     */
+    + " The language of what you READ is irrelevant to the language you WRITE:"
+    + " a Persian transcript, meeting, task or email summarised for an English"
+    + " question is summarised IN ENGLISH, and the reverse holds too. Only the"
+    + " user's own words choose the answer's language.";
   if (locale === "fa") {
     return `${mirror} If the message has no clear language, answer in Persian.`;
   }

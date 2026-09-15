@@ -7,6 +7,7 @@ import { PRIORITY_CHIP, TONE_CHIP, TONE_DOT } from "./TaskDialogs";
 import { TAB_BAR } from "./panelStyle";
 import { IconCheck, IconChevronRight, IconVideo } from "@/components/icons";
 import { dayKeyOf, digits, monthGridAt, weekRangeLabel, weekStrip } from "@/lib/format";
+import { useSeededName } from "@/lib/seededNames";
 
 /**
  * The board's OTHER views, taken from the reference (walked 2026-09-01):
@@ -236,6 +237,10 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
 }) {
   const t = useTranslations("tasks");
   const locale = useLocale();
+  /* the seeded columns localize wherever they are RENDERED, not only on the
+     board — a list row saying «بک‌لاگ» beside a board column saying "Backlog"
+     is one row of the database disagreeing with itself on one screen */
+  const seededName = useSeededName();
   const worn = labels.filter((label) => task.label_ids.includes(label.id));
   return (
     <div
@@ -277,7 +282,7 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
           {task.call_id !== null ? (
             <span className="flex items-center gap-1 truncate">
               <IconVideo width={12} height={12} />
-              {task.call_title ?? t("recordGone")}
+              {task.meeting_title ?? task.call_title ?? t("recordGone")}
             </span>
           ) : null}
           {worn.map((label) => (
@@ -290,7 +295,7 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
       {column !== null ? (
         <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-fg-muted">
           <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[column.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-          {column.name}
+          {seededName(column.name)}
         </span>
       ) : null}
     </div>

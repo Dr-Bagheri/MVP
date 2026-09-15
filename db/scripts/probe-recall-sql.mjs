@@ -9,18 +9,19 @@
 // any language, so this proves the SQL parses, plans and executes while
 // returning zero rows. Nobody's decisions are read.
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { ownerClient } from './lib/owner-url.mjs'
+import { findNeuraiPython } from './lib/neurai-python.mjs'
 
-/* copied byte for byte from db.mjs — see probe-telegram.mjs's header for why
-   retyping the python one-liner is not an option */
-const NEURAI_PYTHON =
-  process.env.NEURAI_PYTHON ??
-  'C:/Users/amirreza/Desktop/neurai-mvp/server/.venv/Scripts/python.exe'
-
+/* The python one-liner is copied byte for byte from db.mjs — see
+   probe-telegram.mjs's header for why retyping it is not an option. The
+   interpreter's PATH is not copied and has no default: it is a property of the
+   machine, and lib/neurai-python.mjs (review F4) owns that rule and the two
+   sentences for the two kinds of nothing. DATABASE_URL is the first sink here,
+   so this takes the non-throwing half and passes the reason on. */
 function ownerUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL
-  if (!existsSync(NEURAI_PYTHON)) throw new Error('no DATABASE_URL and no python')
+  const { path: NEURAI_PYTHON, reason } = findNeuraiPython()
+  if (!NEURAI_PYTHON) throw new Error(`no DATABASE_URL, and no python. ${reason}`)
   const out = execFileSync(
     NEURAI_PYTHON,
     [

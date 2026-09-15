@@ -16,7 +16,8 @@ import {
 import { TaskDetail } from "./tasks/TaskDetail";
 import {
   BOARD_ADD_COLUMN, BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
-  BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow,
+  BOARD_CARD_SLOT, BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE,
+  BoardAddRow, BoardSlot,
 } from "./board/boardStyle";
 import { ProjectDialog } from "./ProjectDialog";
 import { TopicNameBox } from "./TopicNameBox";
@@ -30,6 +31,7 @@ import { useSeededName } from "@/lib/seededNames";
 import { dayKeyOf, digits, personName } from "@/lib/format";
 import { SkeletonLines } from "@/components/scaffold";
 import { useRefreshEpoch } from "@/lib/refreshBus";
+import { notifyError } from "@/lib/notify";
 
 /**
  * THE TASK BOARD — rebuilt from the reference's own product (walked screen
@@ -67,7 +69,6 @@ export function TaskBoard() {
   const [labels, setLabels] = useState<TaskLabelRecord[]>([]);
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
   const [failed, setFailed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("kanban");
   /* read by `load` at call time — see the note there */
@@ -86,8 +87,19 @@ export function TaskBoard() {
      plus"); a topic carries no project id, so the split is read off the
      projects themselves */
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  /** the card in the air, and the column under the pointer (holdDrag) */
-  const [lifted, setLifted] = useState<{ id: string; over: string | null } | null>(null);
+  /*
+   * THE CARD IN THE AIR — which one, where it came from, the column under the
+   * pointer, and how tall it is (holdDrag reports the measured box on lift).
+   *
+   * `from` and `height` are here so the columns can hold a SLOT open: the card
+   * itself is carried by a clone parked on the body, so the tree still holds
+   * its element and would otherwise leave a card-shaped hole nowhere and a
+   * card-shaped nothing everywhere. With these, the source column keeps the
+   * card's place and the column under the pointer opens one.
+   */
+  const [lifted, setLifted] = useState<
+    { id: string; from: string; over: string | null; height: number } | null
+  >(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
   /* 0186 made creating a project an admin's act, and both doors below
      lead there. `false` while /me is in flight, so the controls are
@@ -197,19 +209,18 @@ export function TaskBoard() {
       /* WHICH nothing (rule 12): a row whose task is gone is not a failed
          save. It says so, and the lists re-read so the row leaves with it. */
       if (cause instanceof BffError && cause.status === 404) {
-        setError(t("gone"));
+        notifyError(t("gone"));
         load();
         return;
       }
-      setError(t("writeFailed"));
+      notifyError(t("writeFailed"));
     });
   }, [t, load]);
 
-  const refusal = useCallback(() => setError(t("writeFailed")), [t]);
+  const refusal = useCallback(() => notifyError(t("writeFailed")), [t]);
 
   const patchTask = useCallback(async (id: string, patch: Record<string, unknown>) => {
     try {
-      setError(null);
       const updated = await api.updateTask(id, patch);
       setBoard((prev) => prev === null ? prev : {
         ...prev,
@@ -503,12 +514,6 @@ export function TaskBoard() {
         ) : null}
       </div>
 
-      {error !== null ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {error}
-        </p>
-      ) : null}
-
       {/* ── the views ────────────────────────────────────────────────── */}
       {view === "kanban" ? (
         <div className={BOARD_LANE}>
@@ -616,7 +621,7 @@ export function TaskBoard() {
                       />
                     </button>
                     {toneMenu === col.id ? (
-                      <span className="absolute top-8 z-40 flex w-40 flex-wrap gap-1 rounded-xl border border-border bg-surface p-2 shadow-island">
+                      <span className="absolute top-8 z-40 flex w-40 flex-wrap gap-1 glass-chrome rounded-xl p-2 shadow-island">
                         {LABEL_COLORS.map((tone) => (
                           <button
                             key={tone}
@@ -695,15 +700,26 @@ export function TaskBoard() {
               </header>
 
               <div className={BOARD_CARDS}>
+                {/* the space made for a card arriving from ANOTHER column, at
+                    the top because that is where `moveTask` puts it */}
+                {lifted !== null && lifted.over === col.id && lifted.from !== col.id
+                  ? <BoardSlot height={lifted.height} />
+                  : null}
                 {columnCards(col.id).map((task) => (
                   <Card
                     key={task.id}
                     task={task}
                     labels={labels}
                     people={people}
-                    lifted={lifted !== null && lifted.id === task.id}
-                    onLift={() => setLifted({ id: task.id, over: null })}
-                    onOver={(over) => setLifted((cur) => (cur !== null && cur.id === task.id ? { id: cur.id, over } : cur))}
+                    /* carried: its own place is a slot while the pointer is
+                       still over this column, and gone once the pointer has
+                       taken it elsewhere — the space follows the card */
+                    carried={
+                      lifted === null || lifted.id !== task.id ? "no"
+                        : lifted.over === task.column_id || lifted.over === null ? "slot" : "away"
+                    }
+                    onLift={(size) => setLifted({ id: task.id, from: task.column_id, over: task.column_id, height: size.height })}
+                    onOver={(over) => setLifted((cur) => (cur !== null && cur.id === task.id ? { ...cur, over } : cur))}
                     onDrop={(over) => {
                       setLifted(null);
                       if (over !== null && over !== task.column_id) moveTask(task.id, over);
@@ -840,12 +856,14 @@ export function TaskBoard() {
 
 /** the reference's card: title, labels, its record, priority, progress —
     and the thing a hand moves (holdDrag: a click opens it, a hold lifts it) */
-function Card({ task, labels, people, lifted, onLift, onOver, onDrop, onCancel, onOpen, onToggleDone }: {
+function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel, onOpen, onToggleDone }: {
   task: TaskCardRecord;
   labels: TaskLabelRecord[];
   people: OrgPersonRecord[];
-  lifted: boolean;
-  onLift: () => void;
+  /** "no" on the board · "slot" while carried over its own column · "away"
+      once the pointer has taken it to another one */
+  carried: "no" | "slot" | "away";
+  onLift: (size: { width: number; height: number }) => void;
   onOver: (columnId: string | null) => void;
   onDrop: (columnId: string | null) => void;
   onCancel: () => void;
@@ -875,9 +893,26 @@ function Card({ task, labels, people, lifted, onLift, onOver, onDrop, onCancel, 
       data-card={task.id}
       onPointerDown={drag.onPointerDown}
       onDragStart={drag.onDragStart}
-      /* a lifted card rides above its column and says so; the transform that
-         carries it is written by the hook, not by a render per pointer move */
-      className={`${BOARD_CARD} ${lifted ? "relative z-50 cursor-grabbing ring-2 ring-accent shadow-island" : ""}`}
+      /*
+       * A CARRIED CARD IS NOT HERE — the thing under the hand is a clone
+       * parked on the body (holdDrag), so this element gives up its face and
+       * becomes the SLOT it left behind: its own box, emptied, dashed. It
+       * collapses to nothing once the pointer has taken the card to another
+       * column, where `BoardSlot` opens a gap the same height instead.
+       *
+       * It is emptied and NOT unmounted, and that is load-bearing: the drag
+       * lives in this element's `useHoldDrag`, so a render that swapped the
+       * card for a placeholder component would unmount the hook mid-gesture
+       * and its cleanup would put the card straight back down. The children
+       * are hidden by the wrapper (`[&>*]:invisible`) rather than removed,
+       * for the same reason and to keep the box exactly the size it was.
+       */
+      className={`${BOARD_CARD} ${
+        carried === "away" ? "hidden"
+          : carried === "slot"
+            ? BOARD_CARD_SLOT
+            : ""
+      }`}
       onClick={() => { if (drag.consumeClick()) return; onOpen(); }}
       role="button"
       tabIndex={0}
@@ -919,10 +954,17 @@ function Card({ task, labels, people, lifted, onLift, onOver, onDrop, onCancel, 
       ) : null}
 
       {task.call_id !== null ? (
-        <span className="mt-2 flex items-center gap-1 truncate rounded-md bg-accent-soft px-1.5 py-1 text-[11px] text-accent">
+        /* the provenance chip (2026-09-08): names the MEETING when the record
+           has one and leads to its page; the click stops here so the card's
+           own open-on-click does not also fire */
+        <Link
+          href={task.meeting_id !== null ? `/meetings/${task.meeting_id}` : `/calls/${task.call_id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-2 flex items-center gap-1 truncate rounded-md bg-accent-soft px-1.5 py-1 text-[11px] text-accent hover:underline"
+        >
           <IconVideo width={12} height={12} />
-          {t("fromRecord")}: {task.call_title ?? t("recordGone")}
-        </span>
+          {t("fromRecord")}: {task.meeting_title ?? task.call_title ?? t("recordGone")}
+        </Link>
       ) : null}
 
       <div className="mt-2 flex items-center justify-between gap-2">

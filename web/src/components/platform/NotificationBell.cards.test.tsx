@@ -13,10 +13,17 @@ import type { AgentCardItem } from "@/api/types";
  * catalogue's — asserted against the real fa.json — and the card opens the
  * MEETING rather than the conversations list every other card opens.
  *
- * The CONTROL is the half that makes the destination an assertion: a brief
- * still goes to /conversations and a colleague's message still goes nowhere,
- * because one destination for every kind would pass the two meeting cases and
- * send a digest to a meeting page.
+ * The CONTROL is the half that makes the destination an assertion: a brief goes
+ * to its OWN conversation and a colleague's message goes nowhere, because one
+ * destination for every kind would pass the two meeting cases and send a digest
+ * to a meeting page.
+ *
+ * WHERE A BRIEF GOES. `/conversations` is a list that deliberately does not
+ * contain it: db/0221 removed agent-opened sessions from the history table, so
+ * pressing the card would land nowhere. The brief's destination is
+ * `/assistant?c=<session_id>`, and `/conversations` is what a card whose
+ * session is NULL falls back to — which is exactly the arm the last case here
+ * exercises. NotificationBell.destination.test.tsx argues the point at length.
  */
 const push = vi.fn();
 vi.mock("@/i18n/routing", () => ({
@@ -86,7 +93,7 @@ describe("a meeting's cards in the bell (0217)", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/meetings/mtg-1"));
   });
 
-  it("THE CONTROL: a brief still opens the conversations, and a colleague's message still goes nowhere", async () => {
+  it("THE CONTROL: a brief opens its OWN conversation, and a colleague's message goes nowhere", async () => {
     CARDS = [
       card({ id: "c-b" }),
       card({ id: "c-m", kind: "member_message", title: "", body: "سلام، فردا می‌بینمت", from_name: "سارا" }),
@@ -95,7 +102,10 @@ describe("a meeting's cards in the bell (0217)", () => {
     await openPanel();
 
     await userEvent.click(await screen.findByText("خلاصهٔ آمادهٔ «تماس ۱»"));
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/conversations"));
+    /* db/0221: the brief's own thread, by id — not the list, which after 0211
+       does not contain it */
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/assistant?c=s-1"));
+    expect(push).not.toHaveBeenCalledWith("/conversations");
 
     push.mockClear();
     await openPanel();

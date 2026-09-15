@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
+import { api, type WorkflowSchedule } from "@/api/client";
 import type {
   AuthoredWorkflow, MailDraft, Me, StarterWorkflow, WorkflowCard, WorkflowRunRecord,
 } from "@/api/types";
@@ -20,7 +20,7 @@ import {
   Icon, IconPlay, IconRetry, IconToggleOff, IconToggleOn, IconTrash, type IconName,
 } from "@/components/icons";
 import { digits, formatDate, formatTime } from "@/lib/format";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import { WorkflowBuilder } from "@/components/platform/WorkflowBuilder";
 import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
@@ -237,13 +237,20 @@ export default function WorkflowDetailPage({
   /** the shipped LIBRARY — `null` while loading, `[]` when the read failed */
   const [starters, setStarters] = useState<StarterWorkflow[] | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[]>([]);
+  /**
+   * The standing schedules on this workflow (2026-09-08), read by handle
+   * once the subject is an ENGINE row — a template or an uninstalled
+   * starter has no `workflow_schedule` row to have. `[]` is both "none"
+   * and "the read failed": the slot then falls back to the trigger
+   * sentence, which is what it always showed.
+   */
+  const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
   /** the person's reply drafts — a mail workflow's actual output */
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
   const [orgName, setOrgName] = useState<string | null>(null);
   /** the caller — `auto_draft_replies` is THEIR switch, not the org's */
   const [me, setMe] = useState<Me | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
   /** the capability was withdrawn between the read and the press */
   const [refused, setRefused] = useState(false);
 
@@ -371,6 +378,46 @@ export default function WorkflowDetailPage({
 
   useCrumbTitle(subject?.name);
 
+  const subjectKind = subject?.kind;
+  useEffect(() => {
+    if (subjectKind !== "engine") { setSchedules([]); return; }
+    let live = true;
+    void api.workflowSchedules(handle)
+      .then((rows) => { if (live) setSchedules(rows); })
+      .catch(() => { if (live) setSchedules([]); });
+    return () => { live = false; };
+  }, [subjectKind, handle]);
+
+  /*
+   * "Every Monday at 08:00 UTC, next on …" — the schedule row's own facts.
+   * The weekday is read off `next_due` in UTC (a weekly row's next firing IS
+   * that weekday, by construction in core's nextDueAfter), so the name comes
+   * from Intl in the page's locale rather than a second weekday table; the
+   * clock is UTC on the record and is labelled as such rather than shifted.
+   */
+  const scheduleSentence = useMemo(() => {
+    const row = schedules.find((s) => s.enabled) ?? schedules[0];
+    if (!row) return null;
+    const next = new Date(row.next_due);
+    const time = digits(
+      `${String(Math.floor(row.at_minute / 60)).padStart(2, "0")}:${String(row.at_minute % 60).padStart(2, "0")}`,
+      locale,
+    );
+    const cadence = row.cadence === "weekly"
+      ? t("detailScheduleWeekly", {
+          weekday: new Intl.DateTimeFormat(locale === "fa" ? "fa-IR" : "en", {
+            weekday: "long", timeZone: "UTC",
+          }).format(next),
+          time,
+        })
+      : row.cadence === "monthly"
+        ? t("detailScheduleMonthly", { day: digits(next.getUTCDate(), locale), time })
+        : t("detailScheduleDaily", { time });
+    return `${cadence} — ${t("detailScheduleNext", {
+      date: `${formatDate(row.next_due, locale)} ${formatTime(row.next_due, locale)}`,
+    })}`;
+  }, [schedules, locale, t]);
+
   /* editing a workflow is an admin act; a member reads the process and
      keeps their own switch */
   const isAdmin = me?.role === "admin" || me?.role === "owner";
@@ -404,14 +451,25 @@ export default function WorkflowDetailPage({
   const catalogueProcess = useMemo((): WorkflowProcess | undefined => {
     const key = PROCESS_KEY[handle];
     if (key === undefined) return undefined;
-    try {
-      const raw = t.raw(`process.${key}`) as Partial<WorkflowProcess> | undefined;
-      const steps = Array.isArray(raw?.steps) && raw.steps.every(isStep) ? raw.steps : undefined;
-      return { trigger: isStep(raw?.trigger) ? raw.trigger : undefined, steps };
-    } catch {
-      /* no catalogue entry for this slug — the panel says so in words */
-      return undefined;
-    }
+    /*
+     * ASK BEFORE READING (review F15, the same shape as `lib/skillName.ts`).
+     *
+     * This was a `try`/`catch` around `t.raw`, and the catch could never fire:
+     * use-intl's `raw` reports a miss through `onError` — `console.error` by
+     * default — and RETURNS the key path rather than throwing. A `process.*`
+     * handle added without a catalogue entry would therefore have rendered
+     * correctly (the `Array.isArray` check below catches the returned string)
+     * while emitting a MISSING_MESSAGE on every render, seen by nobody.
+     *
+     * Not a defect today — `PROCESS_KEY` and the catalogue agree. That
+     * agreement is exactly what `skillName.ts`'s guard had until a fifth slug
+     * arrived without starters, so this asks the catalogue it is about to
+     * read.
+     */
+    if (!t.has(`process.${key}`)) return undefined;
+    const raw = t.raw(`process.${key}`) as Partial<WorkflowProcess> | undefined;
+    const steps = Array.isArray(raw?.steps) && raw.steps.every(isStep) ? raw.steps : undefined;
+    return { trigger: isStep(raw?.trigger) ? raw.trigger : undefined, steps };
   }, [handle, t]);
 
   const served = card ? wireProcess(card) : {};
@@ -521,7 +579,6 @@ export default function WorkflowDetailPage({
   async function toggleOrgWorkflow() {
     if (!subject?.manageId || saving) return;
     setSaving(true);
-    setSaveFailed(false);
     try {
       const updated = await api.patchWorkflow(subject.manageId, { enabled: !subject.enabled });
       /* the SERVER's answer is adopted, never an optimistic flip: if core
@@ -529,8 +586,12 @@ export default function WorkflowDetailPage({
       setAuthored((current) =>
         (current ?? []).map((entry) => (entry.id === updated.id ? updated : entry)));
     } catch (cause) {
+      /* 403 is not a failed write, it is a WITHDRAWN capability — the
+         switch itself goes away below, and a toast saying "that did not
+         save" about a control that is no longer there would be the page
+         contradicting itself. */
       if ((cause as { status?: number }).status === 403) setRefused(true);
-      else setSaveFailed(true);
+      else notifyError(t("detailToggleFailed"));
     } finally {
       setSaving(false);
     }
@@ -559,7 +620,6 @@ export default function WorkflowDetailPage({
   async function toggleRecordOnRun() {
     if (me?.record_on_workflows === undefined || saving) return;
     setSaving(true);
-    setSaveFailed(false);
     try {
       const current = me.record_on_workflows ?? [];
       const next = recordsOnRun
@@ -569,7 +629,7 @@ export default function WorkflowDetailPage({
          dedupes and bounds the set, and that is the value */
       setMe(await api.updateAssistant({ record_on_workflows: next }));
     } catch {
-      setSaveFailed(true);
+      notifyError(t("detailToggleFailed"));
     } finally {
       setSaving(false);
     }
@@ -579,13 +639,10 @@ export default function WorkflowDetailPage({
   async function toggleMeetingPrep() {
     if (me?.auto_meeting_prep === undefined || saving) return;
     setSaving(true);
-    setSaveFailed(false);
     try {
       setMe(await api.updateAssistant({ auto_meeting_prep: !me.auto_meeting_prep }));
     } catch {
-      /* the page's own convention: the failure is shown ON the switch, not
-         in a toast that outlives the control it is about */
-      setSaveFailed(true);
+      notifyError(t("detailToggleFailed"));
     } finally {
       setSaving(false);
     }
@@ -595,11 +652,10 @@ export default function WorkflowDetailPage({
   async function toggleAutoDraft() {
     if (me?.auto_draft_replies === undefined || saving) return;
     setSaving(true);
-    setSaveFailed(false);
     try {
       setMe(await api.updateAssistant({ auto_draft_replies: !me.auto_draft_replies }));
     } catch {
-      setSaveFailed(true);
+      notifyError(t("detailToggleFailed"));
     } finally {
       setSaving(false);
     }
@@ -830,7 +886,7 @@ export default function WorkflowDetailPage({
                         <p className="text-sm text-fg-muted">{t("starterAdminInstall")}</p>
                       )
                     ) : (
-                      <EnableSwitch {...switchProps!} busy={saving} failed={saveFailed} />
+                      <EnableSwitch {...switchProps!} busy={saving} />
                     )}
                   </div>
                 </div>
@@ -1032,9 +1088,12 @@ export default function WorkflowDetailPage({
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailUpcoming")}</p>
                   <div className="well mt-2 flex items-center justify-between gap-3 px-4 py-3">
                     <span className="min-w-0 truncate text-sm text-fg">{subject.name}</span>
-                    {/* the same sentence the trigger card shows, from the same
+                    {/* a standing schedule is the real "upcoming"; without one,
+                        the same sentence the trigger card shows, from the same
                         source — two readings of one fact eventually disagree */}
-                    <span className="shrink-0 text-xs text-fg-muted">{trigger?.title ?? "—"}</span>
+                    <span className="shrink-0 text-xs text-fg-muted" data-schedule={scheduleSentence ? "set" : "none"}>
+                      {scheduleSentence ?? trigger?.title ?? "—"}
+                    </span>
                   </div>
 
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailRecents")}</p>
@@ -1193,7 +1252,6 @@ function EnableSwitch({
   note,
   hint,
   busy,
-  failed,
   onToggle,
 }: {
   enabled: boolean;
@@ -1202,7 +1260,6 @@ function EnableSwitch({
   /** what being on actually does — rendered under the note */
   hint: string | null;
   busy: boolean;
-  failed: boolean;
   /** absent = read-only, and there is no other way to be read-only */
   onToggle?: () => void | Promise<void>;
 }) {
@@ -1267,11 +1324,6 @@ function EnableSwitch({
       )}
       {note ? <p className="mt-2 text-xs text-fg-muted">{note}</p> : null}
       {hint ? <p className="mt-1 max-w-[70ch] text-xs leading-5 text-fg-subtle">{hint}</p> : null}
-      {failed ? (
-        <p role="status" className="mt-2 text-xs text-danger">
-          {t("detailToggleFailed")}
-        </p>
-      ) : null}
     </div>
   );
 }

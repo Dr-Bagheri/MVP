@@ -267,6 +267,26 @@ describe("search", () => {
     expect(sql).toContain("echo.fa_fold(c.title) ilike ('%' || echo.fa_fold($4) || '%') escape '\\'");
   });
 
+  it("can EXCLUDE one call and keep only calls started BEFORE an instant — on all three legs (2026-09-08)", async () => {
+    // Prior-meeting retrieval: the call being summarised is the one call sure
+    // to match its own glossary terms, so excluding it in JS would spend the
+    // whole limit on itself. Both filters are SQL, on every UNION leg, and
+    // both are NULL — no filter — when the caller does not ask.
+    const { db, log } = fakeDb(() => []);
+    await createTranscriptsRepo(db).search(IDENTITY, "بودجه", {
+      excludeCallId: CALL, startedBefore: "2026-08-20T10:00:00.000Z",
+    });
+    const q = queries(log)[0]!;
+    expect(q.params?.[4]).toBe(CALL);
+    expect(q.params?.[5]).toBe("2026-08-20T10:00:00.000Z");
+    expect(q.sql.match(/\$5::uuid is null or [a-z]+\.(?:call_)?id <> \$5::uuid/g)).toHaveLength(3);
+    expect(q.sql.match(/\$6::timestamptz is null or c\.started_at < \$6::timestamptz/g)).toHaveLength(3);
+
+    await createTranscriptsRepo(db).search(IDENTITY, "بودجه");
+    expect(queries(log)[1]!.params?.[4]).toBeNull();
+    expect(queries(log)[1]!.params?.[5]).toBeNull();
+  });
+
   it("escapes ILIKE wildcards in the title pattern — `%` must not disable the filter", async () => {
     // The members-directory lesson, applied here: an unescaped % in the
     // query would match EVERY title, and an unescaped _ every character.

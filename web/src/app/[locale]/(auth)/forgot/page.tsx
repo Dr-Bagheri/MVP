@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
+import { notifyError } from "@/lib/notify";
 
 /**
  * "I forgot my password" — the request half.
@@ -27,13 +28,11 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy || !email) return;
     setBusy(true);
-    setError(null);
     try {
       await api.requestPasswordRecovery(email);
       setSent(true);
@@ -43,7 +42,7 @@ export default function ForgotPasswordPage() {
        * route, deliberately — an upstream failure must not become "that
        * address has no account".
        */
-      setError(
+      notifyError(
         cause instanceof BffError && cause.status === 429
           ? t("tooManyRequests")
           : t("failed"),
@@ -81,11 +80,6 @@ export default function ForgotPasswordPage() {
             autoComplete="email"
           />
         </Field>
-        {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
         <button className="btn-primary w-full" disabled={busy || !email}>
           {busy ? t("sending") : t("sendLink")}
         </button>

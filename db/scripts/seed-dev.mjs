@@ -23,10 +23,18 @@
 // Idempotent, so running it twice is a no-op rather than an error.
 
 import { execFileSync } from 'node:child_process'
+import { findNeuraiPython } from './lib/neurai-python.mjs'
 import { existsSync } from 'node:fs'
 import pg from 'pg'
 
-const DEV_PROJECT_REF = 'aqgpxnyuxukwgphrxslw' // the dev project, and only it
+// WHICH HOST COUNTS AS "DEV" — a property of the DEPLOYMENT, not of this
+// repository, so it comes from the environment and has no default. A project
+// ref in the repo names a live endpoint; here it also had no business being a
+// literal, because the guard below is about the operator's own target.
+//
+// Unset fails SAFE: `isDev` then rests on `local` alone, so a remote host is
+// refused rather than seeded. That is the direction a guard must fail in.
+const DEV_PROJECT_REF = process.env.ECHO_DEV_PROJECT_REF ?? null
 
 const ORG = '0d000000-0000-4000-8000-00000000000d'
 // M23's three roles. The owner and the admin are separate people on purpose:
@@ -54,12 +62,11 @@ const PENDING = '0d000000-0000-4000-8000-000000000003'
 const SUSPENDED_ORG = '0d000000-0000-4000-8000-00000000000e'
 const SUSPENDED_MEMBER = '0d000000-0000-4000-8000-000000000004'
 
-const NEURAI_PYTHON =
-  process.env.NEURAI_PYTHON ??
-  'C:\\Users\\amirreza\\Desktop\\neurai-mvp\\server\\.venv\\Scripts\\python.exe'
 
 function storedUrl() {
-  if (!existsSync(NEURAI_PYTHON)) return null
+  /* required, never defaulted — lib/neurai-python.mjs (review F4) */
+  const { path: NEURAI_PYTHON } = findNeuraiPython()
+  if (!NEURAI_PYTHON) return null
   try {
     return execFileSync(
       NEURAI_PYTHON,
@@ -90,14 +97,17 @@ const url =
 
 const host = url.slice(url.lastIndexOf('@') + 1)
 const local = /^(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(host)
-const isDev = host.includes(DEV_PROJECT_REF) || local
+// NB the null check is load-bearing: `host.includes(null)` searches for the
+// STRING "null" rather than throwing, so an unset variable would silently make
+// any host containing that substring look like dev.
+const isDev = local || (DEV_PROJECT_REF !== null && host.includes(DEV_PROJECT_REF))
 
 // The guard that matters. --force exists because a second scratch project is a
 // legitimate target; it prints what it is about to do to which host first.
 if (!isDev && !process.argv.includes('--force')) {
   console.error(
     `refusing to seed a fixed-UUID admin into ${host}\n` +
-      `  this script is dev-only: it is recognised targets (${DEV_PROJECT_REF}, localhost) or nothing.\n` +
+      `  this script is dev-only: it is recognised targets (${DEV_PROJECT_REF ?? 'ECHO_DEV_PROJECT_REF unset'}, localhost) or nothing.\n` +
       '  production has no seeded identities by design — pass --force only for another scratch project.',
   )
   process.exit(2)

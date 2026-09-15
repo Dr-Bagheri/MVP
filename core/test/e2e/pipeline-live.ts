@@ -688,6 +688,17 @@ async function main(): Promise<void> {
 
     // ── The behavioural half: BOTH branches assert mechanism, neither can flake ──
     //
+    // 2026-09-08 note: the summarize step now retrieves prior-meeting context
+    // DETERMINISTICALLY before the model runs (call-steps.ts
+    // retrievePriorContext — org terms in the transcript searched across the
+    // owner's earlier calls, handed to the writer and the grounding verifier
+    // as a fenced PRIOR_MEETINGS block). So on this fixture the model may
+    // legitimately call NO tool and still cite the first call — the tools are
+    // the second source. The offered-check above and the reach/forfeit pair
+    // below stay as they are: they assert the machinery, and the retired
+    // prose assertion stays retired. The deterministic half has its own
+    // unit tests (worker-call-steps.test.ts, summarizer-prior-context.test.ts).
+    //
     // This gate has retreated three times, and each retreat moved the
     // assertion off the model's choices and onto the machinery. It began by
     // demanding the PROSE mention the earlier call (a model's judgement).

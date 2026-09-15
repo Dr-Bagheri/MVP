@@ -39,7 +39,7 @@ export function Overlay({ children, onClose, label, wide = false, size, flush = 
            by the callers, in their own header, so it is hidden rather than
            doubled — two X buttons in one corner is the two-spellings defect
            at its smallest */
-        className={`${WIDTH[size ?? (wide ? "lg" : "sm")]} max-h-[88vh] gap-0 overflow-hidden rounded-2xl border-border bg-surface ${flush ? "p-0" : "p-4"} shadow-island [&>button:last-child]:hidden`}
+        className={`${WIDTH[size ?? (wide ? "lg" : "sm")]} glass-solid max-h-[88vh] gap-0 overflow-hidden rounded-2xl ${flush ? "p-0" : "p-4"} shadow-island [&>button:last-child]:hidden`}
       >
         <div className={`flex ${flush ? "max-h-[88vh]" : "max-h-[calc(88vh-2rem)]"} min-h-0 flex-col`}>{children}</div>
       </DialogContent>

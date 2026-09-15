@@ -18,5 +18,7 @@ export default async function WorkflowBuilderRedirect({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  redirect({ href: "/workflows", locale });
+  /* straight to the pane (2026-09-08) — /workflows redirects there itself,
+     and two redirects in a row is two round trips for one press */
+  redirect({ href: "/?view=workflows", locale });
 }

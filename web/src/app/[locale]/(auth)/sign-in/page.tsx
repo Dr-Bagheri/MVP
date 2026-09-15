@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
+import { notifyError, notifySuccess } from "@/lib/notify";
 import { Card, Field } from "@/components/ui";
 import { OAuthButtons } from "../OAuthButtons";
 import { PasswordInput } from "@/components/PasswordInput";
@@ -56,11 +57,17 @@ export default function SignInPage() {
    *  by eating the heap, which beats a browser tab finding it. */
   const invitationProbed = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** Arrived from a successful email confirmation — say so while routing. */
-  const [confirmedNote, setConfirmedNote] = useState(false);
-  /** Arrived from a completed password reset — the password works HERE. */
-  const [resetNote, setResetNote] = useState(false);
+  /*
+   * NOTHING IS SAID ON THIS CARD ANY MORE (2026-09-08). Three pieces of
+   * local state used to hold one message each — a failure, a confirmed
+   * email, a completed reset — and each drew its own coloured strip above
+   * the form. They are all `notify()` now, which is the same message in the
+   * one place the platform puts messages.
+   *
+   * The card gained something by losing them: the form no longer jumps down
+   * the page when a message arrives, which was moving the button out from
+   * under the cursor at the exact moment somebody was pressing it again.
+   */
 
   /*
    * The confirm-email landing (`/api/auth/confirm` redirects here).
@@ -84,16 +91,16 @@ export default function SignInPage() {
     // 2026-08-20) — the green line says the password is set and this form
     // is where it gets used, so the arrival reads as the next step rather
     // than as being bounced.
-    if (params.get("reset") === "1") setResetNote(true);
+    if (params.get("reset") === "1") notifySuccess(t("resetReady"));
     if (confirmed === "1") {
       // Say what just happened while the routing runs — a silent redirect
       // reads as "nothing happened" for the two seconds it takes (user
       // review, 2026-08-15: the confirmation must SAY the account is ready).
-      setConfirmedNote(true);
+      notifySuccess(t("confirmedReady"));
       setBusy(true);
       void routeByIdentity().finally(() => setBusy(false));
     } else if (confirmed === "failed") {
-      setError(t("confirmFailed"));
+      notifyError(t("confirmFailed"));
     } else if (oauth === "ok") {
       // Do not route an OAuth arrival directly to a membership. A prior
       // invitation/registration may already make them a member, but the first
@@ -102,11 +109,11 @@ export default function SignInPage() {
       void startOAuthArrival().finally(() => setBusy(false));
     } else if (oauth === "failed") {
       // the provider round trip died (expired code, denied consent, replay)
-      setError(t("oauthFailed"));
+      notifyError(t("oauthFailed"));
     } else if (oauth === "disabled") {
       // 0078: an admin turned this method off — a different fact from a
       // broken round trip, and the person deserves the real one
-      setError(t("oauthDisabled"));
+      notifyError(t("oauthDisabled"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot, on arrival
   }, []);
@@ -151,7 +158,7 @@ export default function SignInPage() {
          * by eating the heap.
          */
         if (invitationProbed.current) {
-          setError(t("registerStuck"));
+          notifyError(t("registerStuck"));
           return;
         }
         invitationProbed.current = true;
@@ -172,13 +179,13 @@ export default function SignInPage() {
           /* the server's own sentence: `signups_closed` is a fact about the
              PLATFORM and `org_not_found` about a name — neither is something
              this person can fix by typing, and both are worth reading */
-          setError(cause instanceof BffError && cause.detail
+          notifyError(cause instanceof BffError && cause.detail
             ? cause.detail : t("registerFailed"));
         }
         return;
       case "signed_out":
         // the cookie did not survive the hop; say so rather than looping
-        setError(t("sessionLost"));
+        notifyError(t("sessionLost"));
     }
   }
 
@@ -195,17 +202,16 @@ export default function SignInPage() {
     event.preventDefault();
     if (busy) return;
     if (newPassword !== confirmNewPassword) {
-      setError(tPassword("mismatch"));
+      notifyError(tPassword("mismatch"));
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       await api.setPassword(newPassword);
       setNeedsOAuthPassword(false);
       await routeByIdentity();
     } catch (cause) {
-      setError(refusalText(cause, t));
+      notifyError(refusalText(cause, t));
     } finally {
       setBusy(false);
     }
@@ -215,12 +221,11 @@ export default function SignInPage() {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
-    setError(null);
     try {
       await api.signIn(email, password);
       await routeByIdentity();
     } catch (cause) {
-      setError(refusalText(cause, t));
+      notifyError(refusalText(cause, t));
     } finally {
       setBusy(false);
     }
@@ -230,24 +235,6 @@ export default function SignInPage() {
     <Card>
       {/* no logo on the gate (user ruling): the title carries the identity */}
       <h1 className="mb-5 text-xl font-bold text-fg">{t("signInTitle")}</h1>
-
-      {resetNote ? (
-        <p role="status" className="mb-4 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
-          {t("resetReady")}
-        </p>
-      ) : null}
-
-      {confirmedNote ? (
-        /*
-         * The moment the email link lands: the account's email is verified and
-         * a session already exists. `role="status"` so screen readers hear it
-         * without it being an interruption; the org form or the app follows in
-         * a beat, but this line is what makes the click feel ANSWERED.
-         */
-        <p role="status" className="mb-4 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
-          {t("confirmedReady")}
-        </p>
-      ) : null}
 
       {needsOAuthPassword ? (
         <form className="space-y-4" onSubmit={enrollOAuthPassword}>
@@ -266,7 +253,6 @@ export default function SignInPage() {
               autoComplete="new-password"
             />
           </Field>
-          {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
           <button className="btn-primary w-full" disabled={busy || !newPassword || !confirmNewPassword}>
             {busy ? t("working") : tPassword("setPassword")}
           </button>
@@ -297,11 +283,6 @@ export default function SignInPage() {
               autoComplete="current-password"
             />
           </Field>
-          {error ? (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
           <button className="btn-primary w-full" disabled={busy || !email || !password}>
             {busy ? t("working") : t("signIn")}
           </button>

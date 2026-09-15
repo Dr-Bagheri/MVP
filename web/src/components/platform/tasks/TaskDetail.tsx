@@ -21,7 +21,9 @@ import { DetailPanel } from "../DetailPanel";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
 } from "@/components/icons";
-import { digits, formatDate, personName } from "@/lib/format";
+import { digits, formatDate, personName, personPhoto } from "@/lib/format";
+import { useSeededName } from "@/lib/seededNames";
+import { notifyError } from "@/lib/notify";
 
 /**
  * THE TASK'S OWN SCREEN — the reference's detail modal, walked on
@@ -46,6 +48,8 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
 }) {
   const t = useTranslations("tasks");
   const locale = useLocale();
+  /* the picker offers the same four names the board draws — see TaskViews */
+  const seededName = useSeededName();
   const [tab, setTab] = useState<"comments" | "history">("comments");
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
@@ -57,7 +61,11 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
   const [confirmDelete, setConfirmDelete] = useState(false);
   /** the checklist line awaiting the platform's are-you-sure (dialog at the foot) */
   const [condemnedLine, setCondemnedLine] = useState<{ id: string; label: string } | null>(null);
-  const [failed, setFailed] = useState(false);
+  /* THE REFUSAL SAYS ITSELF (2026-09-08). This was a boolean feeding a red
+     strip under the panel's top bar; it is a toast now, so the twelve
+     `.catch()` arms below all say the same sentence in the same place as
+     every other refused write on the platform. */
+  const fail = () => notifyError(t("writeFailed"));
 
   useEffect(() => {
     setTitle(task.title);
@@ -65,13 +73,18 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
   }, [task.id, task.title, task.description]);
 
   const patch = (body: Record<string, unknown>) => {
-    setFailed(false);
-    void api.updateTask(task.id, body).then(onChanged).catch(() => setFailed(true));
+    void api.updateTask(task.id, body).then(onChanged).catch(() => fail());
   };
   const nameOf = (id: string): string => {
     const person = people.find((p) => p.id === id);
     return person === undefined ? t("someone") : personName(person, locale);
   };
+  /* the same lookup for the FACE. Separate from `nameOf` because the two
+     answer differently when the roster does not hold the id: a name falls back
+     to «کسی», and a photo falls back to nothing at all — `<Avatar>` then draws
+     that fallback's own initial, which is the honest mark for somebody the
+     roster cannot name. */
+  const photoOf = (id: string): string | null => personPhoto(people.find((p) => p.id === id));
 
   const done = task.checklist.filter((line) => line.done).length;
   const sentence = (kind: string, detail: Record<string, string>): string => {
@@ -121,13 +134,14 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
   const end = (
     <>
             {task.call_id !== null ? (
-              /* the RECORD's own page (2026-09-06, the check-up): this linked
+              /* the MEETING's page when the record has one (2026-09-08), else
+                 the RECORD's own page (2026-09-06, the check-up: this linked
                  `/meetings?call=`, a page that reads no such parameter, so the
-                 chip opened the meetings list and dropped the call on the way */
-              <Link href={`/calls/${task.call_id}`}
+                 chip opened the meetings list and dropped the call on the way) */
+              <Link href={task.meeting_id !== null ? `/meetings/${task.meeting_id}` : `/calls/${task.call_id}`}
                 className="btn btn-sm bg-accent-soft font-medium text-accent">
                 <IconVideo width={12} height={12} />
-                <span className="max-w-[280px] truncate">{task.call_title ?? t("recordGone")}</span>
+                <span className="max-w-[280px] truncate">{task.meeting_title ?? task.call_title ?? t("recordGone")}</span>
               </Link>
             ) : null}
             {/* 2026-09-03: `.btn btn-sm`, the theme's compact control — the
@@ -168,7 +182,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 value={task.column_id}
                 onChange={(v) => patch({ column_id: v })}
                 ariaLabel={t("fieldColumn")}
-                options={columns.map((column) => ({ value: column.id, label: column.name }))}
+                options={columns.map((column) => ({ value: column.id, label: seededName(column.name) }))}
               />
             </div>
 
@@ -182,7 +196,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 selected={task.assignee_ids}
                 onToggle={(userId) => {
                   const on = !task.assignee_ids.includes(userId);
-                  void api.setTaskAssignee(task.id, userId, on).then(onChanged).catch(() => setFailed(true));
+                  void api.setTaskAssignee(task.id, userId, on).then(onChanged).catch(() => fail());
                 }}
               />
             </div>
@@ -228,7 +242,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 selected={task.label_ids}
                 onToggle={(id) => {
                   const on = !task.label_ids.includes(id);
-                  void api.setTaskLabel(task.id, id, on).then(onChanged).catch(() => setFailed(true));
+                  void api.setTaskLabel(task.id, id, on).then(onChanged).catch(() => fail());
                 }}
                 onChanged={onLabelsChanged}
               />
@@ -238,7 +252,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 where every other property of the card lives, rather than as
                 a section of its own — a schedule is a fact about this task
                 exactly like its priority and its due date. */}
-            <ScheduleRow task={task} onChanged={onChanged} onFailed={() => setFailed(true)} />
+            <ScheduleRow task={task} onChanged={onChanged} onFailed={fail} />
 
             {task.created_at !== "" ? (
               <p className="pt-1 text-[10px] text-fg-subtle">
@@ -256,11 +270,6 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
         onClose={onClose}
         start={start}
         end={end}
-        notice={failed ? (
-          <p role="alert" className="border-b border-border bg-danger/10 px-4 py-2 text-xs text-danger">
-            {t("writeFailed")}
-          </p>
-        ) : null}
         rail={rail}
       >
             {editing ? (
@@ -323,7 +332,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                         aria-label={line.label}
                         onClick={() => {
                           void api.updateTaskChecklistItem(line.id, { done: !line.done })
-                            .then(onChanged).catch(() => setFailed(true));
+                            .then(onChanged).catch(() => fail());
                         }}
                         className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${
                           line.done ? "border-accent bg-accent text-on-accent" : "border-border"
@@ -362,7 +371,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                     if (e.key !== "Enter" || item.trim() === "") return;
                     void api.addTaskChecklistItem(task.id, item.trim())
                       .then(() => { setItem(""); onChanged(); })
-                      .catch(() => setFailed(true));
+                      .catch(() => fail());
                   }}
                   placeholder={t("newItemPlaceholder")}
                   /* 2026-09-03: the theme's compact field. This was h-9 /
@@ -380,7 +389,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   onClick={() => {
                     void api.addTaskChecklistItem(task.id, item.trim())
                       .then(() => { setItem(""); onChanged(); })
-                      .catch(() => setFailed(true));
+                      .catch(() => fail());
                   }}
                   /* 2026-09-03: the theme's height and corner, square by
                      width — the sanctioned spelling for an icon button that
@@ -436,7 +445,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                             ground, the ring, the uppercasing and that decision;
                             `nameOf` stays the caller's, because which of a
                             person's two names to show is a locale decision. */}
-                        <Avatar name={nameOf(entry.created_by)} size="sm" />
+                        <Avatar name={nameOf(entry.created_by)} src={photoOf(entry.created_by)} size="sm" />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline gap-2">
                             <span className="text-xs font-semibold text-fg">{nameOf(entry.created_by)}</span>
@@ -460,7 +469,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                         if (comment.trim() === "") return;
                         void api.addTaskComment(task.id, comment.trim())
                           .then(() => { setComment(""); onChanged(); })
-                          .catch(() => setFailed(true));
+                          .catch(() => fail());
                       }
                     }}
                     rows={2}
@@ -475,7 +484,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                       onClick={() => {
                         void api.addTaskComment(task.id, comment.trim())
                           .then(() => { setComment(""); onChanged(); })
-                          .catch(() => setFailed(true));
+                          .catch(() => fail());
                       }}
                       /* 2026-09-03: the theme's compact control. Another one
                          the guard is blind to (a height and a corner, no
@@ -497,7 +506,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                     {/* 2026-09-03: the platform's avatar. This tab drew its own
                         twin of the comment list's mark, three lines apart in one
                         file — which is the divergence at its smallest. */}
-                    <Avatar name={nameOf(entry.actor_id)} size="sm" />
+                    <Avatar name={nameOf(entry.actor_id)} src={photoOf(entry.actor_id)} size="sm" />
                     <span className="min-w-0 flex-1 text-sm text-fg">
                       <span className="font-semibold">{nameOf(entry.actor_id)}</span>
                       {" "}
@@ -540,7 +549,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
             setConfirmDelete(false);
-            void api.deleteTask(task.id).then(() => { onChanged(); onClose(); }).catch(() => setFailed(true));
+            void api.deleteTask(task.id).then(() => { onChanged(); onClose(); }).catch(() => fail());
           }}
         />
       ) : null}
@@ -559,7 +568,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           onConfirm={() => {
             const line = condemnedLine;
             setCondemnedLine(null);
-            void api.deleteTaskChecklistItem(line.id).then(onChanged).catch(() => setFailed(true));
+            void api.deleteTaskChecklistItem(line.id).then(onChanged).catch(() => fail());
           }}
         />
       ) : null}

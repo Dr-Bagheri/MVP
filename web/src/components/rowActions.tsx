@@ -476,6 +476,34 @@ export function SelectMenu({
       : "min-w-[max(var(--radix-popover-trigger-width),15rem)]";
 
   /**
+   * AND A CEILING, which the floor above is not (review F17).
+   *
+   * The panel is `w-auto`. A shrink-to-fit box takes everything it is offered
+   * and its width is decided by its longest unwrapped line — invisible for a
+   * bare option list, where the labels are short. The mic menu is not a bare
+   * option list: `panelFooter` puts `MicLevelFooter` inside it, and its
+   * `noiseHint` is a 165-character sentence with nothing to wrap against. The
+   * sentence set the width and the picker inherited it. `collisionPadding`
+   * shifts a box that is too wide; it does not narrow one.
+   *
+   * `20rem` is the xs token step; `100vw - 1rem` is twice the
+   * `collisionPadding={8}` set below, rather than a number chosen to look
+   * tidy. CSS resolves min-width over max-width, so the floor still
+   * guarantees "never narrower than the trigger" and this constrains the
+   * CONTENT, which is the thing that was stretching.
+   *
+   * **THE UNDERSCORES ARE LOAD-BEARING.** Written the way the CSS reads —
+   * `max-w-[min(20rem,calc(100vw - 1rem))]`, with real spaces — this emits
+   * NOTHING AT ALL: a class name cannot carry a space, so Tailwind's
+   * extractor stops at the first one. That version reads as a fix, greps as a
+   * fix, and fails identically to having no ceiling. It is the CSS-layer
+   * failure this repo has eaten before (`text-on-accent`,
+   * `ring-offset-color`): the markup is right and only the computed value
+   * disagrees, so it can only be caught on the rendered node.
+   */
+  const panelCeiling = "max-w-[min(20rem,calc(100vw_-_1rem))]";
+
+  /**
    * HOVER-OPEN, tile face only (user directive, 2026-08-26: "come out
    * without click, just by mouse hover, and disappear when it passes").
    * The grace timer lets the pointer cross the gap between button and
@@ -749,7 +777,7 @@ export function SelectMenu({
           panelHeld.current = true;
           window.addEventListener("pointerup", () => { panelHeld.current = false; }, { once: true });
         } : undefined}
-        className={`w-auto rounded-lg border-border bg-surface p-0 py-1 shadow-xl ${panelWidth}`}
+        className={`w-auto rounded-lg border-border bg-surface p-0 py-1 shadow-xl ${panelWidth} ${panelCeiling}`}
       >
         {panelHeading ? (
           <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-accent">
@@ -904,7 +932,7 @@ export function ConfirmDialog({
            FORM has no describing sentence, and pointing the attribute at one
            that does not exist is worse than declaring there is none */
         aria-describedby={undefined}
-        className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} gap-0 rounded-2xl border-border bg-surface p-5 shadow-2xl`}
+        className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} gap-0 glass-solid rounded-2xl p-5 shadow-2xl`}
       >
         <div className="flex items-start gap-3">
           <AlertDialogTitle className="flex-1 text-base font-semibold text-fg">{title}</AlertDialogTitle>

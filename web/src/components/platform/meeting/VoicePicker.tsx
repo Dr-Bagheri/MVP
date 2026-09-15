@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { Person, Speaker } from "@/api/types";
 import { SelectMenu, type SelectMenuOption } from "@/components/rowActions";
 import type { VoiceCandidate } from "@/lib/voiceCandidates";
+import { notifyError } from "@/lib/notify";
 
 /**
  * NAMING A VOICE WHERE THE VOICE IS READ.
@@ -65,7 +66,6 @@ export function VoicePicker({
 }) {
   const t = useTranslations("meetings");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   const [forgot, setForgot] = useState(false);
   const [guest, setGuest] = useState("");
 
@@ -92,7 +92,10 @@ export function VoicePicker({
 
   async function pick(value: string): Promise<void> {
     setBusy(true);
-    setFailed(false);
+    /* a fresh press starts from nothing said: the "not remembered" note from a
+       previous attempt must not be read as this one's outcome. (An inline
+       `failed` flag was reset here too; that flag is gone — a refused link is
+       a toast now, which expires on its own.) */
     setForgot(false);
     try {
       const candidate = candidates.find((c) => c.memberId === value);
@@ -108,7 +111,7 @@ export function VoicePicker({
     } catch {
       /* the refusal stays where the press was: a link that did not happen
          must not leave a name on the transcript as though it had */
-      setFailed(true);
+      notifyError(t("writeFailed"));
     } finally {
       setBusy(false);
     }
@@ -118,7 +121,6 @@ export function VoicePicker({
     const named = guest.trim();
     if (named === "" || busy) return;
     setBusy(true);
-    setFailed(false);
     setForgot(false);
     try {
       /* the same exact-string reuse the accounts get: typing a guest's name
@@ -129,7 +131,7 @@ export function VoicePicker({
       setGuest("");
       onLinked();
     } catch {
-      setFailed(true);
+      notifyError(t("writeFailed"));
     } finally {
       setBusy(false);
     }
@@ -197,9 +199,6 @@ export function VoicePicker({
           </div>
         )}
       />
-      {failed ? (
-        <span role="alert" className="text-[11px] text-danger">{t("writeFailed")}</span>
-      ) : null}
       {forgot ? (
         <span role="status" className="text-[11px] text-warning">{t("voiceNotRemembered")}</span>
       ) : null}

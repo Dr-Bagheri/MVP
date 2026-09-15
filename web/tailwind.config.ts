@@ -237,6 +237,11 @@ const config: Config = {
            class list read as satisfied and the button would have been 34 tall
            and as wide as its glyph. */
         "control-sm": rem(SCAFFOLD.controlHeightSm),
+        /* and the FULL-SIZE square (`.btn-icon-lg`, 2026-09-09), for an icon
+           button standing beside a worded `.btn` — the family had a 28 and a
+           34 square and nothing that matched the regular button, so a pause
+           beside «پایان و پردازش» read as a smaller class of control. */
+        control: rem(SCAFFOLD.controlHeight),
       },
       maxWidth: {
         "content-small": rem(SCAFFOLD.contentMaxWidthSmall),
@@ -261,6 +266,13 @@ const config: Config = {
         island: "var(--shadow-island)",
         accent: "var(--shadow-accent)",
         pop: "0 2px 6px rgb(2 6 23 / 0.08), 0 12px 32px rgb(2 6 23 / 0.12)",
+        /* the SHEET's depth (2026-09-08). A glass panel's boundary is the lit
+           lip in the inset half of this value, which is why it replaced a
+           border rather than joining one — registered here so `shadow-glass`
+           is a real utility and not a class that emits nothing, the failure
+           this config's own `on-accent` note records. */
+        glass: "var(--shadow-glass)",
+        "glass-hover": "var(--shadow-glass-hover)",
       },
       fontFamily: {
         sans: ["var(--font-vazirmatn)", "system-ui", "sans-serif"],

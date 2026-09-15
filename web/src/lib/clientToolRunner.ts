@@ -113,6 +113,20 @@ const NAMING: Readonly<Record<string, Naming>> = {
   archive_conversation: { subject: ["conversation"], flag: "archived" },
   share_conversation: { subject: ["conversation"], flag: "shared" },
   run_workflow: { subject: ["workflow"] },
+  /* SCHEDULING IS THE ONE WRITE WHOSE OBJECT IS THE FUTURE (2026-09-09). It
+     shipped with no entry here, and none of its argument keys — `workflow`,
+     `cadence`, `weekday`, `at_minute` — is in the generic fallback's list, so
+     `consentDetail` returned null and the card asked "put a workflow on a
+     schedule?" naming neither the workflow nor the cadence. That is the exact
+     defect the per-tool table above was written for, and it is worse here than
+     anywhere else on the list: every other write happens once, and a yes to
+     this one authorises a run a week from now that nobody will be asked about.
+     `with` rather than `to`: a cadence is not what the workflow BECOMES, it is
+     the fact the yes is covering — so the card reads «tasks_digest: weekly».
+     (`weekday` and `at_minute` are numbers, which `str` does not read; the
+     cadence is the word the approval turns on, and the executor's own reply
+     states the first due time back.) */
+  schedule_workflow: { subject: ["workflow"], with: ["cadence"] },
   set_model_allowed: { subject: ["model_id"], flag: "allowed" },
   set_role_permission: { subject: ["capability"], with: ["role"], flag: "allowed" },
   update_project: { subject: ["project"], to: ["name"] },

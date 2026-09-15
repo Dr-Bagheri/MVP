@@ -121,19 +121,9 @@ describe("algorithm confusion is still refused on both branches", () => {
   it.each(["none", "RS256", "HS512", "ES384"])("refuses alg %s and names it", async (alg) => {
     const { jwk } = makeKey("kid-1");
     serveJwks([jwk]);
-    const verify = createVerifier({ secret: "s", jwksUrl: "https://example.test/jwks.json" });
+    const verify = createVerifier({ jwksUrl: "https://example.test/jwks.json" });
     const token = `${b64({ alg, typ: "JWT", kid: "kid-1" })}.${b64({ sub: ALICE })}.x`;
     await expect(verify(token)).rejects.toThrow(new RegExp(`unsupported algorithm ${alg}`));
-  });
-
-  it("will not verify an ES256 token with the shared secret", async () => {
-    // The confusion attack in its real shape: an HMAC forged with a key the
-    // attacker knows, wearing an asymmetric alg — or vice versa. Each branch
-    // uses a key type the other cannot.
-    const verify = createVerifier({ secret: "shared-secret" });
-    const { privateKey } = makeKey("kid-1");
-    await expect(verify(signES256(privateKey, "kid-1", { sub: ALICE, exp: future() })))
-      .rejects.toThrow(/no jwks url configured/);
   });
 
   it("ignores non-EC keys in the JWKS", async () => {
@@ -149,20 +139,21 @@ describe("algorithm confusion is still refused on both branches", () => {
   });
 });
 
-describe("configuration mistakes fail loudly", () => {
-  it("refuses to build a verifier with neither secret nor jwks url", () => {
-    expect(() => createVerifier({})).toThrow(/secret \(HS256\) or a jwks url \(ES256\)/);
-  });
-
-  it("says so when an ES256 token arrives at an HS256-only instance", async () => {
-    // The exact production failure, now with a message that names the cause
-    // instead of "unsupported algorithm".
-    const verify = createVerifier({ secret: "only-hs256" });
-    const { privateKey } = makeKey("kid-1");
-    await expect(verify(signES256(privateKey, "kid-1", { sub: ALICE, exp: future() })))
-      .rejects.toThrow(/asymmetric signing keys.*no jwks url/);
-  });
-});
+/*
+ * THE TWO "CONFIGURATION MISTAKE" TESTS ARE GONE, with the branch they were
+ * about (review F1, 2026-09-08).
+ *
+ * They asked what happens when a verifier is built with a shared secret and no
+ * JWKS url — "neither configured", and "an ES256 token arrives at an
+ * HS256-only instance". There is no shared secret to build one with any more,
+ * and `jwksUrl` is a REQUIRED field, so both states are unrepresentable rather
+ * than merely refused. That is the stronger form: the compiler is the check,
+ * and a runtime test for a state the types forbid could only ever have passed.
+ *
+ * The refusal that DID survive is the one that matters, and it lives in
+ * `auth.test.ts`: an HS256 token is rejected BY NAME. That is the rule now,
+ * and it fails loudly if the branch is ever reintroduced.
+ */
 
 // Referenced so the import is honest about what this file constructs.
 void createPublicKey; void createPrivateKey; void InvalidTokenError;

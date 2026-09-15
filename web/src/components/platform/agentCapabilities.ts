@@ -111,7 +111,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     icon: "zap",
     tools: [
       "list_workflows", "list_workflow_runs", "set_workflow_enabled",
-      "install_workflow_starter", "list_skills", "list_agents",
+      "install_workflow_starter", "schedule_workflow", "list_skills", "list_agents",
     ],
   },
   {

@@ -12,10 +12,18 @@
  * This SUPERSEDES the 2026-08-20 leave-pauses-the-take model: in-app
  * navigation no longer touches a rolling take at all (the floating pill is
  * how it stays visible and controllable). What remains:
- *  - tab hidden → pause (the mic must not roll while nobody is looking);
  *  - tab close / hard reload → the browser's leave prompt (the crash
  *    buffer bounds the loss to ~a second plus a recovery step, but "you
  *    are still recording" is worth one confirmation).
+ *
+ * A HIDDEN TAB DOES NOT PAUSE (2026-09-08). Until now `visibilitychange`
+ * paused a rolling take the moment the tab lost focus — and an in-person
+ * meeting is exactly the setting where the person recording switches to
+ * their notes, a slide deck or another window for most of the hour. Every
+ * such switch silently cut the recording, and nothing said so until the
+ * transcript came back with holes. The microphone is the person's own
+ * choice, made once at start; only they (or finish) end it. Pause stays a
+ * manual act.
  *
  * Errors surface as CODES (the capture.* message keys) — the engine speaks
  * no language; the views translate.
@@ -49,6 +57,15 @@ export interface RecorderSnapshot {
   callId: string | null;
   /** The take's resolved title — the pill and the crash buffer name it. */
   title: string;
+  /**
+   * WHERE THE TAKE IS BEING RECORDED (clicking the pill). A locale-less
+   * route — the meeting's own page for a take started
+   * there — so the pill can carry the person back to the live take rather
+   * than to a list they then have to search. `null` for a take with no
+   * screen of its own (the hub's armed takes), and the pill falls back to
+   * the meetings list, which is the only honest destination left.
+   */
+  returnPath: string | null;
   recordedMs: number;
   level: number;
   wave: number[];
@@ -121,6 +138,12 @@ export interface StartOptions {
    * deciding it for the person.
    */
   noiseSuppression: boolean;
+  /**
+   * The screen this take is being recorded ON, locale-less (e.g.
+   * `/meetings/abc`). The mini pill navigates back to it; omit it and the
+   * pill falls back to the meetings list.
+   */
+  returnPath?: string | undefined;
 }
 
 /** the enhance stage's gain — ~+7dB, enough for a far mic, short of clipping */
@@ -129,7 +152,7 @@ export const BOOST_GAIN = 2.2;
 // ---- module state -----------------------------------------------------------
 
 let snapshot: RecorderSnapshot = {
-  phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
+  phase: "idle", callId: null, title: "", returnPath: null, recordedMs: 0, level: 0,
   wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
   progress: { done: 0, pending: 0, failed: 0 }, error: null,
   captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
@@ -170,6 +193,28 @@ let mimeType = "audio/webm";
 let rawTracks: MediaStreamTrack[] = [];
 let waveSamples: number[] = [];
 let lastWaveAt = 0;
+/**
+ * The level the SCOPE is shown, which is not the level the analyser read
+ * (user report, 2026-09-09: "why is it blinking?").
+ *
+ * Speech is a train of gaps: between two syllables the RMS falls to near
+ * zero several times a second, and publishing that raw made every consumer
+ * of `level` flicker — the scope's halo is a container `filter`, so it was
+ * switching a whole-layer rasterisation on and off at ~12Hz.
+ *
+ * So the published level is an ENVELOPE: it takes a rise immediately (a
+ * meter that lags the first loud word is a meter nobody trusts) and lets a
+ * fall decay over ~400ms, which is what a hardware VU does and what the ear
+ * hears anyway. The bars are untouched — they are samples of a timeline and
+ * must stay honest about the silence.
+ */
+let levelEnv = 0;
+/** how often a bar is appended: 250ms is four a second, which reads as
+    motion. At 500ms the whole lane visibly stepped sideways twice a second */
+const WAVE_MS = 250;
+/** at WAVE_MS this is ~5 minutes before the first halving — the same span
+    the 500ms/600 pair used to hold, so the merge is no more frequent */
+const WAVE_CAP = 1200;
 let quietSince: number | null = null;
 let clipUntil = 0;
 let shareEnded = false;
@@ -228,9 +273,12 @@ function setPhase(phase: RecorderPhase): void {
   else detachPageListeners();
 }
 
-function onVisibility(): void {
-  if (document.hidden && snapshot.phase === "recording") pause();
-}
+/*
+ * The ONLY page listener is the leave prompt. There is deliberately no
+ * `visibilitychange` handler any more (see the header): a rolling take keeps
+ * rolling while the tab is hidden, and the test beside this file holds that
+ * as a contract fact.
+ */
 function onBeforeUnload(e: BeforeUnloadEvent): void {
   if (snapshot.phase === "recording") pause();
   e.preventDefault();
@@ -240,22 +288,49 @@ let pageListeners = false;
 function attachPageListeners(): void {
   if (pageListeners) return;
   pageListeners = true;
-  document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("beforeunload", onBeforeUnload);
 }
 function detachPageListeners(): void {
   if (!pageListeners) return;
   pageListeners = false;
-  document.removeEventListener("visibilitychange", onVisibility);
   window.removeEventListener("beforeunload", onBeforeUnload);
 }
 
 // ---- caption lane (M38) -----------------------------------------------------
 
+/**
+ * WHERE THE LANE'S TWO LEGS GO (2026-09-08). `/api/live-stt/start` hands back
+ * the session TICKET and, when core knows its own public address
+ * (`CORE_PUBLIC_URL`), `direct_url` — the same capability chatLive.ts uses.
+ * With both, the audio chunks and the caption stream go to core DIRECTLY:
+ * core's `/v1/live-stt/:id/{audio,events}?ticket=` routes are CORS-open and
+ * the ticket is the whole authority. Without either, everything rides the
+ * BFF exactly as before — which also means the caption stream is capped at
+ * the events route's `maxDuration` (300s on a serverless host), so a long
+ * in-person meeting only keeps its captions past five minutes on the direct
+ * lane. `stop` stays on the BFF: it is the authenticated act.
+ */
+export function liveSttLegs(
+  started: { session_id: string; ticket?: string; direct_url?: string | null },
+): { audio: string; events: string } {
+  const id = encodeURIComponent(started.session_id);
+  const base = started.direct_url?.replace(/\/+$/, "") ?? "";
+  if (base !== "" && started.ticket) {
+    const ticket = encodeURIComponent(started.ticket);
+    return {
+      audio: `${base}/v1/live-stt/${id}/audio?ticket=${ticket}`,
+      events: `${base}/v1/live-stt/${id}/events?ticket=${ticket}`,
+    };
+  }
+  return { audio: "", events: `/api/live-stt/${id}/events` };
+}
+
 async function startLiveCaptions(mime: string): Promise<void> {
+  let legs: { audio: string; events: string };
   try {
-    const { session_id } = await api.liveSttStart();
-    liveId = session_id;
+    const started = await api.liveSttStart();
+    liveId = started.session_id;
+    legs = liveSttLegs(started);
   } catch {
     // the lane is optional; its ABSENCE is said out loud (M21), once
     patch({ captionsDown: true });
@@ -273,12 +348,21 @@ async function startLiveCaptions(mime: string): Promise<void> {
   const rec = new MediaRecorder(stream!, { mimeType: mime });
   rec.ondataavailable = (event) => {
     if (event.data.size > 0 && liveId) {
-      void api.liveSttAudio(liveId, event.data).catch(() => undefined);
+      // fire-and-forget either way: a dropped chunk is a missed word, not a
+      // reason to stop the take
+      const sent = legs.audio !== ""
+        ? fetch(legs.audio, {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: event.data,
+        }).then(() => undefined)
+        : api.liveSttAudio(liveId, event.data);
+      void sent.catch(() => undefined);
     }
   };
   rec.start(1000);
   liveRec = rec;
-  const es = new EventSource(`/api/live-stt/${encodeURIComponent(liveId)}/events`);
+  const es = new EventSource(legs.events);
   es.onmessage = (event) => {
     try {
       const body = JSON.parse(event.data as string) as {
@@ -493,13 +577,19 @@ function startMeter(): void {
     }
     const rms = Math.sqrt(sum / data.length);
     // RMS of speech sits low; the sqrt-of-RMS curve spreads it over the bar
-    patch({ level: Math.min(1, Math.sqrt(rms) * 1.4) });
+    const raw = Math.min(1, Math.sqrt(rms) * 1.4);
+    /* instant attack, ~400ms release (see `levelEnv`), then QUANTISED to
+       1/50: a level that changes by a thousandth re-renders every subscriber
+       to redraw a halo nobody can see move */
+    levelEnv = raw > levelEnv ? raw : levelEnv * 0.82 + raw * 0.18;
+    const shown = Math.round(levelEnv * 50) / 50;
+    if (shown !== snapshot.level) patch({ level: shown });
 
     if (recorder?.state === "recording") {
-      if (now - lastWaveAt >= 500) {
+      if (now - lastWaveAt >= WAVE_MS) {
         lastWaveAt = now;
-        waveSamples.push(Math.min(1, Math.sqrt(rms) * 1.4));
-        if (waveSamples.length > 600) {
+        waveSamples.push(raw);
+        if (waveSamples.length > WAVE_CAP) {
           // merge pairs — the timeline keeps its shape, not its density
           const merged: number[] = [];
           for (let i = 0; i < waveSamples.length; i += 2) {
@@ -808,11 +898,13 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   partIdx = base.nextIdx;
   partsEnqueued = 0;
   waveSamples = [];
+  levelEnv = 0;
   resetRing();
   quietSince = null;
   clipUntil = 0;
   patch({
-    callId, title, recordedMs: base.offsetMs, previews: [], wave: [],
+    callId, title, returnPath: opts.returnPath ?? null,
+    recordedMs: base.offsetMs, previews: [], wave: [],
     chapterMarks: [], waveStartMs: base.offsetMs, quality: null,
     shared: sharedIn,
   });
@@ -949,6 +1041,7 @@ export async function finish(): Promise<void> {
   cancelAnimationFrame(meterRaf);
   // the ring holds a minute of the room; it goes when the take does
   resetRing();
+  levelEnv = 0;
   patch({ level: 0 });
   // WAIT for onstop to enqueue the final part before settling the barrier
   await new Promise<void>((resolve) => {
@@ -1023,6 +1116,7 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
   cancelAnimationFrame(meterRaf);
   // the ring holds a minute of the room; it goes when the take does
   resetRing();
+  levelEnv = 0;
   patch({ level: 0 });
   await new Promise<void>((resolve) => {
     if (!recorder || recorder.state === "inactive") {
@@ -1054,7 +1148,7 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
   }
   // straight back to the start form — there is nothing to review
   patch({
-    phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
+    phase: "idle", callId: null, title: "", returnPath: null, recordedMs: 0, level: 0,
     wave: [], waveStartMs: 0, chapterMarks: [], quality: null, shared: false,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
     captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
@@ -1091,7 +1185,7 @@ export async function retryUploads(): Promise<void> {
 export function resetRecorder(): void {
   if (snapshot.phase !== "done" && snapshot.phase !== "failed" && snapshot.phase !== "idle") return;
   patch({
-    phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
+    phase: "idle", callId: null, title: "", returnPath: null, recordedMs: 0, level: 0,
     wave: [], waveStartMs: 0, chapterMarks: [], quality: null, shared: false,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
     captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -68,31 +68,33 @@ const REMAINING: Record<string, number> = {
      would satisfy the checker by changing the code the checker reads, which
      is the fix that reads as satisfied and moves nothing. */
   "app/[locale]/management/users/page.tsx": 1,
-  /* NEITHER IS A LOADING STATE (2026-09-03, the agents rebuild). Both matches
-     are exactly the two categories this file's header names: `editing === null
-     ? null :` is the editor dialog's open flag, and `failed === null ? null :`
-     is the refusal line under the form. A dialog nobody opened and an error
-     that has not happened both genuinely render nothing, and neither has a
-     frame to draw.
+  /* NOT A LOADING STATE (2026-09-03, the agents rebuild): `editing === null
+     ? null :` is the editor dialog's open flag. A dialog nobody opened
+     genuinely renders nothing, and it has no frame to draw.
+     It was TWO until 2026-09-08. The second match was `failed === null ?
+     null :`, the refusal line under the form, and that line is a toast now —
+     so the count came down with it, which is this list firing in the
+     stale-entry direction exactly as it is meant to.
      The screen's REAL loading state is framed and is not in this count: both
      sections render their heading unconditionally with SkeletonCards inside,
      so the layout does not move when the roster lands and "loading" never
      draws the same picture as "you have no agents" — which on this screen
      would be a claim about the product rather than about the request. */
-  "components/platform/Agents.tsx": 2,
+  "components/platform/Agents.tsx": 1,
   "app/[locale]/workflows/[handle]/page.tsx": 2,
   "app/[locale]/workflows/runs/[id]/page.tsx": 1,
   "components/echo/Recorder.tsx": 1,
-  "components/echo/SummariesSection.tsx": 1,
+  /* echo/SummariesSection.tsx's row LEFT on 2026-09-10, and it had been dead
+     for longer than anyone could see: the file exists on no branch. The loop
+     below walks the TREE and looks each file's row up, so a row naming a file
+     that is gone is never visited and never fires in either direction — it sat
+     here reading as coverage of a screen that does not exist. The test added
+     below closes that hole for good. */
   /* NOT A LOADING STATE, and listed rather than pattern-matched away
-     (2026-09-03). The live stage's members card renders its host row as
-     `hostName !== null ? … : null`, which is this check's shape — but the
-     meeting record is already in hand by then, and a null host means the
-     meeting HAS no resolvable host (the person's row is gone), which is a
-     real absence with no frame to draw. Telling that from a fetch-in-flight
-     by the shape of the ternary is exactly what a false-positive factory
-     does, so it stays on the list with its reason. */
-  "components/platform/MeetingPage.tsx": 1,
+     (2026-09-03) — the live screen's members card, which is gone with the
+     rest of the plan (2026-09-08). DELETED rather than zeroed: this list
+     fires in the stale-entry direction too, and a zero row reads as coverage
+     while covering nothing. */
   /* 2026-09-04: the Instructions panel is a REAL ABSENCE, not a fetch in
      flight. The three shipped agents carry no instructions of their own —
      their prompt is product configuration and the wire sends null — so the
@@ -132,6 +134,16 @@ const REMAINING: Record<string, number> = {
      picture as "nobody has said anything". */
   "components/platform/chat/MessageRow.tsx": 2,
   "components/platform/chat/Composer.tsx": 1,
+  /* 2026-09-08, and it is the room composer's entry one surface over: the hub's
+     `@` picker opens on `mention === null ? null :`, where null means NOBODY IS
+     WRITING A MENTION — a picker's value, not a fetch in flight. The panel's
+     own three states are framed inside it and are what this rule is about: a
+     query too short to ask with, a search running, and an answer that matched
+     nothing, each naming which nothing it is rather than rendering an empty
+     list. Listed with its reason rather than spelled around, for the reason
+     the entries above give: `mention !== null &&` satisfies the checker by
+     changing the code the checker reads and moves nothing. */
+  "components/platform/Hub.tsx": 1,
   /* 0186, and NOT a loading state. The one match is the schedule's date
      conversion — `iso === null ? null : calendarDay(iso)` — where null is
      the picker's own word for «بدون مهلت», which this feature reads as
@@ -152,7 +164,10 @@ const REMAINING: Record<string, number> = {
   // (entry deleted, not zeroed: a zero row reads as coverage and is a hole)
   "components/platform/TopBar.tsx": 1,
   "components/platform/WorkflowRunDialog.tsx": 1,
-  "components/platform/dashboard/miniWidgets.tsx": 5,
+  // 2026-09-08: dashboard/miniWidgets.tsx LEFT this list WITH ITS FILE — the
+  // board it drew tiles for was replaced by Home, whose two panels hold
+  // SkeletonLines while their reads answer (entry deleted, not zeroed: this
+  // list asserts its entries name real files, so a stale row goes red)
   "components/platform/tasks/JalaliPicker.tsx": 1,
   /* 2026-09-08 — TWO, and neither is a section: `DayField` converts a
      project's `date` to the instant the picker speaks and back, and null
@@ -203,5 +218,22 @@ describe("a section renders its frame before its data", () => {
       wrong,
       "render the frame and a Skeleton inside it, or update the worklist:\n" + wrong.join("\n"),
     ).toEqual([]);
+  });
+
+  it("every row names a file that is still in the tree", () => {
+    /*
+     * THE HOLE THE CHECK ABOVE CANNOT SEE (2026-09-10), and an entry in the
+     * list already promised this assertion existed ("the list asserts its
+     * entries name real files, so a stale row goes red") while it did not.
+     *
+     * The loop walks the TREE and looks each file's row up, so it fires in both
+     * directions for a file that exists and in NEITHER for a row whose file is
+     * gone. One such row was sitting in the list — `echo/SummariesSection.tsx`,
+     * a file on no branch — reading as a considered decision about a screen that
+     * does not exist. This is the stale-entry direction the list already claims
+     * to fail in, said about the other kind of staleness, and it is four lines.
+     */
+    const missing = Object.keys(REMAINING).filter((rel) => !existsSync(join(SRC, rel)));
+    expect(missing, "a row whose file is gone covers nothing — delete it").toEqual([]);
   });
 });

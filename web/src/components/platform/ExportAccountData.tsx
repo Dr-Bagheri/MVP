@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { notifyError } from "@/lib/notify";
 
 /**
  * Export account data (user directive, 2026-08-22, after the sana.ai
@@ -19,8 +20,12 @@ import { api } from "@/api/client";
  */
 export function ExportAccountData() {
   const t = useTranslations("profile");
+  /* THE "failed" ARM IS GONE (2026-09-08). It existed only to draw a red
+     line under the button; the failure is a toast now, and the button's own
+     state after one is `idle` — which is the truth, because pressing it
+     again is exactly what to do. */
   const [state, setState] = useState<
-    { kind: "idle" } | { kind: "working"; done: number; total: number } | { kind: "failed" }
+    { kind: "idle" } | { kind: "working"; done: number; total: number }
   >({ kind: "idle" });
 
   async function exportAll(): Promise<void> {
@@ -66,7 +71,8 @@ export function ExportAccountData() {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       setState({ kind: "idle" });
     } catch {
-      setState({ kind: "failed" });
+      setState({ kind: "idle" });
+      notifyError(t("exportFailed"));
     }
   }
 
@@ -82,11 +88,6 @@ export function ExportAccountData() {
           ? t("exportWorking", { done: state.done, total: state.total })
           : t("exportAction")}
       </button>
-      {state.kind === "failed" ? (
-        <p role="alert" className="mt-2 text-xs text-danger">
-          {t("exportFailed")}
-        </p>
-      ) : null}
     </div>
   );
 }

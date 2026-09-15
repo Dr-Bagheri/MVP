@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/scaffold";
 import { DataTable } from "@/components/DataTable";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatDate } from "@/lib/format";
+import { notifyError } from "@/lib/notify";
 
 /**
  * INVITATIONS — its own surface (user directive, 2026-08-26: "replace the
@@ -49,7 +50,6 @@ export default function InvitationsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [minted, setMinted] = useState<MintedInvitation | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** the invitation awaiting the platform's are-you-sure (dialog at the foot) */
   const [confirmRevoke, setConfirmRevoke] = useState<Invitation | null>(null);
@@ -92,19 +92,18 @@ export default function InvitationsPage() {
   /**
    * The revoke, lifted out of its button so the dialog owns the write.
    *
-   * The refusal rides `inviteError`, the same line an issue failure uses:
-   * before the dialog this call had no catch at all, so a server refusal
-   * left the row on screen with nothing said about it.
+   * The refusal is a toast, the same one an issue failure raises: before
+   * the dialog this call had no catch at all, so a server refusal left the
+   * row on screen with nothing said about it.
    */
   async function revokeInvitationFor(inv: Invitation) {
     if (busy) return;
     setBusy(true);
-    setInviteError(null);
     try {
       await api.revokeInvitation(inv.id);
       setInvitations(await api.invitations());
     } catch (cause) {
-      setInviteError(
+      notifyError(
         cause instanceof BffError ? (cause.detail ?? t("inviteFailed")) : t("inviteFailed"),
       );
     } finally {
@@ -116,7 +115,6 @@ export default function InvitationsPage() {
     const email = inviteEmail.trim();
     if (!email || busy) return;
     setBusy(true);
-    setInviteError(null);
     try {
       // the token exists HERE and never again (D23's show-once contract)
       setMinted(await api.createInvitation(email, inviteRole));
@@ -125,7 +123,7 @@ export default function InvitationsPage() {
     } catch (cause) {
       // core's sentence: it owns one-live-per-email, the role ceiling, and
       // the address rules — re-deriving any of them here would drift
-      setInviteError(
+      notifyError(
         cause instanceof BffError ? (cause.detail ?? t("inviteFailed")) : t("inviteFailed"),
       );
     } finally {
@@ -195,12 +193,6 @@ export default function InvitationsPage() {
                 {t("inviteStored")}
               </button>
             </div>
-          ) : null}
-
-          {inviteError ? (
-            <p role="alert" className="mb-2 text-sm text-danger">
-              {inviteError}
-            </p>
           ) : null}
 
           {/* ONE ROW, THREE WIDTHS (user, 2026-09-05: "put the three of them in

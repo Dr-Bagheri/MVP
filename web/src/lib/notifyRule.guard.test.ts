@@ -20,10 +20,20 @@ import { describe, expect, it } from "vitest";
  * ad-hoc confirmation, and it is the thing a new screen reinvents without
  * meaning to.
  *
- * What it deliberately does NOT catch: `setError`, which is a different
- * subject. An error belongs beside the control that refused, where the person
- * is already looking and can act on it — a refusal that flew past as a toast
- * is a refusal nobody read.
+ * What it deliberately does NOT catch: `setError`. Not because a refusal is
+ * exempt from the bus — it is not, and this paragraph said so for a while and
+ * was wrong about the product while it did. A refusal IS announced: `notifyError`
+ * has 129 call sites, and the bell keeps every one of them, which is the whole
+ * answer to "a toast flew past and nobody read it".
+ *
+ * `setError` is excluded because it is not the shape above. It is not set true
+ * and cleared on a timer; it stands until the next attempt. And the one place in
+ * the product that holds it says exactly when that is right — profile's save
+ * reads `if (refusal.field !== null) setError(refusal); else notifyError(…)`: a
+ * refusal that belongs to a FIELD is drawn at that field, where the correction
+ * has to be made, AND the bus carries everything that belongs to no field. The
+ * two are not alternatives, which is why a pattern that fired on `setError`
+ * would be asking screens to stop marking the box that was wrong.
  */
 const SRC = join(process.cwd(), "src");
 

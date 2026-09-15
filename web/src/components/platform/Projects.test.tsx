@@ -1,3 +1,4 @@
+import { personFixture } from "@/test/fixtures";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -72,6 +73,7 @@ function project(over: Partial<ProjectRecord>): ProjectRecord {
 function card(over: Partial<TaskCardRecord>): TaskCardRecord {
   return {
     id: "k-1", column_id: "c-1", topic_id: "t-1", call_id: null, call_title: null,
+    meeting_id: null, meeting_title: null,
     title: "کارت", priority: "medium", labels: [], due_at: null, done: false,
     position: 1, archived: false, created_by: "u-1", assignee_ids: [],
     label_ids: [], checklist_done: 0, checklist_total: 0, comment_count: 0,
@@ -81,8 +83,8 @@ function card(over: Partial<TaskCardRecord>): TaskCardRecord {
 }
 
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "u-1" },
-  { id: "u-2", display_name: "رؤیا", display_name_en: null, role: "member", username: "u-2" },
+  personFixture({ id: "u-1", display_name: "سینا", display_name_en: null, role: "owner", username: "u-1" }),
+  personFixture({ id: "u-2", display_name: "رؤیا", display_name_en: null, role: "member", username: "u-2" }),
 ];
 
 let LIST: ProjectRecord[] = [];
@@ -643,7 +645,20 @@ describe("nothing the author wrote to themselves", () => {
 });
 
 describe("a refused write keeps the dialog (2026-09-06)", () => {
-  it("says so INSIDE the dialog, over the draft it refused, and leaves the draft to be sent again", async () => {
+  /*
+   * THE ASSERTION MOVED OUT OF THE DIALOG on 2026-09-08, and the FEATURE did
+   * not. What this test is about is the draft surviving a refusal — the old
+   * code closed the dialog and lost the name, the summary, the tone and the
+   * roster. That is unchanged and is still checked below.
+   *
+   * What changed is which element says so. The sentence used to be a line
+   * inside this dialog; it is now the platform's toast, which rises in the
+   * middle of the screen — OVER the dialog rather than inside it, so it is
+   * still on top of the draft it refused. `within(dialog)` would now be
+   * asserting where the message is mounted rather than whether the person
+   * is told, so it asks the screen instead.
+   */
+  it("says so over the draft it refused, and leaves the draft to be sent again", async () => {
     createRefused = true;
     render(<Projects isAdmin meId="u-1" />);
     await userEvent.click(await screen.findByRole("button", { name: /افزودن پروژه/ }));
@@ -651,7 +666,7 @@ describe("a refused write keeps the dialog (2026-09-06)", () => {
     await userEvent.click(screen.getByRole("button", { name: /ساخت پروژه/ }));
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("alert").textContent).toBe("ذخیره نشد — دوباره تلاش کنید.");
+    expect((await screen.findByRole("alert")).textContent).toBe("ذخیره نشد — دوباره تلاش کنید.");
     /* the old code CLOSED the dialog on refusal — name, summary, tone and
        roster gone, with a line at the top of a page nobody was reading */
     expect(within(dialog).getByLabelText("نام پروژه")).toHaveValue("بازطراحی");

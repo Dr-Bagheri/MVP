@@ -12,8 +12,9 @@
  * section — for each section make a new help because we changed it a lot,
  * remove the old one") and AGAIN 2026-09-05 (user: "update the help in main
  * menu regarding our latest update on the platform, both in text, sections
- * and designs"): the dashboard is a section of its own (it is the first
- * page), and every step says what the product does tonight — the compact
+ * and designs"): HOME is a section of its own (it is the first page — the
+ * dashboard until 2026-09-08, the assistant with the day's own facts under
+ * its prompt since), and every step says what the product does tonight — the compact
  * menu, the strip and Ctrl+E, one toolbar shape, pop-up details, the four
  * default columns, drag by hand, projects as orders, rooms with named
  * agents, the guest link, push-to-talk. Every sentence was checked against
@@ -33,7 +34,7 @@
  */
 export const HELP_SECTIONS = [
   { slug: "overview", group: "start", steps: 6 },
-  { slug: "dashboard", group: "start", steps: 5 },
+  { slug: "home", group: "start", steps: 5 },
   { slug: "assistant", group: "parts", steps: 6 },
   { slug: "meetings", group: "parts", steps: 6 },
   { slug: "tasks", group: "parts", steps: 6 },

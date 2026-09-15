@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IconChevronRight } from "@/components/icons";
 
@@ -35,6 +35,17 @@ export interface SelectOption {
   label: string;
   /** an optional colour dot, for labels and column tones */
   dot?: string;
+  /**
+   * A GLYPH IN THE DOT'S SLOT, for a row that ACTS rather than selects.
+   *
+   * «موضوع جدید» is the case it exists for: it sits among values and is not
+   * one, and
+   * a leading + is what says so before it is pressed. Deliberately the same
+   * slot as `dot` — a row has one leading mark, and two would put a value's
+   * colour and an action's glyph in the same list arguing about what a row
+   * is.
+   */
+  icon?: ReactNode;
   /**
    * VISIBLE BUT UNSELECTABLE (the key-minting dialog's suspended members).
    *
@@ -146,7 +157,7 @@ export function Select({
            control's width a list of long labels truncated every one of them
            to "Pro…", "En…", "De…", and a menu nobody can read is a menu
            nobody can choose from */
-        className="w-auto min-w-[var(--radix-popover-trigger-width)] max-w-[min(22rem,80vw)] rounded-xl border-border bg-surface p-1 shadow-island"
+        className="w-auto min-w-[var(--radix-popover-trigger-width)] max-w-[min(22rem,80vw)] glass-chrome rounded-xl p-1 shadow-island"
         /* the handler belongs on the element that RECEIVES focus. Radix
            focuses the CONTENT, and a keydown on the content does not reach a
            handler bound to its child — the first version put it on the list
@@ -197,7 +208,9 @@ export function Select({
                   : `cursor-pointer ${option.value === value ? "font-semibold text-accent" : "text-fg"}`
               } ${index === cursor && option.disabled !== true ? "bg-surface-2" : ""}`}
             >
-              {option.dot !== undefined ? (
+              {option.icon !== undefined ? (
+                <span className="grid h-4 w-4 shrink-0 place-items-center" aria-hidden>{option.icon}</span>
+              ) : option.dot !== undefined ? (
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: option.dot }} aria-hidden />
               ) : null}
               <span className="min-w-0 flex-1">{option.label}</span>

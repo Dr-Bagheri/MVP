@@ -46,9 +46,34 @@ const over = (fg, bg, a) => {
   const F = hx(fg), B = hx(bg);
   return "#" + [0, 1, 2].map((i) => Math.round(F[i] * a + B[i] * (1 - a)).toString(16).padStart(2, "0")).join("");
 };
+/**
+ * CIE L* — perceptual lightness, 0..100.
+ *
+ * This file's other metric is the WCAG contrast RATIO, and the ratio is the
+ * wrong instrument for two adjacent near-black surfaces: the page and the
+ * panel sat at 1.28:1 both before and after a change that made them visibly
+ * different, because the ratio's denominator is tiny down there and every
+ * step reads as "about 1.3". L* does not have that problem — a step of ~4 is
+ * where two dark surfaces stop looking like one, at either end of the scale.
+ */
+const Lstar = (h) => {
+  const Y = lum(hx(h));
+  return Math.round((Y > 0.008856 ? 116 * Math.cbrt(Y) - 16 : 903.3 * Y) * 10) / 10;
+};
 
-/** Chip fill alpha. One number, applied to every tone, verified for each. */
-export const TINT = 0.12;
+/**
+ * Chip fill alpha. One number, applied to every tone, verified for each.
+ *
+ * 0.12 -> 0.10 (2026-09-08). A chip is its own text colour tinted over the
+ * SURFACE, so raising the dark panel raised every chip with it and the dark
+ * accent chip landed at 4.51 against a 4.5 bar. That is a pass, and it is
+ * also the exact figure in this file's own header — the 4.48 near-miss it
+ * was written to catch, one hundredth the other side of the line. A margin
+ * of 0.01 is not a margin; the tint moved instead, which lifts every tone in
+ * both themes at once (worst pair 4.51 -> 4.61) rather than nudging one hue
+ * until the number it is measured by stops complaining.
+ */
+export const TINT = 0.1;
 
 /**
  * NEUTRAL-BLACK revision (user directive, 2026-08-22): "use the sana.ai
@@ -70,15 +95,38 @@ export const DARK = {
      failed this file's floors it was nudged to the nearest passing shade of
      the same family, and the nudge is commented at the value. The blue
      palette this replaces is in git history. */
+  /* THE LADDER RE-STEPPED (observed 2026-09-08: dark-theme contrast was too
+     low, the shell reading as one flat sheet).
+
+     R23 removed every border in the platform and made the panel's boundary
+     its LIP and its DROP instead. In light that works — a white sheet on a
+     cream ground with a dark ambient drop under it reads immediately. In
+     dark all three mechanisms were near zero at once, which is why the dark
+     shell had no structure in it at all:
+
+       tone  the panel sat 3.5 L* above the page (#16191C over #0F1113)
+       drop  a BLACK shadow on a near-black ground is arithmetically nothing
+       lip   `.glass-chrome` — the rail, the top bar, the menu column — has
+             no lip AT ALL, deliberately: it is structure, not content
+
+     So in dark the tone has to carry it alone, and it now does: the panel is
+     7 L* above the page, the raised tone 4.7 above the panel. Asserted below
+     rather than eyeballed, because this exact pair passed every contrast
+     check in this file on the day the flat shell was found — the floors were
+     all about TEXT ON a surface and nothing asked whether the surface could
+     be seen. */
   bg: "#0F1113",            // the ground
-  surface: "#16191C",       // panels and cards sit ABOVE it
-  surface2: "#272C32",      // raised: chips, hovered rows
+  surface: "#1B2025",       // panels and cards sit ABOVE it — was #16191C
+  surface2: "#242A30",      // raised: chips, hovered rows — was #272C32
   /* MEASURED 2026-09-05 on panel.arameet.ir: their field ground is its own
      darker tone, not the raised one. Ours had the raised tone doing both
      jobs, which made a text box and a hovered chip the same colour — the
-     reference tells them apart and the product reads better for it. */
-  field: "#1D2126",         // dark: the field has its own ground
-  border: "#2B2E31",        // hairline (reference: white at 9% over surface)
+     reference tells them apart and the product reads better for it.
+     Re-stepped with the ladder: it stays BELOW the panel (a field is a well
+     inside a card) and above the page, so an input on the bare ground is
+     still a shape. */
+  field: "#161A1E",         // dark: the field has its own ground
+  border: "#333A41",        // hairline (decorative; R23 leaves few of these)
   borderStrong: "#727982",  // control boundaries — clears 3:1
   fg: "#F2F4F6",
   fgMuted: "#C5CAD1",
@@ -95,6 +143,17 @@ export const DARK = {
   /* the RECORD red keeps its own token and its softened value — the
      reference records with a red dot too, and ours already passes */
   record: "#DB6060",
+  /* R23's sheet. `glass` is the tone PAINTED AT `glassAlpha`, so it is
+     lighter than the opaque token it replaces and the two are only equal
+     once composited — which is the assertion below, and the reason these
+     live here instead of being picked by eye in globals.css. There are 256
+     `bg-surface` sites against 46 glass ones; if the composite drifts off
+     the token, the product grows two panel colours and nothing goes red. */
+  glass: "#242B32", glassAlpha: 0.58,
+  glass2: "#39414A", glass2Alpha: 0.3,
+  /* the QUIET sheet (HOME's own column): chrome by position, page by tone.
+     Deliberately between the two — asserted as a relationship, not a value. */
+  glassSoftAlpha: 0.32,
 };
 
 export const LIGHT = {
@@ -123,6 +182,19 @@ export const LIGHT = {
      first passing shade */
   success: "#0B7A52", warning: "#8F5D08", danger: "#C9264A", info: "#1B4A8F",
   record: "#C54A4A",
+  /* light's sheet is WHITE at .72 over the cream ground, which composites to
+     #FCFCFB — a whisper above the page. That is deliberate and it is NOT the
+     dark ladder's mistake: here the ambient drop is dark ink on a light page
+     and does the separating, so the tone does not have to. Hence the L* floor
+     below is asserted for DARK only, with light's readings printed. */
+  glass: "#FFFFFF", glassAlpha: 0.72,
+  /* NOT white (2026-09-08). The raised sheet was #FFFFFF at 50% over a white
+     panel, which is white — so `.glass-raised` in light has been painting the
+     panel it sits on since R23, and a raised row was raised in dark only.
+     This is the cream at the alpha that paints --surface-2, the same rule the
+     dark tone follows. */
+  glass2: "#DBD5C7", glass2Alpha: 0.5,
+  glassSoftAlpha: 0.34,
 };
 
 /**
@@ -198,6 +270,75 @@ for (const [name, T] of [["DARK (primary)", DARK], ["LIGHT (derived)", LIGHT]]) 
   check("accent focus ring vs bg", T.accent, T.bg, 3);
   console.log(`  --- hairline border vs surface: ${cr(T.border, T.surface)} (decorative; 3:1 not required)`);
   console.log(`  --- accent-soft computes to ${over(T.accent, T.surface, TINT)}`);
+
+  /*
+   * ── CAN THE SURFACE BE SEEN? (2026-09-08) ─────────────────────────────
+   *
+   * Every check above asks whether text is legible ON a surface. None of
+   * them asks whether the surface is legible on the PAGE — and after R23
+   * took the borders away, that is the only question left holding the
+   * layout together. The dark shell shipped with the panel 3.5 L* above the
+   * ground and passed this entire file.
+   *
+   * The floor is asserted for DARK only, and the reason is a mechanism and
+   * not a preference: in light the ambient drop is dark ink on a light page
+   * and separates the sheet by itself, so the tone is free to be a whisper;
+   * in dark the drop is black on near-black, `.glass-chrome` carries no lip
+   * at all, and the tone is the only mechanism there is. Light's numbers are
+   * printed so the asymmetry stays visible rather than becoming a hole.
+   */
+  const sep = (label, a, b, need) => {
+    const d = Math.round(Math.abs(Lstar(a) - Lstar(b)) * 10) / 10;
+    if (need == null) { console.log(`  ---   ${String(d).padStart(5)}          ${label}`); return; }
+    const ok = d >= need;
+    if (!ok) failures++;
+    console.log(`  ${ok ? "PASS" : "FAIL"} ${String(d).padStart(6)} (needs ${need})  ${label}`);
+  };
+  const dark = T === DARK;
+  const need = dark ? 6 : null;      // the tone carries it alone in dark
+  const need2 = dark ? 4 : null;
+  sep("L* step: page -> panel (surface on bg)", T.surface, T.bg, need);
+  sep("L* step: panel -> raised (surface-2 on surface)", T.surface2, T.surface, need2);
+  sep("L* step: page -> field (an input on the bare ground)", T.field, T.bg, need2);
+
+  /*
+   * THE SHEET AND THE PANEL ARE ONE COLOUR, composited.
+   *
+   * 256 sites paint `bg-surface`; 46 wear `.glass`. They are the same panel
+   * and a reader must not be able to tell which one they are looking at, so
+   * the sheet's tone is not a value anybody picks — it is whatever paints to
+   * the token at its own alpha.
+   *
+   * The floor is INDISTINGUISHABILITY (2 L*), not equality, because rounding
+   * to eight bits three times cannot land exactly in every theme and a check
+   * nobody can satisfy gets an exemption written for it. Its first run caught
+   * a real one at 6.6: light's `.glass-raised` painted WHITE at 50% over the
+   * white sheet, which is white — the raised row in the light theme has never
+   * been raised, and no contrast check could see it, because a chip that is
+   * exactly its own panel is perfectly legible and simply not there.
+   */
+  const same = (label, got, want) => {
+    const d = Math.round(Math.abs(Lstar(got) - Lstar(want)) * 10) / 10;
+    const ok = d <= 2;
+    if (!ok) failures++;
+    console.log(`  ${ok ? "PASS" : "FAIL"} ${got} vs ${want} (dL ${d}, max 2)  ${label}`);
+  };
+  same("glass over bg paints --surface", over(T.glass, T.bg, T.glassAlpha), T.surface);
+  same("glass-2 over the sheet paints --surface-2", over(T.glass2, T.surface, T.glass2Alpha), T.surface2);
+
+  /*
+   * The quiet sheet is a RELATIONSHIP (HOME's column: "different, and more
+   * similar to the background of the chat but a bit glass morphicly
+   * looking"). It has to sit strictly between the page and the chrome —
+   * a literal here would go stale the first time either end moved, and both
+   * ends just did.
+   */
+  {
+    const soft = over(T.glass, T.bg, T.glassSoftAlpha);
+    const ok = Lstar(T.bg) < Lstar(soft) && Lstar(soft) < Lstar(T.surface);
+    if (!ok) failures++;
+    console.log(`  ${ok ? "PASS" : "FAIL"} ${soft} L*${Lstar(soft)}   quiet sheet sits between page (${Lstar(T.bg)}) and chrome (${Lstar(T.surface)})`);
+  }
 }
 
 console.log(`\n${failures === 0 ? "ALL PAIRS PASS" : `${failures} FAILING PAIR(S)`}`);

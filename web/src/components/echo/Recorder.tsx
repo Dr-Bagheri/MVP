@@ -19,7 +19,7 @@ import {
   subscribeRecorder,
   type RecorderErrorCode,
 } from "@/lib/recordingEngine";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import { Card, Chip } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
@@ -27,6 +27,7 @@ import { resumePoint } from "./uploadRules";
 import { shouldLinkMeeting } from "./meetingLink";
 import { shouldStick } from "@/lib/threadFollow";
 import { AgendaPanel, RecorderNotes } from "./RecorderNotes";
+import { WaveScope } from "./WaveScope";
 import { ConfirmDialog, KebabMenu, SelectMenu, type KebabItem } from "@/components/rowActions";
 import {
   IconCheck, IconChip, IconClock, IconFileText, IconGlobe, IconMic,
@@ -174,6 +175,28 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
   /** Errors come from the engine as CODES; the view speaks the language. */
   const errorText = (code: RecorderErrorCode | null): string | null =>
     code === null ? null : t(code);
+
+  /*
+   * THE ENGINE'S ERROR, SAID ONCE (2026-09-08).
+   *
+   * A red line under the idle card used to render `s.error` for as long as
+   * the code sat in the engine's snapshot — which is until the next start,
+   * so a denied microphone stayed on screen through everything the person
+   * did next. It is a toast now, raised on the EDGE: the code changing from
+   * nothing to something. Watching the value rather than the render is what
+   * keeps one refusal from becoming one message per re-render.
+   *
+   * The `failed` panel below still says its own sentence, and that is not
+   * an exception to the rule — that sentence stands beside the Retry button
+   * it is about, so it is part of a control, not an announcement.
+   */
+  const prevError = useRef(s.error);
+  useEffect(() => {
+    if (s.error !== null && s.error !== prevError.current && phase !== "failed") {
+      notifyError(t(s.error));
+    }
+    prevError.current = s.error;
+  }, [s.error, phase, t]);
 
   // onFinished fires on the transition into done — refresh the caller's list
   const prevPhase = useRef(phase);
@@ -577,28 +600,16 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
   const waveBand = () => {
     const SLOTS = 96;
     const shown = s.wave.slice(-SLOTS);
-    const pad = SLOTS - shown.length;
     const span = s.recordedMs - s.waveStartMs;
     const msPerSample = s.wave.length > 0 && span > 0 ? span / s.wave.length : 0;
     const visibleStartMs = s.recordedMs - shown.length * msPerSample;
     const windowSpan = s.recordedMs - visibleStartMs;
-    /* the glow follows the LIVE level in three steps rather than
-       continuously: a filter that changes every frame re-rasterises the
-       whole scope, and nobody can see more than three steps of a halo */
-    const glow = phase !== "recording" || s.level < 0.08 ? "0" : s.level < 0.35 ? "1" : "2";
-    const values = Array.from({ length: SLOTS }, (_, i) =>
-      Math.max(0.02, i < pad ? 0 : shown[i - pad]!));
-    const lane = (kind: "up" | "down") => (
-      <div className={`wave-lane wave-lane-${kind}`}>
-        {values.map((v, i) => (
-          <span
-            key={i}
-            className="wave-bar"
-            style={{ "--v": v, "--age": (i / SLOTS).toFixed(3) } as React.CSSProperties}
-          />
-        ))}
-      </div>
-    );
+    /* THE SCOPE ITSELF IS `WaveScope` NOW (2026-09-08): the lanes, the age
+       gradient and the three-step glow moved to `components/echo/WaveScope`
+       so the meeting's recording screen wears the same shape rather than a
+       second copy of it. What stays here is everything that is a READING of
+       this take — the chapter marks, the now-line, the rail and its ticks —
+       and those ride in as children. */
     /*
      * THE RAIL is the whole take, not the window: 0:00 at the left, now at
      * the right, and the bright band marks the slice the wave above is
@@ -611,11 +622,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
     const windowLeftPct = takeMs > 0 ? Math.max(0, (visibleStartMs / takeMs) * 100) : 0;
     return (
       <div className="mt-3" dir="ltr" aria-hidden>
-        <div className="wave-scope h-28" data-glow={glow}>
-          {s.wave.length === 0 ? <span className="wave-idle" /> : null}
-          {lane("up")}
-          {lane("down")}
-          <span className="wave-grain" />
+        <WaveScope wave={s.wave} level={s.level} live={phase === "recording"} slots={SLOTS}>
           {msPerSample > 0
             ? s.chapterMarks.map((ms, i) => {
                 const denom = s.recordedMs - visibleStartMs;
@@ -643,7 +650,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
               <span className="absolute -top-0.5 right-1/2 h-2 w-2 translate-x-1/2 rounded-full bg-fg shadow-[0_0_10px_2px_rgb(var(--accent)/0.8)]" />
             </span>
           ) : null}
-        </div>
+        </WaveScope>
         <div className="wave-rail">
           {s.recordedMs > 0 ? (
             <>
@@ -1236,12 +1243,6 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
             {t("retryUploads")}
           </button>
         </div>
-      ) : null}
-
-      {phase === "idle" && s.error ? (
-        <p role="alert" className="mt-3 text-sm text-danger">
-          {errorText(s.error)}
-        </p>
       ) : null}
     </Card>
   );

@@ -9,6 +9,8 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { Skeleton } from "@/components/scaffold";
 import { digits, formatClock, formatDate, personName } from "@/lib/format";
 import type { OrgPersonRecord } from "@/api/types";
+import { resolveColleague } from "@/lib/resolveColleague";
+import { notifyError } from "@/lib/notify";
 
 /**
  * مصوبات / اکشن‌آیتم‌ها / سؤالات / ریسک‌ها / موجودیت‌ها — the five lists a
@@ -55,10 +57,35 @@ export function dayAsInstant(day: string): string {
   return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12).toISOString();
 }
 
-/** owed and past its day, and still standing — three facts, not one */
+/**
+ * TODAY AS A DAY KEY, in the reader's own zone — `YYYY-MM-DD`, the shape
+ * `due_on` already is, so the comparison is a string compare and no instant is
+ * invented on either side.
+ */
+function todayKey(): string {
+  const now = new Date();
+  const pad = (v: number) => String(v).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/**
+ * Owed, past its DAY, and still standing — three facts, not one.
+ *
+ * A DAY COMPARE, not an instant compare (fixed 2026-09-10). This read
+ * `dayAsInstant(due_on) < new Date().toISOString()`, and `dayAsInstant` plants
+ * the day at local NOON — so a commitment due TODAY turned red at 13:00, every
+ * day, for everyone. db/0211 chose a DATE for `due_on` precisely because an
+ * instant would be "a time nobody chose rendered in a zone that can disagree";
+ * comparing it against an instant put the zone straight back in. The board's
+ * own grouping already does it by day key (`tasks/TaskViews.tsx`), and a
+ * deadline must mean the same thing on both screens.
+ *
+ * The test that should have caught this used 2020 and 2099, which are on the
+ * correct side of the line whichever comparison you write.
+ */
 function overdue(row: MeetingItem): boolean {
   if (row.due_on === null || row.done || row.status !== "standing") return false;
-  return dayAsInstant(row.due_on) < new Date().toISOString();
+  return row.due_on < todayKey();
 }
 
 /**
@@ -112,7 +139,6 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   /* the platform's one dialog stands between the pencil's neighbour and an
      unrecoverable line — a decision somebody typed has no undo, and the
      trash sits two pixels from the edit button */
@@ -120,6 +146,10 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   /* the composer is CLOSED by default — the dashed button is the resting
      state, and an input that is always open is a thing to look past */
   const [composing, setComposing] = useState(false);
+  /* an OWNER the directory could not match, kept per item after its task was
+     made — the presenter assigns by hand, and the hint says whose name the
+     summary wrote so nothing is retyped from memory */
+  const [unresolved, setUnresolved] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let alive = true;
@@ -134,7 +164,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   const add = async () => {
     const body = draft.trim();
     if (body === "" || busy) return;
-    setBusy(true); setFailed(false);
+    setBusy(true);
     try {
       const created = await api.addMeetingItem(meetingId, { kind, body });
       /* adopt the SERVER's row rather than the draft — if it normalised the
@@ -143,7 +173,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
       setRows((prev) => (Array.isArray(prev) ? [...prev, created] : [created]));
       setDraft("");
       setComposing(false);
-    } catch { setFailed(true); } finally { setBusy(false); }
+    } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
   };
 
   const saveEdit = async () => {
@@ -151,17 +181,16 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
     const body = editing.body.trim();
     if (body === "") return;
     const id = editing.id;
-    setBusy(true); setFailed(false);
+    setBusy(true);
     try {
       await api.updateMeetingItem(meetingId, id, { body });
       setRows((prev) => (Array.isArray(prev)
         ? prev.map((r) => (r.id === id ? { ...r, body } : r)) : prev));
       setEditing(null);
-    } catch { setFailed(true); } finally { setBusy(false); }
+    } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
   };
 
   const toggleDone = async (row: MeetingItem) => {
-    setFailed(false);
     const next = !row.done;
     setRows((prev) => (Array.isArray(prev)
       ? prev.map((r) => (r.id === row.id ? { ...r, done: next } : r)) : prev));
@@ -170,10 +199,62 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
     } catch {
       /* put the tick back where it was: a checkbox that stays ticked after a
          refused write is a lie that only the next reload corrects, silently */
-      setFailed(true);
+      notifyError(t("itemWriteFailed"));
       setRows((prev) => (Array.isArray(prev)
         ? prev.map((r) => (r.id === row.id ? { ...r, done: row.done } : r)) : prev));
     }
+  };
+
+  /**
+   * ONE action item → ONE task (2026-09-08). The title is the item's text,
+   * the description names the meeting it came from, `call_id` leads the
+   * board back to the record, and the ASSIGNEE is the item's owner resolved
+   * through the same exact-match rule the assistant's tools use — a wrong
+   * person on a task looks exactly like the right one, so a loose match is
+   * refused and the name is shown instead for the presenter to assign by
+   * hand. The item is ticked once its task exists, as before.
+   */
+  const makeTask = async (row: MeetingItem) => {
+    /*
+     * THE SERVER'S ANSWER FIRST (fixed 2026-09-10).
+     *
+     * `owner_id` is the whole reason db/0211's columns were grafted into this
+     * panel: the extraction already resolved the spoken name against the org
+     * roster, WITH a fold, and stored who it meant. This re-resolved the
+     * free-text `owner` instead, through `resolveColleague` — an UNFOLDED exact
+     * match — so a row the reader can see reads «سینا محمدی», only because
+     * `owner_id` resolved it, became a task with no assignee and then painted
+     * "the owner could not be matched" next to that very name. One row
+     * contradicting itself.
+     *
+     * The spoken-name path stays as the FALLBACK, for a row whose owner never
+     * resolved server-side (the prose slicer writes `owner` and no `owner_id`).
+     */
+    let assignee: string | null = row.owner_id;
+    if (assignee === null && row.owner !== null && row.owner.trim() !== "") {
+      try {
+        const who = await resolveColleague(row.owner);
+        if (who.ok) assignee = who.id;
+      } catch { /* the directory failing is not the task failing */ }
+    }
+    await api.createTask({
+      title: row.body.slice(0, 200),
+      description: t("taskFromMeeting", { meeting: `/meetings/${meetingId}` }),
+      ...(callId === null || callId === undefined ? {} : { call_id: callId }),
+      ...(assignee === null ? {} : { assignees: [assignee] }),
+    });
+    if (row.owner !== null && assignee === null) {
+      setUnresolved((prev) => ({ ...prev, [row.id]: row.owner as string }));
+    }
+    await api.updateMeetingItem(meetingId, row.id, { done: true });
+    setRows((prev) => (Array.isArray(prev)
+      ? prev.map((r) => (r.id === row.id ? { ...r, done: true } : r)) : prev));
+  };
+
+  const makeOneTask = async (row: MeetingItem) => {
+    if (busy || row.done) return;
+    setBusy(true);
+    try { await makeTask(row); } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
   };
 
   /**
@@ -189,30 +270,33 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   const convertToTasks = async () => {
     const pending = buckets.action.filter((r) => !r.done);
     if (pending.length === 0 || busy) return;
-    setBusy(true); setFailed(false);
+    setBusy(true);
     try {
-      for (const row of pending) {
-        await api.createTask({ title: row.body.slice(0, 200), ...(callId === null ? {} : { call_id: callId }) });
-        await api.updateMeetingItem(meetingId, row.id, { done: true });
-        setRows((prev) => (Array.isArray(prev)
-          ? prev.map((r) => (r.id === row.id ? { ...r, done: true } : r)) : prev));
-      }
-    } catch { setFailed(true); } finally { setBusy(false); }
+      for (const row of pending) await makeTask(row);
+    } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
   };
 
   const remove = async (row: MeetingItem) => {
-    setFailed(false);
     setBusy(true);
     try {
       await api.deleteMeetingItem(meetingId, row.id);
       setRows((prev) => (Array.isArray(prev) ? prev.filter((r) => r.id !== row.id) : prev));
       setConfirming(null);
-    } catch { setFailed(true); } finally { setBusy(false); }
+    } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
   };
 
   return (
     <section aria-label={t("itemsTitle")} className="tile flex min-h-0 flex-col p-4">
-      <div role="tablist" className="mb-3 flex flex-wrap items-center gap-1 rounded-xl bg-surface-2 p-1">
+      {/*
+        ONE LINE, ALWAYS (user, 2026-09-08). `flex-wrap` put «Entities» on a
+        second row the moment the five English labels outgrew the panel — and a
+        segmented control that wraps stops reading as one control: the pill
+        background grows into a block, and the tab under the fold looks like a
+        different thing from the four above it. A tab strip is a RULER, so it
+        keeps its line and SCROLLS when the width runs out, which is the one
+        overflow that never changes the height of what is under it.
+      */}
+      <div role="tablist" className="scroll-quiet mb-3 flex items-center gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1">
         {MEETING_ITEM_KINDS.map((k) => (
           <button
             key={k}
@@ -227,7 +311,10 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                10px one instead, so the tab strip inside the meeting disagreed with
                the tab strip ABOVE it on the same screen. The active/idle classes
                stay: they belong to the element, not to its geometry. */
-            className={`btn btn-sm font-medium ${
+            /* `shrink-0` is what makes the scroll real: without it flexbox
+               squeezes five tabs into the panel and truncates the labels
+               instead, which is the wrap's problem wearing a narrower hat. */
+            className={`btn btn-sm shrink-0 rounded-xl px-2.5 font-medium ${
               kind === k ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
             }`}
           >
@@ -347,6 +434,14 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       {t(`itemStatus_${row.status}`)}
                     </span>
                   ) : null}
+                  {/* `text-warning`, not `text-warn`: only `--warning` is a
+                      token (tailwind.config), so the old spelling compiled to
+                      nothing and the hint rendered in the body colour */}
+                  {unresolved[row.id] !== undefined ? (
+                    <span className="text-[10px] text-warning" role="note">
+                      {t("itemOwnerUnresolved", { owner: unresolved[row.id] ?? "" })}
+                    </span>
+                  ) : null}
                   {row.at_ms !== null && onSeek !== undefined ? (
                     <button
                       type="button"
@@ -362,6 +457,18 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
               </div>
 
               <div className="flex shrink-0 items-center gap-0.5">
+                {kind === "action" && !row.done ? (
+                  <button
+                    type="button"
+                    aria-label={t("itemMakeTask")}
+                    title={t("itemMakeTask")}
+                    disabled={busy}
+                    onClick={() => void makeOneTask(row)}
+                    className="btn btn-icon text-fg-subtle hover:text-accent disabled:opacity-50"
+                  >
+                    <IconPlus width={12} height={12} />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   aria-label={t("itemEdit")}
@@ -464,7 +571,6 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
           </button>
         ) : null}
       </div>
-      {failed ? <p className="mt-1.5 text-[11px] text-danger">{t("itemWriteFailed")}</p> : null}
 
       {confirming !== null ? (
         <ConfirmDialog

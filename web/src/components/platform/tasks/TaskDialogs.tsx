@@ -17,7 +17,9 @@ import {
   FOOTER_CANCEL, FOOTER_PRIMARY,
 } from "./panelStyle";
 import { IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
-import { digits, formatDate, personName } from "@/lib/format";
+import { digits, formatDate, personName, personPhoto } from "@/lib/format";
+import { useSeededName } from "@/lib/seededNames";
+import { notifyError } from "@/lib/notify";
 
 /**
  * The board's dialogs, built from the reference's own (walked field by field
@@ -63,6 +65,34 @@ export const PRIORITY_CHIP: Record<TaskPriority, string> = {
   high: "bg-warning/10 text-warning",
   medium: "bg-warning/10 text-warning",
   low: "bg-surface-2 text-fg-muted",
+};
+
+/*
+ * THE SHORT FORM — «P1» … «P4».
+ *
+ * A DOT says only "this one is redder than that one", and it says it in a
+ * colour a person has to have been taught. `P1` is the same glyph width as a
+ * dot, reads as rank without a legend, and survives the two places colour
+ * does not: a printed screenshot and a colour-blind reader. It is NOT
+ * translated — «P1» is a code the way an issue key is, and the four words
+ * (`priority_critical` …) stay for every surface that has room for them.
+ *
+ * The board has four levels, so the codes run to P4; critical is P1 because
+ * the number is a RANK, and rank one is the top of it.
+ */
+export const PRIORITY_CODE: Record<TaskPriority, string> = {
+  critical: "P1",
+  high: "P2",
+  medium: "P3",
+  low: "P4",
+};
+/** the code's own colours — red at the top, and the floor is plain, because
+    four coloured badges in a four-row list is a colour chart, not a signal */
+export const PRIORITY_BADGE: Record<TaskPriority, string> = {
+  critical: "bg-danger/10 text-danger ring-danger/30",
+  high: "bg-warning/10 text-warning ring-warning/30",
+  medium: "bg-info/10 text-info ring-info/30",
+  low: "bg-surface-2 text-fg-subtle ring-border",
 };
 
 /* ── the label row: chips that toggle, each with a pencil ─────────────── */
@@ -142,15 +172,13 @@ function LabelEditor({ label, onClose, onSaved }: {
   const [name, setName] = useState(label?.name ?? "");
   const [color, setColor] = useState<TaskLabelColor>(label?.color ?? "grey");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   const [condemned, setCondemned] = useState(false);
 
   const save = () => {
     if (name.trim() === "" || busy) return;
     setBusy(true);
-    setFailed(false);
     const done = () => onSaved();
-    const fail = () => { setBusy(false); setFailed(true); };
+    const fail = () => { setBusy(false); notifyError(t("writeFailed")); };
     if (label === null) void api.createTaskLabel(name.trim(), color).then(done).catch(fail);
     else void api.updateTaskLabel(label.id, { name: name.trim(), color }).then(done).catch(fail);
   };
@@ -168,7 +196,6 @@ function LabelEditor({ label, onClose, onSaved }: {
           <IconClose width={14} height={14} />
         </button>
       </div>
-      {failed ? <p role="alert" className="mb-2 text-xs text-danger">{t("writeFailed")}</p> : null}
       <div className={DIALOG_BODY}>
       <label className="block">
         <span className={FIELD_LABEL}>{t("labelName")}</span>
@@ -253,7 +280,7 @@ function LabelEditor({ label, onClose, onSaved }: {
             setCondemned(false);
             setBusy(true);
             void api.deleteTaskLabel(label.id).then(onSaved)
-              .catch(() => { setBusy(false); setFailed(true); });
+              .catch(() => { setBusy(false); notifyError(t("writeFailed")); });
           }}
         />
       ) : null}
@@ -361,7 +388,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
       </button>
 
       {open ? (
-        <div className="absolute top-10 z-50 w-64 rounded-2xl border border-border bg-surface p-2 shadow-island">
+        <div className="absolute top-10 z-50 w-64 glass-chrome rounded-2xl p-2 shadow-island">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -385,7 +412,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
                           {/* 2026-09-03: the platform's avatar — a menu row's
                               28px, the same mark the task screen's comments and
                               history now show for the same colleague. */}
-                          <Avatar name={personName(person, locale)} size="sm" />
+                          <Avatar name={personName(person, locale)} src={personPhoto(person)} size="sm" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-medium text-fg">
                               {personName(person, locale)}
@@ -485,6 +512,9 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
   onLabelsChanged: () => void;
 }) {
   const t = useTranslations("tasks");
+  /* the four seeded columns read in the reader's language here too — see
+     TaskViews for why every render site and not only the board */
+  const seededName = useSeededName();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [labelIds, setLabelIds] = useState<string[]>([]);
@@ -500,12 +530,10 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
   const [gapDays, setGapDays] = useState("0");
   const [until, setUntil] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   const submit = () => {
     if (title.trim() === "" || busy) return;
     setBusy(true);
-    setFailed(false);
     /*
      * ONE WRITE (0186). This used to create the card and then fire the
      * labels and the people at it, each with its own `.catch(() =>
@@ -529,7 +557,7 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
       ...(repeats ? { schedule: { gap_days: Number(gapDays) || 0, until_date: until } } : {}),
     })
       .then(() => onCreated())
-      .catch(() => { setBusy(false); setFailed(true); });
+      .catch(() => { setBusy(false); notifyError(t("writeFailed")); });
   };
 
   return (
@@ -549,8 +577,6 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
 
       {/* every field a SECTION, divided by the body (panelStyle, 2026-09-05) */}
       <div className={DIALOG_BODY}>
-        {failed ? <p role="alert" className="text-xs text-danger">{t("writeFailed")}</p> : null}
-
         <label className="block">
           <span className={FIELD_LABEL}>{t("fieldTitleRequired")}</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)}
@@ -607,7 +633,7 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
                    selection does (see panelStyle.ts). */
                 className={chipClass(columnId === column.id)}
               >
-                {column.name}
+                {seededName(column.name)}
               </button>
             ))}
           </div>

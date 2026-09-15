@@ -271,6 +271,12 @@ export const SEEDED_STARTERS: Readonly<
     name: "آماده‌سازی جلسهٔ فردی",
     description: "پیش از هر جلسهٔ فردی، سابقهٔ همان نفر مرور می‌شود: چه بر عهده گرفته، چه گفته، و چه چیزی باید پرسیده شود.",
   },
+  /* Echo's own shelf (2026-09-08) — the digest the assistant offers when
+     a task came out of a recurring meeting */
+  "wf-starter-tasks-digest": {
+    name: "خلاصهٔ کارها پیش از جلسهٔ هفتگی",
+    description: "پیش از جلسهٔ هفتگی، کارهای باز شما به ترتیب فوریت جمع می‌شود — چه چیزی عقب افتاده، چه چیزی همین هفته موعد دارد، و چه چیزی می‌تواند صبر کند.",
+  },
 };
 
 /**

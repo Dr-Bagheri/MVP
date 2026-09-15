@@ -68,6 +68,34 @@ function calledPaths(): { raw: string; segments: string[] }[] {
   return out;
 }
 
+/**
+ * The subdirectories of one route folder, or null when there is no folder.
+ *
+ * MEMOISED, and not as a micro-optimisation (2026-09-10). `resolves` recurses
+ * over every segment of every path the client calls, and the tree branches at a
+ * dynamic folder — so the same handful of directories were being `readdirSync`ed
+ * and `statSync`ed thousands of times, and the whole check was a synchronous
+ * filesystem walk inside one `it`. It finished in well under a second alone and
+ * blew the 5s default under the full suite's parallel load, where this process
+ * is competing with two hundred other files for the same disk: a guard that
+ * goes red because the machine was busy is a guard people start re-running
+ * instead of reading. The tree does not change during a run, so one read per
+ * directory is all that was ever needed.
+ */
+const DIRS = new Map<string, string[] | null>();
+function subdirs(dir: string): string[] | null {
+  const hit = DIRS.get(dir);
+  if (hit !== undefined) return hit;
+  let out: string[] | null;
+  try {
+    out = readdirSync(dir).filter((e) => statSync(join(dir, e)).isDirectory());
+  } catch {
+    out = null;
+  }
+  DIRS.set(dir, out);
+  return out;
+}
+
 /** does the route tree serve this shape? An interpolation is one dynamic segment. */
 function resolves(segments: string[], dir = API_ROOT): boolean {
   if (segments.length === 0) return existsSync(join(dir, "route.ts"));
@@ -94,12 +122,8 @@ function resolves(segments: string[], dir = API_ROOT): boolean {
   }
   const wanted = whole.startsWith("${") ? whole : whole.replace(/\$\{.*$/, "");
   const interpolated = wanted.startsWith("${");
-  let entries: string[];
-  try {
-    entries = readdirSync(dir).filter((e) => statSync(join(dir, e)).isDirectory());
-  } catch {
-    return false;
-  }
+  const entries = subdirs(dir);
+  if (entries === null) return false;
   for (const entry of entries) {
     const dynamic = entry.startsWith("[");
     if (interpolated ? !dynamic : !(entry === wanted || dynamic)) continue;
@@ -136,7 +160,7 @@ describe("every BFF path the client calls", () => {
       .toContain("unarchive");
   });
 
-  it("resolves to a route file", () => {
+  it("resolves to a route file", { timeout: 30_000 }, () => {
     const missing = calledPaths()
       .filter((p) => !resolves(p.segments))
       .map((p) => p.raw);

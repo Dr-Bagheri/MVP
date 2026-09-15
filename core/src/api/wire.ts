@@ -68,6 +68,20 @@ export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSource
 export type {
   PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,
 } from "./platform.ts";
+// M52 — the platform console's demo tab.
+export type {
+  DemoCredentials, DemoOrganization, DemoSeedResult,
+} from "./demo-orgs.ts";
+export type {
+  SeededConversation, SeededRecord, SeedReport,
+} from "./demo-seed/engine.ts";
+export type { DemoLanguage } from "./demo-seed/pack.ts";
+/* the seed as a JOB (2026-09-09): what the 202 carries, and what one poll
+   of it answers — `result` is a DemoSeedResult for a create and
+   `{ report: SeedReport }` for a re-seed, delivered exactly once */
+export type {
+  SeedJobError, SeedJobKind, SeedJobStart, SeedJobView,
+} from "./demo-seed/jobs.ts";
 
 // Re-exported so one import covers a response and the vocabularies inside it.
 export type {

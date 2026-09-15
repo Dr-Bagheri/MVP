@@ -8,9 +8,10 @@ import type { Call, MeetingRecord, Person, Speaker, TranscriptSegment } from "@/
 import { meetingVoiceCandidates } from "@/lib/voiceCandidates";
 import { VoicePicker } from "./VoicePicker";
 import { dirFor } from "@/lib/textDirection";
-import { IconCheck, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
+import { IconCheck, IconDownload, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
 import { digits, formatClock } from "@/lib/format";
 import { SkeletonLines } from "@/components/scaffold";
+import { notify } from "@/lib/notify";
 
 /**
  * بازبینی — the reference's review surface, on Echo's real artifacts:
@@ -35,12 +36,24 @@ function ladderIndex(status: string): number {
   return at === -1 ? 1 : at;
 }
 
+/**
+ * `call: null` — THE BYTES ARE STILL LEAVING THIS BROWSER (2026-09-08).
+ *
+ * The upload lane hands the file to the meeting's own page now rather than
+ * holding the wizard open for it, so there is a real stretch — the whole
+ * send, which for an hour of audio is the longest step in the pipeline —
+ * where the ladder has not started because the record does not exist yet.
+ * Rendering nothing there would put a person who just pressed «آپلود» on a
+ * blank screen; rendering the card at step one is the truth, and it is the
+ * same picture the pipeline continues into.
+ */
 export function ProcessingCard({ call, title, locale }: {
-  call: Call; title: string; locale: string;
+  call: Call | null; title: string; locale: string;
 }) {
   const t = useTranslations("meetings");
-  const at = ladderIndex(call.status);
-  const known = (LADDER as readonly string[]).includes(call.status);
+  /* step one, «آپلود صدا», is exactly where an in-flight upload is */
+  const at = call === null ? 0 : ladderIndex(call.status);
+  const known = call === null || (LADDER as readonly string[]).includes(call.status);
   return (
     <div className="tile mx-auto w-full max-w-xl p-6">
       <div className="text-center">
@@ -50,8 +63,8 @@ export function ProcessingCard({ call, title, locale }: {
         </span>
         <h2 className="mt-3 text-base font-bold text-fg">{t("processingTitle")}</h2>
         <p className="mt-1 text-xs text-fg-muted">
-          {title} — {t("processingSubtitle")}
-          {!known ? ` (${call.status})` : ""}
+          {title} — {call === null ? t("uploading") : t("processingSubtitle")}
+          {!known && call !== null ? ` (${call.status})` : ""}
         </p>
       </div>
       <ol className="mt-5 space-y-2">
@@ -137,7 +150,7 @@ async function peaksOf(url: string): Promise<Float32Array | null> {
   }
 }
 
-export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
+export function AudioBar({ callId, seekTo, locale, durationMs = null, title = "" }: {
   callId: string;
   /** an external seek request (a transcript row's timestamp) — a FRESH
       object per click, so repeating a timestamp still seeks */
@@ -146,12 +159,16 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
   /** the call's total, from the wire — null renders as "—", never as 0:00,
       because "we do not know how long" is not "it is empty" */
   durationMs?: number | null;
+  /** what the SAVED file is called — a download whose name is a uuid is a
+      file nobody can find again. Empty falls back to the call's id. */
+  title?: string;
 }) {
   const t = useTranslations("meetings");
   const [parts, setParts] = useState<{ idx: number; offset_ms: number; url: string }[] | null | "absent">(null);
   const [playing, setPlaying] = useState(false);
   const [posMs, setPosMs] = useState(0);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const [saving, setSaving] = useState(false);
   const [peaks, setPeaks] = useState<Float32Array | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -281,6 +298,75 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
   };
 
   /*
+   * SAVE THE RECORDING.
+   *
+   * THROUGH A BLOB, and that is the whole design decision. The obvious
+   * shape — `<a download href={part.url}>` — is a trap here: the `download`
+   * attribute is IGNORED cross-origin, and these are signed storage URLs on
+   * another host, so the browser would NAVIGATE to the audio instead of
+   * saving it. A person pressing «ذخیره» would land on a bare player in a
+   * new tab with the meeting gone from the screen, which reads as the
+   * button being broken rather than as the browser obeying a rule.
+   *
+   * Fetching is safe because the waveform above already does it: `peaksOf`
+   * reads the same URL with `fetch` and draws, so CORS on these URLs is a
+   * fact this file already depends on rather than a hope.
+   *
+   * EVERY PART, one file each. A recording is several files when it ran
+   * long (the parts this bar plays back to back), and there is no single
+   * artefact to hand over — so the honest thing is to save what exists and
+   * name each with its number. Sequential, not parallel: a browser that
+   * gets several saves at once asks the person about them all at once.
+   */
+  const nameFor = (part: { idx: number; url: string }, mime: string) => {
+    /* the URL's own extension is the real one — the MIME is the fallback,
+       because storage answers `application/octet-stream` for some keys */
+    const fromUrl = /\.([a-z0-9]{2,4})(?:\?|$)/i.exec(part.url)?.[1];
+    const fromMime = /(webm|mpeg|mp4|wav|ogg|m4a)/i.exec(mime)?.[1];
+    const ext = (fromUrl ?? (fromMime === "mpeg" ? "mp3" : fromMime) ?? "webm").toLowerCase();
+    /* A FILE NAME IS A PATH SEGMENT: separators and control characters are
+       the only things that must not survive it — Persian is a perfectly
+       good file name and is left alone. The control range is spelled with
+       escape SEQUENCES rather than the characters themselves, and that is
+       not style: the first draft of this line came out of a script that
+       collapsed them into an actual NUL, and the file went binary. */
+    const base = (title.trim() === "" ? callId : title.trim())
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
+      .slice(0, 80);
+    return parts.length > 1 ? `${base}-${part.idx + 1}.${ext}` : `${base}.${ext}`;
+  };
+
+  const save = () => {
+    if (saving) return;
+    setSaving(true);
+    void (async () => {
+      try {
+        for (const part of parts) {
+          const res = await fetch(part.url);
+          if (!res.ok) throw new Error(String(res.status));
+          const blob = await res.blob();
+          const href = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = href;
+          a.download = nameFor(part, blob.type);
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          /* revoked on a timer, not on the next line: revoking synchronously
+             can beat the browser's own read of the blob */
+          setTimeout(() => URL.revokeObjectURL(href), 60_000);
+        }
+      } catch {
+        /* through the bus, like every other outcome on this page — a banner
+           in the bar would move the row it lives in */
+        notify(t("audioDownloadFailed"));
+      } finally {
+        setSaving(false);
+      }
+    })();
+  };
+
+  /*
    * THE REFERENCE'S BAR, in one row (user directive, 2026-09-02: "add the
    * sound bar to the after meeting page in the same row plus the speed
    * button like image"): play · label · waveform · elapsed/total · speed.
@@ -333,16 +419,57 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
           if (e.key === "ArrowLeft") seek(Math.max(0, posMs - 5000));
         }}
       />
-      <span className="badge-num shrink-0 text-xs text-fg-muted">
+      {/*
+        ONE LINE, ALWAYS — and it was never a WRAP (user report twice,
+        2026-09-08: "make sure that the audio time will not break into 2
+        lines", then "still looks broken to 3 lines").
+        `.badge-num` is `display: inline-grid; place-items: center` — it
+        exists for ONE glyph centred in a circle, and this readout has
+        THREE children, so the grid gave each its own implicit ROW. The
+        text was never wrapping; it was being stacked. That is why the
+        first fix, `whitespace-nowrap`, changed nothing and why its test
+        went green over the bug: a class assertion cannot see a rule
+        arriving from a stylesheet two files away.
+        What is wanted from `.badge-num` here is the tabular figures — so
+        the utility is taken directly and the grid is left behind. `flex`
+        makes the row explicit rather than implicit, `shrink-0` keeps the
+        box off the canvas's shrink, and `whitespace-nowrap` stays for the
+        one break the flex row still permits.
+      */}
+      <span className="flex shrink-0 items-center whitespace-nowrap text-xs tabular-nums text-fg-muted">
         {formatClock(Math.floor(posMs / 1000), locale)}
         <span className="mx-1 text-fg-subtle">/</span>
         {total === null ? "—" : formatClock(Math.floor(total / 1000), locale)}
       </span>
+      {/*
+        SAVE — the play key's exact shape, so the bar ends in two controls
+        of one family rather than a square and a lozenge. Disabled while a
+        save is running: a second press would fetch the same bytes again.
+      */}
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving}
+        aria-label={t("audioDownload")}
+        title={t("audioDownload")}
+        className="btn btn-sm w-[34px] shrink-0 border border-border px-0 text-fg"
+      >
+        <IconDownload width={14} height={14} />
+      </button>
+      {/*
+        A FIXED WIDTH, and it is the point of this control.
+
+        The label is ×1, ×1.25, ×1.5 or ×2 — four different widths — so on
+        an auto-sized key every press moved the key itself, the save button
+        beside it and the right edge of the waveform. The width is the
+        widest label's, which is «×۱٫۲۵», and `px-0` hands the centring to
+        the class rather than to padding that would fight it.
+      */}
       <button
         type="button"
         onClick={nextSpeed}
         aria-label={t("audioSpeed")}
-        className="btn btn-sm badge-num shrink-0 border border-border font-semibold text-fg"
+        className="btn btn-sm badge-num w-[52px] shrink-0 border border-border px-0 font-semibold text-fg"
       >
         ×{digits(speed, locale)}
       </button>
@@ -374,7 +501,10 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
 
 /* ── the transcript panel ──────────────────────────────────────────────── */
 
-const SPEAKER_TONES = [
+/* EXPORTED for the LIVE transcript (2026-09-08): a voice must look the same
+   either side of the finish, and two lists of four colours is the pair that
+   stops matching the first time either is touched. */
+export const SPEAKER_TONES = [
   "bg-accent-soft text-accent",
   "bg-info/10 text-info",
   "bg-warning/10 text-warning",
@@ -481,7 +611,42 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
           const speaker = speakers.find((s) => s.id === seg.speaker_id);
           const tone = seg.speaker_id !== null ? toneOf.get(seg.speaker_id) ?? SPEAKER_TONES[0]! : "bg-surface-2 text-fg-muted";
           return (
-            <li key={seg.id} className="flex items-start gap-2.5">
+            /*
+             * THE WHOLE LINE SEEKS (user, 2026-09-08: "make the transcript
+             * clickable and once clicked move me to the relevant place in the
+             * audio track").
+             *
+             * Only the CLOCK was a control, which is the smallest target on
+             * the row and the one part of it nobody is reading — a person who
+             * spots the sentence they want clicks the sentence. `/calls/[id]`
+             * has worked this way since #17; this panel is the same transcript
+             * against the same audio, so it gets the same gesture rather than
+             * a second convention.
+             *
+             * The row is a plain `li` with a handler, not a `role="button"`:
+             * the speaker name inside it is ALREADY a button (the voice
+             * picker), and a button inside a button is neither reachable nor
+             * announceable. The clock stays exactly as it was, so the keyboard
+             * path to this seek is unchanged.
+             */
+            <li
+              key={seg.id}
+              /* the hover ground is drawn INSIDE the list's own box — a
+                 negative margin to bleed it to the edges made the `ol` wider
+                 than its scroller and hung a horizontal scrollbar under a
+                 column of text that has nothing to scroll sideways to */
+              className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-surface-2"
+              onClick={() => {
+                /* A DRAG THAT ENDED IN THIS ROW IS A QUOTE, NOT A SEEK.
+                   Selecting a sentence to copy fires `click` on mouseup, and
+                   jumping the audio there would scrub the recording every
+                   time somebody quoted it — with the selection collapsed by
+                   the seek that follows, so the copy fails too. */
+                const picked = typeof window !== "undefined" ? window.getSelection() : null;
+                if (picked !== null && !picked.isCollapsed) return;
+                onSeek(seg.start_ms);
+              }}
+            >
               {/* NOT `<Avatar>`, deliberately (2026-09-03 sweep). The GROUND is
                   the point here: `tone` gives each speaker their own colour from
                   SPEAKER_TONES, which is how a reader tells voices apart while
@@ -498,7 +663,10 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
                   {/* THE NAME IS THE CONTROL (user directive, 2026-09-07).
                       A voice with no id at all is not a voice this record
                       holds — there is nothing to link — so it stays text. */}
+                  {/* the picker opens a menu ON this row — its click is about
+                      the VOICE, not about where the audio should go */}
                   {isHost && seg.speaker_id !== null && speaker !== undefined ? (
+                    <span onClick={(e) => e.stopPropagation()}>
                     <VoicePicker
                       callId={callId}
                       speaker={speaker}
@@ -507,6 +675,7 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
                       people={people}
                       onLinked={() => setLinked((n) => n + 1)}
                     />
+                    </span>
                   ) : (
                     <span className="text-xs font-semibold text-fg">{name ?? t("unattributed")}</span>
                   )}

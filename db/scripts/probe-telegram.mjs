@@ -8,27 +8,32 @@
 // Nothing here writes. A write test on the organisation's live data is what
 // cost the task board on 2026-09-06.
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { ownerClient } from './lib/owner-url.mjs'
+import { findNeuraiPython } from './lib/neurai-python.mjs'
 
 /*
- * The same lookup db.mjs does. Duplicated rather than extracted, deliberately:
- * db.mjs is the migration runner for production, and refactoring it to serve a
+ * The same lookup db.mjs does. The QUERY stays duplicated, deliberately: db.mjs
+ * is the migration runner for production, and refactoring it to serve a
  * diagnostic is the wrong trade.
  *
  * The one-liner below is COPIED byte for byte from db.mjs and must stay that
  * way. Retyping it cost three failed runs — a JS string literal eats
  * backslashes, so `r'~\\.neurai'` written with one becomes `~.neurai`, and the
  * script then reports "no secret store" about a store that is right there.
+ *
+ * The interpreter's PATH is the one part that is NOT duplicated and has NO
+ * default: where it lives is a property of the machine, and the two obvious
+ * defaults — a stranger's home directory, or one rebuilt from `$USERPROFILE` —
+ * are both worse than none. lib/neurai-python.mjs (review F4) makes that
+ * argument once and owns the two sentences for the two kinds of nothing. This
+ * caller has DATABASE_URL as a first sink, so it takes the non-throwing half
+ * and passes the `reason` on rather than restating it.
  */
-const NEURAI_PYTHON =
-  process.env.NEURAI_PYTHON ??
-  'C:\\Users\\amirreza\\Desktop\\neurai-mvp\\server\\.venv\\Scripts\\python.exe'
-
 function ownerUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL
-  if (!existsSync(NEURAI_PYTHON)) {
-    throw new Error('no DATABASE_URL, and no python to read the secret store with')
+  const { path: NEURAI_PYTHON, reason } = findNeuraiPython()
+  if (!NEURAI_PYTHON) {
+    throw new Error(`no DATABASE_URL, and no python to read the secret store with. ${reason}`)
   }
   const out = execFileSync(
     NEURAI_PYTHON,

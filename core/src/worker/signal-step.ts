@@ -18,10 +18,25 @@
  * home) and an `agent_card` pointing at it (the proactivity channel).
  * Capability-gated: before db/0074 lands, the step reports the skip loudly
  * and archives the message — never an error loop against missing tables.
+ *
+ * MODEL-FREE MEANS SOMEBODY HAS TO CHOOSE THE LANGUAGE (2026-09-09). Because
+ * nothing here is written by a model, none of it could follow the language of
+ * anything — so it followed the language it was typed in, and an English
+ * organisation's conversation list read «خلاصهٔ آمادهٔ «Weekly meeting with
+ * NAI»» with the English meeting name sitting inside a Persian sentence. The
+ * words now come from `delivered-copy.ts` and the side is picked by
+ * `readerLanguage()`, once per delivery, from the recipient's own interface
+ * language. The reasoning, and the two mechanisms refused, are in
+ * `db/reader-language.ts`; the sibling half of this defect — the summariser,
+ * whose text a model DOES write — is db/0219.
  */
 import { createSessionsRepo } from "../api/sessions.ts";
 import { resolveIdentity } from "../db/actor.ts";
 import { hasAssistantPrefs, hasSignalTables } from "../db/capabilities.ts";
+import { readerLanguage } from "../db/reader-language.ts";
+import {
+  briefBody, briefTitle, digestBody, digestTitle, untitledRecord,
+} from "./delivered-copy.ts";
 import { resolveJobIdentity } from "./job-identity.ts";
 import { Q_AGENT_RULES, isSignalPayload, type QueuePayload } from "./queue.ts";
 import type { StepHandler } from "./runner.ts";
@@ -40,7 +55,19 @@ async function writeCard(
   body: string,
 ): Promise<void> {
   const sessions = createSessionsRepo(db);
-  const conversation = await sessions.resolveForAsk(identity, null, title);
+  /*
+   * db/0221 — the session is the CONTENT'S HOME, not an entry in the owner's
+   * conversation list. Four rehearsal meetings put four «خلاصهٔ آماده…» rows
+   * in the sidebar, and they do not belong there: a job that ran on
+   * somebody's behalf is not a conversation they had.
+   *
+   * The row still exists, keeps its messages and keeps its card — the card IS
+   * the notification surface (0074), and it points here so the brief opens as
+   * a real conversation and can be asked about in place. `origin: "agent"` is
+   * what keeps it out of the list until the owner speaks in it, at which point
+   * it IS a conversation they had and comes back on its own.
+   */
+  const conversation = await sessions.resolveForAsk(identity, null, title, "agent");
   await sessions.append(identity, {
     sessionId: conversation.id,
     role: "assistant",
@@ -119,14 +146,15 @@ export function createSignalStep({ db }: SignalStepOptions): StepHandler {
           log.warn({ event: "brief_call_invisible" }, "no visible call for brief; skipped");
           return;
         }
-        const name = call.title?.trim() || "بدون عنوان";
+        /* the recipient's own language, read once — the title, the card and
+           the message must not be able to disagree about it */
+        const language = await readerLanguage(db, identity);
+        const name = call.title?.trim() || untitledRecord(language);
         const summary = call.body?.trim();
         await writeCard(
           db, identity, "post_call_brief",
-          `خلاصهٔ آمادهٔ «${name}»`,
-          summary
-            ? `تماس «${name}» پردازش شد. خلاصه:\n\n${summary}\n\nمی‌توانید همین‌جا درباره‌اش بپرسید.`
-            : `تماس «${name}» پردازش شد، اما خلاصه‌ای ثبت نشده است (دلیل در صفحهٔ تماس آمده). می‌توانید همین‌جا درباره‌اش بپرسید.`,
+          briefTitle(language, name),
+          briefBody(language, name, summary),
         );
         log.info({ event: "brief_delivered", call_id: payload.callId }, "post-call brief delivered");
         return;
@@ -145,13 +173,11 @@ export function createSignalStep({ db }: SignalStepOptions): StepHandler {
         const stat = rows[0];
         const count = Number(stat?.n ?? 0);
         const titles = (stat?.titles ?? []).slice(0, 8);
-        const listing = titles.length ? `\n\nتماس‌های هفته:\n- ${titles.join("\n- ")}` : "";
+        const language = await readerLanguage(db, identity);
         await writeCard(
           db, identity, "weekly_digest",
-          "گزارش هفتگی",
-          count === 0
-            ? "این هفته تماسی ثبت نشد."
-            : `این هفته ${count} تماس در دسترس شما ثبت شد.${listing}\n\nبرای جزئیات هرکدام، همین‌جا بپرسید.`,
+          digestTitle(language),
+          digestBody(language, count, titles),
         );
         log.info({ event: "digest_delivered" }, "weekly digest delivered");
         return;

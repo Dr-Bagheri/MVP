@@ -24,11 +24,23 @@
  * case of the day's pattern: a thing that is wrong and unobservable because
  * nothing real ever touched it.
  *
- * Both branches now exist. HS256 stays for the shared-secret path (the test
+ * THE HS256 BRANCH IS GONE (review F1, 2026-09-08). Both branches used to
+ * exist; the shared-secret one was the residue. HS256 was rotated out at
+ * Supabase, and rotating there stopped Supabase ISSUING those tokens — it did
+ * not stop this file ACCEPTING them. A stale `echo_platform_jwt_secret` in the
+ * deploy store therefore meant the api honoured tokens signed with a key
+ * believed retired, and nothing failed or logged to say so.
+ *
+ * There is ONE branch now. An HS256 token is refused BY NAME
+ * (`unsupported algorithm HS256`), and `core/test/auth.test.ts` keeps a test
+ * for that refusal: the refusal is the rule, and the test fails loudly if the
+ * branch is ever reintroduced.
+ *
+ * (historical, kept because it explains the shape) HS256 stayed for the test
  * suite mints those, and a project on legacy signing still uses it); ES256
  * verifies against the project's JWKS, selected by `kid`.
  */
-import crypto, { createHmac, timingSafeEqual } from "node:crypto";
+import crypto from "node:crypto";
 
 export interface VerifiedClaims {
   sub: string;
@@ -41,15 +53,14 @@ export interface VerifiedClaims {
 
 export interface VerifierOptions {
   /**
-   * Shared secret for the HS256 branch. Optional now — a project on
-   * asymmetric keys has none, and the test suite mints its own.
-   */
-  secret?: string | undefined;
-  /**
-   * The project's JWKS endpoint, enabling the ES256 branch.
+   * The project's JWKS endpoint. **REQUIRED** (review F1).
    * `https://<project>.supabase.co/auth/v1/.well-known/jwks.json`
+   *
+   * Required rather than optional-with-a-runtime-check on purpose: a caller
+   * who forgets it should fail at `tsc`, not at the first request in
+   * production.
    */
-  jwksUrl?: string | undefined;
+  jwksUrl: string;
   /** How long a fetched key set is trusted before a refresh. */
   jwksTtlMs?: number | undefined;
   issuer?: string | undefined;
@@ -138,13 +149,9 @@ function createJwksCache(url: string, ttlMs: number) {
 }
 
 export function createVerifier({
-  secret, issuer, audience, leewaySeconds = 30, jwksUrl, jwksTtlMs = 10 * 60_000,
+  issuer, audience, leewaySeconds = 30, jwksUrl, jwksTtlMs = 10 * 60_000,
 }: VerifierOptions) {
-  if (!secret && !jwksUrl) {
-    throw new Error("jwt verification needs a secret (HS256) or a jwks url (ES256)");
-  }
-  const key = secret ? Buffer.from(secret, "utf8") : undefined;
-  const jwks = jwksUrl ? createJwksCache(jwksUrl, jwksTtlMs) : undefined;
+  const jwks = createJwksCache(jwksUrl, jwksTtlMs);
 
   return async function verify(token: string): Promise<VerifiedClaims> {
     const parts = token.split(".");
@@ -200,14 +207,6 @@ export function createVerifier({
         provided,
       );
       if (!ok) throw new InvalidTokenError("bad signature");
-    } else if (header.alg === "HS256") {
-      if (!key) {
-        throw new InvalidTokenError("token is HS256 but this instance has no shared secret");
-      }
-      const expected = createHmac("sha256", key).update(signed).digest();
-      if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
-        throw new InvalidTokenError("bad signature");
-      }
     } else {
       // The diagnosis names what arrived, because "unsupported algorithm" with
       // no value is what cost this project a live sign-in: the token said

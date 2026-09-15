@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 /**
  * THE ASSISTANT'S CONVERSATION IS MODULE STATE, ON PURPOSE.
@@ -101,25 +101,158 @@ vi.mock("next-intl", () => ({
           )
         : raw;
     };
-    /**
-     * `t.raw` mirrors next-intl's: the message VALUE untouched, whatever its
-     * type — it is how array-valued messages (starter questions) are read.
-     * Without it here, the starters localizer's try/catch swallowed the
-     * stub's TypeError and every test quietly exercised only the fallback:
-     * a suite testing the code's absence while reporting on its presence.
-     * Throws on a miss exactly as the real one does, so the fallback branch
-     * is REACHED by a missing key, never by a missing stub method.
+    /*
+     * ONE LOOKUP FOR BOTH `raw` AND `has`, so they cannot disagree about
+     * whether a key exists. Two spellings of "is it there" is how a fake
+     * starts answering a question differently from the library it stands in
+     * for.
      */
-    t.raw = (key: string): unknown => {
+    const lookup = (key: string): { found: boolean; value: unknown } => {
       const value = key.split(".").reduce<unknown>(
         (node, part) =>
           node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined,
         table,
       );
-      if (value === undefined) throw new Error(`missing message: ${namespace}.${key}`);
-      return value;
+      return { found: value !== undefined, value };
     };
+    /**
+     * `t.raw` mirrors next-intl's: the message VALUE untouched, whatever its
+     * type — it is how array-valued messages (starter questions) are read.
+     *
+     * **IT DOES NOT THROW, and the comment that used to say it did was the
+     * bug (review F15).** That sentence — "throws on a miss exactly as the
+     * real one does" — was a belief about somebody else's library, written
+     * into our harness, and wrong. Read in the installed runtime
+     * (`use-intl@4.13.7 …/development/initializeConfig-CUsOI8u2.js`):
+     * `translateFn.raw` wraps `resolvePath` in a `try` and on failure calls
+     * `getFallbackFromErrorAndNotify(key, MISSING_MESSAGE, error.message)`,
+     * which reports through `onError` — `console.error` by default — and
+     * RETURNS `getMessageFallback`, i.e. the dotted key path. Nothing is
+     * thrown, in the shipped bytes.
+     *
+     * That difference is not cosmetic: the defect F15 is about lives on the
+     * console channel, and a fake that throws produces no console output for
+     * a spy to observe. With the throwing version in place the assertion
+     * could not be *written*, let alone fail.
+     */
+    t.raw = (key: string): unknown => {
+      const { found, value } = lookup(key);
+      if (found) return value;
+      /* the real sentence, verbatim from `initializeConfig-*.js:53` plus the
+         IntlError code prefix — this is what a person sees in the console */
+      console.error(
+        `MISSING_MESSAGE: Could not resolve \`${namespace}.${key}\` in messages for locale \`fa\`.`,
+      );
+      return `${namespace}.${key}`;
+    };
+    /**
+     * `t.has` — resolves the same path and answers a boolean, reporting
+     * NOTHING. Asking is silent; reading is not. That asymmetry is the whole
+     * mechanism the fix depends on, so both sides of it live here.
+     *
+     * Confirmed present on the real translator in the INSTALLED version
+     * (`dist/types/core/createBaseTranslator.d.ts:20 — has(key: string):
+     * boolean`), not in the changelog. If it were absent, every test here
+     * would pass while every render in production threw `t.has is not a
+     * function` — the fake deciding what nothing means, reintroduced by the
+     * fix for exactly that.
+     */
+    t.has = (key: string): boolean => lookup(key).found;
     return t;
   },
   useLocale: () => "fa",
 }));
+
+/**
+ * THE TOAST STACK IS MOUNTED FOR EVERY TEST, because it is mounted for every
+ * SCREEN (2026-09-08).
+ *
+ * Messages left their surfaces on that date: a refused write used to draw its
+ * own red line inside the component under test, and now it calls `notify()`
+ * and `components/platform/Toaster` draws it — once, above every route, from
+ * the locale layout. A component test that renders only the component is
+ * therefore testing a screen that cannot say anything, and twenty assertions
+ * of the form "the refusal is visible" would have had to be rewritten into
+ * assertions about a module's internal history array.
+ *
+ * That rewrite was the wrong fix. Those tests are right about the product —
+ * the person IS told — and the only thing that changed is which element says
+ * so. Mounting the real Toaster here keeps them asking the question they were
+ * written to ask, against the real component, through the real bus.
+ *
+ * CENTRAL, for the reason every other stub in this file is: it is true of
+ * every test that renders a surface, and a mount each author has to remember
+ * is one each author will forget.
+ *
+ * IT IS NOT RENDERED THROUGH TESTING LIBRARY, and that is the whole trick.
+ * A dozen suites open with `beforeEach(() => cleanup())`, and a test file's
+ * hooks run AFTER the setup file's — so a Toaster rendered with `render()`
+ * was mounted and then immediately torn down by the suite's own first line,
+ * every time, in every one of those files. Its container is created here and
+ * owned here; RTL's `cleanup` only unmounts what RTL mounted, so this one
+ * survives the suites that clear the screen before each test. It is unmounted
+ * in `afterEach` — which clears the timers inside it, and stops one test's
+ * toast being found by the next test's `findByRole("alert")`.
+ */
+import { createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
+
+let toasterRoot: Root | null = null;
+let toasterHost: HTMLElement | null = null;
+
+beforeEach(async () => {
+  /*
+   * A FILE THAT MOCKS THE BUS AWAY HAS OPTED OUT.
+   *
+   * Several suites replace `@/lib/notify` with a partial mock — usually a
+   * `notifyError` spy and nothing else — because what they are testing is
+   * that the component RAISED the notice, not that a stack drew it. The
+   * Toaster subscribes on mount, so under those mocks it would call a
+   * `subscribeNotify` the mock does not define and take the whole render
+   * down with it, turning "this suite mocks the bus" into thirty failures
+   * that read as broken components.
+   *
+   * It is a `try`, not an `if`, because a Vitest module mock THROWS on a
+   * property it was not given rather than answering `undefined` — reading
+   * `bus.subscribeNotify` to see whether it exists is itself the failure.
+   */
+  let live = false;
+  try {
+    const bus = await import("@/lib/notify");
+    live = typeof bus.subscribeNotify === "function";
+    /*
+     * AND THE BUS STARTS EMPTY, which is not tidiness either.
+     *
+     * `notify()` collapses a repeat of the same sentence inside an 8-second
+     * window into the notice already raised — the fix for one dead
+     * connection drawing «ذخیره نشد» four times. Its memory is the history
+     * array, which is module state, which the whole file shares: without
+     * this, a suite that refuses a write in two tests has the SECOND one
+     * arrive as a repeat of the first — same id, count of two, and a card
+     * whose text now carries a «×۲» that the assertion does not expect.
+     * A dedupe window is shared state between tests until somebody empties
+     * it.
+     */
+    if (live) bus.clearNotifications();
+  } catch {
+    live = false;
+  }
+  if (!live) return;
+  const { Toaster } = await import("@/components/platform/Toaster");
+  toasterHost = document.createElement("div");
+  document.body.appendChild(toasterHost);
+  toasterRoot = createRoot(toasterHost);
+  act(() => {
+    toasterRoot!.render(createElement(Toaster));
+  });
+});
+
+afterEach(() => {
+  if (toasterRoot === null) return;
+  const root = toasterRoot;
+  act(() => { root.unmount(); });
+  toasterHost?.remove();
+  toasterRoot = null;
+  toasterHost = null;
+});

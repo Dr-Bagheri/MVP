@@ -165,15 +165,59 @@ export function NotificationBell() {
      * A CARD ABOUT A MEETING OPENS THE MEETING (0217): its review tab holds
      * the summary the «ready» card announces and the ledger the commitment
      * came from, with «make it a task» beside it. A meeting card whose
-     * meeting is GONE (meeting_id nulled by the FK) falls through to the
-     * conversations like any other card — a 404 wearing a notification is
-     * worse than a list that has nothing to do with it.
+     * meeting is GONE (meeting_id nulled by the FK) falls through like any
+     * other card — a 404 wearing a notification is worse than a list that
+     * has nothing to do with it.
+     *
+     * THIS BRANCH COMES FIRST, and it is not redundant with the session deep
+     * link below: 0217's meeting cards are written with `session_id = null`,
+     * so without it every «ready» and «commitment» card would take the
+     * tombstone path and land on /conversations — a list that holds neither
+     * the summary nor the ledger the card is announcing. The two rules are
+     * complementary, not rival: a meeting card points at its meeting, and
+     * every other card points at the thread that wrote it.
+     *
+     * Truthy rather than `!== null`: an absent id and a nulled one mean the
+     * same thing here — no meeting to open — and a card that reached the
+     * panel without the column would otherwise be routed to
+     * `/meetings/undefined`.
      */
-    if (card.meeting_id !== null && (card.kind === "meeting_ready" || card.kind === "meeting_commitment")) {
+    if (card.meeting_id && (card.kind === "meeting_ready" || card.kind === "meeting_commitment")) {
       router.push(`/meetings/${encodeURIComponent(card.meeting_id)}`);
       return;
     }
-    router.push("/conversations");
+    /*
+     * OTHERWISE, A CARD OPENS ITS OWN CONVERSATION (db/0221, 2026-09-09).
+     *
+     * This pushed `/conversations` — the LIST — and the comment above it said
+     * "every other card points at the conversation that produced it", which was
+     * true of the ROW and false of this line: `session_id` was read by nobody,
+     * so the card's whole affordance was "go to the history table and find it
+     * yourself by title".
+     *
+     * That was survivable while an agent-opened session was listed there. It
+     * stops being survivable the moment 0221 excludes those rows from the list,
+     * which is the same day: the brief would be written, its card would ring,
+     * and pressing the card would land on a table that deliberately does not
+     * contain it. Tidying the sidebar without this is not a smaller change than
+     * deleting the brief — it is the same change with the write still paid for.
+     *
+     * `/assistant?c=<id>` is the platform's own deep link, the one the history
+     * table and the workflow page's mail drafts already use (`/assistant`
+     * redirects to home, which is where the thread renders — nav.ts records
+     * that a rail entry is a door, not the room). Once the person answers in
+     * the thread, `echo.session_belongs_in_history` promotes it and it joins
+     * the list on its own.
+     *
+     * A null `session_id` still goes to the list, and that is not laziness: the
+     * column is 0074's SET NULL tombstone, so it means the conversation was
+     * PURGED. `/assistant?c=null` would be a 404 dressed as a conversation;
+     * the list is the honest "whatever survived is here". The alternative
+     * considered and refused was making such a card inert — a card that does
+     * nothing when pressed teaches, on the first press, that the bell is
+     * broken (the same argument that keeps `member_message` from navigating).
+     */
+    router.push(card.session_id ? `/assistant?c=${card.session_id}` : "/conversations");
   }
 
   return (
@@ -229,7 +273,7 @@ export function NotificationBell() {
       </button>
 
       {open ? (
-        <div className="absolute end-0 top-11 z-50 max-h-[60dvh] w-[min(90vw,20rem)] overflow-y-auto rounded-xl border border-border bg-surface p-2 shadow-xl">
+        <div className="absolute end-0 top-11 z-50 max-h-[60dvh] w-[min(90vw,20rem)] overflow-y-auto glass-chrome rounded-xl p-2 shadow-xl">
           {shownCards.length === 0 && notices.length === 0 && invites.length === 0 ? (
             <p className="px-2 py-3 text-xs text-fg-muted">{t("bellEmpty")}</p>
           ) : (
@@ -318,7 +362,17 @@ export function NotificationBell() {
                   {notices.slice(0, 8).map((notice) => (
                     <p
                       key={notice.id}
-                      className={`px-2 py-1.5 text-xs ${notice.kind === "warn" ? "text-warning" : "text-fg-muted"}`}
+                      /* the four kinds, toned as they are in the toast
+                         (2026-09-08). The list used to know two, so an
+                         "error" landed in the else-branch and was drawn in
+                         the same grey as a save that worked — the bell
+                         quietly downgrading a failure it was recording. */
+                      className={`px-2 py-1.5 text-xs ${
+                        notice.kind === "error" ? "text-danger"
+                        : notice.kind === "warn" ? "text-warning"
+                        : notice.kind === "success" ? "text-success"
+                        : "text-fg-muted"
+                      }`}
                     >
                       {notice.text}
                     </p>

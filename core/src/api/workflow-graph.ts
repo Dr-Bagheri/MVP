@@ -312,11 +312,17 @@ const STEP_KEYS: Record<WorkflowStepKind, readonly string[]> = {
   foreach: ["id", "kind", "over", "max", "do"],
   propose: ["id", "kind", "proposal", "from", "call", "to", "subject", "message"],
   apply: ["id", "kind", "from"],
-  notify: ["id", "kind", "card"],
+  /* `from` (2026-09-08): the card may CARRY an upstream step's text — the
+     digest a person opens from the bell, not only its title. Optional, so
+     every graph that exists keeps its title-only card. */
+  notify: ["id", "kind", "card", "from"],
   wait: ["id", "kind", "on"],
 };
 
-const SEARCH_SCOPES = ["transcript", "summaries", "calls", "directory"] as const;
+/* `tasks` (2026-09-08): the owner's own board, read-only — the same read
+   the assistant's list_tasks makes, so a scheduled digest can see what a
+   person would see and nothing more */
+const SEARCH_SCOPES = ["transcript", "summaries", "calls", "directory", "tasks"] as const;
 const DECIDE_OPS = ["gt", "gte", "lt", "lte", "eq", "ne", "contains"] as const;
 const FETCH_KINDS = FETCH_SOURCE_KINDS;
 const WAIT_KINDS = ["decision", "until", "signal"] as const;
@@ -676,6 +682,10 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
         if (typeof step.card !== "string" || step.card.length < 3 || step.card.length > 60) {
           refuse("notify needs a card kind", id);
         }
+        /* the body, when bound, must name an earlier step's output — any
+           shape: an ask's prose is the ordinary case, and the executor
+           fences nothing here because the card is read by its own owner */
+        if (step.from !== undefined) requireBinding(step.from, "from", id, index, bodyOf);
         outputs.set(id, { kind: "none" });
         break;
       }

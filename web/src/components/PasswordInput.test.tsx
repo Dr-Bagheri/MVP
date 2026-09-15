@@ -2,8 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PasswordInput } from "./PasswordInput";
 
+/* `useLocale` too, from 2026-09-08. This file's mock replaces next-intl for
+   EVERY component the test renders, and since messages became toasts the
+   harness mounts the platform's stack alongside whatever is under test — so
+   a mock missing a hook the stack calls fails this suite with an error about
+   a component it has no opinion about. */
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useLocale: () => "fa",
 }));
 
 describe("the reveal button's side", () => {

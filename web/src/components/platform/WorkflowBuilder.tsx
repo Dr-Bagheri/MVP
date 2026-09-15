@@ -7,7 +7,7 @@ import type { AuthoredWorkflow } from "@/api/types";
 import { SelectMenu } from "@/components/rowActions";
 import { IconArrowDown, IconArrowUp, IconClose, IconPlus, IconTrash } from "@/components/icons";
 import { digits } from "@/lib/format";
-import { notify } from "@/lib/notify";
+import { notify, notifyError } from "@/lib/notify";
 import {
   EXECUTABLE_STEP_KINDS,
   EXTRACT_SCHEMA_NAMES,
@@ -252,8 +252,10 @@ export function WorkflowBuilder({
   /** the trigger menu is OPEN; closed, the section is one selector card */
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
-  /** the server's refusal, verbatim — it names the step and the rule */
-  const [refusal, setRefusal] = useState<string | null>(null);
+  /* The server's refusal is said VERBATIM — it names the step and the rule,
+     and a paraphrase would name neither. It rode a monospace strip in this
+     dialog's footer until 2026-09-08; it is a toast now, like every other
+     refused write, and it keeps the server's own sentence. */
   /**
    * The row this modal is writing to. It starts as the edited workflow and
    * becomes the CREATED one after the first save, so a publish refusal
@@ -332,7 +334,6 @@ export function WorkflowBuilder({
   async function save() {
     if (busy) return;
     setBusy(true);
-    setRefusal(null);
     try {
       let target = created.current;
       if (target === null) {
@@ -360,7 +361,7 @@ export function WorkflowBuilder({
       onClose();
     } catch (cause) {
       const detail = cause as { detail?: string; message?: string };
-      setRefusal(detail.detail || detail.message || t("saveFailed"));
+      notifyError(detail.detail || detail.message || t("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -743,7 +744,7 @@ export function WorkflowBuilder({
         unsaved arrangement, and a stray click landing on the dim is not a
         request to throw it away. The ✕ and Escape are the doors.
       */}
-      <div className="flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+      <div className="flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden glass-solid rounded-2xl shadow-2xl">
         <header className="flex items-center gap-2 border-b border-border px-5 py-4">
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
             {workflow ? t("titleEdit", { name: savedName.current }) : t("title")}
@@ -1010,14 +1011,6 @@ export function WorkflowBuilder({
         </div>
 
         <footer className="border-t border-border px-5 py-4">
-          {refusal ? (
-            /* core's own sentence — it names the step and the rule, and a
-               paraphrase would name neither */
-            <p role="alert" dir="ltr"
-              className="mb-3 rounded-lg bg-danger/10 px-3 py-2 font-mono text-[11px] leading-5 text-danger">
-              {refusal}
-            </p>
-          ) : null}
           {/* 2026-09-03: a dialog footer is where `.btn-sm` lives. Both of
               these carried `h-9 min-h-0` — a 36px size invented on top of a
               class that already has one, which is how one modal ends up

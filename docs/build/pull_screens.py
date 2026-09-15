@@ -17,17 +17,25 @@ Usage:
 Names are matched to the LAST len(names) screenshot results, in order, unless
 --ids is given, in which case each name is paired with the id beside it:
     python pull_screens.py <out-dir> --ids dashboard=ss_abc assistant=ss_def
+
+The transcript's path is a property of the MACHINE and of the session that took
+the shots, so there is no default: set SESSION_TRANSCRIPT to the .jsonl file.
 """
 import base64
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
-TRANSCRIPT = Path(
-    "C:/Users/amirreza/.claude/projects/C--Users-amirreza-Desktop-mvp"
-    "/41b903d3-cd6a-4374-93ee-2e012d2dbd1d.jsonl"
-)
+_transcript = os.environ.get("SESSION_TRANSCRIPT")
+if not _transcript:
+    raise SystemExit(
+        "SESSION_TRANSCRIPT is not set. Point it at the session .jsonl that holds "
+        "the screenshot results, e.g.\n"
+        "  set SESSION_TRANSCRIPT=<claude-projects-dir>/<session-id>.jsonl"
+    )
+TRANSCRIPT = Path(_transcript)
 
 
 def shots():

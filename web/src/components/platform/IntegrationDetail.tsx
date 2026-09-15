@@ -19,6 +19,7 @@ import {
 import { BrandMark } from "./brandMarks";
 import { ConnectDialog } from "./ConnectDialog";
 import { FilterChips } from "./sectionTabs";
+import { notifyError } from "@/lib/notify";
 
 /**
  * ONE integration: what it reads, and where it stands (user directive,
@@ -78,7 +79,6 @@ export function IntegrationDetail({ slug }: { slug: string }) {
   const [tick, setTick] = useState(0);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const name = entry ? copy[entry.key].name : null;
   /* while the catalogue KNOWS the slug the title is known synchronously;
@@ -122,7 +122,6 @@ export function IntegrationDetail({ slug }: { slug: string }) {
      token — the shelf and this page cannot drift apart on how one connects */
   function connect(reconnect = false): void {
     if (!entry) return;
-    setError(null);
     setDialog({ reconnect });
   }
 
@@ -512,8 +511,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                   </>
                 )}
               </div>
-              {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
-            </>
+              </>
           )}
         </PageContainer>
       </>
@@ -534,15 +532,14 @@ export function IntegrationDetail({ slug }: { slug: string }) {
           busy={busy}
           onConfirm={() => {
             setBusy(true);
-            setError(null);
-            void api.disconnectConnector(entry.provider)
+                    void api.disconnectConnector(entry.provider)
               .then(() => {
                 setAsking(false);
                 /* the connection is gone — the honest place to stand is the
                    overview, where the table now says so */
                 router.push("/integrations");
               })
-              .catch(() => setError(t("disconnectFailed")))
+              .catch(() => notifyError(t("disconnectFailed")))
               .finally(() => setBusy(false));
           }}
           onCancel={() => setAsking(false)}

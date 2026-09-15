@@ -37,6 +37,14 @@ export type {
   ChatReactionRecord, ChatReplyPreview, JoinInviteRecord, InviteKind,
 } from "@echo/core/wire";
 export type { PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser };
+/* M52 — the platform console's demo tab. Inherited from the producer like
+   everything else here: a hand-written mirror of `DemoSeedResult` is how a
+   field that does not exist ends up rendered with confidence. */
+export type {
+  DemoCredentials, DemoLanguage, DemoOrganization, DemoSeedResult,
+  SeedReport, SeededRecord,
+  SeedJobError, SeedJobKind, SeedJobStart, SeedJobView,
+} from "@echo/core/wire";
 
 // ---- org & people (M2, M15) -------------------------------------------------
 
@@ -680,7 +688,23 @@ export interface AdminModelRow {
   name: string;
   allowed: boolean;
   suggested: boolean;
+  /**
+   * On core/'s ranked shelf (RECOMMENDED_MODELS). The picker opens on these
+   * — the catalogue is 335 models and an alphabetical list of the rest led
+   * with a retired provider. OPTIONAL because a core deployed before this
+   * field existed does not send it, and "absent" must not read as "not
+   * recommended" and empty the dialog.
+   */
+  recommended?: boolean;
   tools?: boolean;
+  /**
+   * USD per million tokens, as the upstream catalogue states it. OPTIONAL and
+   * meaning "not stated" when absent — a model whose entry omits pricing must
+   * never render as free.
+   */
+  cost?: { input: number; output: number };
+  /** Context window in tokens, when the catalogue states one. */
+  contextWindow?: number;
 }
 
 export interface ModelsResponse {

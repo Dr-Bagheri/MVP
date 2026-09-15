@@ -3,11 +3,17 @@ import fa from "../messages/fa.json";
 import en from "../messages/en.json";
 
 let locale: "fa" | "en" = "en";
+/* `useLocale` too, from 2026-09-08. This file's mock replaces next-intl for
+   EVERY component the test renders, and since messages became toasts the
+   harness mounts the platform's stack alongside whatever is under test — so
+   a mock missing a hook the stack calls fails this suite with an error about
+   a component it has no opinion about. */
 vi.mock("next-intl", () => ({
   useTranslations: (ns: string) => (key: string) => {
     const table = (locale === "fa" ? fa : en) as unknown as Record<string, Record<string, string>>;
     return table[ns]?.[key] ?? `${ns}.${key}`;
   },
+  useLocale: () => locale,
 }));
 
 const { useSeededName } = await import("./seededNames");
@@ -43,5 +49,41 @@ describe("seeded column names", () => {
     locale = "fa";
     const name = useSeededName();
     expect(name("بک‌لاگ")).toBe("بک‌لاگ");
+  });
+
+  /**
+   * THE OTHER PRODUCER, AND THE DIRECTION NOBODY LOOKS AT (2026-09-09).
+   *
+   * Two things seed a board: core's `DEFAULT_COLUMNS`, in Persian, on an
+   * organisation's first visit; and the demo console's English language pack
+   * (`demo-seed/content.en.ts`), which writes "Backlog / To do / In progress
+   * / Done". The map knew only the first, so an English-seeded board could
+   * not be read in Persian — the exact defect this file exists for with the
+   * languages swapped, on the side a Persian-first team is structurally least
+   * likely to check.
+   */
+  it("an ENGLISH-seeded board reads in Persian too", () => {
+    locale = "fa";
+    const name = useSeededName();
+    expect(name("Backlog")).toBe("بک‌لاگ");
+    expect(name("In progress")).toBe("در حال انجام");
+  });
+
+  it("and on the English screen that board is left exactly as seeded", () => {
+    locale = "en";
+    const name = useSeededName();
+    expect(name("Backlog")).toBe("Backlog");
+    expect(name("To do")).toBe("To do");
+  });
+
+  it("CONTROL: the English keys are the SEEDED words, not any English word", () => {
+    /* without this, "map the English too" drifts into translating whatever
+       looks like a stage — and a column somebody named "Blocked", or typed in
+       a different case, is theirs and stays theirs */
+    locale = "fa";
+    const name = useSeededName();
+    expect(name("Blocked")).toBe("Blocked");
+    expect(name("backlog")).toBe("backlog");
+    expect(name("Doing")).toBe("Doing");
   });
 });

@@ -41,7 +41,16 @@ export function BottomBar() {
             role="dialog"
             aria-modal="true"
             aria-label={t("more")}
-            className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-border bg-surface p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden"
+            /* R23, on the phone's own chrome (2026-09-08). This sheet wore
+               `border-t border-border bg-surface` — the opaque panel with a
+               rule along its lip, which is the picture the directive named.
+               `glass-solid` is the sheet's tone at FULL opacity: this one
+               rises over its own scrim, and translucency there stops reading
+               as glass and starts reading as the darkened page bleeding up
+               through the labels (every panel over a scrim is opaque). The
+               corner stays — a sheet that slides
+               up from the window's edge is not a pane join. */
+            className="glass-solid fixed inset-x-0 bottom-0 z-50 rounded-t-2xl p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
             {/* every non-bar destination, not just the utility group — a rail
@@ -78,7 +87,22 @@ export function BottomBar() {
 
       <nav
         aria-label={t("primaryNav")}
-        className="flex border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+        /*
+         * THE PHONE'S CHROME IS A SHEET TOO (R23, 2026-09-08).
+         *
+         * `border-t border-border bg-surface` stood here after the sweep took
+         * the same three classes off the rail, the top bar and every card —
+         * so the one surface a phone always has on screen was the last opaque
+         * pane in the product, with the one hairline left drawing the app as a
+         * stack of panes. It is the rail's counterpart below `md` and it wears
+         * the rail's own class: one spelling of "the chrome's colour", which
+         * is the only form in which the bar and the rail cannot come to
+         * disagree about it.
+         *
+         * The safe-area padding stays: the sheet is translucent, not absent,
+         * and the iOS home indicator still sits under it.
+         */
+        className="glass-chrome flex pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {NAV_BAR.map((nav) => {
           const Icon = NAV_ICON[nav.key];

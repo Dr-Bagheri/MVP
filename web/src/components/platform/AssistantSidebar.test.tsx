@@ -39,11 +39,17 @@ vi.mock("@/i18n/routing", () => ({
 /* the identity read, per test: the default is a member, and two cases below
    answer slowly or answer "stranger" */
 const identity = vi.hoisted(() => vi.fn(async (): Promise<{ state: string }> => ({ state: "member" })));
+/* the stored conversations the header's menu lists; empty for every case that
+   is not about the header */
+const sessions = vi.hoisted(() => vi.fn((): unknown[] => []));
 vi.mock("@/api/client", () => ({
   api: {
     identityState: () => identity(),
     models: async () => ({ models: [], preferred_model: null }),
     agentThread: async () => ({ messages: [], floor: [] }),
+    /* the header's switcher reads this — on OPEN only, so every other case in
+       this file never touches it (see the header describe at the foot) */
+    agentSessions: async () => sessions(),
     deliverToolResult: async () => undefined,
     ask: () => (async function* () { /* nothing asked in this file */ })(),
     /* the roster `@handle` resolves against (0166). It is read on mount and
@@ -105,6 +111,7 @@ vi.mock("@/lib/voice", () => ({
 import { AssistantSidebar } from "./AssistantSidebar";
 import { SCAFFOLD } from "@/components/scaffold/constants";
 import { announceRecordingLive } from "@/lib/assistantBus";
+import { assistantSnapshot } from "@/lib/assistantSession";
 
 /**
  * **The failure this platform has already shipped once.**
@@ -555,5 +562,51 @@ describe("a recording takes the ears and leaves the column (2026-09-07)", () => 
     expect(container.querySelector("textarea")).not.toBeNull();
     /* and the half that must go with the recording */
     expect(loopStopped, "the assistant kept listening into the take").toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE HEADER NAMES THE CONVERSATION AND OPENS THE OTHERS.
+ *
+ * Three assertions for three changes, and the switching one is the load-bearing
+ * half: the sidebar could always ADOPT a stored conversation, and until this
+ * menu existed nothing inside the sidebar could ask it to.
+ */
+describe("the assistant's header (2026-09-08)", () => {
+  it("switches to a stored conversation, collapses rather than closes, and lights no lamp", async () => {
+    sessions.mockReturnValue([
+      { id: "s-1", title: "قرارداد", last_message_at: "2026-09-08T09:00:00Z",
+        archived_at: null, created_at: "2026-09-08T08:00:00Z", message_count: 4 },
+      { id: "s-2", title: null, last_message_at: "2026-09-07T09:00:00Z",
+        archived_at: null, created_at: "2026-09-07T08:00:00Z", message_count: 2 },
+    ]);
+    localStorage.setItem("neurai-assistant-sidebar", "1");
+    const { container } = await mount();
+    await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
+
+    /* THE DOT. It was `bg-accent` on a 8px circle in the header — a status
+       light that stood for no status. Scoped to the header, so the composer's
+       own accent is not what makes this pass. */
+    const header = container.querySelector<HTMLElement>("[data-assistant-sidebar] .border-b")!;
+    expect(header.querySelector(".bg-accent"), "the header still lights a lamp").toBeNull();
+
+    /* THE BUTTON. `close` was a cross on a column that never leaves the
+       screen; the glyph is asserted by NAME because a re-drawn cross would
+       still be a cross. */
+    const collapse = screen.getByRole("button", { name: "جمع‌کردن دستیار" });
+    expect(collapse.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("collapseEnd");
+
+    /* THE SWITCH. The trigger carries the room's name until a conversation is
+       adopted, and lists what is stored — the untitled one under the history
+       table's own words. */
+    await userEvent.click(screen.getByRole("button", { name: "تغییر گفت‌وگو" }));
+    await screen.findByRole("menuitem", { name: "قرارداد" });
+    expect(screen.getByRole("menuitem", { name: /گفت‌وگوی جدید ۱/ })).not.toBeNull();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "قرارداد" }));
+    /* adopted: the store holds it, and the trigger now says which one */
+    await waitFor(() => expect(assistantSnapshot().sessionId).toBe("s-1"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "تغییر گفت‌وگو" }).textContent)
+      .toContain("قرارداد"));
   });
 });

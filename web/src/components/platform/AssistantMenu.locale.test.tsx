@@ -43,11 +43,19 @@ vi.mock("next-intl", () => {
            that invents copy would pass this test against a missing catalogue */
         return typeof value === "string" ? value : `${namespace}.${key}`;
       };
+      /* SECOND COPY OF THE FAKE. See `web/vitest.setup.ts` for why `raw`
+         REPORTS and returns the key path rather than throwing, and why `has`
+         has to exist beside it (review F15). Two is the count; grep `t.raw =`
+         before assuming there is no third. */
       t.raw = (key: string): unknown => {
         const value = walk(table(namespace), key);
-        if (value === undefined) throw new Error(`missing message: ${namespace}.${key}`);
-        return value;
+        if (value !== undefined) return value;
+        console.error(
+          `MISSING_MESSAGE: Could not resolve \`${namespace}.${key}\` in messages for locale \`${locale}\`.`,
+        );
+        return `${namespace}.${key}`;
       };
+      t.has = (key: string): boolean => walk(table(namespace), key) !== undefined;
       return t;
     },
     useLocale: () => locale,

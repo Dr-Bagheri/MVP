@@ -41,13 +41,28 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const next = join(webRoot, "node_modules", ".bin", process.platform === "win32" ? "next.CMD" : "next");
+/*
+ * NEXT'S OWN SCRIPT, RUN BY THIS NODE — not the `.bin` shim through a shell
+ * (2026-09-08).
+ *
+ * The shim needs `shell: true` on Windows to be executable at all, and a
+ * shelled command is a STRING: a checkout under a directory whose name
+ * contains a space broke at that space, and cmd reported everything
+ * before it as "is not recognized" — under the gate's own
+ * "the production build does not complete", a harness failure wearing a
+ * build failure's words, which is the shape that sends somebody to debug
+ * their app. Spawning the resolved .js with `process.execPath` needs no
+ * shell, so there is no string for a space to split, and the platform fork
+ * for `next.CMD` disappears with it.
+ */
+const next = join(webRoot, "node_modules", "next", "dist", "bin", "next");
 
-const result = spawnSync(next, ["build"], {
+const result = spawnSync(process.execPath, [next, "build"], {
   cwd: webRoot,
   stdio: "inherit",
+  /* read by next.config.mjs's `distDir` — this repo's own variable, not
+     Next's, so the name has to match the config exactly */
   env: { ...process.env, NEXT_BUILD_DIR: ".next-gate" },
-  shell: process.platform === "win32",
 });
 
 if (result.status !== 0) {

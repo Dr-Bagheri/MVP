@@ -13,6 +13,7 @@ import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton, Skeleto
 import { SkillDryRun, SkillHistory } from "@/components/platform/SkillWorkshop";
 import { notify } from "@/lib/notify";
 import { Card, Chip } from "@/components/ui";
+import { notifyError } from "@/lib/notify";
 
 /**
  * Skills management (M29, Part 2) — the Onyx-personas surface on our
@@ -112,7 +113,6 @@ function SkillsPageContent() {
   const [answer, setAnswer] = useState<Answer>("pending");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const consumedCreateRequest = useRef(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
@@ -127,9 +127,9 @@ function SkillsPageContent() {
       setAnswer("ok");
     } catch {
       /* a refresh after a save keeps whatever cards are already up — the
-         sentence in the alert is the honest part, not a fresh empty state */
+         sentence in the toast is the honest part, not a fresh empty state */
       setAnswer("failed");
-      setError(t("loadFailed"));
+      notifyError(t("loadFailed"));
     }
   }
 
@@ -147,7 +147,6 @@ function SkillsPageContent() {
   useEffect(() => {
     if (createRequested && me && !consumedCreateRequest.current) {
       consumedCreateRequest.current = true;
-      setError(null);
       setDraft({ ...EMPTY, level: isAdmin ? "org" : "user" });
     }
   }, [createRequested, isAdmin, me]);
@@ -158,7 +157,6 @@ function SkillsPageContent() {
   async function save() {
     if (!draft || busy) return;
     setBusy(true);
-    setError(null);
     const starters = draft.starters.split("\n").map((q) => q.trim()).filter(Boolean);
     const maxCalls = draft.maxToolCalls.trim() === "" ? null : Number(draft.maxToolCalls);
     try {
@@ -191,7 +189,7 @@ function SkillsPageContent() {
     } catch (cause) {
       // core's sentence verbatim — it owns the slug rule, the tool
       // vocabulary and the level permissions, and its refusals carry them
-      setError(cause instanceof BffError ? (cause.detail ?? t("saveFailed")) : t("saveFailed"));
+      notifyError(cause instanceof BffError ? (cause.detail ?? t("saveFailed")) : t("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -199,12 +197,11 @@ function SkillsPageContent() {
 
   async function setArchived(row: AuthoredSkill, archived: boolean) {
     setBusy(true);
-    setError(null);
     try {
       await api.archiveSkill(row.id, archived);
       await load();
     } catch (cause) {
-      setError(cause instanceof BffError ? (cause.detail ?? t("saveFailed")) : t("saveFailed"));
+      notifyError(cause instanceof BffError ? (cause.detail ?? t("saveFailed")) : t("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -224,19 +221,12 @@ function SkillsPageContent() {
         actions={<button
           className="btn-primary shrink-0"
           onClick={() => {
-            setError(null);
             setDraft({ ...EMPTY, level: isAdmin ? "org" : "user" });
           }}
         >
           {t("newSkill")}
         </button>}
       />
-
-      {error ? (
-        <p role="alert" className="mb-4 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
 
       {draft ? (
         <Section title={draft.id ? t("editorEdit") : t("editorNew")}>
@@ -477,7 +467,6 @@ function SkillsPageContent() {
                     className="btn-secondary btn-sm"
                     disabled={busy}
                     onClick={() => {
-                      setError(null);
                       setDraft(fromAuthored(s));
                     }}
                   >

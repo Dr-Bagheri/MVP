@@ -20,6 +20,7 @@
 import { NotFoundError, ValidationError, ConflictError } from "./errors.ts";
 import { hasMeetingAttendees, hasMeetingTakeStatus } from "../db/capabilities.ts";
 import { iso } from "./vocabulary.ts";
+import { isDiarizerLabel, isSpeakerPlaceholder } from "./speaker-naming.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -341,15 +342,109 @@ function parseInvitees(value: unknown): string[] {
  * reading as wired, which is the defect this whole area started as.
  */
 const SECTIONS: Array<{ kind: MeetingItemKind; match: RegExp }> = [
-  { kind: "decision", match: /مصوب|تصمیم/ },
-  { kind: "action", match: /اکشن|اقدام|کار بعدی/ },
-  { kind: "question", match: /سؤال|سوال|پرسش/ },
-  { kind: "risk", match: /ریسک|خطر|موانع|مشکل|چالش/ },
-  { kind: "entity", match: /موجودیت|افراد و سازمان/ },
+  /* BILINGUAL (2026-09-08): a summary written in English — a skill override,
+     an English-speaking org, a model that answered in the transcript's own
+     language — used to slice into NOTHING, which read as "no decisions"
+     rather than as "headings not recognised". Each kind now names the
+     English headings the templates and the models actually write. */
+  { kind: "decision", match: /مصوب|تصمیم|decision|resolution|agreed/i },
+  /* «گام‌های بعدی» (2026-09-09): a real summary of a real recording wrote that
+     heading — it is the ordinary Persian for "next steps" and the list had only
+     «اقدام» and «کار بعدی» — so the meeting produced two owned action items and
+     the panel showed none. Not "no action items": the heading was not
+     recognised, which is the exact failure this comment block already warns
+     about, arriving in the language the list was written for.
+     The ZWNJ is optional in the pattern because people type it both ways. */
+  { kind: "action", match: /اکشن|اقدام|کار بعدی|گام‌?های بعدی|قدم‌?های بعدی|action|next step|to-?do|follow-?up/i },
+  { kind: "question", match: /سؤال|سوال|پرسش|question|open item/i },
+  /* «مشکلات و موانع» is the same two words the other way round, and an English
+     summary writes "Obstacles and Problems" — neither of which any of the
+     original alternatives matched on its own. */
+  { kind: "risk", match: /ریسک|خطر|موانع|مشکل|چالش|risk|blocker|issue|concern|obstacle|problem/i },
+  { kind: "entity", match: /موجودیت|افراد و سازمان|entit|people|organi[sz]ation|stakeholder/i },
 ];
 
-export function sliceSummary(text: string): Array<{ kind: MeetingItemKind; body: string }> {
-  const out: Array<{ kind: MeetingItemKind; body: string }> = [];
+export interface SlicedItem {
+  kind: MeetingItemKind;
+  body: string;
+  /** who was named for it — parsed from the templates' fixed marker
+      («— مسئول: نام» / «— owner: name»), or conservatively from the two
+      natural shapes below; null when nobody was named */
+  owner: string | null;
+}
+
+/**
+ * The FIXED marker the summary templates ask for on every action line:
+ * `… — مسئول: سینا` / `… — owner: Sina`, with or without the dash, with or
+ * without a bracket around it. Anchored at the END of the line so a sentence
+ * that merely mentions «مسئول» in passing keeps its text.
+ */
+const OWNER_MARKER = /\s*[(\[]?\s*[—–-]?\s*(?:مسئول|مسؤول|owner|assignee)\s*[:：]\s*([^()\[\]]{1,80}?)\s*[)\]]?\s*[.。]?$/i;
+/** a NAME: letters (any script), spaces, dots and hyphens, at most three words
+    — anything with a digit, a slash or a symbol is a fragment, not a person */
+const NAME_SHAPE = /^[\p{L}\p{M}][\p{L}\p{M}.'\u200c-]*(?:\s+[\p{L}\p{M}][\p{L}\p{M}.'\u200c-]*){0,2}$/u;
+/** words that sit where a name would and are never one — the prefix shape
+    «Note: …» / «توجه: …» is a label, and filing it as an owner is a lie */
+const NOT_A_NAME = new Set([
+  "note", "notes", "nb", "todo", "action", "decision", "risk", "question", "owner", "deadline", "due",
+  "توجه", "نکته", "تذکر", "اقدام", "تصمیم", "مسئول", "ریسک", "سؤال", "سوال", "پرسش", "مهلت",
+]);
+/* `isSpeakerPlaceholder` is the third clause and it is not decoration:
+   NAME_SHAPE happens to reject «Speaker 1» and «S1·1» today (a digit-only
+   word, a middle dot), which is an accident of a regex written for something
+   else. The rule "the product's own name for a voice is never a person" is
+   stated where it can be read and tested. */
+const looksLikeName = (s: string): boolean =>
+  NAME_SHAPE.test(s)
+  && !NOT_A_NAME.has(s.toLowerCase().replace(/[.:]+$/, ""))
+  && !isSpeakerPlaceholder(s);
+
+/**
+ * Split an action line into its text and the person it was given to.
+ *
+ * Three shapes, in order of confidence: the templates' own marker; a
+ * bracketed name at the very end («… (سینا)»); a name-shaped prefix before a
+ * colon («سینا: …»). The latter two are deliberately strict — a wrong owner
+ * on a task is worse than none, because a task assigned to the wrong person
+ * looks exactly like a task assigned to the right one.
+ */
+export function splitOwner(line: string): { body: string; owner: string | null } {
+  const marked = OWNER_MARKER.exec(line);
+  if (marked !== null) {
+    const owner = String(marked[1]).trim();
+    const body = line.slice(0, marked.index).replace(/[\s—–-]+$/, "").trim();
+    if (owner !== "" && body !== "") {
+      /*
+       * A PLACEHOLDER IS NOT AN OWNER (2026-09-09). The marker was found, so
+       * it is stripped from the body either way — leaving «— Owner: Speaker 1»
+       * in the sentence would move the leak one field over — but the value is
+       * dropped when it is the product's own name for a voice rather than a
+       * person's. An unowned action item is honest; one owned by `S1·1` is
+       * not, and it is worse than honest-but-empty: ItemsPanel resolves this
+       * string against the directory when it makes a task, so a placeholder
+       * here becomes "assign this to S1·1 by hand" on somebody's board.
+       */
+      return { body, owner: isSpeakerPlaceholder(owner) ? null : owner };
+    }
+  }
+  /* the other two shapes go through `looksLikeName`, which now asks the same
+     question — one wall each, not two: a second placeholder check here would
+     read as rigour and make the test for it vacuous */
+  const bracketed = /^(.*\S)\s*[(（]([^()（）]{2,60})[)）]\s*[.。]?$/.exec(line);
+  if (bracketed !== null) {
+    const owner = String(bracketed[2]).trim();
+    if (looksLikeName(owner)) return { body: String(bracketed[1]).trim(), owner };
+  }
+  const prefixed = /^([^:：]{2,40})\s*[:：]\s+(\S.*)$/.exec(line);
+  if (prefixed !== null) {
+    const owner = String(prefixed[1]).trim();
+    if (looksLikeName(owner)) return { body: String(prefixed[2]).trim(), owner };
+  }
+  return { body: line, owner: null };
+}
+
+export function sliceSummary(text: string): SlicedItem[] {
+  const out: SlicedItem[] = [];
   let current: MeetingItemKind | null = null;
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
@@ -368,14 +463,35 @@ export function sliceSummary(text: string): Array<{ kind: MeetingItemKind; body:
     }
     if (current === null) continue;
     /* strip a bullet or a number, then keep the sentence */
-    const body = line.replace(/^([-*•]|\d+[.)])\s*/, "").trim();
-    if (body === "") continue;
-    out.push({ kind: current, body: body.slice(0, 2000) });
+    const item = line.replace(/^([-*•]|\d+[.)])\s*/, "").trim();
+    if (item === "") continue;
+    /* only an ACTION has an owner — a decision's «(سینا)» is who proposed it,
+       which is not the same fact and must not become an assignee */
+    const { body, owner } = current === "action" ? splitOwner(item) : { body: item, owner: null };
+    out.push({ kind: current, body: body.slice(0, 2000), owner: owner === null ? null : owner.slice(0, 120) });
   }
   return out;
 }
 
-export type MeetingsRepo = ReturnType<typeof createMeetingsRepo>;
+/**
+ * The api half of db/0220's CHECK — the constraint is the enforcer and this
+ * mirrors it so a caller meets a sentence instead of a 23514 (the
+ * `app_user_username_format` pattern, applied to the field that leaked).
+ *
+ * It refuses ONLY the diarizer's own string, exactly what the constraint
+ * refuses. The wider placeholder rule («Speaker 1») lives at the extractor,
+ * where a MODEL is the writer; a person typing it here is doing something
+ * odd and legible, and refusing a human's own words in their own record is a
+ * different and worse mistake than the one this fixes.
+ */
+function assertOwnerIsNotALabel(owner: string | null): void {
+  if (owner !== null && isDiarizerLabel(owner)) {
+    throw new ValidationError(
+      "that is the recording's internal name for a voice, not a person",
+      { code: "owner_is_a_speaker_label" },
+    );
+  }
+}
 
 export function createMeetingsRepo(db: Db) {
   /** the select, with or without db/0202's roster (the capability is cached) */
@@ -679,6 +795,16 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
    * Refused by BODY on the same meeting: regenerating a summary re-reads the
    * same transcript, and without this a second run would double every
    * decision the first one found. Returns how many LANDED.
+   *
+   * `{ role: "agent" }` IS THE FUNCTION, not decoration. Without the
+   * third argument `withIdentity` resolves `options.role === "agent" ? "agent"
+   * : "app"` to echo_app (db/identity.ts), and 0161's `meeting_item_insert`
+   * for echo_app is `with check (… and source = 'user')` while this insert
+   * writes `source = 'ai'` — which only `meeting_item_agent_insert` permits, and
+   * only to echo_agent. So every row was refused by RLS, and the refusal was
+   * swallowed upstream (`summarizer.ts` catches and sets `claims = null`): the
+   * extraction looked like a model that never answered. The role is spelled out
+   * here, and never defaulted, for exactly that reason.
    */
   async function recordExtracted(
     identity: Identity,
@@ -692,7 +818,45 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
       atMs: number | null;
     }>,
   ): Promise<{ landed: number; itemIds: string[] }> {
+    /* ZERO rows leaves the previous extraction standing. A pass that read the
+       meeting and found nothing is not evidence that the previous pass was
+       wrong, and `extractClaims` already returns before reaching here in that
+       case — so this is the guard, not the policy. */
     if (rows.length === 0) return { landed: 0, itemIds: [] };
+
+    /*
+     * APPEND, DE-DUPED BY BODY — and deliberately NOT "replace".
+     *
+     * The worry this started from is real: the Summary tab's button re-runs
+     * this pass, and two passes over one transcript can phrase one decision
+     * differently, so the ledger can hold two rows that mean the same thing.
+     * A `delete` of the `ai` rows the new batch does not restate was written
+     * here to fix that, and REVIEW (2026-09-10) found it cost far more than it
+     * bought. It is gone. What it did, each confirmed against the schema:
+     *
+     *   · `kind` is one of five (0160: decision, action, question, risk,
+     *     entity) and this pass only ever produces two (`summarizer.ts`
+     *     maps commitment→action, else decision). An unscoped delete of
+     *     `source='ai'` therefore destroyed every extracted QUESTION, RISK and
+     *     ENTITY on the meeting — rows this pass cannot put back.
+     *   · "restated" was exact body equality, so a row a PERSON had reworded
+     *     no longer matched, was deleted, and the model's original text was
+     *     re-inserted over their edit. It discarded the human's words, which
+     *     is the one thing this table exists to keep.
+     *   · a degraded pass shrank the ledger silently: two claims returned
+     *     where eight stood deleted six good rows and logged nothing.
+     *   · delete and insert are necessarily two transactions (a role is a
+     *     property of a transaction), so a failed insert left the meeting
+     *     emptier than before.
+     *
+     * So the duplicate stays possible and is the lesser harm. It is also the
+     * honest shape: two differently-worded claims about one meeting are two
+     * CLAIMS, and this platform's rule is that a model may claim and only a
+     * person may agree — silently deleting one of them is that rule inverted.
+     * The insert below already refuses an exact-body repeat, so pressing the
+     * button twice over an unchanged transcript adds nothing at all, which is
+     * the case somebody actually hits.
+     */
     return db.withIdentity(identity, async (tx: SqlTx) => {
       /* the ids of what LANDED, not what was offered: the aftermath delivery
          (0217) names these rows, and a row the duplicate guard refused must
@@ -717,7 +881,11 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
         if (done[0]) itemIds.push(String(done[0].id));
       }
       return { landed: itemIds.length, itemIds };
-    });
+      /* The agent role, spelled out. `source = 'ai'` is writable by
+         echo_agent alone (0161 `meeting_item_agent_insert`); without this the
+         default is echo_app, whose policy pins `source = 'user'`, and every row
+         above is refused. */
+    }, { role: "agent" });
   }
 
   /**
@@ -790,6 +958,7 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
     meetingId: string,
     item: { kind: MeetingItemKind; body: string; owner: string | null; atMs: number | null },
   ): Promise<MeetingItemRecord> {
+    assertOwnerIsNotALabel(item.owner);
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
         `insert into echo.meeting_item
@@ -822,6 +991,7 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
     itemId: string,
     patch: { body?: string; done?: boolean; owner?: string | null },
   ): Promise<void> {
+    if (patch.owner !== undefined) assertOwnerIsNotALabel(patch.owner);
     const sets: string[] = [];
     const values: unknown[] = [itemId];
     if (patch.body !== undefined) { values.push(patch.body); sets.push(`body = $${values.length}`); }
@@ -860,7 +1030,7 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
     identity: Identity,
     meetingId: string,
     callId: string,
-  ): Promise<{ added: number }> {
+  ): Promise<{ added: number; found: number }> {
     const summaries = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
       `select body from echo.summary
         where call_id = $1
@@ -869,7 +1039,7 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
       [callId],
     ));
     const body = summaries[0] === undefined ? "" : String(summaries[0].body ?? "");
-    if (body.trim() === "") return { added: 0 };
+    if (body.trim() === "") return { added: 0, found: 0 };
 
     const existing = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
       "select kind, body from echo.meeting_item where meeting_id = $1", [meetingId],
@@ -893,18 +1063,45 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
       if (set.has(row.body)) continue;
       set.add(row.body);
       seen.set(row.kind, set);
+      /* the OWNER rides the same insert (2026-09-08): a name the summary
+         attached to an action lands as the row's owner, so the per-item
+         "make task" can resolve an assignee without anyone retyping it */
       await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
         `insert into echo.meeting_item
-           (meeting_id, org_id, kind, body, source, position, created_by)
+           (meeting_id, org_id, kind, body, source, position, created_by, owner)
          values ($1, echo.actor_org_id(), $2, $3, 'ai',
                  coalesce((select max(position) + 1 from echo.meeting_item
                             where meeting_id = $1 and kind = $2), 0),
-                 echo.actor_id())`,
-        [meetingId, row.kind, row.body],
+                 echo.actor_id(), $4)`,
+        [meetingId, row.kind, row.body, row.owner],
       ), { role: "agent" });
       added += 1;
     }
-    return { added };
+    return { added, found: found.length };
+  }
+
+  /**
+   * The PIPELINE's entry (2026-09-08): the summarize step has a call, not a
+   * meeting, so the meeting is looked up by the record it owns. A call with
+   * no meeting — a plain upload on the calls page — is the ordinary state and
+   * returns `meetingId: null`; the caller decides how loud that is. Runs as
+   * the same identity the summarize step runs under: the call's owner.
+   */
+  async function extractItemsForCall(
+    identity: Identity,
+    callId: string,
+  ): Promise<{ meetingId: string | null; added: number; found: number }> {
+    const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
+      `select id from echo.meeting
+        where call_id = $1 and archived_at is null
+        order by created_at desc
+        limit 1`,
+      [callId],
+    ));
+    if (rows[0] === undefined) return { meetingId: null, added: 0, found: 0 };
+    const meetingId = String(rows[0].id);
+    const result = await extractItems(identity, meetingId, callId);
+    return { meetingId, ...result };
   }
 
   async function detail(identity: Identity, id: string): Promise<MeetingRecord> {
@@ -1256,11 +1453,27 @@ function toItem(row: Record<string, unknown>): MeetingItemRecord {
   return {
     list, detail, create, update, remove, topics, createTopic, updateTopic,
     byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
-    items, addItem, updateItem, removeItem, extractItems,
+    items, addItem, updateItem, removeItem,
+    /* the PROSE slicer. No longer what the pipeline runs (the model pass
+       in summarizer.ts is), but still the demo seed's way of landing a pack's
+       items — `demo-seed/engine.ts` calls `extractItems`, and
+       `core/test/demo-content-packs.test.ts` asserts on `sliceSummary`. */
+    extractItems, extractItemsForCall,
     /* 0211 — the whole-organisation ledger, the worker's landing place and
        the roster it resolves spoken names against */
+    /* TWO writers put `source='ai'` rows in this table, and saying so is the
+       point: `recordExtracted` (the model pass, over the TRANSCRIPT) and
+       `extractItems` (the prose slicer, over the stored SUMMARY, still reached
+       by the items route and the assistant's own tool). Neither de-dupes
+       against the other's wording — they cannot, since the same decision reads
+       differently from a transcript and from a summary — so the ledger can
+       hold two rows meaning one thing. That is a CLAIM each, for a person to
+       settle; see `recordExtracted` for why the delete that used to hide it
+       was removed. */
     ledger, recordExtracted, roster, meetingIdForCall, deliverMeetingCards,
     addAttendees, removeAttendee, markAttended,
     board, setBoard, setPresenting, attachmentPath,
   };
 }
+
+export type MeetingsRepo = ReturnType<typeof createMeetingsRepo>;
