@@ -52,9 +52,10 @@ export const BOARD_COLUMN =
      laptop with the assistant open (30vw, the user's own ruling) the page
      column is 762px inside, and four columns plus three gaps fit only under
      ~182px each — 14rem was 217 and the board still scrolled on the one
-     screen the ruling is about. 11.5rem is 178 there, 201 on a 1920
-     monitor, and a card keeps 158px of text at the narrowest. */
-  "glass flex min-w-[11.5rem] flex-1 basis-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
+     screen the ruling is about. 11rem is 170 there (the add-column strip
+     takes the rest), 193 on a 1920 monitor, and a card keeps ~150px of
+     text at the narrowest. */
+  "glass flex min-w-[11rem] flex-1 basis-0 flex-col self-stretch rounded-2xl p-2.5 min-h-[70vh]";
 
 export const BOARD_HEADER = "flex items-center justify-between gap-1 px-1 py-1";
 export const BOARD_HEADER_START = "flex min-w-0 items-center gap-1";
@@ -83,8 +84,18 @@ export const BOARD_CARD_SLOT =
 
 /** the add-COLUMN placeholder at the end of the lane: a narrower dashed column
     with the same floor, so it stands in the row as a column and not a strip */
+/**
+ * THE ADD-COLUMN SLOT IS A STRIP, NOT A COLUMN (2026-09-15). It was a
+ * column-wide (13.75rem) dashed box at the end of the lane, and on the 1280
+ * laptop with the assistant open it was the ONE fixed width left there: the
+ * four columns fit their share (748 in 762) and the slot pushed the lane
+ * into a scroll by itself. It is the board's own dashed «+» now — the folder
+ * strip's square, drawn column-tall — 34px wide with the label as its name,
+ * so an admin still finds it at the lane's end and a member's lane (which
+ * never draws it) and an admin's are the same width to within a strip.
+ */
 export const BOARD_ADD_COLUMN =
-  "tap flex w-[13.75rem] shrink-0 items-start justify-center gap-2 self-stretch rounded-2xl border border-dashed border-border pt-4 text-sm text-fg-muted hover:border-border-strong hover:text-fg min-h-[70vh]";
+  "tap flex w-control-sm shrink-0 items-start justify-center self-stretch rounded-2xl border border-dashed border-border pt-4 text-fg-muted hover:border-border-strong hover:text-fg";
 
 /** the dashed row at the foot of a column that makes a new thing where it will live */
 export function BoardAddRow({ label, onClick }: { label: string; onClick: () => void }) {

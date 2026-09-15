@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayKey, User } from "@/api/types";
-import { Pagination, usePaged } from "@/components/Pagination";
+import { DataTable } from "@/components/DataTable";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatDate } from "@/lib/format";
@@ -60,9 +60,6 @@ export function KeysCard({
   const [busy, setBusy] = useState(false);
 
   const memberById = new Map(members.map((member) => [member.id, member]));
-  /* server order is the page order too — revoked keys sink to the bottom, so
-     the live ones a person came here for are on page one */
-  const { page, setPage, pageCount, visible } = usePaged(keys);
 
   return (
     <Card className="mb-4">
@@ -82,106 +79,101 @@ export function KeysCard({
       ) : (
         // Tables are the one thing that legitimately outgrows a phone; scroll
         // the table, never the page.
-        <>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[46rem] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="table-head py-2 pe-3">{t("colName")}</th>
-                <th className="table-head py-2 pe-3">{t("colActsAs")}</th>
-                <th className="table-head py-2 pe-3">{t("colAssistant")}</th>
-                <th className="table-head py-2 pe-3">{t("colLastUsed")}</th>
-                <th className="table-head py-2 pe-3">{t("colExpires")}</th>
-                <th className="table-head py-2">{/* actions */}</th>
-              </tr>
-            </thead>
-            {/*
-              Server order is kept exactly: core/ returns `revoked_at nulls
-              first, created_at desc`, which already puts withdrawn keys at the
-              bottom. Re-sorting here would be a second copy of an ordering rule
-              that only one side can own.
-            */}
-            <tbody className="divide-y divide-border">
-              {visible.map((key) => {
+        /*
+         * THE PLATFORM'S ONE TABLE (2026-09-15, the kit): this card drew its
+         * own <table> — border-collapse, a hairline head, divided rows — and
+         * was the last surface in the product whose rows did not look like
+         * every other table's. Server order is kept exactly: core/ returns
+         * `revoked_at nulls first, created_at desc`, which already puts
+         * withdrawn keys at the bottom, and re-sorting here would be a second
+         * copy of an ordering rule that only one side can own.
+         */
+        <DataTable
+          rows={keys}
+          rowKey={(key) => key.id}
+          rowClassName={(key) => (keyState(key, memberById.get(key.actor_id)) !== "live" ? "opacity-70" : "")}
+          columns={[
+            {
+              key: "name",
+              header: t("colName"),
+              cell: (key) => (
+                <>
+                  <p className="font-medium text-fg">{key.name}</p>
+                  <p className="ltr mt-0.5 font-mono text-xs text-fg-muted">{key.token_prefix}…</p>
+                  <p className="mt-0.5 text-xs text-fg-muted">
+                    {t("createdAt", { date: formatDate(key.created_at, locale) })}
+                  </p>
+                </>
+              ),
+            },
+            {
+              key: "actor",
+              header: t("colActsAs"),
+              cell: (key) => {
                 const actor = memberById.get(key.actor_id);
-                const state = keyState(key, actor);
-                const dead = state !== "live";
                 return (
-                  <tr key={key.id} className={dead ? "opacity-70" : undefined}>
-                    <td className="py-3 pe-3 align-top">
-                      <p className="font-medium text-fg">{key.name}</p>
-                      <p className="ltr mt-0.5 font-mono text-xs text-fg-muted">
-                        {key.token_prefix}…
-                      </p>
-                      <p className="mt-0.5 text-xs text-fg-muted">
-                        {t("createdAt", { date: formatDate(key.created_at, locale) })}
-                      </p>
-                    </td>
-
-                    <td className="py-3 pe-3 align-top">
-                      {actor ? (
-                        <span className="text-sm text-fg">{actor.display_name}</span>
-                      ) : (
-                        <span className="text-sm text-fg-muted">
-                          {t("actorNotListed")}
-                          <span className="ltr ms-1 font-mono text-xs">{key.actor_id}</span>
-                        </span>
-                      )}
-                      {state === "actor_inactive" ? (
-                        <p className="mt-1 text-xs text-danger">{t("actorInactive")}</p>
-                      ) : null}
-                    </td>
-
-                    <td className="py-3 pe-3 align-top">
-                      {/*
-                        Both states are stated. An absent chip would be a third
-                        meaning — "we don't know" — sitting in the same place as
-                        "off", and this is the field that separates a key which
-                        reads from a key which bills.
-                      */}
-                      {key.allow_assistant ? (
-                        <Chip tone="accent">{t("assistantOn")}</Chip>
-                      ) : (
-                        <Chip tone="neutral">{t("assistantOff")}</Chip>
-                      )}
-                    </td>
-
-                    <td className="py-3 pe-3 align-top text-xs text-fg-muted">
-                      {key.last_used_at ? formatDate(key.last_used_at, locale) : t("neverUsed")}
-                    </td>
-
-                    <td className="py-3 pe-3 align-top text-xs text-fg-muted">
-                      {key.expires_at ? formatDate(key.expires_at, locale) : t("noExpiry")}
-                    </td>
-
-                    <td className="py-3 align-top">
-                      {key.revoked_at ? (
-                        <div className="flex flex-col items-start gap-1">
-                          <Chip tone="danger">{t("revoked")}</Chip>
-                          <span className="text-xs text-fg-muted">
-                            {formatDate(key.revoked_at, locale)}
-                          </span>
-                        </div>
-                      ) : state === "expired" ? (
-                        <Chip tone="warning">{t("expired")}</Chip>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn-secondary btn-sm"
-                          onClick={() => setRevoking(key)}
-                        >
-                          {t("revoke")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                  <>
+                    {actor ? (
+                      <span className="text-sm text-fg">{actor.display_name}</span>
+                    ) : (
+                      <span className="text-sm text-fg-muted">
+                        {t("actorNotListed")}
+                        <span className="ltr ms-1 font-mono text-xs">{key.actor_id}</span>
+                      </span>
+                    )}
+                    {keyState(key, actor) === "actor_inactive" ? (
+                      <p className="mt-1 text-xs text-danger">{t("actorInactive")}</p>
+                    ) : null}
+                  </>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={page} pageCount={pageCount} onPage={setPage} />
-        </>
+              },
+            },
+            {
+              key: "assistant",
+              header: t("colAssistant"),
+              /* both states are stated: an absent chip would be a third
+                 meaning — "we don't know" — sitting where "off" sits, and this
+                 is the field that separates a key which reads from a key
+                 which bills */
+              cell: (key) => key.allow_assistant
+                ? <Chip tone="accent">{t("assistantOn")}</Chip>
+                : <Chip tone="neutral">{t("assistantOff")}</Chip>,
+            },
+            {
+              key: "lastUsed",
+              header: t("colLastUsed"),
+              className: "text-xs text-fg-muted",
+              cell: (key) => (key.last_used_at ? formatDate(key.last_used_at, locale) : t("neverUsed")),
+            },
+            {
+              key: "expires",
+              header: t("colExpires"),
+              className: "text-xs text-fg-muted",
+              cell: (key) => (key.expires_at ? formatDate(key.expires_at, locale) : t("noExpiry")),
+            },
+            {
+              key: "state",
+              header: t("revoke"),
+              srOnly: true,
+              stopClick: true,
+              cell: (key) => {
+                const state = keyState(key, memberById.get(key.actor_id));
+                return key.revoked_at ? (
+                  <div className="flex flex-col items-start gap-1">
+                    <Chip tone="danger">{t("revoked")}</Chip>
+                    <span className="text-xs text-fg-muted">{formatDate(key.revoked_at, locale)}</span>
+                  </div>
+                ) : state === "expired" ? (
+                  <Chip tone="warning">{t("expired")}</Chip>
+                ) : (
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => setRevoking(key)}>
+                    {t("revoke")}
+                  </button>
+                );
+              },
+            },
+          ]}
+        />
       )}
 
       <MintKeyDialog

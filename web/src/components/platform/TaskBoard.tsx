@@ -1034,10 +1034,11 @@ function AddColumnInline({ onAdded, onRefused }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        aria-label={t("addColumn")}
+        title={t("addColumn")}
         className={BOARD_ADD_COLUMN}
       >
         <IconPlus width={14} height={14} />
-        {t("addColumn")}
       </button>
     );
   }
