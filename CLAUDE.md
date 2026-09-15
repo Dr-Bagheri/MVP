@@ -6690,7 +6690,22 @@ sessions) for the cross-session narrative.
   failure; that is why this gate exists", on its own author.
   R6 census for the next round: 205 raw `text-[Npx]` sizes in 52 files
   (`11px` ×112, `10px` ×68) — the rulebook's own next item.
+  **Then the deployed screen found one the source could not show.** Read on
+  production in the user's Chrome after the deploy: the task board's four
+  headers carry only the tone well and the title (0 archive buttons), the
+  card its 27px trash with the title row still 19.4px; the projects kanban
+  card its trash — and the projects LIST row rendered as a centred vertical
+  stack, seven lines, one item each. Its class list says `tile flex
+  items-center gap-3`, which reads as a row in any diff; `.tile` declares
+  `flex-direction: column` for the dashboard's cards and Tailwind's `flex`
+  sets only the display, so the column won. It had shipped this way at
+  05fe3e4 — the meetings and task lists' rows say `tile tile-row` and this
+  one, alone among eight, did not. Fixed to the lists' own recipe, pinned in
+  the rendered test, and `tileRow.guard.test.ts` keeps the two words
+  together tree-wide: tokens never substrings (`tile-chip` is another
+  class), `flex-col` the one exclusion with its reason, a had-something-to-
+  check floor, a control pair, and its first red was the shipped row.
   NOT proven live yet: the bar and the follow need a real take, which is a
   write on the org's data (2026-09-06) — the user's next recording is the
-  measurement; the boards are verified on production after the deploy.
-  db 222 migrations · core 1575 tests · web 1572 tests + gate + sweep.
+  measurement.
+  db 222 migrations · core 1575 tests · web 1574 tests + gate + sweep.

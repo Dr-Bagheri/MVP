@@ -559,7 +559,14 @@ function ProjectList({ projects, cardsOf, people, locale, onDelete }: {
           <Link
             key={p.id}
             href={`/projects?project=${p.id}`}
-            className="tile flex items-center gap-3 px-3 py-2.5 transition-colors hover:border-accent/40"
+            /* `tile-row` (2026-09-15): `.tile` is a COLUMN — it dresses the
+               dashboard's cards and says `flex-direction: column` — so a
+               `tile` that is a row has to say so, or the class list reads as
+               a row and renders as a stack. This row rendered as a stack on
+               production, centred, seven items tall; the meetings and task
+               lists' rows carry `tile-row` and never did. tileRow.guard keeps
+               the two words together. */
+            className="tile tile-row flex cursor-pointer items-center gap-3 p-3.5"
           >
             <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[p.tone] ?? TONE_DOT.grey!}`} aria-hidden />
             <span aria-hidden className="text-base">{p.icon ?? "📁"}</span>

@@ -308,7 +308,12 @@ loosened rule — and the user's "except this part" is what puts one there.
   regression, fewer is a stale entry — with synthetic controls for chips,
   inputs and the three classes; (2) `.tile`'s literal radius ==
   `SCAFFOLD.radius.modal` and its shadow == `--shadow-card`, read from the
-  rule body, not the comment beside it; (3) `.card-row` and `.well` exist.
+  rule body, not the comment beside it; (3) `.card-row` and `.well` exist;
+  (4) `tileRow.guard.test.ts` (2026-09-15): a `.tile` that is a ROW says
+  `tile-row` — `.tile` declares `flex-direction: column` for the dashboard's
+  cards, and a `tile flex items-center` list row reads as a row in a diff
+  and renders as a centred stack (the projects list row shipped so). Tokens
+  never substrings, `flex-col` the one exclusion, first red = that row.
   Verified red three ways: on the un-swept tree (32 files named, tile
   20/island), on a recipe staged back into Skeleton, and on a stale count
   (Overlay recorded as 2) — each fired on exactly its own line.

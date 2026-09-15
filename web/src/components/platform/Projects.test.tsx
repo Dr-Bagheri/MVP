@@ -693,6 +693,9 @@ describe("a project card carries its own delete (2026-09-15)", () => {
     await userEvent.click(screen.getByRole("button", { name: "لیست" }));
     const row = (await screen.findByText("پروژهٔ الف")).closest("a") as HTMLElement;
     expect(within(row).getByRole("button", { name: "حذف" })).toBeInTheDocument();
+    /* and the row IS a row: `.tile` is a column unless it says `tile-row`,
+       and this one rendered as a seven-line stack on production (2026-09-15) */
+    expect(row.className.split(/\s+/)).toContain("tile-row");
 
     cleanup();
     render(<Projects isAdmin={false} meId="u-1" />);
