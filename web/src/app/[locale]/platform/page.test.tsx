@@ -224,7 +224,9 @@ describe("Platform-root console", () => {
     fireEvent.change(name, { target: { value: "Northwind Ltd" } });
     fireEvent.change(screen.getByLabelText(/دلیل/), { target: { value: "rename requested by owner" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "ذخیرهٔ تغییرات" }));
+    /* «ذخیره», everywhere on the platform (user, 2026-09-16: "change the
+       save changes to just save") */
+    fireEvent.click(screen.getByRole("button", { name: "ذخیره" }));
     await waitFor(() =>
       expect(updatePlatformOrganization).toHaveBeenCalledWith(
         ORG, { name: "Northwind Ltd", locale: "en" }, "rename requested by owner",

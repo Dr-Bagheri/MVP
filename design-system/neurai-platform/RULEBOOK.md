@@ -87,6 +87,14 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   من» / «همه پروژه‌ها» with its count, and the «مهلت امروز» toggle) — the
   tinted rail, content-width, so the tasks and projects pages carry the same
   two rows (2026-09-16, reversing the 2026-09-05 placement in row one).
+- The meetings page is TWO rows (2026-09-16, later): row one carries the
+  slice filter AND the sort — a second grey `TAB_TRACK` with the field as
+  tabs, a divider and the direction key, in row one's own pill — with the
+  two create buttons in `end`; row two is the `TopicStrip`, whose `end` slot
+  holds one tinted track: the list/calendar keys, a `TRACK_DIVIDER`, and a
+  SEARCH KEY that is a glyph until pressed and then a field growing into the
+  row beside it (closing it clears the query). A search is a key on the
+  rail, never a box beside it.
 - The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
   create button (R3), or — on Profile — «خروج» as a pill in its own
   `TAB_TRACK` (2026-09-16), the row's own shape rather than a button of
@@ -109,7 +117,7 @@ spelled by hand).
 | Thing | The one spelling | Guard |
 |---|---|---|
 | Table | `DataTable` (`components/DataTable.tsx`) — header, rows, skeleton, pager, menu, selection all inside it. It FITS its column and grows down: cells wrap, nothing scrolls sideways (user ruling 2026-09-15). Rows are the detail size with a 6px gap. | `loading.guard`, `confirm.guard` |
-| Button | `.btn` / `.btn-primary` / `.btn-secondary` at 38 · `.btn-sm` at 34 · `.btn-icon` at 28 · `.btn-icon-sm` at 34 (`globals.css`) — a height, min-height or text size written beside `btn` is a defect | `control.guard`, `units.guard` |
+| Button | `.btn` / `.btn-primary` / `.btn-secondary` at 42 — the sub-menu rail's own box (34 + 8), on the rail's `rounded-xl` corner and the pill's weight 500 (user, 2026-09-16: "the style of the top bar menu and the buttons must be the same") · `.btn-sm` at 34 (the rail's pill, `rounded-xl`) · `.btn-icon` at 28 · `.btn-icon-sm` at 34 (`globals.css`) — a height, min-height or text size written beside `btn` is a defect | `control.guard`, `units.guard` |
 | Field | `.input` / `.input-sm`, `Field`, `FormRow` | `select.guard` |
 | Card | `.card` (a page block) · `.card-row` (a card in a list) · `.well` (a row inside a card) · `.tile` is a card; a row of tiles says `tile-row` | `surface.guard`, `tileRow.guard` |
 | Dialog / detail | `Overlay`, `ConfirmDialog`, `DetailPanel`; body rhythm from `panelStyle` (`DIALOG_BODY`, `PANEL_SECTIONS`, `RAIL_SECTIONS`) | `dialogSections.guard`, `detailPanel.guard`, `nativeDialog.guard` |
@@ -128,7 +136,7 @@ written in **px** does not. Every size in the tree is a token or a rem:
 - Type: `text-page-title` 16 · `text-section-title` 15 · `text-pane-title` 14 ·
   `text-menu-item` 13.5 · `text-sm` 13 · `text-detail` 12.5 · `text-caption` 11 ·
   `text-micro` 10 (`SCAFFOLD.fontSize` → `tailwind.config.ts`).
-- Controls: `h-control` 38 · `h-control-sm` 34 · `h-control-icon` 28 ·
+- Controls: `h-control` 42 (= the rail: 34 + 8) · `h-control-sm` 34 · `h-control-icon` 28 ·
   `h-field` 40.
 - Widths: a share (`%`, `flex-1`), a token, or a rem. Never `w-[300px]`.
 

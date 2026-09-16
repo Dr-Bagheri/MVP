@@ -240,8 +240,12 @@ export const NAV_PRIMARY: readonly NavItem[] = [
  */
 export const NAV_UTILITY: readonly NavItem[] = [
   { href: "/settings", key: "settings", inBar: false },
-  { href: "/help", key: "help", inBar: false },
   /*
+   * NO HELP (user directive, 2026-09-16: "remove help from the main menu as
+   * well"). The page stays at /help — a route is cheaper than a broken
+   * bookmark, and the trail still knows the address — it simply has no seat
+   * in the rail.
+   *
    * NO GITHUB (user directive, 2026-09-04: "remove GitHub from the menu").
    *
    * It was the one entry in the navigation that left the product, and it sat

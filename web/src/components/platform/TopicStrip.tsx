@@ -5,7 +5,7 @@ import { useLocale } from "next-intl";
 import { KebabMenu } from "@/components/rowActions";
 import { IconFolder, IconPencil, IconPlus, IconTrash } from "@/components/icons";
 import { digits } from "@/lib/format";
-import { FILTER_COUNT, FILTER_TRACK, TOOLBAR_ROW, filterChipClass } from "./sectionTabs";
+import { FILTER_COUNT, FILTER_TRACK, TOOLBAR_END, TOOLBAR_ROW, filterChipClass } from "./sectionTabs";
 import { TopicNameBox } from "./TopicNameBox";
 
 /**
@@ -122,6 +122,7 @@ export function TopicStrip({
   onDone,
   onRefused,
   children,
+  end,
 }: {
   allLabel: string;
   allCount: number;
@@ -141,6 +142,10 @@ export function TopicStrip({
   onRefused: () => void;
   /** appended after the `+`: the task board's projects section */
   children?: ReactNode;
+  /** the row's OTHER END: the meetings page's view switch and search key
+      (2026-09-16), in the row's own end slot so the two sit at the edge the
+      create button sits on in the row above */
+  end?: ReactNode;
 }) {
   const locale = useLocale();
   const [adding, setAdding] = useState(false);
@@ -219,6 +224,7 @@ export function TopicStrip({
 
       {children}
     </div>
+    {end ? <div className={TOOLBAR_END}>{end}</div> : null}
     </div>
   );
 }

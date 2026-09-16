@@ -114,8 +114,20 @@ export const SCAFFOLD = {
    * baseline width where the two units agree. The whole family is one unit
    * now, so the proportions hold at every width instead of at one.
    */
-  controlHeight: 38,
-  /** the compact control — segmented tabs, toolbar buttons */
+  /*
+   * 42, NOT the 38 measured off the reference on 2026-09-02 — a user ruling
+   * over a measurement (2026-09-16: "the style of the top bar menu and the
+   * buttons must be the same, I feel they are far apart … change the style
+   * of all buttons in the platform"). The sub-menu rail is the compact pill
+   * (34) plus 4px of track above and below, so a page button standing beside
+   * a rail — «جلسه جدید» beside «گذشته | پیش‌رو | آرشیو» — is the rail's own
+   * box: same height, same corner (`.btn` wears the rail's `rounded-xl`).
+   * Measured before the change at root 15.06: rail 39.5 / 16px corner /
+   * weight 500 against buttons at 35.8 / 11px / 600. Written as a formula so
+   * the two cannot drift apart again.
+   */
+  controlHeight: 34 + 8,
+  /** the compact control — segmented tabs, toolbar buttons, the rail's pill */
   controlHeightSm: 34,
   /** the square icon button */
   controlHeightIcon: 28,

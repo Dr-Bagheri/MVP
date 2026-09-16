@@ -41,7 +41,9 @@ vi.mock("@/api/client", () => ({
 
 const { OrgFields } = await import("./OrgFields");
 
-const saveButton = () => screen.getByRole("button", { name: /ذخیرهٔ تغییرات/ });
+/* «ذخیره», not «ذخیرهٔ تغییرات» (user, 2026-09-16: "change the save changes
+   to just save everywhere on platform") */
+const saveButton = () => screen.getByRole("button", { name: "ذخیره" });
 
 beforeEach(() => {
   resetNotifications();

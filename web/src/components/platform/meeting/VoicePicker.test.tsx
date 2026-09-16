@@ -110,41 +110,45 @@ describe("naming a voice from inside the transcript", () => {
     await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", null));
   });
 
-  it("resolves an unlearned colleague ITSELF, in the one press", async () => {
+  it("offers an unlearned colleague DISABLED, says why, and creates NOTHING (2026-09-16)", async () => {
     /*
-     * The user's directive, 2026-09-08: "remove that pop up as well, it
-     * should handle it itself." A candidate with `personId: null` used to
-     * open a dialog asking which directory person the account is — and on
-     * this deployment EVERY candidate arrives that way (fourteen accounts,
-     * zero links, measured 2026-09-07), so the dialog was not an edge case,
-     * it was the ordinary path.
+     * User directive, 2026-09-16: "when we added the speaker back in
+     * transcription after recording it created a new person on the speakers
+     * page; it should not." The 2026-09-08 version resolved a candidate with
+     * `personId: null` by CREATING a directory row named as the option said
+     * — a new person on the speakers page every time. The colleague stays on
+     * the list (a colleague who vanishes reads as "the platform does not
+     * know they were here"), cannot be pressed, and carries the reason.
      *
-     * The discriminating assertion is that ONE press finishes the job: under
-     * the version this replaces, nothing was written until three more.
+     * The discriminating assertions are the two ABSENCES: no create and no
+     * link. A version that greys the row and still writes on press passes
+     * the presence checks and is the reported defect.
      */
     draw();
     await openMenu();
-    await userEvent.click(screen.getByRole("option", { name: /drbagheri/ }));
-
-    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-new"));
-    /* named exactly as the option said — the label is a promise about what
-       the transcript will read */
-    expect(createPerson).toHaveBeenCalledWith("drbagheri", "");
-    /* and the durable half, so no later meeting asks or creates anything */
-    expect(updatePerson).toHaveBeenCalledWith("p-new", { app_user_id: "u-host" });
+    const row = screen.getByRole("option", { name: /drbagheri/ });
+    /* the option is a native button, so disabled is the ATTRIBUTE */
+    expect(row).toBeDisabled();
+    expect(row).toHaveTextContent("voiceNotInDirectory");
+    await userEvent.click(row);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(createPerson).not.toHaveBeenCalled();
+    expect(linkSpeaker).not.toHaveBeenCalled();
+    expect(updatePerson).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  it("reuses the directory row already carrying that name — never a second one", async () => {
+  it("links a colleague the resolver placed by NAME to that row, and writes the pairing — never a second row", async () => {
     /*
-     * The pairing is admin work and may be refused, so an unresolved
-     * candidate can come back meeting after meeting. Creating a person each
-     * time would fill the directory with copies of one colleague. Matched on
-     * the EXACT string, never a fold: a fold here would be a second opinion
-     * about who somebody is, and the server already owns the only one.
+     * Who a colleague is in the directory is `voiceCandidates`' decision now
+     * (the link, the server's suggestion, or a name in either script); this
+     * surface links to the row it was handed and remembers the pairing so no
+     * later meeting has to match anything. `p-amir` is unpaired in the
+     * fixture, which is what makes the `updatePerson` call the assertion —
+     * an already-paired row gets none (next test).
      */
     draw({
-      candidates: [{ memberId: "u-amir", name: "امیررضا باقری", personId: null, isHost: true, attended: true }],
+      candidates: [{ memberId: "u-amir", name: "امیررضا باقری", personId: "p-amir", isHost: true, attended: true }],
     });
     await openMenu();
     await userEvent.click(screen.getByRole("option", { name: /امیررضا باقری/ }));
@@ -152,6 +156,15 @@ describe("naming a voice from inside the transcript", () => {
     await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-amir"));
     expect(createPerson).not.toHaveBeenCalled();
     expect(updatePerson).toHaveBeenCalledWith("p-amir", { app_user_id: "u-amir" });
+  });
+
+  it("writes no pairing for a row that is already paired — the control", async () => {
+    draw();
+    await openMenu();
+    await userEvent.click(screen.getByRole("option", { name: /سینا سپاسی/ }));
+    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-sina"));
+    expect(updatePerson).not.toHaveBeenCalled();
+    expect(createPerson).not.toHaveBeenCalled();
   });
 
   it("names a guest who has no account at all, from the panel's own field", async () => {
@@ -210,11 +223,15 @@ describe("naming a voice from inside the transcript", () => {
      * forfeit is said out loud).
      */
     updatePerson.mockRejectedValueOnce(new Error("403"));
-    draw();
+    /* a name-resolved colleague whose row is not yet paired — the one case
+       that writes a pairing at all since 2026-09-16 */
+    draw({
+      candidates: [{ memberId: "u-amir", name: "امیررضا باقری", personId: "p-amir", isHost: true, attended: true }],
+    });
     await openMenu();
-    await userEvent.click(screen.getByRole("option", { name: /drbagheri/ }));
+    await userEvent.click(screen.getByRole("option", { name: /امیررضا باقری/ }));
 
-    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-new"));
+    await waitFor(() => expect(linkSpeaker).toHaveBeenCalledWith("c1", "s1", "p-amir"));
     expect(await screen.findByRole("status")).toHaveTextContent("voiceNotRemembered");
   });
 

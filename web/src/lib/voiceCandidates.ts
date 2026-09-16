@@ -43,10 +43,13 @@ import { personName } from "@/lib/format";
  *   the transcript reads «سینا سپاسی». Labelling the option "Sina Sepasi"
  *   and then rendering the other spelling is a small lie about what the
  *   press did.
- * · AN UNRESOLVED MEMBER IS STILL OFFERED, carrying `personId: null`. The
- *   surface asks WHICH directory person they are and remembers the answer;
- *   dropping them would hide exactly the people the chain has not learned
- *   yet, which today is all fourteen.
+ * · AN UNRESOLVED MEMBER IS STILL OFFERED, carrying `personId: null` — but
+ *   since 2026-09-16 the surface offers them DISABLED and says why, and
+ *   creates NOTHING (user: "when we added the speaker back in transcription
+ *   after recording it created a new person on the speakers page; it should
+ *   not"). The rung below is what makes that rare: a directory row that
+ *   carries the account's name in EITHER script now resolves here, where
+ *   before only the admin's link or the server's same-script fold did.
  */
 export interface VoiceCandidate {
   /** the platform account — what makes this person one of the meeting's */
@@ -67,22 +70,56 @@ type MeetingPeople = Pick<
   MeetingRecord, "created_by" | "host_name" | "host_name_en" | "attendees"
 >;
 
+/** the two spellings an account may carry, for the name rung */
+export interface AccountNames {
+  display_name: string;
+  display_name_en?: string | null;
+}
+
+/**
+ * One spelling of a name for comparison: case, Arabic-vs-Persian letter
+ * forms (ي/ی, ك/ک, ة/ه), the zero-width joiners and whitespace all folded —
+ * the same folds core's router applies before matching an agent's name
+ * (2026-09-06), so «سینا سپاسی» and «سينا  سپاسي» are one name.
+ */
+export function foldName(s: string | null | undefined): string {
+  return (s ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/ة/g, "ه")
+    .replace(/[‌‍]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * The directory person an account is known to be, or null.
  *
- * Two rungs, in this order, and no third: the LINK an admin wrote
- * (`app_user_id`), then the server's own folded-name suggestion — which is
- * filled only when exactly one member matches, and is read here rather than
- * re-derived, because a second spelling of "this person is probably that
- * member" is how two surfaces come to disagree about the same pair.
+ * Three rungs, in this order, and no fourth: the LINK an admin wrote
+ * (`app_user_id`); the server's own folded-name suggestion — filled only when
+ * exactly one member matches, and read here rather than re-derived; and the
+ * NAME (2026-09-16): a directory row whose folded name equals the account's
+ * folded name in either spelling — «سینا سپاسی» beside "Sina Sepasi" whose
+ * Latin row is `display_name_en`, or the same Persian name typed with an
+ * Arabic yeh. EXACTLY ONE row may match, or the rung answers nothing: two
+ * directory rows sharing a name is an ambiguity the picker must not resolve
+ * by picking the first (the 2026-09-06 lone-prefix lesson, in a fold).
  */
 export function directoryPersonFor(
   memberId: string,
   people: readonly Person[],
+  names?: AccountNames,
 ): Person | null {
-  return people.find((p) => p.app_user_id === memberId)
-    ?? people.find((p) => p.suggested_app_user_id === memberId)
-    ?? null;
+  const linked = people.find((p) => p.app_user_id === memberId)
+    ?? people.find((p) => p.suggested_app_user_id === memberId);
+  if (linked) return linked;
+  if (!names) return null;
+  const wanted = [foldName(names.display_name), foldName(names.display_name_en)].filter((n) => n !== "");
+  if (wanted.length === 0) return null;
+  const byName = people.filter((p) => p.app_user_id === null && wanted.includes(foldName(p.display_name)));
+  return byName.length === 1 ? byName[0]! : null;
 }
 
 export function meetingVoiceCandidates(
@@ -93,15 +130,15 @@ export function meetingVoiceCandidates(
   const seen = new Set<string>();
   const out: VoiceCandidate[] = [];
 
-  const add = (memberId: string, accountName: string, isHost: boolean, attended: boolean) => {
+  const add = (memberId: string, names: AccountNames, isHost: boolean, attended: boolean) => {
     /* the host may also sit on their own roster (0202 does not stop it), and
        one person offered twice is a picker that reads as two people */
     if (seen.has(memberId)) return;
     seen.add(memberId);
-    const person = directoryPersonFor(memberId, people);
+    const person = directoryPersonFor(memberId, people, names);
     out.push({
       memberId,
-      name: person?.display_name.trim() || accountName,
+      name: person?.display_name.trim() || personName(names, locale),
       personId: person?.id ?? null,
       isHost,
       attended,
@@ -110,7 +147,7 @@ export function meetingVoiceCandidates(
 
   add(
     meeting.created_by,
-    personName({ display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en }, locale),
+    { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
     true,
     true,
   );
@@ -122,7 +159,7 @@ export function meetingVoiceCandidates(
     if (a.attended !== b.attended) return a.attended ? -1 : 1;
     return personName(a, locale).localeCompare(personName(b, locale), locale);
   });
-  for (const a of roster) add(a.user_id, personName(a, locale), false, a.attended);
+  for (const a of roster) add(a.user_id, a, false, a.attended);
 
   return out;
 }

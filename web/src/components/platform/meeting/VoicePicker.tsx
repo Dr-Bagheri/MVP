@@ -26,21 +26,32 @@ import { notifyError } from "@/lib/notify";
  * are joined by `person.app_user_id` — which the speakers table now shows and
  * edits on every row. Where that join already exists this picker never had a
  * question to ask; where it does not, it used to open a dialog asking which
- * directory person the account is. That dialog is gone. An unresolved
- * candidate is resolved HERE, in the same press:
+ * directory person the account is. That dialog is gone.
  *
- *   · the directory row that already carries this name is reused — matched on
- *     the exact string, never a fold. A fold would be a second opinion about
- *     who somebody is, and the server already has the only one that counts
- *     (`suggested_app_user_id`, which `voiceCandidates` reads);
- *   · otherwise one is created, named exactly as the option said;
- *   · and the pairing is written so no later meeting has to do any of this.
+ * ── NOTHING IS CREATED FOR A COLLEAGUE (user directive, 2026-09-16) ────────
  *
- * The pairing is BEST EFFORT and says so when it fails: writing
- * `app_user_id` is admin work (the server's PATCH is requireAdmin), while
- * creating a person is a member's capability — so a member host still gets
- * the link they asked for and the platform is simply asked again next time.
- * A silent failure would read as the product forgetting on purpose.
+ * "When we added the speaker back in transcription after recording it
+ * created a new person on the speakers page; it should not." The 2026-09-08
+ * version resolved an unlearned colleague by creating a directory row named
+ * as the option said — which is exactly a new person on the speakers page,
+ * every time a colleague the directory had not learned was named. So:
+ *
+ *   · WHO a colleague is in the directory is decided by `voiceCandidates`
+ *     (the admin's link, the server's suggestion, or a name that matches in
+ *     either script) — the picker no longer matches names itself, and the
+ *     fold lives in one module rather than two;
+ *   · a colleague the directory does not know is OFFERED, DISABLED, and
+ *     says why («در فهرست گویندگان نیست») — a door that refuses is worse
+ *     than none, but a colleague who silently vanishes from the list reads
+ *     as "the platform does not know they were here";
+ *   · linking a name-resolved colleague still WRITES the pairing, best
+ *     effort and said when it fails: `app_user_id` is admin work (the
+ *     server's PATCH is requireAdmin), so a member host still gets the link
+ *     they asked for and the platform is simply asked again next time.
+ *
+ * The one place a row is still made is the guest field below — a person
+ * TYPED BY NAME is somebody the directory should learn, which is the
+ * 2026-09-08 ask and not the 2026-09-16 objection.
  *
  * ── SOMEBODY WHO IS NOT A COLLEAGUE ───────────────────────────────────────
  *
@@ -75,19 +86,24 @@ export function VoicePicker({
      never recorded (the matcher's own work) still shows its name below. */
   const current = candidates.find((c) => c.personId !== null && c.personId === speaker.person_id);
 
-  /** the directory row for an account: the one it already has, or a new one */
+  /** the directory row for an account — the one `voiceCandidates` resolved,
+      and NEVER a new one (2026-09-16). A candidate the resolver could not
+      place is offered disabled below, so this is only ever reached with a
+      person id in hand; the throw is the floor for the day that stops
+      being true, and it fails the press loudly rather than creating a row. */
   async function personFor(candidate: VoiceCandidate): Promise<string> {
-    if (candidate.personId !== null) return candidate.personId;
-    const existing = people.find((p) => p.display_name.trim() === candidate.name.trim());
-    const person = existing ?? await api.createPerson(candidate.name.trim(), "");
-    try {
-      /* the durable half: after this, every later meeting resolves without
-         creating or matching anything */
-      await api.updatePerson(person.id, { app_user_id: candidate.memberId });
-    } catch {
-      setForgot(true);
+    if (candidate.personId === null) throw new Error("voice candidate has no directory person");
+    const person = people.find((p) => p.id === candidate.personId);
+    if (person && person.app_user_id !== candidate.memberId) {
+      try {
+        /* the durable half: after this, every later meeting resolves through
+           the link rather than through a name */
+        await api.updatePerson(person.id, { app_user_id: candidate.memberId });
+      } catch {
+        setForgot(true);
+      }
     }
-    return person.id;
+    return candidate.personId;
   }
 
   async function pick(value: string): Promise<void> {
@@ -141,7 +157,13 @@ export function VoicePicker({
     { value: "", label: t("unknownPerson") },
     ...candidates.map((c) => ({
       value: c.memberId,
-      label: c.isHost ? t("voiceHost", { name: c.name }) : c.name,
+      /* a colleague the directory does not know is listed and cannot be
+         pressed, with the reason on the row — the host learns where the
+         answer is (the speakers page) instead of getting a new row there */
+      label: c.personId === null
+        ? `${c.isHost ? t("voiceHost", { name: c.name }) : c.name} · ${t("voiceNotInDirectory")}`
+        : c.isHost ? t("voiceHost", { name: c.name }) : c.name,
+      disabled: c.personId === null,
     })),
     /* somebody the matcher named who is not on this meeting's roster — a
        guest linked earlier, or the matcher's own work. Their row exists so

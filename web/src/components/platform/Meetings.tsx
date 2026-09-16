@@ -15,12 +15,12 @@ import { DateField, TimeField } from "@/components/DateTimeFields";
 import { stashUpload } from "@/lib/pendingUpload";
 import { audioContentType, readDurationSeconds, uploadRejection } from "@/components/echo/uploadRules";
 import {
-  IconArchive, IconArrowDown, IconArrowUp, IconCalendar, IconCheck, IconCheckCircle,
-  IconChevronRight, IconClose, IconFolder, IconMic, IconPeople3, IconPlus,
+  IconArchive, IconArrowDown, IconArrowUp, IconCalendar, IconCheck,
+  IconChevronRight, IconClose, IconFolder, IconMic, IconPlus,
   IconRows, IconSearch, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import {
-  FILTER_TRACK, FilterChips, TAB_TRACK, TOOLBAR_GROUPS, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass,
+  FILTER_TRACK, TAB_TRACK, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass,
 } from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { TopicStrip } from "./TopicStrip";
@@ -127,6 +127,12 @@ export function Meetings() {
   const [scheduling, setScheduling] = useState(false);
   /* the reference's own two axes: a view and a stage filter, plus topics */
   const [view, setView] = useState<"list" | "calendar">("list");
+  /* THE SEARCH KEY (user, 2026-09-16: "put the search there as well with
+     just the icon; if pressed it will open up horizontally in the row and
+     you can type in it"): a glyph on the strip's rail until pressed, then a
+     field that grows into the row. Closing it CLEARS the query — a filter
+     nobody can see is a list that lies. */
+  const [searchOpen, setSearchOpen] = useState(false);
   /*
    * «همه» IS GONE (user, 2026-09-08: "remove the all, instead we have held and
    * upcomming and the held is the default front").
@@ -283,6 +289,11 @@ export function Meetings() {
     </button>
   );
 
+  const toggleSearch = (open: boolean = !searchOpen) => {
+    setSearchOpen(open);
+    if (!open) setQuery("");
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ── ROW ONE: the kit's track, and the two actions at its end ── */}
@@ -317,131 +328,51 @@ export function Meetings() {
           {chip(filter === "ahead", t("filterAhead"), () => setFilter("ahead"))}
           {chip(filter === "archived", t("filterArchived"), () => setFilter("archived"))}
         </div>
+
+        {/* ── THE SORT, IN ROW ONE (user, 2026-09-16: "put the sort in the
+               first sub menu top with the same style of the first row
+               items"): a second grey rail beside the slice filter — the field
+               as tabs, a divider, the direction key — in row one's own pill,
+               not the tinted chip it wore on the row below since 2026-09-15.
+               The direction stays its own key for the reason that note gave:
+               the field and the direction are two questions, and folding them
+               together is six tabs that grow by two per field. ── */}
+        <div role="tablist" aria-label={t("sortBy")} className={TAB_TRACK}>
+          {(["date", "people", "status"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              /* the VALUE, for a test to name — a label is a fact about the
+                 catalogue, and a test that clicks by label breaks on a rewording */
+              data-key={key}
+              aria-selected={sort === key}
+              onClick={() => setSort(key)}
+              className={sectionTabClass(sort === key)}
+            >
+              {t(key === "date" ? "sortDate" : key === "people" ? "sortPeople" : "sortStatus")}
+            </button>
+          ))}
+          <span className={TRACK_DIVIDER} aria-hidden />
+          <button
+            type="button"
+            aria-label={descending ? t("sortDescending") : t("sortAscending")}
+            title={descending ? t("sortDescending") : t("sortAscending")}
+            aria-pressed={descending}
+            onClick={() => setDescending((v) => !v)}
+            className={`${sectionTabClass(false)} px-2`}
+          >
+            {descending
+              ? <IconArrowDown width={14} height={14} />
+              : <IconArrowUp width={14} height={14} />}
+          </button>
+        </div>
       </Toolbar>
 
-      {/*
-        * ── ONE TOOLBAR ROW ───────────────────────────────────────
-        *
-        * User, 2026-09-08: "it should be like a horizontal tool bar and not
-        * full width … the filtering should be topic with drop down and not
-        * folders, and not a list of fully width vertical items, one row with
-        * dropdowns".
-        *
-        * TWO things were wrong and they had the same cause. The folders were
-        * a STRIP — one chip per topic, wrapping onto its own line as soon as
-        * there were four of them — and the search and the sort were laid out
-        * as `flex-1` and `w-full` controls, so each took the page's whole
-        * width and stacked. Three stacked full-width bands above a list is
-        * not a toolbar; it is a form.
-        *
-        * So every control here is SIZED TO ITS CONTENT and they share one
-        * line: a search box that stops at 18rem, the topic as a dropdown
-        * whose height is fixed however many topics exist, the sort field and
-        * its direction key. `flex-wrap` is kept for the narrow viewport,
-        * where wrapping is the correct answer rather than the accident.
-        */}
-      <div className={TOOLBAR_GROUPS}>
-      {/*
-        * ── THE SORT, AS THE SECOND SUB-MENU ──────────────────────────────
-        *
-        * User, 2026-09-15: "for the meeting table fix the sort as the second
-        * top sub menu like the last image" — the image being the security
-        * page's «همه ۱۶ | آنلاین ۴ | آفلاین ۱۲».
-        *
-        * It was a `w-[11rem]` dropdown in the row above, which cost two
-        * presses to see three options and was the one control on the page
-        * with a silhouette nothing else shares. `FilterChips` is the shape
-        * every other second row in the product already wears (security, the
-        * audit log, the workflow shelf, both boards' strips), so this page
-        * stops being the exception rather than gaining a fourth dialect.
-        *
-        * NO `FILTER_ROW_GAP` HERE, and that is not an oversight: the class is
-        * `mb-3`, the parent is already `flex-col gap-3`, and wearing both
-        * would put 24px under a row the rest of the product sets at 12.
-        *
-        * THE DIRECTION STAYS A SEPARATE KEY, for the reason the dropdown's
-        * own note gave and this move does not change: the field and the
-        * direction are two questions, and folding them together means six
-        * chips that grow by two every time a sort field is added.
-        */}
-      <FilterChips
-        label={t("sortBy")}
-        active={sort}
-        onSelect={setSort}
-        chips={[
-          { key: "date", label: t("sortDate"), icon: <IconCalendar width={12} height={12} /> },
-          { key: "people", label: t("sortPeople"), icon: <IconPeople3 width={12} height={12} /> },
-          { key: "status", label: t("sortStatus"), icon: <IconCheckCircle width={12} height={12} /> },
-        ]}
-      >
-        <span className={TRACK_DIVIDER} aria-hidden />
-        <button
-          type="button"
-          aria-label={descending ? t("sortDescending") : t("sortAscending")}
-          title={descending ? t("sortDescending") : t("sortAscending")}
-          aria-pressed={descending}
-          onClick={() => setDescending((v) => !v)}
-          className={filterChipClass(false)}
-        >
-          {descending
-            ? <IconArrowDown width={14} height={14} />
-            : <IconArrowUp width={14} height={14} />}
-        </button>
-      </FilterChips>
-
-        {/* THE TOPIC LEFT THIS ROW for the third row (2026-09-16) — see the
-            TopicStrip under the toolbar. */}
-        {/* THE SORT MOVED OUT OF THIS ROW — see the chip row below. */}
-
-        {/*
-          * THE VIEW SWITCH, AT THE FAR END OF THIS SAME LINE (user,
-          * 2026-09-08: "should be at the right most at the same toolbar
-          * line"). `ms-auto` rather than a spacer element — the gap is a
-          * consequence of there being nothing else to put there, and a
-          * `flex-1` filler would be an element in the tree that means
-          * nothing to a reader of it.
-          *
-          * FULLY ROUNDED, also asked for the same day ("the calender list at
-          * the end, highlighted should be fully rounded"). `.btn-icon`'s own
-          * corner is the theme's 8px, which on a 28px square reads as a
-          * pressed toolbar key; a circle inside a pill-shaped track reads as
-          * a SEGMENTED SWITCH, which is what this pair is. `rounded-full` is
-          * a utility and `.btn-icon` a component class, so the utility layer
-          * wins on its own and no `!` is needed.
-          */}
-        {/* THE SEARCH AT THE ROW'S EDGE (user, 2026-09-15: "the search bar in
-            meeting should be attached to the side like the buttons on top of
-            it"). It stood mid-row after the sort; it is the END group now,
-            under «جلسه جدید», with the view switch beside it — and it is the
-            compact field, the size of every other control on this row. The
-            same rule reaches every in-page search (Integrations, the
-            console): a search is a tool ON the toolbar, at its edge. */}
-        <div className="ms-auto flex flex-wrap items-center gap-2">
-          <label className="relative w-full sm:w-[18rem]">
-            <span className="sr-only">{t("searchMeetings")}</span>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("searchMeetings")}
-              className="input-sm ps-8"
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-subtle"
-              style={{ insetInlineStart: "0.625rem" }}
-            >
-              <IconSearch width={14} height={14} />
-            </span>
-          </label>
-          <div className={FILTER_TRACK}>
-            {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
-            {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
-          </div>
-        </div>
-      </div>
 
 
-      {/* ── THE THIRD ROW: the topic strip (user, 2026-09-16: "all meetings
+      {/* ── THE SECOND ROW (it was the third until the sort moved up the
+             same day): the topic strip (user, 2026-09-16: "all meetings
              should look like the projects with the edit three dot in it and
              the plus after it for new one, and the place in the third row —
              unify"). The kit's TopicStrip, the task board's own row, READ
@@ -449,6 +380,52 @@ export function Meetings() {
              went with the reason it existed: the inline box had replaced the
              picker, and there is no picker to replace now. ── */}
       <TopicStrip
+        end={(
+          /* ── THE VIEW SWITCH AND THE SEARCH, AT THE ROW'S END (user,
+                2026-09-16: "add the list and calendar icon into the second
+                sub menu top on the end and put the search there as well with
+                just the icon … same style as calendar and list with a
+                divider"). ONE tinted track — the strip's own rail — holding
+                the two view keys, a divider, and the search KEY: a glyph
+                until pressed, then a field that grows into the row beside
+                it. The field wears the rail, not `.input`: a box inside a
+                track is a second silhouette on one row. ── */
+          <div className={FILTER_TRACK}>
+            {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
+            {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
+            <span className={TRACK_DIVIDER} aria-hidden />
+            <button
+              type="button"
+              aria-label={t("searchMeetings")}
+              title={t("searchMeetings")}
+              aria-pressed={searchOpen}
+              onClick={() => toggleSearch()}
+              className={`${filterChipClass(searchOpen)} px-2`}
+            >
+              <IconSearch width={14} height={14} />
+            </button>
+            {/* the width animates on the WRAPPER, so the field slides open
+                along the row rather than appearing; the input inside is
+                mounted only while open, so Escape and a re-press tear it
+                down cleanly */}
+            <span
+              className="inline-block overflow-hidden transition-[width] duration-200"
+              style={{ width: searchOpen ? "12rem" : 0 }}
+            >
+              {searchOpen ? (
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
+                  placeholder={t("searchMeetings")}
+                  aria-label={t("searchMeetings")}
+                  className="h-control-sm w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
+                />
+              ) : null}
+            </span>
+          </div>
+        )}
         allLabel={t("allMeetings")}
         allCount={Array.isArray(rows) ? rows.length : 0}
         active={topic}

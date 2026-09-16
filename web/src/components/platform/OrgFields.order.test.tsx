@@ -93,7 +93,7 @@ describe("Management · General — the org form's rows", () => {
     await userEvent.clear(name);
     await userEvent.type(name, "شرکت تازه");
     await act(async () => {
-      await userEvent.click(screen.getByRole("button", { name: "ذخیرهٔ تغییرات" }));
+      await userEvent.click(screen.getByRole("button", { name: "ذخیره" }));
     });
     expect(updateOrg).toHaveBeenCalledTimes(1);
     /* the EXACT key set: a stray `description: null` here would clear a

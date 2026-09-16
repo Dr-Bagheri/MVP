@@ -213,30 +213,52 @@ describe("Meetings", () => {
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ فروش")).toBeInTheDocument());
 
+    /* the search is a KEY since 2026-09-16: the field exists only once the
+       key is pressed */
+    await userEvent.click(screen.getByRole("button", { name: "جست‌وجوی جلسه" }));
     await userEvent.type(screen.getByPlaceholderText("جست‌وجوی جلسه"), "سارا");
     await waitFor(() => expect(screen.queryByText("جلسهٔ فروش")).toBeNull());
     expect(screen.getByText("جلسهٔ محصول")).toBeInTheDocument();
   });
 
-  it("the search sits at the END of its row, in the compact field, beside the view switch (2026-09-15)", async () => {
+  it("the search is a KEY on the strip's end track, with the view switch and a divider (2026-09-16)", async () => {
     /*
-     * "The search bar in meeting should be attached to the side like the
-     * buttons on top of it." Asserted as STRUCTURE: the field is inside the
-     * row's end group (`ms-auto` — the same edge «جلسه جدید» sits on in the
-     * row above), the view switch is in that same group, and the field is
-     * the row's size. A search that merely renders somewhere passes every
-     * filter test and can sit anywhere.
+     * "Add the list and calendar icon into the second sub menu top on the
+     * end and put the search there as well with just the icon; if pressed it
+     * will open up horizontally in the row and you can type in it, same style
+     * as calendar and list with a divider." Asserted as STRUCTURE: one tinted
+     * track holds the two view keys, a divider and the search key; no field
+     * exists until the key is pressed; the field appears in that same track;
+     * and closing the key CLEARS the query — the half that matters, since a
+     * filter nobody can see is a list that lies.
      */
-    LIST = [meeting({ id: "m-a", title: "جلسهٔ فروش" })];
+    LIST = [meeting({ id: "m-a", title: "جلسهٔ فروش" }), meeting({ id: "m-b", title: "جلسهٔ محصول" })];
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ فروش")).toBeInTheDocument());
 
+    expect(screen.queryByPlaceholderText("جست‌وجوی جلسه"), "a box before the key is pressed").toBeNull();
+    const key = screen.getByRole("button", { name: "جست‌وجوی جلسه" });
+    const track = key.parentElement!;
+    expect(track.className, "the search key is not on the tinted rail").toContain("bg-accent-soft");
+    expect(track.contains(screen.getByRole("button", { name: "فهرست" }))).toBe(true);
+    expect(track.contains(screen.getByRole("button", { name: "تقویم" }))).toBe(true);
+    expect(track.querySelector("span[aria-hidden]"), "no divider between the views and the search").not.toBeNull();
+    /* and the track sits in the strip's row — the same row as «همه جلسات» */
+    const strip = screen.getByRole("button", { name: /همه جلسات/ }).parentElement!;
+    expect(strip.parentElement).toBe(track.parentElement!.parentElement);
+
+    await userEvent.click(key);
     const box = screen.getByPlaceholderText("جست‌وجوی جلسه");
-    expect(box.className.split(/\s+/), "the search is not the compact field").toContain("input-sm");
-    const group = box.closest("label")!.parentElement!;
-    expect(group.className.split(/\s+/), "the search is not at the row's end").toContain("ms-auto");
-    /* the view switch shares the group — the two tools at the edge, together */
-    expect(group.contains(screen.getByRole("button", { name: "فهرست" }))).toBe(true);
+    expect(track.contains(box), "the field opened somewhere other than its track").toBe(true);
+    expect(key).toHaveAttribute("aria-pressed", "true");
+    await userEvent.type(box, "فروش");
+    await waitFor(() => expect(screen.queryByText("جلسهٔ محصول")).toBeNull());
+
+    /* closing clears: both meetings are back and no box remains */
+    await userEvent.click(key);
+    await waitFor(() => expect(screen.getByText("جلسهٔ محصول")).toBeInTheDocument());
+    expect(screen.queryByPlaceholderText("جست‌وجوی جلسه")).toBeNull();
+    expect(key).toHaveAttribute("aria-pressed", "false");
   });
 
   /* SORTING is a FIELD and a DIRECTION, two controls — so the direction key
@@ -278,6 +300,14 @@ describe("Meetings", () => {
     const row = screen.getByRole("tablist", { name: "مرتب‌سازی" });
     expect(within(row).getAllByRole("tab").map((c) => c.getAttribute("data-key")))
       .toEqual(["date", "people", "status"]);
+    /* IN ROW ONE, IN ROW ONE'S PILL (user, 2026-09-16: "put the sort in the
+       first sub menu top with the same style of the first row items"): the
+       grey rail, standing in the same row as the slice filter — a tinted
+       rail on a row of its own is the 2026-09-15 shape this replaced */
+    expect(row.className, "the sort wears the tinted rail").toContain("bg-surface-2");
+    expect(row.className).not.toContain("bg-accent-soft");
+    const sliceRail = screen.getByRole("tab", { name: "گذشته" }).parentElement!;
+    expect(row.parentElement, "the sort is not in row one").toBe(sliceRail.parentElement);
     expect(within(row).getByRole("tab", { name: /تاریخ/ })).toHaveAttribute("aria-selected", "true");
 
     /* it SORTS, rather than only lighting up: both meetings share a date, so

@@ -840,18 +840,25 @@
    */
   .btn {
     /*
-     * NOT A PILL. `rounded-full` was the single biggest reason our screens
-     * did not look like the reference at identical colours and identical
-     * copy: every button in the product was a lozenge, and theirs are
-     * 11px-cornered rectangles that sit in the same family as the inputs
-     * beside them. Measured: h38, padding 9/15, 13px semibold.
+     * THE RAIL'S OWN BOX (user ruling, 2026-09-16: "the style of the top bar
+     * menu and the buttons must be the same, I feel they are far apart …
+     * change the style of all buttons in the platform — save, new meeting,
+     * start the meeting, add task, add project inside the pop-up windows,
+     * not the plus ones"). A page button stands beside a sub-menu rail on
+     * most screens, and the two were different families: the rail is the
+     * 34px pill inside 4px of track with the tile corner (`rounded-xl`, 16)
+     * at weight 500; the button was 38 tall, 11-cornered and semibold. So
+     * `.btn` is the rail's silhouette now — `min-h-control` reads 34 + 8, the
+     * corner is the rail's `rounded-xl`, the weight the pill's `font-medium`.
+     * The inputs keep their own 11px corner: a field is a well, not a rail.
      *
-     * The radius comes from the token (`rounded-md` = radius.control), so
-     * buttons and inputs can never drift apart again — they read the same
-     * number.
+     * (Before that, 2026-09-02: NOT A PILL — `rounded-full` was the single
+     * biggest reason our screens did not look like the reference; that
+     * ruling still holds, `rounded-xl` on a 42px box is a rounded rectangle,
+     * not a lozenge.)
      */
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-md px-[15px] text-center text-detail font-semibold leading-control
+           rounded-xl px-[15px] text-center text-detail font-medium leading-control
            transition-all duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
@@ -889,7 +896,10 @@
      did not, until the small control was the taller of the two. Measured, not
      reasoned: 38/34 at 1440, 36.8/34 at 1280. */
   .btn-sm {
-    @apply h-control-sm min-h-control-sm rounded-[8px] px-[13px] text-[0.78125rem];
+    /* the rail's pill corner (2026-09-16): a compact button standing alone
+       is the same pill as one lifted inside a track, so it wears the same
+       `rounded-xl` — `sectionTabClass` no longer has to add it */
+    @apply h-control-sm min-h-control-sm rounded-xl px-[13px] text-[0.78125rem];
   }
   .btn-icon {
     @apply h-control-icon min-h-control-icon w-control-icon rounded-[8px] px-0;

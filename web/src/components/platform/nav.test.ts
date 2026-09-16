@@ -58,21 +58,23 @@ describe("platform nav", () => {
     expect(external.map((item) => item.key)).toEqual([]);
   });
 
-  it("ends with Settings and Help, in that order", () => {
+  it("ends with Settings alone — Help left the rail (2026-09-16)", () => {
     /*
-     * The ORDER is the directive ("change the location of settings and help
-     * to end of the menu"), so it is asserted as a sequence: a set of the
-     * right two keys in the wrong arrangement satisfies "both are there", and
-     * the arrangement is what was asked for.
+     * "Change the location of settings and help to end of the menu" put the
+     * two at the foot (2026-08-27); "remove help from the main menu as well"
+     * (2026-09-16) took Help out. Asserted as the exact utility list and as
+     * an ABSENCE across the whole rail: a help entry re-added anywhere in
+     * NAV_PRIMARY would satisfy "the utility group is settings" and still
+     * put the door back.
      *
-     * WHERE they sit on screen is a layout fact this suite cannot see — the
-     * rule above them is `mt-auto` inside a `flex-1` column, and jsdom
-     * computes no styles. Measured in the browser instead, recorded in the
-     * commit rather than asserted here as a class name.
+     * WHERE Settings sits on screen is a layout fact this suite cannot see —
+     * the rule above it is `mt-auto` inside a `flex-1` column, and jsdom
+     * computes no styles. Measured in the browser instead.
      */
-    expect(NAV_UTILITY.map((item) => item.key)).toEqual(["settings", "help"]);
-    const all = [...NAV_PRIMARY, ...NAV_UTILITY].map((item) => item.key);
-    expect(all.slice(-2)).toEqual(["settings", "help"]);
+    expect(NAV_UTILITY.map((item) => item.key)).toEqual(["settings"]);
+    const all = [...NAV_PRIMARY, ...NAV_UTILITY];
+    expect(all.at(-1)?.key).toBe("settings");
+    expect(all.find((item) => item.key === "help" || item.href === "/help")).toBeUndefined();
   });
 });
 
