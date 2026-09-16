@@ -58,6 +58,12 @@ const patches: { id: string; body: Record<string, unknown> }[] = [];
 /** every PATCH the project panel sends — the rail is where a project is edited now */
 const projectPatches: { id: string; body: Record<string, unknown> }[] = [];
 
+/* THE READERS (db/0227). ADMIN made every fixture project (`created_by:
+   "u-1"`), so the edits the earlier cases assert are theirs to draw; a
+   second admin's project and the owner's seat get their own cases below. */
+const ADMIN = { meId: "u-1", isAdmin: true, isOwner: false };
+const MEMBER = { meId: "u-1", isAdmin: false, isOwner: false };
+
 function project(over: Partial<ProjectRecord>): ProjectRecord {
   return {
     id: "p-1", name: "بازطراحی سایت", summary: "", tone: "blue", icon: null,
@@ -79,6 +85,8 @@ function card(over: Partial<TaskCardRecord>): TaskCardRecord {
     meeting_id: null, meeting_title: null,
     title: "کارت", priority: "medium", labels: [], due_at: null, done: false,
     position: 1, archived: false, created_by: "u-1", assignee_ids: [],
+    /* 0227 — no room is the ordinary state */
+    channel_id: null, channel_name: null,
     label_ids: [], checklist_done: 0, checklist_total: 0, comment_count: 0,
     created_at: "2026-09-01T08:00:00.000Z", recurrence_id: null,
     ...over,
@@ -151,7 +159,7 @@ import { CrumbTitleProvider } from "./CrumbTitle";
    output instead of the rule. It also keeps the missing-floor throw honest
    — a detail page rendered outside a provider SHOULD fail. */
 const detail = (id: string, meId: string | null) => (
-  <CrumbTitleProvider><ProjectDetail id={id} meId={meId} isAdmin onClose={() => undefined} /></CrumbTitleProvider>
+  <CrumbTitleProvider><ProjectDetail id={id} reader={{ meId, isAdmin: true, isOwner: false }} onClose={() => undefined} /></CrumbTitleProvider>
 );
 
 /** the kanban column's own box — the element carrying its project cards */
@@ -183,7 +191,7 @@ describe("Projects", () => {
       project({ id: "p-a", name: "پروژهٔ خالی", task_total: 0, task_done: 0 }),
       project({ id: "p-b", name: "پروژهٔ جاری", task_total: 5, task_done: 2 }),
     ];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ خالی")).toBeInTheDocument());
 
     /* scoped to each card, so a dash anywhere else on the page cannot make
@@ -204,7 +212,7 @@ describe("Projects", () => {
      * diff and puts a full-width panel back under a toolbar of chips.
      */
     LIST = [project({ id: "p-a", name: "پروژه" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
 
     for (const label of ["تازه‌ترین", "بر اساس نام", "بر اساس پیشرفت"]) {
@@ -232,11 +240,11 @@ describe("Projects", () => {
      * not, which is why this test follows it rather than being deleted.
      */
     LIST = [project({ id: "p-a", name: "پروژه" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     expect(await screen.findByRole("button", { name: /افزودن پروژه/ })).toBeInTheDocument();
 
     cleanup();
-    render(<Projects isAdmin={false} meId="u-1" />);
+    render(<Projects reader={MEMBER} />);
     await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /افزودن پروژه/ })).toBeNull();
     /* the control: the page still rendered, so "no button" is not "no page".
@@ -262,7 +270,7 @@ describe("Projects", () => {
       card({ id: "k-open", column_id: "c-1", topic_id: "t-1", done: false }),
       card({ id: "k-done", column_id: "c-1", topic_id: "t-1", done: true }),
     ];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     const cardEl = (await screen.findByText("پروژهٔ جاری")).closest("[data-card]") as HTMLElement;
     const target = await columnOf("انجام‌شده");
 
@@ -289,18 +297,35 @@ describe("Projects", () => {
     expect(patches[0]!.body.column_id).toBe("c-2");
   });
 
-  it("«مال من» keeps only the projects the reader is on", async () => {
+  it("«مال من» keeps the projects the reader is on, leads, or MADE — and drops the rest", async () => {
+    /* user report, 2026-09-16: "my projects only is not working for admins" —
+       an admin who makes projects is on none of them, so membership alone
+       emptied the page from their seat. The fixture's four projects are one
+       of each: on it, leading it, made it, none of the three. */
     LIST = [
-      project({ id: "p-a", name: "پروژهٔ من", member_ids: ["u-1", "u-2"] }),
-      project({ id: "p-b", name: "پروژهٔ دیگری", member_ids: ["u-2"] }),
+      project({ id: "p-a", name: "پروژهٔ من", created_by: "u-9", member_ids: ["u-1", "u-2"] }),
+      project({ id: "p-l", name: "پروژهٔ سرپرستی", created_by: "u-9", lead_id: "u-1", member_ids: ["u-2"] }),
+      project({ id: "p-c", name: "پروژهٔ ساخته", created_by: "u-1", member_ids: ["u-2"] }),
+      project({ id: "p-b", name: "پروژهٔ دیگری", created_by: "u-9", member_ids: ["u-2"] }),
     ];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
     expect(screen.getByText("پروژهٔ دیگری")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
     await waitFor(() => expect(screen.queryByText("پروژهٔ دیگری")).toBeNull());
     expect(screen.getByText("پروژهٔ من")).toBeInTheDocument();
+    expect(screen.getByText("پروژهٔ سرپرستی")).toBeInTheDocument();
+    expect(screen.getByText("پروژهٔ ساخته")).toBeInTheDocument();
+  });
+
+  it("«مال من» with nothing of mine says WHICH nothing", async () => {
+    LIST = [project({ id: "p-b", name: "پروژهٔ دیگری", created_by: "u-9", member_ids: ["u-2"] })];
+    render(<Projects reader={ADMIN} />);
+    await screen.findByText("پروژهٔ دیگری");
+    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    await userEvent.click(screen.getByRole("button", { name: "لیست" }));
+    expect(await screen.findByText("پروژه‌ای که ساخته‌اید، سرپرست آن هستید یا در آن عضوید، نیست.")).toBeInTheDocument();
   });
 
   it("«مال من» shows NOTHING while the identity is unknown — never everything", async () => {
@@ -315,7 +340,7 @@ describe("Projects", () => {
       project({ id: "p-a", name: "پروژهٔ من", member_ids: ["u-1"] }),
       project({ id: "p-b", name: "پروژهٔ دیگری", member_ids: ["u-2"] }),
     ];
-    render(<Projects isAdmin meId={null} />);
+    render(<Projects reader={{ meId: null, isAdmin: true, isOwner: false }} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
@@ -335,7 +360,7 @@ describe("Projects", () => {
   });
 
   it("creates with the wire's shape, and never sends the creator as a member", async () => {
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await userEvent.click(await screen.findByRole("button", { name: /افزودن پروژه/ }));
 
     await userEvent.type(await screen.findByLabelText("نام پروژه"), "بازطراحی");
@@ -511,7 +536,7 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
     ONE = project({ id: "p-1", stage: "paused", member_ids: ["u-1"] });
     render(
       <CrumbTitleProvider>
-        <ProjectDetail id="p-1" meId="u-1" isAdmin={false} onClose={() => undefined} />
+        <ProjectDetail id="p-1" reader={MEMBER} onClose={() => undefined} />
       </CrumbTitleProvider>,
     );
     await waitFor(() => expect(screen.getByText("متوقف")).toBeInTheDocument());
@@ -521,6 +546,28 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
     expect(screen.queryByRole("button", { name: /متوقف/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /ویرایش/ })).toBeNull();
     expect(screen.queryByLabelText("سرپرست")).toBeNull();
+  });
+
+  it("shows an ADMIN who did not make it the readings too, and the OWNER the controls (db/0227)", async () => {
+    ONE = project({ id: "p-1", stage: "paused", created_by: "u-9", member_ids: ["u-1"] });
+    render(
+      <CrumbTitleProvider>
+        <ProjectDetail id="p-1" reader={ADMIN} onClose={() => undefined} />
+      </CrumbTitleProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("متوقف")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /ویرایش/ })).toBeNull();
+    expect(screen.queryByLabelText("سرپرست")).toBeNull();
+    /* giving work stays an admin's (0186) — the one control that is not an edit of the project */
+    expect(screen.getByRole("button", { name: "افزودن تسک" })).toBeInTheDocument();
+
+    cleanup();
+    render(
+      <CrumbTitleProvider>
+        <ProjectDetail id="p-1" reader={{ meId: "u-1", isAdmin: true, isOwner: true }} onClose={() => undefined} />
+      </CrumbTitleProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /ویرایش/ })).toBeInTheDocument());
   });
 });
 
@@ -549,7 +596,7 @@ describe("the kanban (2026-09-05)", () => {
       card({ id: "t-2", topic_id: "top-a", column_id: "c-2", done: false }),
       card({ id: "t-1", topic_id: "top-a", column_id: "c-1", done: false }),
     ];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
 
     const column = await columnOf("برای انجام");
     expect(within(column).getByText("پروژهٔ الف")).toBeInTheDocument();
@@ -565,7 +612,7 @@ describe("the kanban (2026-09-05)", () => {
     /* the card still SITS in the first column and is done — which is the case
        that separates "where the cards are" from "where the work got to" */
     TASKS = [card({ id: "t-1", topic_id: "top-a", column_id: "c-1", done: true })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
 
     expect(within(await columnOf("انجام‌شده")).getByText("پروژهٔ الف")).toBeInTheDocument();
     expect(within(await columnOf("برای انجام")).queryByText("پروژهٔ الف")).toBeNull();
@@ -581,7 +628,7 @@ describe("the kanban (2026-09-05)", () => {
     ];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف", topic_id: "top-a" })];
     TASKS = [];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
 
     expect(within(await columnOf("برای انجام")).getByText("پروژهٔ الف")).toBeInTheDocument();
   });
@@ -605,7 +652,7 @@ describe("the way in moved into the column (2026-09-05)", () => {
       { id: "c-2", name: "انجام‌شده", tone: "green", position: 2 },
     ];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف", topic_id: "top-a" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
 
     /* one per column — a project is made where it will sit */
     await waitFor(() =>
@@ -621,7 +668,7 @@ describe("the way in moved into the column (2026-09-05)", () => {
        create a project from three of the four views. */
     COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
     await userEvent.click(screen.getByRole("button", { name: "لیست" }));
@@ -637,7 +684,7 @@ describe("the way in moved into the column (2026-09-05)", () => {
   it("shows a MEMBER neither control", async () => {
     COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin={false} meId="u-1" />);
+    render(<Projects reader={MEMBER} />);
     await screen.findByText("پروژهٔ الف");
 
     expect(screen.queryByRole("button", { name: /افزودن پروژه/ })).toBeNull();
@@ -652,7 +699,7 @@ describe("nothing the author wrote to themselves", () => {
        this page, so both panels carry the assertion rather than the one that
        happened to be caught. */
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
     expect(document.body.textContent ?? "").not.toContain("/*");
 
@@ -687,7 +734,7 @@ describe("a refused write keeps the dialog (2026-09-06)", () => {
    */
   it("says so over the draft it refused, and leaves the draft to be sent again", async () => {
     createRefused = true;
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await userEvent.click(await screen.findByRole("button", { name: /افزودن پروژه/ }));
     await userEvent.type(await screen.findByLabelText("نام پروژه"), "بازطراحی");
     await userEvent.click(screen.getByRole("button", { name: /ساخت پروژه/ }));
@@ -712,7 +759,7 @@ describe("a project card carries its own delete (2026-09-15)", () => {
   it("shows an admin the trash on the kanban card and on the list row, and a member neither", async () => {
     COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
     const cardEl = screen.getByText("پروژهٔ الف").closest("a") as HTMLElement;
     expect(within(cardEl).getByRole("button", { name: "حذف" })).toBeInTheDocument();
@@ -725,15 +772,34 @@ describe("a project card carries its own delete (2026-09-15)", () => {
     expect(row.className.split(/\s+/)).toContain("tile-row");
 
     cleanup();
-    render(<Projects isAdmin={false} meId="u-1" />);
+    render(<Projects reader={MEMBER} />);
     await screen.findByText("پروژهٔ الف");
     expect(screen.queryByRole("button", { name: "حذف" })).toBeNull();
+  });
+
+  it("an admin sees the trash on the project they MADE and not on another admin's; the owner sees both (db/0227)", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [
+      project({ id: "p-a", name: "پروژهٔ الف", created_by: "u-1" }),
+      project({ id: "p-b", name: "پروژهٔ ب", created_by: "u-9" }),
+    ];
+    render(<Projects reader={ADMIN} />);
+    await screen.findByText("پروژهٔ ب");
+    const mine = screen.getByText("پروژهٔ الف").closest("a") as HTMLElement;
+    const theirs = screen.getByText("پروژهٔ ب").closest("a") as HTMLElement;
+    expect(within(mine).getByRole("button", { name: "حذف" })).toBeInTheDocument();
+    expect(within(theirs).queryByRole("button", { name: "حذف" })).toBeNull();
+
+    cleanup();
+    render(<Projects reader={{ meId: "u-1", isAdmin: true, isOwner: true }} />);
+    await screen.findByText("پروژهٔ ب");
+    expect(within(screen.getByText("پروژهٔ ب").closest("a") as HTMLElement).getByRole("button", { name: "حذف" })).toBeInTheDocument();
   });
 
   it("asks in the platform's dialog — a no deletes nothing, a yes deletes exactly that project", async () => {
     COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
     await userEvent.click(screen.getByRole("button", { name: "حذف" }));
@@ -771,7 +837,7 @@ describe("a project card carries its own delete (2026-09-15)", () => {
 describe("the projects page is the board's two rows (2026-09-16)", () => {
   it("keeps «پروژه‌های من» and «مهلت امروز» in ROW ONE's grey rail, in the row the views are in", async () => {
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
     const mine = screen.getByRole("button", { name: "پروژه‌های من" });
@@ -806,7 +872,7 @@ describe("the projects page is the board's two rows (2026-09-16)", () => {
       project({ id: "p-b", name: "پروژهٔ ب", folder_id: "f-a" }),
       project({ id: "p-c", name: "پروژهٔ پ", folder_id: null }),
     ];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
     const all = screen.getByRole("button", { name: /^همه پروژه‌ها/ });
@@ -834,7 +900,7 @@ describe("the projects page is the board's two rows (2026-09-16)", () => {
   it("the `+` is a NEW FOLDER — the board's inline box and its write, not the project dialog", async () => {
     FOLDERS = [{ id: "f-a", name: "مشتریان" }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
     await userEvent.click(screen.getByRole("button", { name: "پوشهٔ جدید" }));
@@ -851,7 +917,7 @@ describe("the projects page is the board's two rows (2026-09-16)", () => {
   it("a chip's ⋯ renames in the same box and archives — both through the folder route, never the project's delete", async () => {
     FOLDERS = [{ id: "f-a", name: "مشتریان" }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف", folder_id: "f-a" })];
-    render(<Projects isAdmin meId="u-1" />);
+    render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
     await userEvent.click(screen.getByRole("button", { name: "گزینه‌ها" }));
@@ -874,7 +940,7 @@ describe("the projects page is the board's two rows (2026-09-16)", () => {
   it("shows a MEMBER the chips and neither the ⋯ nor the `+`", async () => {
     FOLDERS = [{ id: "f-a", name: "مشتریان" }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف", folder_id: "f-a" })];
-    render(<Projects isAdmin={false} meId="u-1" />);
+    render(<Projects reader={MEMBER} />);
     await screen.findByText("پروژهٔ الف");
 
     /* the DISCRIMINATING half: the chip is there — a strip that renders

@@ -692,6 +692,7 @@ export function TaskBoard() {
           topics={board.topics}
           labels={labels}
           people={people}
+          isAdmin={isAdmin}
           onClose={() => {
             setOpenTask(null);
             if (linkedTask !== null) router.replace("/tasks");

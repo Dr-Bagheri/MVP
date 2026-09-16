@@ -3,8 +3,9 @@
 -- THE WHOLE MATRIX (rule 7's corollary: "the ordinary path is the product").
 -- 0181 let any active member create a project; 0186 narrows that, and a
 -- narrowing is the change most likely to be asserted only on the side that
--- refuses. So both sides are here for each of the three writes, and so is the
--- half that must NOT have moved — reading.
+-- refuses. So both sides are here for each of the three writes, and so was
+-- the half that must NOT have moved — reading — until 0227 moved it on the
+-- user's word: a member reads the projects they are ON (see below).
 --
 --   alice  owner,  org A   (actor_is_admin() is true for owner AND admin)
 --   dave   admin,  org A
@@ -53,14 +54,20 @@ select t.denied(
  * throws, an `update` walled by USING quietly does nothing, and a test that
  * demands the wrong one reports a working wall as broken.
  *
- * So the assertion is on the RECORD: the name did not move.
+ * So the assertion is on the RECORD: the name did not move — read at OWNER
+ * altitude since 0227, because bob is not on this project and no longer sees
+ * it at all, so his own view would answer zero either way (the counting
+ * corollary; erin's check below has always been read this way).
  */
 update echo.project set name = 'نام تازه'
  where id = 'a6000000-0000-4000-8000-000000000f01'::uuid;
+reset role;
 select t.ok(
   (select count(*) from echo.project
     where id = 'a6000000-0000-4000-8000-000000000f01'::uuid and name = 'بازطراحی') = 1,
   '0186: a member''s rename touches nothing — the project keeps its name');
+set local role echo_app;
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob again
 
 select t.denied(
   $$insert into echo.project_member (project_id, user_id, org_id, added_by)
@@ -68,14 +75,17 @@ select t.denied(
             echo.actor_org_id(), echo.actor_id())$$,
   '0186: a member cannot put themselves — or anybody — on a project');
 
--- ─── AND STILL SEES EVERY PROJECT ───────────────────────────────────────
-/* the half a narrowing usually takes with it by accident. The wall is about
-   who may HAND OUT work, never about who may know what the team is doing
-   (0181's ruling, unchanged) — and a member who cannot see the project they
-   were added to would be the feature failing at its own purpose. */
+-- ─── AND SEES WHAT THEY ARE ON (0227 REVERSED 0181's "every project") ────
+/* This block asserted "a member still reads every project in their org"
+   from 0186 to 0227 — the half a narrowing usually takes with it by
+   accident, kept on purpose then. On 2026-09-16 the user ruled the other
+   way ("they will only see the projects that they are assigned to"), so the
+   assertion flipped rather than vanished: bob is NOT on «بازطراحی» and does
+   not see it; the feature's own purpose — seeing the project you were added
+   to — is asserted below, once dave adds him to his. */
 select t.ok(
-  exists (select 1 from echo.project where id = 'a6000000-0000-4000-8000-000000000f01'::uuid),
-  '0186: a member still reads every project in their org');
+  not exists (select 1 from echo.project where id = 'a6000000-0000-4000-8000-000000000f01'::uuid),
+  '0227: a member does not see a project they are not on');
 
 -- ─── THE ORDINARY PATH: an admin does all three ─────────────────────────
 select set_config('echo.actor_id', '06000000-0000-4000-8000-000000000006', true); -- dave, admin
@@ -101,6 +111,11 @@ select t.ok(
            where project_id = 'a6000000-0000-4000-8000-000000000f02'::uuid
              and user_id = '02000000-0000-4000-8000-000000000002'),
   '0186: an admin puts a colleague on a project');
+-- and the colleague sees the project he was put on — the feature's purpose
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob
+select t.ok(
+  exists (select 1 from echo.project where id = 'a6000000-0000-4000-8000-000000000f02'::uuid),
+  '0227: a member sees the project they were put on');
 
 -- ─── ANOTHER ORG'S ADMIN IS STILL A STRANGER ────────────────────────────
 /* the control that keeps the three refusals above meaningful: they must fail
@@ -117,9 +132,9 @@ update echo.project set name = 'taken'
    tidiness: erin cannot see this project AT ALL, so asking her whether it
    still has its name returns zero either way — "I cannot see it" and "it was
    renamed" are the same answer from where she stands. The question is about
-   the ROW, so it is asked from above the wall. (Bob's rename above is read as
-   bob on purpose: he CAN see every project, so his own view is the honest
-   place to check that nothing moved.) */
+   the ROW, so it is asked from above the wall. (Bob's rename above was read
+   as bob until 0227 — he could see every project then; since a member sees
+   only the projects they are on, his is read from above the wall too.) */
 reset role;
 select t.ok(
   (select count(*) from echo.project

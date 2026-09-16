@@ -2823,3 +2823,59 @@ Two halves, and the first is a wall (db/0224):
 The bar for "later we change it" is written down: when billing lands (Q1),
 verification becomes the billing state's own fact and this door is the
 first thing to retire.
+
+## M55 — A task has a room, and a project is what you are on [user directive 2026-09-16: "assign tasks to a chatroom; people assigned in that task automatically are assigned to the chatroom, no invitations, only an admin can do it. The projects in the main menu should be visible to the members; they cannot edit it and they only see the projects they are assigned to. Only an admin can change projects; they see all projects but only edit the ones they created themselves"]
+
+**The task's room (db/0227).** `task.channel_id` points at a chat room
+(0184); many tasks may share one. Three facts, each at the altitude it is
+promised:
+
+- **Who may set it** is a trigger, not a policy: the board is deliberately
+  not walled (0144 — locking it would make the product's main verb an
+  admin's feature), so the ONE field on the card that decides who is told
+  what is refused to a member by `tg_task_room_is_an_admins` (42501 with a
+  named hint; core translates it into the 403 it is, where every other
+  write refusal maps to 404). Silent with no actor — the purge's FK nulling
+  a purged room must never raise (0202's own sentence).
+- **Whoever is on the task is in its room**, written where every path
+  meets: an AFTER trigger on the assignment and one on the pointer, so the
+  board's dialog, the agent's hand and a future route all seat the person
+  the same way. "No invitation" is the design — a membership row is the
+  sidebar and the read cursor (0184), and the assignment IS the reason they
+  are there. Definer doors, because `chat_member_write` rightly lets a
+  person write only their own row. Additive: an unassignment keeps the seat
+  (un-planning is not un-remembering); leaving is theirs.
+- **«New room» is one transaction** — channel, the maker's seat, the
+  pointer, the history line — so a channel that exists and points at
+  nothing is unrepresentable.
+
+**A project is what you are on (db/0227, REVERSING 0181's "every active
+member sees every project").** 0181 said what would change it — "a policy
+that reads it; an absent feature, not a wrong one" — and it arrived on the
+user's word. A member reads the projects they are ON (`project_member`),
+LEAD, or made; an admin reads them all. Membership is a fact about another
+protected table, so the policy asks a definer helper (`actor_on_project`)
+rather than an EXISTS that runs as the caller (D9). The roster read narrows
+with the project; a person's own rows stay theirs.
+
+**An admin edits what they made.** The four writes 0186 gave "an admin"
+take the 0077 hierarchy's sentence: your own record, or one whose author
+your role strictly OUTRANKS (`actor_outranks`: owner > admin > member) —
+chosen over `created_by = actor` alone because the org owner is the one
+seat where "everything here is mine" is true, and because a project whose
+author's account is tombstoned would otherwise be a row nobody could ever
+touch again (D27's class). Creating stays any admin's; a folder (0226)
+stays any admin's — it groups the surface, it is not a project. The web
+mirrors the wall only to decide which controls to DRAW (`projectReach.ts`:
+the owner everything, an admin their own); the server stays the wall.
+
+**«Mine» means one thing on both boards.** «پروژه‌های من» was membership
+alone, and an admin who makes projects is on none of them — from their seat
+the toggle emptied the page and read as broken. Mine is what I am on, lead,
+or made, which is the task board's own «فقط تسک‌های من» (assigned or
+created); the empty state under the toggle says WHICH nothing.
+
+Cost, said out loud: a project's category on the board is still
+org-readable (a member not on the project sees its folder as a plain
+folder), and its room is still a room every member may read (0184). What
+narrowed is the project record — its people, lead, stage and progress.

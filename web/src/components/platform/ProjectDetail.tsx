@@ -32,6 +32,7 @@ import { SkeletonLines } from "@/components/scaffold";
 import { digits, formatDate, personName, personPhoto } from "@/lib/format";
 import { notifyError } from "@/lib/notify";
 import { useSeededName } from "@/lib/seededNames";
+import { canEditProject, type ProjectReader } from "./projectReach";
 
 /**
  * ONE PROJECT (0181), and since 2026-09-08 THE PLACE A PROJECT IS EDITED.
@@ -66,12 +67,12 @@ import { useSeededName } from "@/lib/seededNames";
  * It keeps an address: `/projects?project=<id>` is a link a person can send,
  * and the old `/projects/<id>` redirects there.
  */
-export function ProjectDetail({ id, meId, isAdmin, onClose }: {
+export function ProjectDetail({ id, reader, onClose }: {
   id: string;
-  meId: string | null;
-  isAdmin: boolean;
+  reader: ProjectReader;
   onClose: () => void;
 }) {
+  const { meId, isAdmin } = reader;
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -169,6 +170,11 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
      null id — so the ternary that stood here was a second way of asking one
      question */
   const lead = people.find((p) => p.id === project.lead_id) ?? null;
+  /* db/0227: the rail is live controls for whoever may EDIT this project —
+     its author, or the owner — and readings for everybody else, an admin
+     who did not make it included. One component answering one question
+     twice rather than two screens that can disagree (2026-09-08). */
+  const canEdit = canEditProject(project, reader);
 
   const patch = (body: Parameters<typeof api.updateProject>[1]) => {
     void api.updateProject(project.id, body)
@@ -176,7 +182,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
       .catch(() => notifyError(t("writeFailed")));
   };
 
-  const start = isAdmin ? (
+  const start = canEdit ? (
     <>
       <KebabMenu
         label={t("moreActions")}
@@ -261,7 +267,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
       {/* ── WHERE THE WORK IS (0208) ──────────────────────────────────── */}
       <div>
         <span className={RAIL_LABEL}>{t("fieldStage")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <div className="flex flex-wrap gap-1">
             {PROJECT_STAGES.map((stage) => (
               <button
@@ -291,7 +297,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
       {/* ── HOW URGENT — the board's own four levels, drawn the board's way */}
       <div>
         <span className={RAIL_LABEL}>{t("fieldPriority")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <div className="flex flex-wrap gap-1">
             {PROJECT_PRIORITIES.map((level) => (
               <button
@@ -323,7 +329,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           contradict, and the fix is to add them first. */}
       <div>
         <span className={RAIL_LABEL}>{t("fieldLead")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <Select
             value={project.lead_id ?? ""}
             onChange={(v) => patch({ lead_id: v === "" ? null : v })}
@@ -352,7 +358,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           key — the omit-leaves / null-clears contract of every other row. */}
       <div>
         <span className={RAIL_LABEL}>{t("fieldFolder")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <Select
             value={project.folder_id ?? ""}
             onChange={(v) => patch({ folder_id: v === "" ? null : v })}
@@ -378,7 +384,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           only thing it needed was the project's words rather than a task's. */}
       <div>
         <span className={RAIL_LABEL}>{t("fieldMembers")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <AssigneePicker
             people={people}
             selected={project.member_ids}
@@ -425,7 +431,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           nowhere else (see the helper's note). */}
       <div>
         <span className={RAIL_LABEL}>{t("fieldStarts")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <DayField value={project.starts_on} onPick={(day) => patch({ starts_on: day })} />
         ) : project.starts_on === null ? (
           <span className={RAIL_EMPTY}>{t("noDate")}</span>
@@ -436,7 +442,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
 
       <div>
         <span className={RAIL_LABEL}>{t("fieldDue")}</span>
-        {isAdmin ? (
+        {canEdit ? (
           <DayField value={project.due_on} onPick={(day) => patch({ due_on: day })} />
         ) : project.due_on === null ? (
           <span className={RAIL_EMPTY}>{t("noDate")}</span>
@@ -449,7 +455,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
           Both were fields of the dialog this panel replaced. The tone picker
           is the same component the create dialog draws, one import rather
           than a second row of swatches. */}
-      {isAdmin ? (
+      {canEdit ? (
         <TonePicker value={project.tone} onChange={(tone) => patch({ tone })} label={t("fieldTone")} />
       ) : (
         <div>
@@ -461,7 +467,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
         </div>
       )}
 
-      {isAdmin ? (
+      {canEdit ? (
         <div>
           <span className={RAIL_LABEL}>{t("fieldIcon")}</span>
           <div className="flex flex-wrap gap-1.5">

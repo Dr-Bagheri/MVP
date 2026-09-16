@@ -75,6 +75,7 @@ function card(over: Partial<TaskCardRecord>): TaskCardRecord {
     created_by: "u-me", assignee_ids: [], label_ids: [], checklist_done: 0,
     checklist_total: 0, comment_count: 0, created_at: "2026-08-31T10:00:00Z",
     recurrence_id: null,
+    channel_id: null, channel_name: null,
     ...over,
   };
 }
@@ -142,6 +143,10 @@ vi.mock("@/api/client", () => {
     updateTaskColumn: (...a: unknown[]) => updateTaskColumn(...a), addTaskChecklistItem: vi.fn(),
     updateTaskChecklistItem: vi.fn(), deleteTaskChecklistItem: vi.fn(),
     addTaskComment: vi.fn(), setTaskLabel: vi.fn(), setTaskAssignee: vi.fn(),
+    /* 0227: the detail reads the org's rooms for an admin's room row — a
+       mock that omits a method the component calls does not fake "no
+       rooms", it throws, and the failure arrives as whatever rendered last */
+    chatChannels: async () => [], createTaskRoom: vi.fn(),
     createTaskLabel: vi.fn(), updateTaskLabel: vi.fn(), deleteTaskLabel: vi.fn(),
     /* the archive's delete (2026-09-05): the row leaves the fixture the way
        it leaves the server */

@@ -15,7 +15,7 @@
  *   · counts the board can render without N+1 reads — each card carries its
  *     checklist totals and comment count from one grouped query.
  */
-import { NotFoundError, ValidationError } from "./errors.ts";
+import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -50,6 +50,10 @@ export const TASK_EVENT_KINDS = [
      one before it. `detail.from` carries the previous instance's id, so the
      chain is walkable without a second table. */
   "renewed",
+  /* 0227: the card was put in a room, or taken out of one. `detail.room`
+     carries the room's name, because the row may not point at one by the
+     time the history is read. */
+  "room_set", "room_cleared",
 ] as const;
 export type TaskEventKind = (typeof TASK_EVENT_KINDS)[number];
 
@@ -157,6 +161,12 @@ export interface TaskCardRecord {
   /** set when this card is an instance of a repeating order (0186) — the
       board draws a small mark, and the detail reads the schedule itself */
   recurrence_id: string | null;
+  /** THE TASK'S ROOM (0227): the chat channel its people talk in, an admin's
+      to set; whoever is assigned is seated there by the database. The name
+      is resolved here so the rail can say it without a second fetch — a
+      room every member may read (0184), so it resolves for every reader. */
+  channel_id: string | null;
+  channel_name: string | null;
 }
 
 export interface TaskChecklistItemRecord {
@@ -196,6 +206,7 @@ const CARD_ROWS = `
          mt.id as meeting_id, mt.title as meeting_title,
          t.title, t.priority, t.labels, t.due_at, t.done_at, t.position,
          t.archived_at, t.created_by, t.created_at, t.recurrence_id,
+         t.channel_id, room.name as channel_name,
          coalesce(ch.total, 0) as checklist_total,
          coalesce(ch.done, 0) as checklist_done,
          coalesce(cm.n, 0) as comment_count,
@@ -203,6 +214,8 @@ const CARD_ROWS = `
          coalesce(lbl.ids, '{}') as label_ids
     from echo.task t
     left join echo.call c on c.id = t.call_id
+    /* the task's room (0227) — org-readable, so it resolves for every reader */
+    left join echo.chat_channel room on room.id = t.channel_id
     /* the newest live meeting on the record — LEFT and LATERAL so a task
        from a plain upload stays a task, and a second meeting re-using the
        call (rare, allowed) cannot double the card */
@@ -252,6 +265,8 @@ function toCard(row: Record<string, unknown>): TaskCardRecord {
     meeting_id: (row.meeting_id as string | null) ?? null,
     meeting_title: (row.meeting_title as string | null) ?? null,
     recurrence_id: (row.recurrence_id as string | null) ?? null,
+    channel_id: (row.channel_id as string | null) ?? null,
+    channel_name: (row.channel_name as string | null) ?? null,
     title: String(row.title),
     priority: row.priority as TaskPriority,
     labels: (row.labels as string[]) ?? [],
@@ -606,6 +621,12 @@ export function createTasksRepo(db: Db) {
     if ("topic_id" in patch) {
       put("topic_id", typeof patch.topic_id === "string" && patch.topic_id !== "" ? patch.topic_id : null);
     }
+    /* THE ROOM (0227): null clears, a string points. Who may is the
+       database's trigger, not a check here — a repo-side admin check would be
+       a second copy of the wall, one of which is never exercised. */
+    if ("channel_id" in patch) {
+      put("channel_id", typeof patch.channel_id === "string" && patch.channel_id !== "" ? patch.channel_id : null);
+    }
     if ("position" in patch) {
       const position = Number(patch.position);
       if (!Number.isFinite(position)) {
@@ -637,7 +658,7 @@ export function createTasksRepo(db: Db) {
          has already forgotten by the time it returns */
       const before = await tx.unsafe<Record<string, unknown>>(
         `select t.title, t.priority, t.done_at, t.archived_at, t.due_at,
-                c.name as column_name
+                c.name as column_name, t.channel_id
            from echo.task t
            left join echo.task_column c on c.id = t.column_id
           where t.id = $1`,
@@ -653,10 +674,10 @@ export function createTasksRepo(db: Db) {
        * came back twice (2026-09-06). Decision-first, 0132's shape: the
        * write decides, the code reads what it decided.
        */
-      const rows = await tx.unsafe<Record<string, unknown>>(
+      const rows = await roomRefusalTranslated(() => tx.unsafe<Record<string, unknown>>(
         `update echo.task set ${sets.join(", ")} where id = $1
          returning id, (done_at = now()) as done_now`, args,
-      );
+      ));
       if (!rows[0]) throw new NotFoundError();
 
       const was = before[0];
@@ -699,8 +720,88 @@ export function createTasksRepo(db: Db) {
         if (now === null && then !== null) await note(tx, id, "due_cleared");
         else if (now !== null) await note(tx, id, "due_set", { at: now });
       }
+      if ("channel_id" in patch) {
+        const next = typeof patch.channel_id === "string" && patch.channel_id !== "" ? patch.channel_id : null;
+        if (next !== ((was.channel_id as string | null) ?? null)) await noteRoom(tx, id, next);
+      }
     });
     return detail(identity, id);
+  }
+
+  /** the room's name into the history — the row may not point at it by the
+      time the history is read, so the name travels with the event */
+  async function noteRoom(tx: SqlTx, taskId: string, channelId: string | null): Promise<void> {
+    if (channelId === null) { await note(tx, taskId, "room_cleared"); return; }
+    const room = await tx.unsafe<Record<string, unknown>>(
+      `select name from echo.chat_channel where id = $1`, [channelId],
+    );
+    await note(tx, taskId, "room_set", { room: String(room[0]?.name ?? "") });
+  }
+
+  /**
+   * THE TRIGGER'S REFUSAL, TRANSLATED. db/0227's `tg_task_room_is_an_admins`
+   * raises 42501 with the hint `task_room_admin_only` when somebody who is
+   * not an admin moves the card's room. Every other 42501 on a write is a
+   * policy refusing a row (mapped to 404, its own reasoned choice); this one
+   * is a named rule about a field on a row the person may otherwise edit, so
+   * it is a 403 that says so.
+   */
+  async function roomRefusalTranslated<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      const pg = error as { code?: string; hint?: string } | null;
+      if (pg?.code === "42501" && pg.hint === "task_room_admin_only") {
+        throw new NotActivatedError("only an admin may put a task in a room", "forbidden");
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * A ROOM FOR THE TASK, IN ONE TRANSACTION (0227): the channel named after
+   * the card (or as asked), the maker seated in it (0184's rule: a room you
+   * made and are not in reads as a create that silently failed), and the
+   * card pointed at it — which is where the database seats everybody already
+   * assigned. The admin-only wall is the trigger's, and the name collision is
+   * the unique index's (chat's own sentence, re-spoken with the field named).
+   */
+  async function createRoom(identity: Identity, taskId: string, name?: unknown): Promise<TaskDetailRecord> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      const card = await tx.unsafe<Record<string, unknown>>(
+        `select title from echo.task where id = $1`, [taskId],
+      );
+      if (!card[0]) throw new NotFoundError();
+      const wanted = typeof name === "string" && name.trim() !== "" ? name.trim() : String(card[0].title);
+      const roomName = wanted.slice(0, 80);
+      let roomId: string;
+      try {
+        const created = await tx.unsafe<Record<string, unknown>>(
+          `insert into echo.chat_channel (org_id, name, created_by)
+           values (echo.actor_org_id(), $1, echo.actor_id())
+           returning id`,
+          [roomName],
+        );
+        roomId = String(created[0]!.id);
+      } catch (error) {
+        if ((error as { code?: string }).code === "23505") {
+          throw new ConflictError("a channel with that name exists", {
+            code: "chat_name_taken", params: { name: roomName },
+          });
+        }
+        throw error;
+      }
+      await tx.unsafe(
+        `insert into echo.chat_channel_member (channel_id, user_id, org_id)
+         values ($1, echo.actor_id(), echo.actor_org_id()) on conflict do nothing`,
+        [roomId],
+      );
+      await roomRefusalTranslated(() => tx.unsafe(
+        `update echo.task set channel_id = $2, updated_at = now() where id = $1`, [taskId, roomId],
+      ));
+      await note(tx, taskId, "room_set", { room: roomName });
+    });
+    return detail(identity, taskId);
   }
 
   async function addChecklistItem(identity: Identity, taskId: string, label: unknown): Promise<TaskChecklistItemRecord> {
@@ -1279,7 +1380,7 @@ export function createTasksRepo(db: Db) {
     addChecklistItem, updateChecklistItem, deleteChecklistItem,
     addComment, setAssigned: setAssignedWithNote, createColumn, updateColumn, createTopic, updateTopic,
     people, labels, createLabel, updateLabel, deleteLabel, setLabel, events,
-    setRecurrence,
+    setRecurrence, createRoom,
   };
 }
 

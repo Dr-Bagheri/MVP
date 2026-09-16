@@ -52,6 +52,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/projects/folders", "db/0226 — the projects page's second row is its FOLDERS; the web reads them through api.projectFolders and the strip is empty without this route"],
   ["POST", "/v1/projects/folders", "db/0226 — the strip's dashed `+` makes a folder here (an admin's act by policy)"],
   ["PATCH", "/v1/projects/folders/:id", "db/0226 — a chip's ⋯ renames or archives through this route; archived, never deleted"],
+  ["POST", "/v1/tasks/:id/room", "db/0227 — a room for the task, made and pointed at in one transaction; an admin's act by trigger, and whoever is assigned is seated by the database"],
   ["POST", "/v1/meetings/:id/attended", "db/0202 — who was actually in the room, stamped by themselves"],
   ["GET", "/v1/calls/:id/translation", "db/0201 — the transcript's translation as rows, prepared by the transcriber (C4, 2026-09-06)"],
   ["GET", "/v1/calls/:id/speakers", "SPEC §The transcript — resolving a segment's speaker_id"],

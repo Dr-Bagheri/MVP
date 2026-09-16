@@ -219,6 +219,41 @@ describe("the sub-menu flyout", () => {
     expect(onChild).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
   });
+
+  /* THE FLYOUT LIVES BESIDE ITS PARENT, NOT INSIDE IT (user report,
+     2026-09-16: "it goes behind the sidebar"). Rendered inside the parent
+     panel it is clipped to that panel's box — the parent's wrapper is fixed
+     and transformed, so it is the containing block of a fixed flyout, and
+     its overflow-x-hidden cuts everything past its edge; on production only
+     the 12px overlap was visible and the rest read as "behind the sidebar".
+     jsdom lays nothing out, so the clip cannot be measured here; what CAN be
+     asserted is the structure the clip depends on: the flyout is a menu the
+     parent menu does not contain. */
+  it("the flyout is portaled out of its parent panel, so the parent's overflow cannot clip it", async () => {
+    render(
+      <KebabMenu
+        label="menu"
+        items={[{
+          key: "lang",
+          label: "Language",
+          icon: dot,
+          sub: [{ key: "fa", label: "Persian", icon: null, onSelect: vi.fn() }],
+        }]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
+    const menus = screen.getAllByRole("menu");
+    expect(menus).toHaveLength(2);
+    const [parent, flyout] = menus;
+    expect(flyout).toContainElement(screen.getByRole("menuitem", { name: "Persian" }));
+    expect(parent).not.toContainElement(flyout!);
+    /* and both panels size to their words under one rule */
+    for (const panel of menus) {
+      expect(panel).toHaveClass("w-max", "min-w-[9rem]");
+      expect(panel.className).not.toMatch(/min-w-\[13\.5rem\]/);
+    }
+  });
 });
 
 describe("the tile face opens on hover", () => {

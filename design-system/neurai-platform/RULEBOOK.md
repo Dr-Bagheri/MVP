@@ -160,7 +160,7 @@ spelled by hand).
 | Card | `.card` (a page block) · `.card-row` (a card in a list) · `.well` (a row inside a card) · `.tile` is a card; a row of tiles says `tile-row` | `surface.guard`, `tileRow.guard` |
 | Dialog / detail | `Overlay`, `ConfirmDialog`, `DetailPanel`; body rhythm from `panelStyle` (`DIALOG_BODY`, `PANEL_SECTIONS`, `RAIL_SECTIONS`) | `dialogSections.guard`, `detailPanel.guard`, `nativeDialog.guard` |
 | Board | `board/boardStyle.tsx` — columns are equal shares of the lane with a 14rem floor | `board.guard` |
-| Menu | `KebabMenu` / `ContextMenu` (`components/rowActions.tsx`) | `submenu.guard` |
+| Menu | `KebabMenu` / `ContextMenu` (`components/rowActions.tsx`) — the panel is as wide as its longest entry (`w-max`, a 9rem floor, a 20rem ceiling; user, 2026-09-16: "too long, make them adjustable based on the text"), and a flyout is PORTALED beside its parent, never rendered inside it (the parent's overflow clipped it to a 12px sliver) | `submenu.guard`, `rowActions.menu.test` |
 | Icon | `components/icons.tsx`, 12 / 14 / 16 / 18 | `icons.guard` |
 | Copy under a title | none — a name, and at most one sentence when it matters | `copy.guard` |
 

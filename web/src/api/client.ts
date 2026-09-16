@@ -1859,9 +1859,20 @@ export const api = {
     title: string; description: string; priority: TaskPriority; due_at: string | null;
     column_id: string; topic_id: string | null; position: number; labels: string[];
     done: boolean; archived: boolean;
+    /** 0227: the task's room — null clears; an admin's to set (the server's trigger) */
+    channel_id: string | null;
   }>): Promise<TaskDetailRecord> {
     return bff(`/api/tasks/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  /** 0227: a room for the task, named after it unless asked — made, the maker
+      seated, and the card pointed at it in one core transaction; whoever is
+      assigned is seated by the database. An admin's act (403 otherwise). */
+  async createTaskRoom(taskId: string, name?: string): Promise<TaskDetailRecord> {
+    return bff(`/api/tasks/${encodeURIComponent(taskId)}/room`, {
+      method: "POST", body: JSON.stringify(name === undefined ? {} : { name }),
+      headers: { "content-type": "application/json" },
     });
   },
   /** attach or replace a task's repeating schedule (0186); null removes it */

@@ -7,7 +7,7 @@ import { Select } from "@/components/Select";
 import { Avatar } from "@/components/Avatar";
 import { api } from "@/api/client";
 import type {
-  OrgPersonRecord, TaskColumnRecord, TaskDetailRecord, TaskLabelRecord,
+  ChatChannelRecord, OrgPersonRecord, TaskColumnRecord, TaskDetailRecord, TaskLabelRecord,
   TaskPriority, TaskTopicRecord,
 } from "@/api/types";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
@@ -16,7 +16,7 @@ import {
   TONE_CHIP, TONE_DOT, relativeTime,
 } from "./TaskDialogs";
 import { Overlay } from "../Overlay";
-import { BODY_HEADING, DIALOG_BODY, RAIL_LABEL, SECTION_EMPTY, TAB_BAR, tabClass } from "./panelStyle";
+import { BODY_HEADING, DIALOG_BODY, RAIL_EMPTY, RAIL_LABEL, RAIL_VALUE, SECTION_EMPTY, TAB_BAR, tabClass } from "./panelStyle";
 import { DetailPanel } from "../DetailPanel";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
@@ -36,12 +36,15 @@ import { notifyError } from "@/lib/notify";
  * The rail's fields are LIVE controls, not a read-out: this is where a card
  * is actually edited, which is why the reference puts them there.
  */
-export function TaskDetail({ task, columns, topics, labels, people, onClose, onChanged, onLabelsChanged }: {
+export function TaskDetail({ task, columns, topics, labels, people, isAdmin = false, onClose, onChanged, onLabelsChanged }: {
   task: TaskDetailRecord;
   columns: TaskColumnRecord[];
   topics: TaskTopicRecord[];
   labels: TaskLabelRecord[];
   people: OrgPersonRecord[];
+  /** the room row is an admin's control and everybody else's reading
+      (db/0227's trigger) — ABSENT rather than refused for a member */
+  isAdmin?: boolean;
   onClose: () => void;
   onChanged: () => void;
   onLabelsChanged: () => void;
@@ -91,7 +94,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
     const key = `event_${kind}`;
     return t(key as "event_done", {
       from: detail.from ?? "", to: detail.to ?? "",
-      label: detail.label ?? "", person: detail.person ?? "",
+      label: detail.label ?? "", person: detail.person ?? "", room: detail.room ?? "",
     });
   };
 
@@ -199,6 +202,28 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   void api.setTaskAssignee(task.id, userId, on).then(onChanged).catch(() => fail());
                 }}
               />
+            </div>
+
+            {/* THE ROOM (db/0227): the chat room the card's people talk in.
+                An admin picks one of the org's rooms or makes one named
+                after the card; everybody assigned is seated in it by the
+                database, no invitation. A member reads the name as a door
+                into the room — the control is ABSENT for them rather than
+                offered and refused (the trigger would answer 403). */}
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldRoom")}</span>
+              {isAdmin ? (
+                <RoomRow task={task} onChanged={onChanged} onFailed={fail} />
+              ) : task.channel_id === null ? (
+                <span className={RAIL_EMPTY}>{t("noRoom")}</span>
+              ) : (
+                <Link
+                  href={`/chat?room=${encodeURIComponent(task.channel_id)}`}
+                  className={`${RAIL_VALUE} hover:text-accent`}
+                >
+                  {task.channel_name ?? t("openRoom")}
+                </Link>
+              )}
             </div>
 
             <div>
@@ -589,6 +614,76 @@ export { TONE_CHIP, TONE_DOT };
  *     produce anything and still reads "repeats" is the card making a promise
  *     the server has already stopped keeping.
  */
+/**
+ * THE ROOM ROW, for an admin (db/0227). The org's live rooms in the kit's
+ * dropdown with «no room» as the first answer, and beside it «new room»,
+ * which makes a channel named after the card and points the card at it in
+ * one server transaction. Clearing is a PATCH with null. The list is read
+ * when the row mounts — an admin opening a card reads the rooms once, and
+ * a member never does.
+ */
+function RoomRow({ task, onChanged, onFailed }: {
+  task: TaskDetailRecord;
+  onChanged: () => void;
+  onFailed: () => void;
+}) {
+  const t = useTranslations("tasks");
+  const [rooms, setRooms] = useState<ChatChannelRecord[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void api.chatChannels()
+      .then((list) => { if (live) setRooms(list.filter((r) => r.archived_at === null)); })
+      .catch(() => { if (live) setRooms([]); });
+    return () => { live = false; };
+  }, []);
+  /* the card's own room is offered even when the list has not landed, so
+     the control never reads «no room» over a card that has one */
+  const options = [
+    { value: "", label: t("noRoom") },
+    ...(rooms ?? []).map((room) => ({ value: room.id, label: room.name })),
+    ...(task.channel_id !== null && !(rooms ?? []).some((r) => r.id === task.channel_id)
+      ? [{ value: task.channel_id, label: task.channel_name ?? t("openRoom") }]
+      : []),
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      <Select
+        value={task.channel_id ?? ""}
+        onChange={(v) => {
+          if (v === (task.channel_id ?? "")) return;
+          void api.updateTask(task.id, { channel_id: v === "" ? null : v }).then(onChanged).catch(onFailed);
+        }}
+        ariaLabel={t("fieldRoom")}
+        options={options}
+        disabled={busy}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="btn btn-sm btn-secondary"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void api.createTaskRoom(task.id).then(onChanged).catch(onFailed).finally(() => setBusy(false));
+          }}
+        >
+          <IconPlus width={14} height={14} />
+          {t("roomNew")}
+        </button>
+        {task.channel_id !== null ? (
+          <Link
+            href={`/chat?room=${encodeURIComponent(task.channel_id)}`}
+            className="btn btn-sm btn-ghost"
+          >
+            {t("openRoom")}
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ScheduleRow({ task, onChanged, onFailed }: {
   task: TaskDetailRecord;
   onChanged: () => void;

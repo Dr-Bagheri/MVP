@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { Projects } from "./Projects";
+import type { ProjectReader } from "./projectReach";
 
 /**
  * Who is reading, resolved once and handed to both project surfaces.
@@ -20,22 +21,25 @@ import { Projects } from "./Projects";
  * appears late is a moment of surprise; a button that appears wrongly is a
  * refusal the person has to interpret.
  */
-function useReader(): { meId: string | null; isAdmin: boolean } {
-  const [reader, setReader] = useState<{ meId: string | null; isAdmin: boolean }>({
-    meId: null, isAdmin: false,
+function useReader(): ProjectReader {
+  const [reader, setReader] = useState<ProjectReader>({
+    meId: null, isAdmin: false, isOwner: false,
   });
   useEffect(() => {
     void api.me()
       .then((me) => setReader({
         meId: me?.id ?? null,
         isAdmin: me?.role === "admin" || me?.role === "owner",
+        /* db/0227: the owner outranks every author, so the owner is shown
+           every project's edits and an admin only their own */
+        isOwner: me?.role === "owner",
       }))
-      .catch(() => setReader({ meId: null, isAdmin: false }));
+      .catch(() => setReader({ meId: null, isAdmin: false, isOwner: false }));
   }, []);
   return reader;
 }
 
 export function ProjectsScreen() {
-  const { meId, isAdmin } = useReader();
-  return <Projects meId={meId} isAdmin={isAdmin} />;
+  const reader = useReader();
+  return <Projects reader={reader} />;
 }

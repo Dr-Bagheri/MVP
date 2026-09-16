@@ -3493,6 +3493,17 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await tasks.events(identity, id));
   });
 
+  /* 0227: a room for the task — the channel, the maker's seat and the
+     card's pointer in one transaction; the trigger walls it to an admin and
+     seats whoever is already assigned */
+  app.post("/v1/tasks/:id/room", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: unknown };
+    return reply.send(await tasks.createRoom(identity, id, body.name));
+  });
+
   app.put("/v1/tasks/:id/assignees/:userId", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

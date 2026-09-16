@@ -76,18 +76,34 @@ const DropdownMenuSubTrigger = React.forwardRef<
 DropdownMenuSubTrigger.displayName =
   DropdownMenuPrimitive.SubTrigger.displayName
 
+/*
+ * THE FLYOUT IS PORTALED (user report, 2026-09-16: "it goes behind the
+ * sidebar"). It was not: Radix positions a SubContent `fixed`, and the
+ * shadcn default renders it INSIDE the parent Content — whose wrapper is
+ * `fixed` with a `transform`, which makes that wrapper the containing block
+ * of every fixed descendant, and whose own `overflow-x-hidden` then CLIPS
+ * the flyout to the parent's box. On a Persian page the flyout opens to the
+ * left, 12px into its parent (rowActions' `sideOffset={-12}`), so exactly
+ * that 12px sliver was visible and everything past the parent's edge was
+ * gone — measured on production: hit-tests inside the flyout's own rect
+ * landed on the assistant sidebar's thread, which is what "behind the
+ * sidebar" looked like. A portal puts the flyout beside its parent at body
+ * level, where nothing clips it and the later sibling wins the stack.
+ */
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
 >(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.SubContent
-    ref={ref}
-    className={cn(
-      "z-50 min-w-[8rem] overflow-hidden glass-chrome rounded-md p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=open]:duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 origin-[--radix-dropdown-menu-content-transform-origin]",
-      className
-    )}
-    {...props}
-  />
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.SubContent
+      ref={ref}
+      className={cn(
+        "z-50 min-w-[8rem] overflow-hidden glass-chrome rounded-md p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=open]:duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 origin-[--radix-dropdown-menu-content-transform-origin]",
+        className
+      )}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
 ))
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName

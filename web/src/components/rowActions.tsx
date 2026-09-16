@@ -247,7 +247,7 @@ function MenuEntry({ item }: { item: KebabItem }) {
               users get it too. */}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent
-          className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+          className="w-max min-w-[9rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
           sideOffset={-12}
         >
           <MenuBody items={item.sub} />
@@ -339,7 +339,15 @@ export function KebabMenu({
         /* the row underneath must not also receive the press that chose a
            menu item — a table row is usually clickable itself */
         onClick={(e) => e.stopPropagation()}
-        className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+        /* THE WORDS SET THE WIDTH (user directive, 2026-09-16: "the kebab
+           menus are too long, make them a little smaller and adjustable based
+           on the text inside them"). It was a 13.5rem floor, which every
+           three-word menu had to fill with air; `w-max` sizes the panel to
+           its longest entry, the floor is what a two-word menu needs to be
+           read as a menu, and the ceiling keeps a long title from running off
+           a phone. The flyout wears the same three, so a sub-menu cannot be a
+           different width from the menu that opened it. */
+        className="w-max min-w-[9rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
       >
         <MenuBody items={items} />
       </DropdownMenuContent>

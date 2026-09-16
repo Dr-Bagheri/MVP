@@ -33,6 +33,7 @@ import {
   IconPeople3, IconPlus, IconUser,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
+import { canEditProject, isMyProject, type ProjectReader } from "./projectReach";
 import { dayKeyOf, digits, formatDate, monthGridAt, personName, personPhoto } from "@/lib/format";
 
 /** what `api.taskBoard()` answers — the shape this screen reads it for */
@@ -94,7 +95,8 @@ function progressOf(p: ProjectRecord): number | null {
   return p.task_total === 0 ? null : p.task_done / p.task_total;
 }
 
-export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: boolean }) {
+export function Projects({ reader }: { reader: ProjectReader }) {
+  const { meId, isAdmin } = reader;
   const t = useTranslations("projects");
   const tTasks = useTranslations("tasks");
   const tCommon = useTranslations("common");
@@ -102,6 +104,10 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
      below is the only way from the icon to the write, and only an admin is
      ever handed the icon (0191) */
   const [condemned, setCondemned] = useState<ProjectRecord | null>(null);
+  /* db/0227: an admin edits the projects they made (the owner all of them);
+     the controls follow the wall, and the server stays the wall */
+  const deleteFor = (p: ProjectRecord): (() => void) | undefined =>
+    canEditProject(p, reader) ? () => setCondemned(p) : undefined;
   const locale = useLocale();
   const router = useRouter();
   /* ?project= deep link (R18): the panel has an address, the way ?task= does */
@@ -219,7 +225,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
     const today = dayKeyOf(new Date());
     const list = rows.filter((p) => {
       if (folderFilter !== "all" && p.folder_id !== folderFilter) return false;
-      if (scope === "mine" && !(meId !== null && p.member_ids.includes(meId))) return false;
+      if (scope === "mine" && !isMyProject(p, meId)) return false;
       if (!dueToday) return true;
       /* «مهلت امروز» on a project means UNFINISHED work due today. A done
          card that was due this morning is not something anybody needs to be
@@ -397,7 +403,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           isAdmin={isAdmin}
           onAdd={() => setCreating(true)}
           onMove={requestMove}
-          onDelete={isAdmin ? setCondemned : undefined}
+          deleteFor={deleteFor}
         />
       ) : shown.length === 0 ? (
         /* the two nothings said apart: an organisation with no projects is
@@ -407,6 +413,12 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           <p className="text-sm font-medium text-fg">
             {scope === "all" && !dueToday && view !== "archive" ? t("emptyTitle") : t("emptyFiltered")}
           </p>
+          {/* WHICH nothing (2026-09-16): «my projects» on a seat that made,
+              leads and is on none reads as a broken toggle unless the empty
+              state says what «mine» means */}
+          {scope === "mine" && !dueToday && view !== "archive" ? (
+            <p className="max-w-sm text-xs text-fg-muted">{t("emptyMine")}</p>
+          ) : null}
           {scope === "all" && !dueToday && view !== "archive" ? (
             <p className="max-w-sm text-xs text-fg-muted">
               {isAdmin ? t("emptyBody") : t("emptyBodyMember")}
@@ -415,20 +427,20 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         </div>
       ) : view === "list" ? (
         <ProjectList projects={shown} cardsOf={cardsOf} people={people} locale={locale}
-          onDelete={isAdmin ? setCondemned : undefined} />
+          deleteFor={deleteFor} />
       ) : view === "calendar" ? (
         <ProjectCalendar projects={shown} cardsOf={cardsOf} locale={locale} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((p) => (
             <ProjectCard key={p.id} project={p} people={people} locale={locale}
-              onDelete={isAdmin ? () => setCondemned(p) : undefined} />
+              onDelete={deleteFor(p)} />
           ))}
         </div>
       )}
 
       {openId !== null ? (
-        <ProjectDetail id={openId} meId={meId} isAdmin={isAdmin} onClose={() => router.replace("/projects")} />
+        <ProjectDetail id={openId} reader={reader} onClose={() => router.replace("/projects")} />
       ) : null}
 
       {/* THE CARD'S DELETE, in the platform's one dialog, with the detail
@@ -499,7 +511,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
  * tasks stay. The derived column then reads the target, which is what the
  * hand asked for.
  */
-function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd, onMove, onDelete }: {
+function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd, onMove, deleteFor }: {
   columns: TaskColumnRecord[];
   projects: ProjectRecord[];
   columnOf: (p: ProjectRecord) => string | null;
@@ -508,8 +520,8 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
   isAdmin: boolean;
   onAdd: () => void;
   onMove: (project: ProjectRecord, columnId: string) => void;
-  /** the card's delete, for an admin; absent for everybody else */
-  onDelete?: (project: ProjectRecord) => void;
+  /** the card's delete, per project — undefined where the reader may not (db/0227) */
+  deleteFor: (project: ProjectRecord) => (() => void) | undefined;
 }) {
   const t = useTranslations("projects");
   /* R17 says this board and the task board are ONE board. That has to reach
@@ -576,7 +588,7 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
                     if (over !== null && over !== col.id) onMove(p, over);
                   }}
                   onCancel={() => setLifted(null)}
-                  onDelete={onDelete === undefined ? undefined : () => onDelete(p)}
+                  onDelete={deleteFor(p)}
                 />
               ))}
               {/* THE WAY IN LIVES IN THE COLUMN (user directive, 2026-09-05):
@@ -616,13 +628,13 @@ function DraggableProjectCard({ project, people, locale, carried, onLift, onOver
 }
 
 /** the board's list view, one row per project */
-function ProjectList({ projects, cardsOf, people, locale, onDelete }: {
+function ProjectList({ projects, cardsOf, people, locale, deleteFor }: {
   projects: ProjectRecord[];
   cardsOf: (p: ProjectRecord) => TaskCardRecord[];
   people: OrgPersonRecord[];
   locale: string;
-  /** the row's delete, for an admin; absent for everybody else */
-  onDelete?: (project: ProjectRecord) => void;
+  /** the row's delete, per project — undefined where the reader may not (db/0227) */
+  deleteFor: (project: ProjectRecord) => (() => void) | undefined;
 }) {
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
@@ -674,8 +686,8 @@ function ProjectList({ projects, cardsOf, people, locale, onDelete }: {
             {/* the same control the board's card wears (2026-09-15): a
                 project is deleted from the thing that IS the project, in
                 every view that shows one */}
-            {onDelete !== undefined ? (
-              <BoardCardDelete label={tCommon("delete")} onClick={() => onDelete(p)} />
+            {deleteFor(p) !== undefined ? (
+              <BoardCardDelete label={tCommon("delete")} onClick={deleteFor(p)!} />
             ) : null}
           </Link>
         );
