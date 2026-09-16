@@ -698,6 +698,32 @@ test and by the verify-red mutations of the round.
 
 ---
 
+## 7n. Deployment record — 2026-09-16, last (7c2673e: web only — the attendees dropdown, the circle, the composer's row)
+
+No migration and no core change: web on Vercel from the push (`Vercel – mvp`
+success on the commit status). **In the user's Chrome, signed in, at 1280.**
+`/fa/meetings`, «جلسه جدید» pressed: the dialog carries TWO comboboxes,
+«موضوع (پوشه)» reading «بدون موضوع» and «شرکت‌کنندگان» reading «دکتر
+باقری» — both `.input`, both **37.6px** tall on an **11px** corner, and the
+attendees box has ZERO `aria-pressed` rows of its own (it was nine an hour
+earlier, which is the shape the directive replaced). Opening the attendees
+control: a listbox with `aria-multiselectable="true"` and ten options, the
+first «دکتر باقری — میزبان (شما)» carrying `aria-disabled="true"`. Pressing
+the first colleague: the panel **stayed open**, that row went
+`aria-selected="true"` with a check glyph, and the closed control then read
+«دکتر باقری، Behnaaz Behjati». Escaped without creating anything.
+`/fa/management/general`: the logo computes `border-radius: 9999px` at
+45×45 — the profile photo's own numbers, and the class list reads
+`rounded-full`. The assistant sidebar's composer row has exactly two
+children: `type="submit"` with the enter glyph at the row's start (left 340
+on the RTL row) and the mic with `ms-auto` at its end (left 18), with no
+`[data-icon="plus"]` anywhere in the row.
+
+NOT pressed live: creating the meeting (a write on the organisation's data),
+and the mic itself (it opens the microphone).
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

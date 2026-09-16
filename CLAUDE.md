@@ -7540,3 +7540,74 @@ sessions) for the cross-session narrative.
   project, a meeting with attendees, a photo or logo) — pinned by the tests.
   db 226 migrations · core 1887 tests (1 pre-existing red, history ZWNJ) ·
   web 1686 tests + gate + sweep.
+- 2026-09-16 (last — THE ATTENDEES ROW BECOMES THE KIT'S DROPDOWN, THE LOGO
+  BECOMES A CIRCLE, AND THE SIDEBAR COMPOSER KEEPS THE MIC INSTEAD OF THE
+  PLUS; commit 7c2673e; web on Vercel, nothing in core or db): three items
+  from three screenshots, the first correcting the shape the attendees row
+  had shipped in an hour earlier.
+  **ONE VALUE OR MANY, SAME CONTROL.** "Make this one a dropdown as well like
+  the ones above, with the same dropdown style." The attendees row had been
+  an always-open box of rows sitting under the folder DROPDOWN — two
+  people-pickers in one form, one a list and one a menu. `components/Select`
+  takes many values now, through a UNION in its props (`value`/`onChange` or
+  `values`/`onToggle` with an optional `summary`, never both — a multi-select
+  that quietly took the first of two answers is unrepresentable). With many:
+  the panel STAYS OPEN on a press (three people through a menu that shuts
+  each time is three round trips for one decision), the listbox says
+  `aria-multiselectable`, a chosen row carries a check, and the closed
+  control reads the chosen labels or the caller's summary. It lives in the
+  kit rather than in a second panel because that file's own header lists the
+  four things a hand-rolled one has to re-learn — Radix's dialog rule, the
+  clipping ancestor, the flip at the viewport edge, the arrow keys — and a
+  people-picker inside a modal meets all four.
+  **The host is a row that cannot be chosen** (`SelectOption.disabled`, which
+  exists for exactly this): hiding them answers "am I on this?" with silence,
+  and a toggle offers a choice the server ignores (0202). The closed control
+  names everyone who is coming, host first, because the question the field
+  answers is who will be in the room. A guest keeps its own box under the
+  dropdown — a name that does not exist yet cannot be a row in a list of
+  people who do — with the typed names as chips beside it.
+  **The logo is a circle** ("make the image place a circle like the profile
+  image holder"): after the morning's round the two were already one control
+  at one size, and the corner was the last thing telling a reader they were
+  two features.
+  **The sidebar composer is the send key and the mic, and nothing else**
+  ("remove the plus from the side menu ai assistant and put the mic there
+  instead"): the mic took the menu's `ms-auto`, so the two keys sit at the
+  two ends of the row. `ComposerMenu` had ONE consumer and now has none, so
+  it is deleted whole (118 lines) with its two copy keys — a producer with no
+  consumer, and this repo deletes those rather than leaving them. The cost is
+  said rather than discovered: «گفت‌وگوی تازه» survives in the panel's header
+  (SessionMenu's own `onNew`, the same function), and the connectors shortcut
+  does not — that door is Home's sidebar row and Settings · اتصال‌ها.
+  **The loading guard fired on the new field and got an entry, not a
+  rewrite.** Its one match is `me === null ? null : personName(me, locale)` —
+  the host's name while the identity read is in flight. The section's frame
+  is fully drawn (the control, its border, its chevron); what is missing is
+  one name in a closed label, and a skeleton there would be the word greyed
+  rather than a frame. `me === null` is also both states this product keeps
+  apart. Written down as a named entry with that reasoning, because the same
+  branch spelled `me && …` would be dodging the check rather than answering
+  it.
+  Verify-red by mutation on nine behaviours, each red on its own test: the
+  panel shutting on every pick, the listbox not saying it takes several, a
+  chosen row reported unselected, the caller's summary ignored, the host
+  offered as a choice, the closed control naming only the colleagues, the
+  dropdown replaced, the logo square again, the mic left where it was.
+  Verified: web tsc 0; 1692 web tests in 235 files (the one red is the
+  recorded `SpeakersDirectory.account` load flake, green alone); every guard
+  and the keys check; the build gate alone; the encoding sweep (1471 files).
+  Nothing in core or db.
+  **Proven on production in the user's Chrome** (runbook 7n): the new-meeting
+  dialog carries TWO comboboxes — «موضوع (پوشه)» and «شرکت‌کنندگان» — at the
+  same 37.6px on the same 11px corner, both `.input`, and zero rows in an
+  open box; the attendees list is `aria-multiselectable` with ten options,
+  the first «دکتر باقری — میزبان (شما)» carrying `aria-disabled`; pressing a
+  colleague left the panel OPEN with that row `aria-selected` and checked,
+  and the closed control then read «دکتر باقری، Behnaaz Behjati». The org
+  logo computes `border-radius: 9999px` at 45×45 — the profile photo's own
+  numbers. The sidebar composer's row has exactly two children: the submit
+  key (enter glyph) at the row's start and the mic with `ms-auto` at its end,
+  with no `+` glyph anywhere in it.
+  db 226 migrations · core 1887 tests (1 pre-existing red, history ZWNJ) ·
+  web 1692 tests + gate + sweep.
