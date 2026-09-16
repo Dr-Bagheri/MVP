@@ -583,6 +583,68 @@ the tool's click did not hold the Radix panel open for a read; the
 
 ---
 
+## 7k. Deployment record — 2026-09-16, later (65a3f30: web only — the buttons take the rail's box, the meetings sort joins row one and the search becomes a key, Help leaves the rail, «ذخیره», the voice picker creates nobody)
+
+No migration and no core change: web on Vercel from the push (`Vercel – mvp`
+success on the commit status). **In the user's Chrome, signed in, at 1280
+(root 15.06)**, the meetings page: row one is TWO grey rails at y=72 — the
+slices «گذشته / پیش‌رو / آرشیو» and the sort, a `tablist` labelled
+«مرتب‌سازی» with `data-key` date · people · status — and the lit pill in
+either reads 32px tall, a 16px corner, weight 500; the two buttons at the
+row's end, «جلسه جدید» (`btn-primary`) and «جلسه پیش‌رو» (`btn-secondary`),
+sit at y=72 at **39.5px, 16px, 500** — the pill plus the track's padding
+(34 + 8 at that root = 32 + 7.5), which is the one family the ruling asked
+for (they had measured 35.8 / 11px / 600 beside a 39.5 rail). Row two at
+y=122: the strip's tinted rail — «همه جلسات ۰» lit (32 / 16px) and the
+dashed `+` «موضوع جدید» (26.4px on an 8px corner) — inside a
+`flex flex-wrap items-center justify-between` row, and at the row's other
+end ONE tinted track: «فهرست» (pressed), «تقویم», and the search key
+«جست‌وجوی جلسه» (`aria-pressed` false), each 32px. Pressing the key:
+`aria-pressed` true, ONE `<input>` inside that same tinted track, focused,
+32px tall and 181px wide in a 12rem wrapper, the track 114 → 295px. Typing
+«جلسه» → the field reads it. Pressing the key again → `aria-pressed` false
+and ZERO inputs; pressing it once more → the field comes back EMPTY (the
+query cleared on close — the assertion that matters). The rail reads
+«خانه · جلسات · پروژه‌ها · تسک‌ها · مدیریت · تنظیمات» and no «راهنما».
+Management · General: the labels in document order «نشان سازمان», «نام
+سازمان», «ایمیل», «وب‌سایت», «زبان پیش‌فرض سازمان»; the page's only buttons
+are «فارسی» and **«ذخیره»** (39.5 / 16px / 500); the rendered-text walk
+finds no «ذخیرهٔ تغییرات» (with the catalogue-only control at 0). NOT read
+live: the search narrowing rows (this organisation has no meeting, so the
+empty state stood under the field) and the voice picker (no record with
+speakers on it) — both pinned by their unit tests. Probe note: a synchronous
+read in the same JS call as a `.click()` sees the state BEFORE React's
+flush (the key read "not pressed, no input"); the read in the next call
+saw the field. Read after the click, never beside it.
+
+---
+
+## 7l. Deployment record — 2026-09-16, last (035926b: web only — the projects page takes the board's two rows)
+
+No migration and no core change: web on Vercel from the push (`Vercel – mvp`
+success on the commit status; the deploy marker is the strip itself, which
+the page did not have before). **In the user's Chrome, signed in, at 1280
+(root 15.06), /fa/projects**: row one is THREE grey rails at y=72 inside one
+wrap row — the views (231px wide), the sorts (270px), and the toggles
+(212px) holding «پروژه‌های من» and «مهلت امروز», each 32px, `aria-pressed`
+false at rest; ZERO `.btn-primary` above y=150 (the row-one create is gone);
+the kanban's four columns keep their «افزودن پروژه» rows. Row two at y=122:
+the strip's tinted rail, **316px wide** in a `justify-between` wrap row (its
+content, not the column): «همه پروژه‌ها ۱» lit, the chip «📁 دیتابیس صوتی»
+carrying a ⋯ labelled «گزینه‌ها», and the dashed `+` «پروژهٔ جدید» (26.4px).
+The ⋯ opens two entries, «ویرایش» and «حذف» (the second in the danger
+coat); «ویرایش» opened the project's own panel — a `role="dialog"` headed
+«دیتابیس صوتی» at **`/fa/projects?project=30ae8ef4-…`** — and Escape closed
+it back to `/fa/projects`. Pressing «پروژه‌های من»: `aria-pressed` true,
+the pill lifted (`bg-surface` + `shadow-card`), the one card stayed (the
+reader is on that project) while the strip's count stayed «۱» (the strip
+lists every project; the toggle filters the cards); pressed again → false.
+NOT pressed live: «حذف» (it deletes a real project) and the `+` (it opens
+the create dialog; pinned by the unit test as opening the dialog and not
+the inline box).
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

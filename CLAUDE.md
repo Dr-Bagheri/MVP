@@ -7280,3 +7280,146 @@ sessions) for the cross-session narrative.
   not hold the panel open) — pinned by the unit test.
   db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
   web 1664 tests + gate + sweep.
+- 2026-09-16 (last — THE BUTTONS TAKE THE RAIL'S BOX, THE MEETINGS SORT
+  JOINS ROW ONE AND THE SEARCH BECOMES A KEY, HELP LEAVES THE RAIL, «ذخیره»
+  EVERYWHERE, AND NAMING A VOICE CREATES NOBODY; commit 65a3f30; web on
+  Vercel, nothing in core or db): six items from three screenshots.
+  **"They are far apart" was a number.** Measured on the meetings page at
+  root 15.06 before anything was written: the sub-menu rail 39.5px tall on
+  a 16px corner with 500-weight pills; the two buttons beside it 35.8px on
+  an 11px corner at weight 600 — two families on one line. `.btn` is the
+  rail's own box now: `controlHeight` is written as `34 + 8` (the pill plus
+  the track's padding, a formula so the two cannot drift), the corner is
+  the rail's `rounded-xl`, the weight the pill's `font-medium`; `.btn-sm`
+  wears the same corner. Every page button follows — save, new meeting,
+  schedule, start, the dialogs' add-task and add-project — and the dashed
+  `+` and the icon squares do not, as the user said. The 2026-09-02 "not a
+  pill" ruling still holds (16px on a 42px box is a rounded rectangle) and
+  the reference's 38 is recorded as superseded by the user rather than
+  corrected back.
+  **The meetings toolbar is two rows.** The sort («تاریخ / شرکت‌کنندگان /
+  وضعیت» + the direction key) is a second GREY rail in row one, in row one's
+  pill — "with the same style of the first row items" — and the old second
+  row (tinted chips, a search box, the view switch) is gone. The topic strip
+  is row two, and `TopicStrip` grew an `end` slot: one tinted track holding
+  the list/calendar keys, a divider, and a SEARCH KEY that is a glyph until
+  pressed and then a field that grows into the row beside it (a width
+  transition on the wrapper, the input mounted only while open). Closing
+  the key CLEARS the query, and that is the assertion that matters: a
+  filter nobody can see is a list that lies. The search test is structural
+  — no field before the press, the field inside the key's own track, the
+  track in the strip's row — because jsdom lays nothing out.
+  **Help left the rail** (the route and the trail entry stay: a route is
+  cheaper than a broken bookmark); `nav.test` asserts the absence across
+  the whole rail, not only the utility group. **«ذخیرهٔ تغییرات» is «ذخیره»**
+  on both keys that said it.
+  **Naming a voice creates nobody.** "When we added the speaker back in
+  transcription after recording it created a new person on the speakers
+  page; it should not." Read at owner altitude before a line was written:
+  the user's organisation has ten accounts and five directory rows — all
+  five PAIRED since the 2026-09-08 account column — so the 2026-09-08 path
+  (resolve an unlearned colleague by creating a row named as the option
+  said) made a new person for any of the other five it was asked to name;
+  the seven rows born in one second on 09-15 were the demo organisation's
+  seed, not this. Two changes, one module each: `voiceCandidates` gained a
+  THIRD rung — a directory row whose folded name equals the account's name
+  in EITHER script («سینا سپاسی» beside "Sina Sepasi" on `display_name_en`,
+  or the same Persian name typed with an Arabic yeh), exactly one row or
+  none (two rows sharing a name place nobody — the lone-prefix lesson in a
+  fold — and a row paired with another account is not up for grabs by
+  name); and the picker no longer creates: a colleague the directory does
+  not know is OFFERED, DISABLED, with the reason on the row («در فهرست
+  گویندگان نیست»), so the host learns where the answer is instead of
+  getting a new row there. The guest field still makes a person by name —
+  that is the 2026-09-08 ask, not the 2026-09-16 objection — and linking a
+  name-resolved colleague still writes the pairing, best effort and said
+  when refused.
+  **The gate raced my own mutations.** The build gate ran in the background
+  while the verify-red script mutated sources on disk, and reported a
+  typecheck failure naming the strip's unused `end` — the first mutation,
+  caught mid-flight. A red that names a defect the restored tree does not
+  have is the harness, not the code (rule 13's symmetric duty); re-run
+  alone, the gate passed. Recorded because the shape — two of my own
+  instruments sharing one tree — is the one that sends somebody to fix
+  working code.
+  Verified: web tsc 0; 1673 web tests in 233 files (the load flake stayed
+  green this run); build gate; encoding sweep (1462 files); verify-red by
+  mutation on six behaviours, each red on its own test: the strip's end
+  slot removed, the search key keeping its query on close, the sort back on
+  a tinted row, the picker creating again, the name rung removed, help back
+  in the rail. Deployed: web on Vercel (nothing in core or db).
+  **Proven on production in the user's Chrome** (runbook 7k has the
+  numbers): the meetings pill 32 / 16px / 500 and the two end buttons
+  39.5 / 16px / 500 at root 15.06 — the pill plus the track's padding, one
+  family; row one two grey rails (slices, then the sort tablist with
+  date · people · status); row two the strip beside one tinted track
+  holding list · calendar · the search key; the key pressed → a focused
+  field INSIDE that track (181px in a 12rem wrapper), typed «جلسه», closed
+  → no field, reopened → EMPTY; the rail without «راهنما»; Management ·
+  General's only buttons «فارسی» and «ذخیره» with «ذخیرهٔ تغییرات» absent
+  from the rendered text. NOT read live: the search narrowing rows (no
+  meeting in the org) and the voice picker (no record with speakers).
+  db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
+  web 1673 tests + gate + sweep.
+- 2026-09-16 (last — THE PROJECTS PAGE TAKES THE BOARD'S TWO ROWS; commit
+  035926b; web on Vercel, nothing in core or db): "my projects and today
+  due must go up in the first sub menu like in the tasks with the same
+  first row style; and after all projects in the second sub menu should be
+  the plus like the tasks for a new folder, with the same style and
+  function, and when created have the three-dot button to edit and delete
+  in it."
+  **Row one** is the views, the sorts, and a third grey track with
+  «پروژه‌های من» and «مهلت امروز» as `toggleClass` toggles — the board's
+  own toggles in the board's own place. The row-one create button is GONE:
+  the strip's `+` reaches every view and the kanban's columns keep their
+  «افزودن پروژه» rows, so a third door would be two doors to one dialog on
+  one screen (2026-09-05 had taken it off the kanban for that reason and
+  left it on the views with no column; the strip reaches all of them).
+  **Row two** is the kit's `TopicStrip` — «همه پروژه‌ها» with its count, a
+  chip per project carrying its OPEN work, an admin's ⋯ («ویرایش» opens the
+  project's own panel at `/projects?project=<id>`, «حذف» the one confirm
+  dialog), and the dashed `+` opening the WHOLE project dialog: a project
+  is people and a tone as well as a name, so the inline box is the wrong
+  door. A chip filters the page to that project and a second press lifts
+  it. Admins only for the `+` and the ⋯, ABSENT rather than disabled (0186,
+  0191) — an empty menu draws no ⋯, so a member sees chips and nothing to
+  press. `TopicStrip` grew `onAdd`, `menuFor` and `canAdd`, the writes and
+  the box's labels went optional, and a chip with no items draws no ⋯; the
+  task board and the meetings page read it unchanged.
+  **One name, two places — the test file's own rule.** Every project's name
+  is on screen twice now, on its chip and on its card, so a text query
+  meets both and throws. The chip is a toggle (it carries `aria-pressed`,
+  as every pill on the two rows does) and the card never is: the file sets
+  `configure({ defaultIgnore: "script, style, [aria-pressed]" })` — per
+  file, vitest isolates modules — so text queries are the CARDS and the
+  chips are reached by ROLE. Four cases pin the round: the toggles in row
+  one's grey rail (asserted as identity with the views' own ancestors,
+  because the tinted rail carries the same geometry and differs by one
+  token), the strip's counts (a done card under the project is NOT counted
+  — a version counting every card says three where two is true) and its
+  filter both ways, the ⋯'s two entries (`pushSpy` with the panel's
+  address; the confirm dialog's no and yes), and the member's chips with
+  neither control (the chip's presence being the discriminating half). The
+  "way in" cases follow the door: «پروژهٔ جدید» is the strip's dashed `+`
+  on every view, and "no button on top" is asserted as zero `.btn-primary`
+  on the page.
+  Verify-red by mutation on seven behaviours, each red on its own test: the
+  `+` offered to a member, the ⋯ given to a member, the toggles off the
+  grey rail, the chip counting done cards, a press filtering nothing, the
+  `+` opening the inline box, a primary create back in row one. Verified:
+  web tsc 0; 1677 web tests in 233 files (the `SpeakersDirectory.account`
+  case red under full-suite load and green alone — the recorded load flake;
+  nothing under echo/ touched); the build gate alone; the encoding sweep
+  (1463 files). RULEBOOK's projects bullet rewritten.
+  **Proven on production in the user's Chrome** (runbook 7l): at 1280 the
+  three grey rails at y=72 (231 / 270 / 212 wide) with the toggles at rest,
+  ZERO `.btn-primary` above the board, four «افزودن پروژه» rows; row two the
+  tinted strip **316px wide** in a `justify-between` row — «همه پروژه‌ها ۱»,
+  the chip «📁 دیتابیس صوتی» with its ⋯ «گزینه‌ها», the dashed «پروژهٔ
+  جدید»; the ⋯ opened «ویرایش» and «حذف», and «ویرایش» opened the panel at
+  `/fa/projects?project=30ae8ef4-…` headed «دیتابیس صوتی» (Escape closed
+  it); «پروژه‌های من» lifted the pill and kept the reader's one card while
+  the strip's count stayed. NOT pressed live: «حذف» and the `+` (a real
+  delete; a create dialog).
+  db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
+  web 1677 tests + gate + sweep.
