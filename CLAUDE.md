@@ -7681,3 +7681,77 @@ sessions) for the cross-session narrative.
   owner's `firstRunSeen` is true) — pinned by the tests above.
   db 226 migrations · core 1887 tests (1 pre-existing red, history ZWNJ) ·
   web 1707 tests + gate + sweep.
+- 2026-09-16 (later — A TASK HAS A ROOM, A PROJECT IS WHAT YOU ARE ON, AN
+  ADMIN EDITS WHAT THEY MADE, AND THE MENUS FIT THEIR WORDS; commit 447a371,
+  db/0227, M55; core + web deployed, 0227 on production): four items from
+  four screenshots.
+  **The menu was not behind the sidebar — its FLYOUT was clipped.** Measured
+  on production: the main ⋯ panel wins the stack. But Radix positions a
+  SubContent `fixed`, the shadcn default renders it INSIDE the parent
+  Content, whose wrapper is fixed+transformed (the containing block of a
+  fixed descendant) and whose `overflow-x-hidden` cuts it to the parent's
+  box; on a Persian page it opens left, 12px into its parent
+  (`sideOffset=-12`), so that sliver showed and the rest read as "behind the
+  sidebar" — hit-tests inside the flyout's own rect landed on the assistant
+  thread. Portaled now (`ui/dropdown-menu` SubContent wrapped in Portal),
+  and the panel is `w-max` with a 9rem floor and a 20rem ceiling — the old
+  13.5rem floor every three-word menu filled with air. Minted, again: **a
+  Radix flyout inside its parent's Content is clipped by the parent's
+  overflow and positioned against its transform — portal it or it lives in a
+  box the size of the menu that opened it.**
+  **The task's room (db/0227).** `task.channel_id`, many tasks to one room.
+  Who may set it is a TRIGGER, not a policy, because the board is
+  deliberately not walled (0144) and the room is the one field that decides
+  who is told what — silent with no actor so the purge's set-null never
+  raises, and core translates its hinted 42501 into the 403 it is (every
+  other 42501 on a write is a policy → 404). Whoever is on the task is IN
+  the room, by an AFTER trigger on the assignment and one on the pointer,
+  both definer doors (`chat_member_write` rightly lets a person write only
+  their own seat) — no invitation, the assignment is the reason, and an
+  unassignment KEEPS the seat (un-planning is not un-remembering, 0202).
+  `POST /v1/tasks/:id/room` makes the channel named after the card, seats
+  the maker and points the card in one transaction. The rail: an admin gets
+  the kit's dropdown over the org's live rooms and «اتاق تازه»; a member
+  gets the name as a door and no control.
+  **A project is what you are on** — reversing 0181's "every active member
+  sees every project" on the user's word, which 0181 had itself named as the
+  way it would change ("a policy that reads it, an absent feature not a wrong
+  one"). A member reads what they are on, lead, or made (`actor_on_project`,
+  a definer helper, not an EXISTS that runs as the caller — D9); an admin
+  reads all; the roster follows the project. **An admin edits what they
+  made**, in 0077's sentence — their own or an author they OUTRANK — chosen
+  over `created_by = actor` because the org owner is the seat where
+  everything is theirs and a tombstoned author's project must not be a row
+  nobody can touch (D27's class). Creating and folders stay any admin's. The
+  web mirrors the wall only to draw controls (`projectReach.ts`); the server
+  stays the wall. db/test/106's "a member still reads every project" flipped
+  rather than vanished, with its reason in the file.
+  **«Mine» means one thing on both boards.** «پروژه‌های من» was membership
+  alone, and an admin who makes projects is on none — the toggle emptied
+  their page and read as broken. Mine is on/lead/made (the task board's own
+  «فقط تسک‌های من»: assigned or created), and the empty state says which
+  nothing.
+  **The instrument finding.** The verify-red runner parsed core's COLOURED
+  vitest summary and read "0 passed" for a file with eight, reporting three
+  core mutations GREEN against a run that could not have been red (a red is
+  only evidence if the harness could have been green — strip the ANSI, run
+  the control). After the strip: three flips of db/test/130 red by name on
+  the throwaway Postgres, ten web and three core mutations each red on their
+  own test. Also: the board's api mock omitted `chatChannels`, so the room
+  row threw inside a promise and three unrelated board cases failed as
+  whatever rendered last — a mock that omits a method the component calls
+  does not fake "no rooms", it throws (rule 10, met again).
+  Verified: core tsc 0, 1896 core tests (the one red is the recorded history
+  ZWNJ contradiction); web tsc 0, 1723 web tests in 239 files, all 42 guard
+  files green, the build gate alone, the encoding sweep (1505 files); db 0227
+  + the suite on the throwaway Postgres (73 PASS) and on PRODUCTION (75 PASS,
+  "the wall holds"). Deployed: 0227 first, core on Hetzner (401/404 on the
+  room route, zero warnings), web on Vercel. **Proven on production**
+  (runbook 7p): the ⋯ menu 142px with its flyout 136px BESIDE it and every
+  hit inside it; the rail's «اتاق گفت‌وگو» combobox and «اتاق تازه»; the
+  owner seeing an admin's project at «همه» with its trash and «پروژه‌های من»
+  hiding it (the owner is not on it). NOT exercised live: the room writes and
+  the seating (a write on the org's data), and «mine»'s positive half for an
+  admin (one project, not the owner's — pinned by the unit matrix and 130).
+  db 227 migrations · core 1896 tests (1 pre-existing red, history ZWNJ) ·
+  web 1723 tests + gate + sweep.

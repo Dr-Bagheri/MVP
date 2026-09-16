@@ -753,6 +753,38 @@ frame the four question pages render live.
 
 ---
 
+## 7p. Deployment record — 2026-09-16, later (447a371: db/0227 the task's room and the project reach, core + web — M55)
+
+Migration first (schema leads code), then core on Hetzner, web on Vercel.
+0227 applied on production and the fixture suite re-run — 75 PASS, "the wall
+holds", 130 (32 checks) and 106 (18) among them. Core: archive hashes equal
+end to end (`ff31674…`), both entrypoints parse under strip-types, both units
+active, health `{"ok":true}`, zero level≥40 journal lines after; the room
+route reads **401** at `/v1/tasks/:id/room` against `/v1/nonsense` **404**.
+Web built from the push (`Vercel – mvp` success on the first poll); the BFF
+pair discriminates — the room route **401** unauthenticated, `/api/nonsense`
+**404**.
+
+**Read on production in the user's Chrome, at 1280.** The meetings ⋯ menu is
+**142px** wide (its longest entry «انتقال به موضوع»), not the old 13.5rem
+floor; opening «انتقال به موضوع» drew the flyout at **136px** BESIDE it
+(both panels `parentIsBodyChild`, `ancestorClips` empty — portaled, nothing
+clips them), and three hit-tests across the flyout's own rect all landed
+INSIDE it, where before only a 12px sliver did. The task detail's rail
+carries «اتاق گفت‌وگو» as a combobox reading «اتاقی ندارد» at 38px, in order
+موضوع · وضعیت · مسئول‌ها · **اتاق گفت‌وگو** · اولویت · مهلت · برچسب‌ها, with
+«اتاق تازه» (`btn btn-sm btn-secondary`, 32px) beside it — the owner's
+control. Projects: the owner sees «۱۰۰ ساعت …» (created by an admin, Sina)
+at «همه پروژه‌ها» with its trash, and pressing «پروژه‌های من» flips it
+`aria-pressed=true` and HIDES the card — the owner is not on that one
+project, which is «mine» working from an admin's seat (the bug was the
+toggle emptying the page).
+
+NOT exercised live, and why: putting a task in a room, «اتاق تازه», and the
+seating (a write on the org's data, the 2026-09-06 lesson); the positive
+half of «mine» for an admin (the org has one project and the owner did not
+make it — pinned by projectReach's unit matrix and db/test/130 instead).
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
