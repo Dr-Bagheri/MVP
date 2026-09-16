@@ -219,7 +219,14 @@ export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
   const prevRunError = useRef(live.error);
   useEffect(() => {
     if (live.error !== null && live.error !== prevRunError.current) {
-      notifyError(live.error.detail ?? t("askFailed"));
+      /* db/0224: the one refusal with a CODE gets the page's own sentence —
+         the server's English about verification is the fallback nobody
+         should read on a Persian screen */
+      notifyError(
+        live.error.code === "org_unverified"
+          ? t("unverifiedRefusal")
+          : live.error.detail ?? t("askFailed"),
+      );
     }
     prevRunError.current = live.error;
   }, [live.error, t]);

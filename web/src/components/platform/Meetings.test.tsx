@@ -518,17 +518,19 @@ describe("Meetings", () => {
   });
 
   /*
-   * THE TOPIC IS A DROPDOWN NOW (user, 2026-09-08: "the filtering should be
-   * topic with drop down and not folders … one row with dropdowns"), and the
-   * strip's two properties had to survive the shape change:
+   * THE TOPIC IS THE THIRD ROW'S STRIP (user, 2026-09-16: "all meetings
+   * should look like the projects with the edit three dot in it and the plus
+   * after it for new one, and the place in the third row — unify"). The
+   * dropdown of 2026-09-08 is gone; the strip's two properties are the same
+   * as ever and asserted the same way:
    *
-   *   · the COUNT, which was a badge on each chip and is now part of the
-   *     option's own label — losing it would have traded a fact for a layout;
-   *   · the rule that only a REAL folder can be renamed or removed, which the
-   *     strip enforced by drawing a menu on folders and not on «همه جلسات».
-   *     One menu serves every topic now, so the rule became `disabled`.
+   *   · the COUNT, a badge on every chip — losing it silently would trade a
+   *     fact for a layout;
+   *   · the folder actions on a REAL folder's ⋯ and nowhere else: «همه
+   *     جلسات» is the absence of a filter and carries no menu, so there is
+   *     nothing to disable — the row is asserted as ONE ⋯.
    */
-  it("the topic dropdown filters, carries its counts, and guards the folder actions", async () => {
+  it("the topic strip filters, carries its counts, and offers the folder actions on a folder's ⋯ only", async () => {
     TOPICS = [{ id: "t-p", name: "محصول" }];
     LIST = [
       meeting({ id: "m-a", title: "جلسهٔ الف", topic_id: "t-p", topic: "محصول" }),
@@ -537,55 +539,37 @@ describe("Meetings", () => {
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
 
-    /* THE FOLDER STRIP IS GONE — asserted, because every check below would
-       pass just as well on a screen that kept both. */
-    expect(screen.queryByRole("button", { name: /همه جلسات/ })).toBeNull();
+    /* THE DROPDOWN IS GONE — asserted, because every check below would pass
+       just as well on a screen that kept both */
+    expect(screen.queryByRole("combobox", { name: "موضوع (پوشه)" })).toBeNull();
 
-    const picker = screen.getByRole("combobox", { name: "موضوع (پوشه)" });
-    expect(picker).toHaveTextContent("همه جلسات (۲)");
+    const all = screen.getByRole("button", { name: /همه جلسات/ });
+    expect(all).toHaveTextContent("۲");
+    const folder = await screen.findByRole("button", { name: /محصول/ });
+    expect(folder).toHaveTextContent("۱");
+    expect(screen.getAllByRole("button", { name: "گزینه‌های موضوع" })).toHaveLength(1);
 
-    /* on «همه جلسات» there is no folder to act on, so the two folder actions
-       are offered and refused rather than hidden — a menu that changes its
-       length as you move around is harder to learn than one that greys */
-    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های موضوع" }));
-    expect(await screen.findByRole("menuitem", { name: "ویرایش نام موضوع" }))
-      .toHaveAttribute("aria-disabled", "true");
-    await userEvent.keyboard("{Escape}");
-
-    await userEvent.click(picker);
-    await userEvent.click(await screen.findByRole("option", { name: "محصول (۱)" }));
+    await userEvent.click(folder);
     await waitFor(() => expect(screen.queryByText("جلسهٔ ب")).toBeNull());
     expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument();
+    expect(folder).toHaveAttribute("aria-pressed", "true");
 
-    // and with a real folder chosen, the same entry is live
-    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های موضوع" }));
-    expect(await screen.findByRole("menuitem", { name: "ویرایش نام موضوع" }))
-      .not.toHaveAttribute("aria-disabled", "true");
+    /* pressing the lit chip lifts the filter — «همه» is one press away either way */
+    await userEvent.click(folder);
+    await waitFor(() => expect(screen.getByText("جلسهٔ ب")).toBeInTheDocument());
+    expect(all).toHaveAttribute("aria-pressed", "true");
   });
 
-  /*
-   * «موضوع جدید» IS THE DROPDOWN'S LAST ROW (user, 2026-09-08), and it is the
-   * one option that is not a value. The contract has two halves and the
-   * second is the one worth a test: choosing it must open the name box
-   * WITHOUT the sentinel reaching the filter — `topic_id === "__new"` matches
-   * no meeting, so a leak would empty the list and look like a broken filter
-   * rather than like a mis-wired option.
-   */
-  it("«موضوع جدید» is the dropdown's last row, and picking it never becomes a filter", async () => {
+  it("the ⋯ archives a folder — never deletes — and a lit filter falls back to «همه»", async () => {
     TOPICS = [{ id: "t-p", name: "محصول" }];
-    LIST = [meeting({ id: "m-a", title: "جلسهٔ الف" })];
+    LIST = [meeting({ id: "m-a", title: "جلسهٔ الف", topic_id: "t-p", topic: "محصول" })];
     render(<Meetings />);
-    await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole("combobox", { name: "موضوع (پوشه)" }));
-    const options = await screen.findAllByRole("option");
-    expect(options.at(-1)).toHaveTextContent("موضوع جدید");
-
-    await userEvent.click(options.at(-1)!);
-    // the name box opened…
-    expect(await screen.findByPlaceholderText("نام موضوع…")).toBeInTheDocument();
-    // …and the list did not become empty behind it
-    expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument();
+    const folder = await screen.findByRole("button", { name: /محصول/ });
+    await userEvent.click(folder);
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های موضوع" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "حذف موضوع" }));
+    await waitFor(() => expect(topicWrites).toEqual([["update", "t-p:archived"]]));
+    expect(screen.getByRole("button", { name: /همه جلسات/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("an empty list names its state", async () => {
@@ -596,70 +580,48 @@ describe("Meetings", () => {
 });
 
 /*
- * NAMING A FOLDER.
+ * NAMING A FOLDER — the strip's own inline box (2026-09-16), the task board's
+ * exact one: the `+` opens it empty, the ⋯'s rename opens it with the name,
+ * Enter commits, Escape leaves. The dialog of 2026-09-08 went with the reason
+ * it existed (the inline box had replaced the picker, and there is no picker).
  */
-describe("the folder picker", () => {
-  it("marks «موضوع جدید» as an action rather than a value, and opens a dialog", async () => {
+describe("the folder strip's box", () => {
+  it("the `+` opens the box, and Enter writes the new folder", async () => {
     TOPICS = [{ id: "t-p", name: "محصول" }];
-    LIST = [meeting({ id: "m-a", topic_id: "t-p", topic: "محصول" })];
     render(<Meetings />);
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "موضوع (پوشه)" })).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole("combobox", { name: "موضوع (پوشه)" }));
-    const row = screen.getByRole("option", { name: /موضوع جدید/ });
-    /* the + rides the row's leading slot — a value's colour dot would be in
-       the same place, which is why a row may carry one mark and not both */
-    expect(row.querySelector("svg")).not.toBeNull();
-    /* the CONTROL: an ordinary value carries no glyph, so "there is an svg"
-       cannot pass by every row having one */
-    expect(screen.getByRole("option", { name: /محصول/ }).querySelector("svg")).toBeNull();
-
-    await userEvent.click(row);
-    /* a DIALOG, not the picker replaced by a 144px field */
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByPlaceholderText("نام موضوع…")).toBeInTheDocument();
-    /* AND THE PICKER IS STILL THERE BEHIND IT — the whole point of the move,
-       and the thing the inline box destroyed. Asserted by TEXT, not by role:
-       Radix marks everything outside an open modal `aria-hidden`, so the
-       picker is correctly out of the accessibility tree while the dialog is
-       up and a role query would report the right behaviour as a failure. */
-    expect(screen.getByText(/همه جلسات/)).toBeInTheDocument();
-  });
-
-  it("writes the new folder's name and closes", async () => {
-    render(<Meetings />);
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "موضوع (پوشه)" })).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("combobox", { name: "موضوع (پوشه)" }));
-    await userEvent.click(screen.getByRole("option", { name: /موضوع جدید/ }));
-
-    await userEvent.type(await screen.findByPlaceholderText("نام موضوع…"), "  بازاریابی  ");
-    await userEvent.click(screen.getByRole("button", { name: "ذخیره" }));
-
-    /* TRIMMED — a folder named with a trailing space is one nobody can match
-       against by eye */
+    await screen.findByRole("button", { name: /محصول/ });
+    await userEvent.click(screen.getByRole("button", { name: "موضوع جدید" }));
+    const field = await screen.findByPlaceholderText("نام موضوع…");
+    await userEvent.type(field, "بازاریابی{Enter}");
     await waitFor(() => expect(topicWrites).toEqual([["create", "بازاریابی"]]));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    /* the box leaves with the write, and the `+` is back */
+    await waitFor(() => expect(screen.queryByPlaceholderText("نام موضوع…")).toBeNull());
+    expect(screen.getByRole("button", { name: "موضوع جدید" })).toBeTruthy();
   });
 
-  it("the SAME dialog renames, carrying the folder's current name", async () => {
+  it("the SAME box renames, carrying the folder's current name", async () => {
     TOPICS = [{ id: "t-p", name: "محصول" }];
-    LIST = [meeting({ id: "m-a", topic_id: "t-p", topic: "محصول" })];
     render(<Meetings />);
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "موضوع (پوشه)" })).toBeInTheDocument());
-    /* pick the folder first — rename acts on the SELECTED one and is refused
-       while «همه جلسات» is chosen */
-    await userEvent.click(screen.getByRole("combobox", { name: "موضوع (پوشه)" }));
-    await userEvent.click(screen.getByRole("option", { name: /محصول/ }));
-
+    await screen.findByRole("button", { name: /محصول/ });
     await userEvent.click(screen.getByRole("button", { name: "گزینه‌های موضوع" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "ویرایش نام موضوع" }));
-
     const field = await screen.findByPlaceholderText("نام موضوع…");
     expect(field).toHaveValue("محصول");
     await userEvent.clear(field);
     await userEvent.type(field, "محصولات{Enter}");
     /* ENTER commits: a one-field form the keyboard cannot finish is a form
-       that asks for the mouse back — the habit the inline box taught */
+       that asks for the mouse back */
     await waitFor(() => expect(topicWrites).toEqual([["update", "t-p:محصولات"]]));
+  });
+
+  it("Escape leaves the box with nothing written", async () => {
+    TOPICS = [{ id: "t-p", name: "محصول" }];
+    render(<Meetings />);
+    await screen.findByRole("button", { name: /محصول/ });
+    await userEvent.click(screen.getByRole("button", { name: "موضوع جدید" }));
+    const field = await screen.findByPlaceholderText("نام موضوع…");
+    await userEvent.type(field, "نیمه‌کاره{Escape}");
+    await waitFor(() => expect(screen.queryByPlaceholderText("نام موضوع…")).toBeNull());
+    expect(topicWrites).toEqual([]);
   });
 });

@@ -13,6 +13,8 @@ import { ChangePassword } from "@/components/platform/ChangePassword";
 import { TelegramLink } from "@/components/platform/TelegramLink";
 import { ExportAccountData } from "@/components/platform/ExportAccountData";
 import { TwoPane, type PaneGroup } from "@/components/platform/TwoPane";
+import { TAB_TRACK, sectionTabClass } from "@/components/platform/sectionTabs";
+import { IconLogout } from "@/components/icons";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
 import { digits, modelLabel, personName } from "@/lib/format";
 import { signOutThisDevice } from "@/lib/signOut";
@@ -302,9 +304,29 @@ export default function ProfilePage({
    * because reserving space for something that turns out to be a different
    * size moves the layout exactly as much as reserving none.
    */
+  /* «خروج» ON THE FIRST ROW, AT ITS OTHER END (user, 2026-09-16: "put the
+     log out on the first row on the other end, small button, same style as
+     the row does"). It wears the row's own pill — `sectionTabClass`, in its
+     own rail — through TwoPane's `actions` slot, which is where every page
+     puts the control that belongs to row one and is not a section. It had
+     been a full-width danger button at the foot of the identity section,
+     which is where nobody looks for a way out. */
+  const signOut = (
+    <div className={TAB_TRACK}>
+      <button
+        type="button"
+        onClick={() => { void signOutThisDevice(locale); }}
+        className={sectionTabClass(false)}
+      >
+        <IconLogout width={14} height={14} />
+        {tPlatform("signOut")}
+      </button>
+    </div>
+  );
+
   if (!me)
     return (
-      <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small">
+      <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small" actions={signOut}>
           <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex min-w-0 items-center gap-3">
               {/* 2026-09-03: h-12, because the header's mark is `<Avatar
@@ -359,7 +381,7 @@ export default function ProfilePage({
     );
 
   return (
-    <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small">
+    <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small" actions={signOut}>
       {/* the SECTION's name, not the page's — the breadcrumb and the toolbar
           already say "profile", and a third copy of the word is the heading
           this product spent a round removing everywhere else */}
@@ -533,30 +555,12 @@ export default function ProfilePage({
         </Section>
 
         {/*
-          THE WAY OUT, at the foot of Identity (user directive, 2026-09-04:
-          "in the identity sub page remove the session section, just put a big
-          sign out button").
-
-          It was a section of its own titled «نشست» holding one row holding
-          one button — a heading, a panel and a label all saying what the
-          button already said. Full width and alone now, because it is the
-          last thing on the page and nothing else competes for the press.
-
-          The line under it went on the same directive (2026-09-04). It said
-          the sign-out closes this session on this device only — true, and a
-          caveat about a button nobody had asked a question about. The tone
-          stays the soft danger wash rather than a solid `btn-danger`:
-          signing out is reversible by signing back in.
+          THE WAY OUT LEFT THE FOOT OF IDENTITY (2026-09-16): it is the pill
+          at the end of the first row now (`signOut`, above), on every
+          section rather than only this one. From 2026-09-04 to then it stood
+          here as a full-width soft-danger button, after the «نشست» section
+          that had held it went — that history is in git.
         */}
-        <Section divided>
-          <button
-            type="button"
-            onClick={() => { void signOutThisDevice(locale); }}
-            className="btn w-full bg-danger/10 font-semibold text-danger hover:bg-danger/20"
-          >
-            {tPlatform("signOut")}
-          </button>
-        </Section>
         </>
       ) : null}
 

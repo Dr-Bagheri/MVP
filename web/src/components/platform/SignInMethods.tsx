@@ -13,6 +13,7 @@ import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { notify } from "@/lib/notify";
 import { Chip } from "@/components/ui";
+import { SIGNIN_METHODS } from "@echo/core/vocabulary";
 
 /**
  * Settings · Sign-in methods.
@@ -64,7 +65,7 @@ export function SignInMethods() {
 
   const mayToggle = me?.role === "admin" || me?.role === "owner";
 
-  async function toggle(provider: "google" | "github", enabled: boolean): Promise<void> {
+  async function toggle(provider: string, enabled: boolean): Promise<void> {
     setBusy(provider);
     try {
       const result = await api.setAuthMethod(provider, enabled);
@@ -81,13 +82,21 @@ export function SignInMethods() {
   return (
     <div className="space-y-4">
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
-        {(["google", "github"] as const).map((key) => {
+        {/* the closed set is core's (db/0225: google, github, apple, azure,
+            sso) — read from the producer rather than spelled here, so a
+            method the server knows and this card does not is unrepresentable */}
+        {SIGNIN_METHODS.map((key) => {
           const row = methods.find((m) => m.provider === key);
           /* `?? true` is core's default for a provider it has no row for —
              read ONLY under `answer === "ok"`. Before the answer it was
              indistinguishable from the served value, which is the whole
              defect this section was fixed for. */
-          const enabled = row?.enabled ?? true;
+          /* ABSENT IS OFF (2026-09-16): a method the server did not list has
+             no switch on that deployment yet (db/0225's rows before it
+             landed), and the oauth start route refuses it the same way — a
+             row that read «فعال» for a door the server cannot open would be
+             the default wearing an answer's costume, one more time */
+          const enabled = row?.enabled ?? false;
           return (
             <div key={key} className="flex items-center gap-3 px-5 py-4">
               <div className="min-w-0 flex-1">

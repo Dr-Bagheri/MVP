@@ -1,29 +1,43 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me } from "@/api/types";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { Card, Field } from "@/components/ui";
 import { PasswordInput } from "@/components/PasswordInput";
+import { DemoPanel } from "../DemoPanel";
+import { OAuthButtons } from "../OAuthButtons";
 
 /**
  * THE ONE GATE (M54, 2026-09-15 — user directive: "you go with one click on
- * your email inside and you can use the platform"): an email field, one
- * press, and the mail that arrives carries a LINK and a six-digit CODE. The
- * link lands on `/api/auth/confirm` (token hash, exchanged server-side — M1);
- * the code is typed on this same screen. Either one is both signing up and
- * signing in: GoTrue creates the identity if the address is new, and the
+ * your email inside and you can use the platform"), and since 2026-09-16 the
+ * REFERENCE'S TWO HALVES (user directive: "the login page should look like a
+ * mixture of these two images — a login on the right side always, and the
+ * left side our demo video, and in the login it shows you options that you
+ * can connect with these 4 or email, or you already signed up").
+ *
+ * So the page is a split: the DEMO on the left (DemoPanel — the video when
+ * one exists, the product's own scenes until then) and the DOOR on the right,
+ * always on the right — the grid is pinned `dir="ltr"` so the two halves keep
+ * their physical sides in both locales, and each half restores the locale's
+ * own direction inside itself. Below `lg` the demo steps aside and the door
+ * stands alone; a phone is not the place for a film beside a form.
+ *
+ * The door: the four provider buttons (Google, Apple, Microsoft, SSO), «یا»,
+ * an email field, one press — and, for whoever already has one, the password
+ * one link away. The mail that arrives carries a LINK and a six-digit CODE.
+ * The link lands on `/api/auth/confirm` (token hash, exchanged server-side —
+ * M1); the code is typed on this same screen. Either one is both signing up
+ * and signing in: GoTrue creates the identity if the address is new, and the
  * product registers the person on their first successful verify.
  *
- * Signing up and signing in used to be two forms with two passwords' worth
- * of things to get wrong; `/sign-up` redirects here now.
+ * ── The states, and why they are one component ───────────────────────────
  *
- * ── The three states, and why they are one component ─────────────────────
- *
- *   email     the address, Continue
+ *   email     the doors, the address, Continue
+ *   sso       the work email for single sign-on (the fourth door's own field)
  *   code      "check your email": the six-digit box, send again, change the
  *             address, or fall back to a password
  *   password  the previous gate, kept whole for everyone who has one (the
@@ -31,16 +45,15 @@ import { PasswordInput } from "@/components/PasswordInput";
  *             a secondary path, one link away, never the first thing shown
  *
  * They share the address and the routing, which is why splitting them into
- * three pages would be three copies of `routeByIdentity`.
+ * pages would be four copies of `routeByIdentity`.
  *
  * ── What did NOT change ───────────────────────────────────────────────────
  *
  * `routeByIdentity()` is the same function this page has carried since the
- * form that signed nobody in: the SERVER decides where a session lands. What
- * is new in it is one line — a member whose first-time flow is unfinished
- * goes to /onboarding rather than home. The rest (pending, suspended, the
- * register-on-first-sign-in probe with its recursion bound, the OAuth first
- * password) is unchanged and its tests still hold.
+ * form that signed nobody in: the SERVER decides where a session lands (the
+ * first-time flow until it is finished, home after; pending; suspended; the
+ * register-on-first-sign-in probe with its recursion bound; the OAuth first
+ * password). Its tests still hold.
  *
  * The history this file used to open with — the mock form that pushed to
  * /calls without a request — lives in git (`git log -- this file`). The
@@ -51,7 +64,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 /** how long «send again» waits — GoTrue refuses a second mail inside a minute */
 const RESEND_COOLDOWN_S = 60;
 
-type Mode = "email" | "code" | "password";
+type Mode = "email" | "sso" | "code" | "password";
 
 /** Where a MEMBER lands: the first-time flow until it is finished, home after. */
 export function landingFor(me: Pick<Me, "onboarding_completed_at"> | undefined): string {
@@ -66,6 +79,8 @@ export function landingFor(me: Pick<Me, "onboarding_completed_at"> | undefined):
 export default function SignInPage() {
   const t = useTranslations("auth");
   const tPassword = useTranslations("password");
+  const locale = useLocale();
+  const dir = locale === "fa" ? "rtl" : "ltr";
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("email");
   const [email, setEmail] = useState("");
@@ -73,9 +88,9 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [cooldown, setCooldown] = useState(0);
   /**
-   * A first Google/GitHub arrival must choose a password before ANY route into
-   * the product. The server, not membership status, tells us whether that
-   * password identity already exists.
+   * A first Google/Apple/Microsoft/SSO arrival must choose a password before
+   * ANY route into the product. The server, not membership status, tells us
+   * whether that password identity already exists.
    */
   const [needsOAuthPassword, setNeedsOAuthPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -144,7 +159,7 @@ export default function SignInPage() {
       // the provider round trip died (expired code, denied consent, replay)
       notifyError(t("oauthFailed"));
     } else if (oauth === "disabled") {
-      // 0078: an admin turned this method off — a different fact from a
+      // 0078/0225: this door is not switched on — a different fact from a
       // broken round trip, and the person deserves the real one
       notifyError(t("oauthDisabled"));
     }
@@ -294,9 +309,44 @@ export default function SignInPage() {
     }
   }
 
+  /**
+   * SINGLE SIGN-ON — the fourth door's own step: the work email says which
+   * organisation's identity provider to go to. The server mints the PKCE
+   * verifier and answers with the provider's URL; the browser only follows
+   * it. Two named refusals, two sentences (the route's own reasons).
+   */
+  async function startSso(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy || !email) return;
+    setBusy(true);
+    try {
+      const { url } = await api.startSso(email);
+      window.location.assign(url);
+    } catch (cause) {
+      if (cause instanceof BffError && cause.code === "disabled") notifyError(t("ssoDisabled"));
+      else if (cause instanceof BffError && cause.code === "not_configured") notifyError(t("ssoNotConfigured"));
+      else notifyError(t("signInFailed"));
+      setBusy(false);
+    }
+  }
+
+  /* digits only, whatever keyboard typed them — the route normalises Persian
+     digits too, but a box that only ever holds six ASCII digits is the one
+     that can auto-submit on the sixth */
+  const onCode = (raw: string) => {
+    const digits = raw
+      .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+      .replace(/\D/g, "")
+      .slice(0, 6);
+    setCode(digits);
+  };
+
+  let door: React.ReactNode;
+
   if (needsOAuthPassword) {
-    return (
-      <Card>
+    door = (
+      <>
         <h1 className="mb-5 text-xl font-bold text-fg">{t("signInTitle")}</h1>
         <form className="space-y-4" onSubmit={enrollOAuthPassword}>
           <p className="text-sm leading-7 text-fg-muted">{t("finishPasswordOauth")}</p>
@@ -318,24 +368,11 @@ export default function SignInPage() {
             {busy ? t("working") : tPassword("setPassword")}
           </button>
         </form>
-      </Card>
+      </>
     );
-  }
-
-  if (mode === "code") {
-    /* digits only, whatever keyboard typed them — the route normalises Persian
-       digits too, but a box that only ever holds six ASCII digits is the one
-       that can auto-submit on the sixth */
-    const onCode = (raw: string) => {
-      const digits = raw
-        .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-        .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-        .replace(/\D/g, "")
-        .slice(0, 6);
-      setCode(digits);
-    };
-    return (
-      <Card>
+  } else if (mode === "code") {
+    door = (
+      <>
         <h1 className="text-xl font-bold text-fg">{t("codeTitle")}</h1>
         {/* ARRIVAL — the one sentence that says what the mail carries and
             what to do with it; without it this is a box with no story */}
@@ -381,13 +418,11 @@ export default function SignInPage() {
             {t("usePassword")}
           </button>
         </p>
-      </Card>
+      </>
     );
-  }
-
-  if (mode === "password") {
-    return (
-      <Card>
+  } else if (mode === "password") {
+    door = (
+      <>
         {/* no logo on the gate (user ruling): the title carries the identity */}
         <h1 className="mb-5 text-xl font-bold text-fg">{t("signInTitle")}</h1>
         <form className="space-y-4" onSubmit={signIn}>
@@ -418,11 +453,6 @@ export default function SignInPage() {
           <button className="btn-primary w-full" disabled={busy || !email || !password}>
             {busy ? t("working") : t("signIn")}
           </button>
-          {/* THE PROVIDER BUTTONS ARE OFF THIS SCREEN (user directive,
-              2026-09-15: "remove these two button git hub and google for
-              now"). FOR NOW is the whole of it, so `OAuthButtons`, the
-              `/api/auth-methods` read, the PKCE routes and the copy all
-              stay where they are — bringing them back is this one line. */}
         </form>
         {/* The recovery link has a page behind it. It was advertised here
             with nothing built, which is worse than not offering it: someone
@@ -437,38 +467,96 @@ export default function SignInPage() {
             {t("useCode")}
           </button>
         </p>
-      </Card>
+      </>
+    );
+  } else if (mode === "sso") {
+    door = (
+      <>
+        <h1 className="text-xl font-bold text-fg">{t("ssoTitle")}</h1>
+        <p className="mt-2 text-sm leading-7 text-fg-muted">{t("ssoLead")}</p>
+        <form className="mt-4 space-y-4" onSubmit={startSso}>
+          <Field label={t("ssoEmail")}>
+            <input
+              className="input"
+              dir="ltr"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              autoFocus
+            />
+          </Field>
+          <button className="btn-primary w-full" disabled={busy || !email}>
+            {busy ? t("working") : t("ssoContinue")}
+          </button>
+        </form>
+        <p className="mt-4 text-center text-sm">
+          <button type="button" className="text-accent hover:underline" onClick={() => setMode("email")}>
+            {t("ssoBack")}
+          </button>
+        </p>
+      </>
+    );
+  } else {
+    door = (
+      <>
+        {/* no logo on the gate (user ruling): the title carries the identity */}
+        <h1 className="text-xl font-bold text-fg">{t("emailTitle")}</h1>
+        {/* ARRIVAL — a stranger's first screen says what the one press does */}
+        <p className="mt-2 text-sm leading-7 text-fg-muted">{t("emailLead")}</p>
+        {/* THE FOUR DOORS, then «یا», then the address — the reference's own
+            order (user, 2026-09-16) */}
+        <div className="mt-5">
+          <OAuthButtons onSso={() => setMode("sso")} />
+        </div>
+        <div className="my-4 flex items-center gap-3 text-detail text-fg-subtle" aria-hidden>
+          <span className="h-px flex-1 bg-border" />
+          {t("orDivider")}
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <form className="space-y-4" onSubmit={sendCode}>
+          <Field label={t("email")}>
+            <input
+              className="input"
+              dir="ltr"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </Field>
+          <button className="btn-primary w-full" disabled={busy || !email}>
+            {busy ? t("working") : t("emailContinue")}
+          </button>
+        </form>
+        {/* «already signed up» — the password path, one link away, for
+            everyone who has one */}
+        <p className="mt-4 text-center text-sm">
+          <button type="button" className="text-accent hover:underline" onClick={() => setMode("password")}>
+            {t("havePassword")}
+          </button>
+        </p>
+      </>
     );
   }
 
   return (
-    <Card>
-      {/* no logo on the gate (user ruling): the title carries the identity */}
-      <h1 className="text-xl font-bold text-fg">{t("emailTitle")}</h1>
-      {/* ARRIVAL — a stranger's first screen says what the one press does */}
-      <p className="mt-2 text-sm leading-7 text-fg-muted">{t("emailLead")}</p>
-      <form className="mt-4 space-y-4" onSubmit={sendCode}>
-        <Field label={t("email")}>
-          <input
-            className="input"
-            dir="ltr"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            autoFocus
-          />
-        </Field>
-        <button className="btn-primary w-full" disabled={busy || !email}>
-          {busy ? t("working") : t("emailContinue")}
-        </button>
-      </form>
-      <p className="mt-4 text-center text-sm">
-        <button type="button" className="text-accent hover:underline" onClick={() => setMode("password")}>
-          {t("usePassword")}
-        </button>
-      </p>
-    </Card>
+    /*
+     * THE SPLIT. `dir="ltr"` on the grid pins the PHYSICAL order — demo left,
+     * door right — in both locales ("a login on the right side always"); each
+     * half restores the page's own direction inside itself so the Persian
+     * form still reads right-to-left. `items-stretch` gives the demo the
+     * door's height, so the two read as one panel rather than a card beside
+     * a taller poster.
+     */
+    <div dir="ltr" className="mx-auto grid w-full max-w-6xl items-stretch gap-6 lg:grid-cols-2">
+      <div dir={dir} className="hidden lg:block">
+        <DemoPanel />
+      </div>
+      <div dir={dir} className="flex items-center justify-center">
+        <Card className="w-full max-w-md">{door}</Card>
+      </div>
+    </div>
   );
 }
 

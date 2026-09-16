@@ -4,6 +4,8 @@ import { useSearchParams } from "next/navigation";
 import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
 import { Agents } from "@/components/platform/Agents";
 import { Hub } from "@/components/platform/Hub";
+import { Integrations } from "@/components/platform/Integrations";
+import { VerificationBanner } from "@/components/platform/VerificationNotice";
 import { Workflows } from "@/components/platform/Workflows";
 import { PageContainer } from "@/components/scaffold";
 import { HomeConversationsSheet, HomeSidebar } from "./HomeSidebar";
@@ -76,20 +78,25 @@ export function Home() {
               the conversations at all. The sheet is that door; it renders the
               SAME component, so there is still one conversations list. */}
           <HomeConversationsSheet />
-          {view === "workflows" || view === "agents" ? (
+          {view === "workflows" || view === "agents" || view === "integrations" ? (
             /* THE PANE'S OWN SCROLLER. The Hub below is a fixed box that
-               scrolls its thread internally; these two are ordinary pages that
+               scrolls its thread internally; these are ordinary pages that
                are as tall as their content, so the scroll has to live here —
                on the column, not on the row, or the sidebar would scroll away
-               with the list. */
+               with the list. Integrations joined the pane on 2026-09-16 (user
+               directive: "in the sub menu in home under the agents"). */
             <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
-              {view === "workflows" ? <Workflows /> : <Agents />}
+              {view === "workflows" ? <Workflows /> : view === "agents" ? <Agents /> : <Integrations />}
             </div>
           ) : (
             /* the same small column the assistant page used: a conversation is
                reading width, and a thread stretched across a list column makes
                every line a journey */
             <PageContainer width="small" fill className="!pt-4 !pb-6">
+              {/* db/0224: «your workspace awaits verification», above the
+                  composer, BEFORE a question is typed into an assistant that
+                  cannot answer it yet */}
+              <VerificationBanner className="mb-3" />
               <Hub idleContent={<HomeSnapshot />} />
             </PageContainer>
           )}

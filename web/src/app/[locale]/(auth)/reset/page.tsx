@@ -89,7 +89,7 @@ export default function ResetPasswordPage() {
 
   if (expired || tokenHash === null) {
     return (
-      <Card>
+      <Card className="mx-auto w-full max-w-sm">
         <h1 className="text-lg font-bold text-fg">{t("linkDeadTitle")}</h1>
         {/* Expired, already used, or altered — indistinguishable from here and
             from the person's side, and all three have the same fix. Offering a
@@ -107,7 +107,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <Card>
+    <Card className="mx-auto w-full max-w-sm">
       <h1 className="text-lg font-bold text-fg">
         {linkType === "invite" ? t("inviteTitle") : t("resetTitle")}
       </h1>

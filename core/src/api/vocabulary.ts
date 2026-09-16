@@ -474,3 +474,22 @@ export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];
  */
 export const TRANSLATION_STATUSES = ["queued", "ready", "failed"] as const;
 export type TranslationStatus = (typeof TRANSLATION_STATUSES)[number];
+
+/**
+ * db/0078 + db/0225 (2026-09-16): the external sign-in methods an admin can
+ * switch on or off in Settings · Sign-in methods. The db CHECK on
+ * `echo.signin_method.provider` names the same names — core/test reads the
+ * migration and asserts the equality, so the two cannot drift quietly.
+ *
+ * `google`, `apple` and `azure` (Microsoft) are GoTrue OAuth providers the
+ * web starts through `/api/auth/oauth/:provider`; `sso` is GoTrue's SAML
+ * door, started from a work-email domain through `/api/auth/sso`; `github`
+ * stays enabled in the table for whoever holds a bookmark to its route but
+ * is no longer drawn on the gate (user directive, 2026-09-16: "these 4 or
+ * email"). A method here is OFF until the operator has configured the
+ * provider in the Supabase project AND flipped the switch — pressing an
+ * unconfigured one on the gate answers with the sentence, never with a
+ * provider's raw error.
+ */
+export const SIGNIN_METHODS = ["google", "github", "apple", "azure", "sso"] as const;
+export type SigninMethod = (typeof SIGNIN_METHODS)[number];

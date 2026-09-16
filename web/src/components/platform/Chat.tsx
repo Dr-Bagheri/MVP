@@ -19,6 +19,7 @@ import { digits } from "@/lib/format";
 import { MessageRow } from "./chat/MessageRow";
 import { Composer } from "./chat/Composer";
 import { notifyError, notifyWarn } from "@/lib/notify";
+import { VerificationBanner } from "./VerificationNotice";
 
 /**
  * THE TEAM CHANNEL (0184; its actions and invitations 0189).
@@ -249,6 +250,9 @@ export function Chat({ meId, isAdmin, people }: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* db/0224: in an unverified workspace the room's agents stay silent —
+          said here, above the rooms, before anybody names @roya at a wall */}
+      <VerificationBanner />
       {/* ── the rooms, as the top sub-menu ───────────────────────────── */}
       <div className={TOOLBAR_ROW}>
         <div className={TAB_TRACK} role="tablist" aria-label={t("channels")}>

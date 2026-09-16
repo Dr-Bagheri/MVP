@@ -15,6 +15,7 @@
 import type { MemberRole, UserStatus } from "../api/vocabulary.ts";
 import type { Identity } from "../agent/types.ts";
 import { assertUuid, type Db, type SqlTx } from "./identity.ts";
+import { hasOrgVerified } from "./capabilities.ts";
 
 export class UnknownActorError extends Error {}
 export class OwnerMismatchError extends Error {}
@@ -50,6 +51,8 @@ interface AppUserRow {
   status: UserStatus;
   /** NULL when the org row is invisible to this actor — see SELECT_SELF. */
   org_status: "active" | "suspended" | null;
+  /** present only when the 0224 column exists — see selectSelf */
+  org_verified?: boolean | null;
 }
 
 /**
@@ -75,8 +78,17 @@ interface AppUserRow {
  * not active, or their org is suspended) are conditions under which the
  * answer is false anyway.
  */
-const SELECT_SELF = `
+/**
+ * db/0224: the verification stamp rides the same read — one query for the
+ * identity, so no route or worker pays a second one to learn whether the
+ * agent wall is up. Selected only where the column EXISTS (probed once,
+ * cached): before the migration the row simply has no `org_verified`, and
+ * the identity's field stays absent, which agent/verification.ts reads as
+ * "no wall here" rather than as false.
+ */
+const selectSelf = (withVerified: boolean) => `
   select u.id, u.org_id, u.role, u.status, o.status as org_status
+         ${withVerified ? ", (o.verified_at is not null) as org_verified" : ""}
   from echo.app_user u
   left join echo.org o on o.id = u.org_id
   where u.id = $1
@@ -111,8 +123,9 @@ function inactiveReason(row: AppUserRow): "pending" | "suspended" | "disabled" {
  */
 export async function resolveIdentity(db: Db, userId: string): Promise<Identity> {
   const actor = assertUuid(userId);
+  const withVerified = await hasOrgVerified(db);
   const rows = await db.withActor(actor, (tx: SqlTx) =>
-    tx.unsafe<AppUserRow>(SELECT_SELF, [actor]),
+    tx.unsafe<AppUserRow>(selectSelf(withVerified), [actor]),
   );
   const row = rows[0];
   // Now genuinely means "no app_user row" — signup incomplete — rather than
@@ -128,6 +141,11 @@ export async function resolveIdentity(db: Db, userId: string): Promise<Identity>
     // member of a suspended org resolve inactive.
     isActive,
     ...(isActive ? {} : { inactiveReason: inactiveReason(row) }),
+    // The stamp travels ONLY when the column was read AND came back as a
+    // boolean: a fake that answers the probe and then omits the column (a
+    // test written before 0224) must not turn into a wall — absent stays
+    // absent, and only an explicit false refuses (agent/verification.ts).
+    ...(withVerified && typeof row.org_verified === "boolean" ? { orgVerified: row.org_verified } : {}),
   };
 }
 

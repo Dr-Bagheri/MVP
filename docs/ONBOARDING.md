@@ -134,3 +134,41 @@ is on (Resend, since 2026-08-15 — the built-in sender allows ~3 mails an hour)
 - **Not provable from this side:** a real email arriving and being clicked —
   it needs the template above and a mailbox. The first real sign-up through
   the gate is the acceptance run; record it in CLAUDE.md when it happens.
+
+## 7. The four doors, and what each needs from the operator (2026-09-16)
+
+The gate draws Google, Apple, Microsoft and SSO above «یا» and the email
+field (user directive: "options that you can connect with these 4 or email,
+or you already signed up"). Every door is a SWITCH in Settings · Sign-in
+methods (db/0078, widened by db/0225), and a press on an off door answers
+with the platform's own sentence («این روش ورود هنوز فعال نشده») — never a
+provider's raw error. The three new doors arrive OFF. Switching one on is
+two steps, in this order:
+
+| Door | In the Supabase project (Authentication → Providers) | Then |
+|---|---|---|
+| Google | already configured (the 2026-08 pair) | on |
+| Apple | enable **Apple**: Services ID, Team ID, Key ID and the `.p8` key from the Apple developer account; the redirect URL Supabase prints | flip **Apple** on in Settings · Sign-in methods |
+| Microsoft | enable **Azure**: an app registration's client id + secret (single-tenant or multi-tenant, your call), the redirect URL Supabase prints | flip **Microsoft** on |
+| SSO | Supabase SAML SSO (a Pro-plan feature): register each organisation's identity provider by DOMAIN (`supabase sso add --type saml --metadata-url … --domains acme.example`); the person types their work email and GoTrue routes by its domain | flip **SSO** on |
+
+The web starts Google, Apple and Microsoft through `/api/auth/oauth/:provider`
+(PKCE; the callback exchanges the code server-side — M1) and SSO through
+`POST /api/auth/sso` (the same callback). A provider enabled in Supabase but
+OFF here stays a sentence; a provider ON here but not enabled in Supabase
+would hand the browser GoTrue's own error — which is why the switch is
+flipped LAST. GitHub keeps its row and route for whoever holds a bookmark; it
+is not drawn.
+
+**The demo beside the door**: set `NEXT_PUBLIC_DEMO_VIDEO_URL` in Vercel to
+the recording's address (a file in `web/public/demo/` works) and the panel
+plays it; until then it turns through the product's own scenes.
+
+## 8. Verification before the agents spend (db/0224)
+
+A stranger who signs up is IN — everything works — and the agents wait for
+the platform's word (user ruling: "for now I verify them to start using the
+agents"). The operator's part is the console's organisation row: an
+organisation carrying «در انتظار تأیید» is a founded workspace nobody has
+looked at; «تأیید دسترسی دستیارها» switches its agents on, audited, and can
+be taken back. docs/B2C-STRUCTURE.md §4a has the design.

@@ -19,6 +19,7 @@
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { AgentRunRecord, AgentRunStore, AgentStep, Identity } from "./types.ts";
+import { isOrgUnverifiedRefusal, OrgUnverifiedError } from "./verification.ts";
 
 const INSERT_RUN = `
   insert into echo.agent_run
@@ -83,18 +84,28 @@ const AGENT_ROLE = { role: "agent" } as const;
 export function createAgentRunStore({ db, identity }: RunStoreOptions): AgentRunStore {
   return {
     async begin(run): Promise<string> {
-      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<{ id: string }>(INSERT_RUN, [
-          run.orgId,
-          run.actorId,
-          run.callId,
-          run.skillId,
-          run.kind,
-          run.model,
-          toJsonb(run.request ?? {}),
-        ]),
-        AGENT_ROLE,
-      );
+      let rows: { id: string }[];
+      try {
+        rows = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<{ id: string }>(INSERT_RUN, [
+            run.orgId,
+            run.actorId,
+            run.callId,
+            run.skillId,
+            run.kind,
+            run.model,
+            toJsonb(run.request ?? {}),
+          ]),
+          AGENT_ROLE,
+        );
+      } catch (error) {
+        /* db/0224's wall, in its own voice: a 42501 with HINT org_unverified
+           is the workspace not being verified, not a miswired role — a path
+           that reached the trigger without the runtime's pre-check still
+           fails TYPED, so the api maps it and a worker can name it */
+        if (isOrgUnverifiedRefusal(error)) throw new OrgUnverifiedError();
+        throw error;
+      }
       const id = rows[0]?.id;
       if (!id) {
         // RLS returning nothing here means the actor could not insert a run

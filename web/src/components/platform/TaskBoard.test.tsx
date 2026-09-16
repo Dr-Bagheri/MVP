@@ -609,22 +609,25 @@ describe("the board's two doors into projects (2026-09-05)", () => {
     expect(screen.getByRole("button", { name: /کانبان/ })).toBeInTheDocument();
   });
 
-  it("gives an admin a LINK to the projects page, not a filter chip", async () => {
+  it("carries NO link to the projects page in its first row — the rail is the door (2026-09-16)", async () => {
     /*
-     * "For admins there must be a new button in the first sub menu before
-     * only-my-tasks with the name projects, that navigates you to the project
-     * page."
-     *
-     * A link and not a chip, because every chip beside it changes what THIS
-     * screen shows and this one leaves it. Asserted as a link with an href,
-     * since a button that looked identical would navigate nowhere.
+     * From 2026-09-05 to 2026-09-16 an admin reached /projects through a
+     * LINK in this row ("a new button in the first sub menu before
+     * only-my-tasks with the name projects"). The user then put projects
+     * back in the main menu above tasks and asked for it out of this row —
+     * two doors to one room is the shape nav.ts keeps warning about.
+     * Asserted as an ABSENCE, because the version that kept the link renders
+     * perfectly and is only wrong beside the rail. The projects SECTION of
+     * the strip below (a project's folders, the project `+`) is data, not a
+     * door, and stays.
      */
     boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
     render(<TaskBoard />);
     await screen.findByText("برای انجام");
 
-    const link = await screen.findByRole("link", { name: /پروژه‌ها/ });
-    expect(link).toHaveAttribute("href", expect.stringContaining("/projects"));
+    expect(screen.queryByRole("link", { name: /پروژه‌ها/ })).toBeNull();
+    /* the control: the strip's project `+` is still an admin's door to a NEW project */
+    expect(screen.getByRole("button", { name: "پروژهٔ تازه" })).toBeTruthy();
   });
 });
 

@@ -390,7 +390,17 @@ export function verifySignupToken(
 
 /** The providers the product offers. A name outside this list is a URL we
  * never minted — the oauth route refuses it rather than forwarding it. */
-export const OAUTH_PROVIDERS = ["google", "github"] as const;
+/**
+ * The GoTrue OAuth providers this app can start a round trip with. `apple`
+ * and `azure` (Microsoft) joined on 2026-09-16 (user directive: the gate
+ * offers Google, Apple, Microsoft, SSO, or email); each is drawn on the gate
+ * and governed by db/0225's switch — OFF until the operator has configured
+ * the provider in the Supabase project — so a press on an unconfigured one
+ * answers with the platform's sentence (`?oauth=disabled`) rather than with
+ * GoTrue's raw "unsupported provider". SSO is not in this list: it starts
+ * from a domain through `/api/auth/sso`, not from a provider name.
+ */
+export const OAUTH_PROVIDERS = ["google", "github", "apple", "azure"] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 /**
@@ -423,4 +433,45 @@ export function oauthAuthorizeUrl(
 /** The second half of the PKCE round trip: opaque code + our verifier → session. */
 export function exchangeOAuthCode(authCode: string, codeVerifier: string): Promise<TokenSet> {
   return gotrue("/token?grant_type=pkce", { auth_code: authCode, code_verifier: codeVerifier });
+}
+
+/**
+ * SINGLE SIGN-ON, by a work email's domain (2026-09-16). GoTrue's `/sso`
+ * answers with the identity provider's URL for a domain it has a SAML
+ * provider registered for, and refuses (4xx) one it has not — the caller
+ * turns that refusal into its own sentence. PKCE-shaped like the OAuth start,
+ * so the provider's answer lands on the same callback and is exchanged the
+ * same way (M1): the browser never sees a token.
+ */
+export async function ssoAuthorizeUrl(
+  domain: string,
+  redirectTo: string,
+  codeChallenge: string,
+): Promise<string> {
+  const { url, key } = config();
+  let response: Response;
+  try {
+    response = await fetch(`${url}/auth/v1/sso`, {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: key },
+      body: JSON.stringify({
+        domain,
+        redirect_to: redirectTo,
+        code_challenge: codeChallenge,
+        code_challenge_method: "s256",
+        skip_http_redirect: true,
+      }),
+      cache: "no-store",
+    });
+  } catch (cause) {
+    throw new AuthError(502, `auth provider unreachable: ${cause instanceof Error ? cause.message : "fetch failed"}`);
+  }
+  const data = (await response.json().catch(() => ({}))) as { url?: string; error_description?: string; msg?: string };
+  if (!response.ok) {
+    throw new AuthError(response.status, data.error_description ?? data.msg ?? "sso request failed");
+  }
+  if (typeof data.url !== "string" || data.url === "") {
+    throw new AuthError(502, "auth provider returned no sso url");
+  }
+  return data.url;
 }

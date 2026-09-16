@@ -16,13 +16,14 @@ import { stashUpload } from "@/lib/pendingUpload";
 import { audioContentType, readDurationSeconds, uploadRejection } from "@/components/echo/uploadRules";
 import {
   IconArchive, IconArrowDown, IconArrowUp, IconCalendar, IconCheck, IconCheckCircle,
-  IconChevronRight, IconClose, IconFolder, IconMic, IconPencil, IconPeople3, IconPlus,
+  IconChevronRight, IconClose, IconFolder, IconMic, IconPeople3, IconPlus,
   IconRows, IconSearch, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import {
   FILTER_TRACK, FilterChips, TAB_TRACK, TOOLBAR_GROUPS, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass,
 } from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
+import { TopicStrip } from "./TopicStrip";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/scaffold";
 import {
@@ -201,14 +202,6 @@ export function Meetings() {
       )))
       .catch(() => setPhotos(new Map()));
   }, []);
-  /* ONE piece of state for naming a folder: `null` is closed, a row with no
-     id is the NEW one. Two booleans said the same thing in three ways and
-     could both be true at once — a state the screen has no picture for. */
-  const [namingTopic, setNamingTopic] = useState<{ id: string | null; name: string } | null>(null);
-  /* the topic the dropdown is standing on, or null for «همه جلسات» — which
-     is the absence of a filter and so has nothing to rename or remove */
-  const selectedTopic = topicRows.find((row) => row.id === topic) ?? null;
-
   const shown = useMemo(() => {
     if (!Array.isArray(rows)) return [];
     const now = Date.now();
@@ -396,122 +389,8 @@ export function Meetings() {
         </button>
       </FilterChips>
 
-        {/*
-          * THE TOPIC, AS A DROPDOWN.
-          *
-          * The strip could show a count per folder and this cannot show more
-          * than one at a time, so the count travels INTO the label — the
-          * number was the strip's one advantage and losing it silently would
-          * be trading a fact for a layout.
-          *
-          * `Select` is `w-full` by its own class, which is what made the last
-          * attempt span the page: the width belongs to the WRAPPER, not to a
-          * `w-auto` written beside a `w-full` that outranks it in the
-          * stylesheet. That is why these two sit in fixed-width boxes.
-          */}
-        <div className="w-[11rem] shrink-0">
-          <Select
-            value={topic}
-            ariaLabel={t("fieldTopicFolder")}
-            /*
-             * «موضوع جدید» IS THE LAST ROW (user, 2026-09-08: "new topic
-             * should be at the last item in the dropdown").
-             *
-             * It is an ACTION in a list of values, which is the thing this
-             * file's own note above the folder menu argues against — and the
-             * distinction that makes it right here is which noun it acts on.
-             * Rename and remove act on the CURRENT selection, so as options
-             * they would be rows that change the meaning of the row above
-             * them; «موضوع جدید» acts on nothing and adds a value to this
-             * very list, which is why every picker in every product puts it
-             * exactly here. It stays LAST so the list's own values are never
-             * pushed down the panel as folders are added.
-             *
-             * The sentinel is filtered out before it can reach `topic`: a
-             * meeting whose `topic_id` is the string "__new" is not a state
-             * this list can produce, and the guard is what keeps it that way.
-             */
-            onChange={(next) => {
-              if (next === "__new") { setNamingTopic({ id: null, name: "" }); return; }
-              setTopic(next);
-            }}
-            options={[
-              {
-                value: "all",
-                label: `${t("allMeetings")} (${digits(Array.isArray(rows) ? rows.length : 0, locale)})`,
-              },
-              ...topicRows.map((row) => ({
-                value: row.id,
-                label: `${row.name} (${digits(Array.isArray(rows) ? rows.filter((m) => m.topic_id === row.id).length : 0, locale)})`,
-              })),
-              /* the + says this row ACTS rather than selects, before it is
-                 pressed — it rides the same
-                 leading slot a value's colour dot would */
-              { value: "__new", label: t("addTopic"), icon: <IconPlus width={12} height={12} /> },
-            ]}
-          />
-        </div>
-
-        {/*
-          * THE FOLDER ACTIONS, which the strip carried per chip.
-          *
-          * They cannot live in the dropdown — a listbox row is a VALUE, and
-          * an option that renames itself when picked is a control pretending
-          * to be a choice — so they are one menu beside it. Rename and remove
-          * act on the SELECTED topic and are disabled while «همه جلسات» is
-          * chosen: that entry is the absence of a filter, and offering to
-          * rename it would be a menu over a fiction (the strip's own rule,
-          * kept).
-          */}
-        {/*
-          * NAMING A FOLDER IS A DIALOG NOW.
-          *
-          * The inline box REPLACED the picker while it was open, so the list
-          * a person had just been reading vanished under a 144px field — and
-          * the act it belongs to is reached from inside that list's own
-          * dropdown, which closes to reveal the box that took its place.
-          * A dialog leaves the row where it was and gives the field the
-          * width a folder name deserves.
-          *
-          * BOTH jobs, not only the new one. Renaming is the same interaction
-          * with a starting value, and converting one would have left two
-          * shapes for one act inside a single component — which is the drift
-          * this dialog exists to end rather than start.
-          */}
-        <KebabMenu
-            label={t("topicOptions")}
-            triggerClassName="btn btn-icon shrink-0 border border-border text-fg-muted hover:text-fg"
-            items={[
-              /* «موضوع جدید» left this menu for the dropdown's last row on
-                 2026-09-08. Two doors to one box is how they drift. */
-              {
-                key: "rename",
-                label: t("renameTopic"),
-                icon: <IconPencil width={14} height={14} />,
-                disabled: selectedTopic === null,
-                onSelect: () => {
-                  if (selectedTopic !== null) setNamingTopic({ id: selectedTopic.id, name: selectedTopic.name });
-                },
-              },
-              {
-                key: "remove",
-                label: t("removeTopic"),
-                icon: <IconTrash width={14} height={14} />,
-                danger: true,
-                disabled: selectedTopic === null,
-                /* ARCHIVED, not deleted: the meetings in it are re-pointed
-                   to no-folder by the schema, and a folder that vanished
-                   would take the answer to "where did that go" with it */
-                onSelect: () => {
-                  if (selectedTopic === null) return;
-                  void api.updateMeetingTopic(selectedTopic.id, { archived: true })
-                    .then(() => { setTopic("all"); loadTopics(); load(); })
-                    .catch(refusal);
-                },
-              },
-            ]}
-        />
-
+        {/* THE TOPIC LEFT THIS ROW for the third row (2026-09-16) — see the
+            TopicStrip under the toolbar. */}
         {/* THE SORT MOVED OUT OF THIS ROW — see the chip row below. */}
 
         {/*
@@ -561,6 +440,37 @@ export function Meetings() {
         </div>
       </div>
 
+
+      {/* ── THE THIRD ROW: the topic strip (user, 2026-09-16: "all meetings
+             should look like the projects with the edit three dot in it and
+             the plus after it for new one, and the place in the third row —
+             unify"). The kit's TopicStrip, the task board's own row, READ
+             here rather than drawn again. The dropdown-and-menu of 2026-09-08
+             went with the reason it existed: the inline box had replaced the
+             picker, and there is no picker to replace now. ── */}
+      <TopicStrip
+        allLabel={t("allMeetings")}
+        allCount={Array.isArray(rows) ? rows.length : 0}
+        active={topic}
+        onSelect={setTopic}
+        topics={topicRows.map((row) => ({
+          id: row.id, name: row.name,
+          count: Array.isArray(rows) ? rows.filter((m) => m.topic_id === row.id).length : 0,
+        }))}
+        labels={{
+          options: t("topicOptions"), rename: t("renameTopic"), remove: t("removeTopic"),
+          add: t("addTopic"), placeholder: t("topicNamePlaceholder"), cancel: t("cancel"),
+        }}
+        onCreate={(name) => api.createMeetingTopic(name)}
+        onRename={(id, name) => api.updateMeetingTopic(id, { name })}
+        /* ARCHIVED, not deleted: the meetings in it are re-pointed to
+           no-folder by the schema, and a folder that vanished would take the
+           answer to "where did that go" with it */
+        onArchive={(id) => api.updateMeetingTopic(id, { archived: true })
+          .then(() => setTopic((cur) => (cur === id ? "all" : cur)))}
+        onDone={() => { loadTopics(); load(); }}
+        onRefused={refusal}
+      />
 
       {rows === null ? (
         /* audit finding, 2026-09-02: while the list fetched, the column held a
@@ -728,15 +638,6 @@ export function Meetings() {
           ))}
         </ul>
       )}
-
-      {namingTopic !== null ? (
-        <TopicDialog
-          topic={namingTopic}
-          onClose={() => setNamingTopic(null)}
-          onDone={() => { setNamingTopic(null); loadTopics(); load(); }}
-          onRefused={refusal}
-        />
-      ) : null}
 
       {creating ? (
         <NewMeetingDialog
@@ -995,90 +896,6 @@ function ModePicker({ value, onChange }: { value: MeetingMode; onChange: (m: Mee
  * The DATA is untouched — `meeting.agenda` and `meeting.invitees` are still
  * on the wire and still written by the agents' own tools.
  */
-
-/**
- * NAMING A FOLDER, IN A BOX OF ITS OWN.
- *
- * `topic.id === null` is the NEW folder and anything else is a rename — one
- * component for the two jobs because they are the same interaction with a
- * different starting value, which is the reasoning the inline box it replaces
- * carried and the half of it worth keeping.
- *
- * The dialog's own anatomy is the new-meeting dialog's, deliberately: the
- * same header with its ×, the same `DIALOG_BODY` rhythm, the same footer pair
- * at the same heights. A second dialog shape for a one-field form is how a
- * product comes to have four.
- */
-function TopicDialog({ topic, onClose, onDone, onRefused }: {
-  topic: { id: string | null; name: string };
-  onClose: () => void;
-  onDone: () => void;
-  onRefused: () => void;
-}) {
-  const t = useTranslations("meetings");
-  const [name, setName] = useState(topic.name);
-  const [busy, setBusy] = useState(false);
-  const ready = name.trim() !== "" && !busy;
-
-  const submit = () => {
-    if (!ready) return;
-    setBusy(true);
-    const value = name.trim();
-    void (topic.id !== null
-      ? api.updateMeetingTopic(topic.id, { name: value })
-      : api.createMeetingTopic(value).then(() => undefined))
-      .then(onDone)
-      .catch(() => { setBusy(false); onRefused(); onDone(); });
-  };
-
-  const title = topic.id === null ? t("addTopic") : t("renameTopic");
-  return (
-    <Overlay onClose={onClose} label={title} size="sm">
-      <div className="mb-1 flex items-start justify-between gap-3">
-        <h2 className="text-base font-bold text-fg">{title}</h2>
-        <button type="button" aria-label={t("close")} onClick={onClose}
-          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
-          <IconClose width={14} height={14} />
-        </button>
-      </div>
-      <div className={DIALOG_BODY}>
-        <Field label={t("fieldTopicFolder")}>
-          {/* ENTER COMMITS, the one habit the inline box taught that a dialog
-              must not lose — a single-field form where the keyboard cannot
-              finish is a form that asks for the mouse back */}
-          <input
-            autoFocus
-            value={name}
-            maxLength={80}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            placeholder={t("topicNamePlaceholder")}
-            className="input"
-          />
-        </Field>
-      </div>
-      <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-        <button type="button" onClick={onClose}
-          className="btn border border-border text-fg">
-          {t("cancel")}
-        </button>
-        <button type="button" onClick={submit} disabled={!ready}
-          className="btn bg-accent text-on-accent shadow-accent">
-          {t("save")}
-        </button>
-      </div>
-    </Overlay>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-fg-muted">{label}</span>
-      {children}
-    </label>
-  );
-}
 
 /**
  * THE NEW CALL, AND IT IS ALWAYS NOW.
@@ -1484,6 +1301,16 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
         className="sr-only"
         onChange={(e) => { take(e.target.files); e.target.value = ""; }}
       />
+    </label>
+  );
+}
+
+/* a labelled field for the dialogs above — the one helper the dialogs share */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-fg-muted">{label}</span>
+      {children}
     </label>
   );
 }

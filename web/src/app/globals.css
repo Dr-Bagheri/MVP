@@ -1839,6 +1839,37 @@
   background: none;
   box-shadow: none;
 }
+/* AND FLAT (user, 2026-09-16: "the bar in recording still is a different
+   colour, like gradients — make it a solid colour like after it finishes").
+   The finished record's player draws its waveform as SOLID bars, centred on
+   the row, on the card's own ground — nothing else. The live strip had kept
+   four things of the hall's that read as a gradient over a 32px box: the
+   reflection lane, the age-and-level ramp on every bar, the grain overlay
+   and the three-step glow. All four go here, and the bars grow from the
+   middle exactly as the player's do, so the two instruments read as one
+   thing across the finish line. `!important` on the filter because the glow
+   is set by attribute selectors that outrank this class. */
+.wave-scope.wave-scope-strip {
+  filter: none !important;
+  contain: layout;
+}
+.wave-scope-strip .wave-grain,
+.wave-scope-strip .wave-lane-down,
+.wave-scope-strip .wave-axis { display: none; }
+.wave-scope-strip .wave-lane {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.wave-scope-strip .wave-lane-up { top: 0; height: 100%; align-items: center; }
+.wave-scope-strip .wave-bar {
+  background-image: none;
+  background-color: rgb(var(--accent));
+  opacity: 1;
+}
+.wave-scope-strip .wave-lane-up .wave-bar {
+  clip-path: inset(calc((1 - var(--v)) * 50%) 0 calc((1 - var(--v)) * 50%) 0 round 999px);
+}
+.wave-scope-strip .wave-idle { top: 50%; }
 .wave-scope { transition: filter 260ms ease-out; }
 .wave-scope[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .20)); }
 .wave-scope[data-glow="2"] {

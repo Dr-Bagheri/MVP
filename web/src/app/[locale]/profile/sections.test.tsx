@@ -121,7 +121,9 @@ describe("each section renders its own content, and only its own", () => {
     await open("preferences");
     expect(screen.getByLabelText(/^زبان/)).toBeTruthy();
     expect(screen.queryByDisplayValue("سارا"), "the identity form leaked").toBeNull();
-    expect(screen.queryByRole("button", { name: "خروج از حساب" })).toBeNull();
+    /* the way out is on the FIRST ROW now (2026-09-16), so it is on every
+       section — what must not leak here is the identity form, above */
+    expect(screen.getByRole("button", { name: "خروج از حساب" })).toBeTruthy();
   });
 
   it("telegram: its own panel alone", async () => {

@@ -79,7 +79,13 @@ export interface AssistantSnapshot {
    * is how English lands on a Persian screen (the repo's standing refusal
    * rule: a code, and the words at the consumer).
    */
-  error: { detail?: string } | null;
+  error: {
+    detail?: string;
+    /** core's catalogued refusal code, when the refusal had one — what lets
+        a surface say the specific true thing in its own language
+        (`org_unverified`, db/0224) rather than the server's English */
+    code?: string;
+  } | null;
 }
 
 /**
@@ -403,7 +409,12 @@ async function runStream(
         error:
           cause instanceof StreamDied || progress.sawAny
             ? null
-            : { ...(detail === undefined ? {} : { detail }) },
+            : {
+                ...(detail === undefined ? {} : { detail }),
+                ...(typeof (cause as { code?: unknown }).code === "string"
+                  ? { code: (cause as { code: string }).code }
+                  : {}),
+              },
       });
       settle("failed");
     }

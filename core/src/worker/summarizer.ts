@@ -577,6 +577,15 @@ export function createSummarizer<TDeps>({
        * is removed from the run's view of the skill; the skill's prompt and
        * tools ride unchanged.
        */
+      // db/0224 (M54): an unverified workspace spends nothing. The call still
+      // COMPLETES — the transcript is the record (invariant 1) and a summary
+      // is rebuildable — and the reason lands where an admin reads it, the
+      // exact shape the no-model skip below takes. Requeueing this step once
+      // the platform verifies the workspace produces the summary.
+      if (identity.orgVerified === false) {
+        return { skipped: true, reason: "the workspace is not verified yet; agents cannot run" };
+      }
+
       const skill = model && resolved ? { ...resolved, model: null } : resolved;
       const callerModel = model
         ?? (skill?.model ? undefined : await resolveModel(db, identity, fallbackModel));

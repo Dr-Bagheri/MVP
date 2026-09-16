@@ -70,6 +70,12 @@ const EXCLUDED: Record<string, string> = {
     "is no local union or local member list to drift. Same reasoning as " +
     "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
     "than copying, not an oversight.",
+  SIGNIN_METHODS:
+    "not mirrored: the settings card draws one row per member of this array " +
+    "(SignInMethods.tsx imports it) and the gate's four doors are named by the " +
+    "routes, not by a local union — a method the list gains grows a row in the " +
+    "card and nothing else needs to learn it. Same reasoning as PROJECT_STAGES: " +
+    "importing, not copying.",
   PROJECT_STAGES:
     "not mirrored: the project panel imports the array from this module to " +
     "draw one chip per stage, and `types.ts` re-exports `ProjectStage` from " +

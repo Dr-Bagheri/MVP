@@ -128,12 +128,15 @@ describe("breadcrumb trail", () => {
     expect(trailFor("/settings/audit-logs").at(-1)!.label).toBe("settings.section.audit-logs");
   });
 
-  it("opens the projects page under the board — «تسک‌ها / پروژه‌ها» (user, 2026-09-06)", () => {
-    expect(trailFor("/projects").map((c) => c.href)).toEqual(["/tasks", "/projects"]);
-    expect(trailFor("/projects").map((c) => c.label)).toEqual(["platform.tasks", "platform.projects"]);
+  it("opens the projects page as a ROOT — a rail entry again (user, 2026-09-16)", () => {
+    /* [SUPERSEDES 2026-09-06's «تسک‌ها / پروژه‌ها»: the page was reached from
+       the board's first row then; it is in the main menu above tasks now,
+       and every rail entry is a root] */
+    expect(trailFor("/projects").map((c) => c.href)).toEqual(["/projects"]);
+    expect(trailFor("/projects").map((c) => c.label)).toEqual(["platform.projects"]);
     /* and a project's own (redirecting) address still climbs through both */
     expect(trailFor("/projects/0c5c0e02-1111-2222-3333-444455556666").map((c) => c.href))
-      .toEqual(["/tasks", "/projects", "/projects/0c5c0e02-1111-2222-3333-444455556666"]);
+      .toEqual(["/projects", "/projects/0c5c0e02-1111-2222-3333-444455556666"]);
   });
 
   it("returns nothing for a route with no trail", () => {
@@ -188,13 +191,15 @@ describe("the trail's own assumptions", () => {
        Settings-parent check below now forbids outright. */
     /* «/echo» left the set on 2026-09-04 with the surface itself. «/projects»
        joined it the same day as a rail entry, LEFT the rail on 2026-09-05
-       (an admin's surface, reached from the board's first row) and on
-       2026-09-06 the user asked for the trail to say so — «تسک‌ها /
-       پروژه‌ها» — so it is parented to /tasks below and is not a root.
-       «/search» left on 2026-09-15 with its page. */
+       (an admin's surface, reached from the board's first row), was parented
+       to /tasks on 2026-09-06 («تسک‌ها / پروژه‌ها»), and is a ROOT AGAIN
+       since 2026-09-16 — the rail lists it above tasks. «/search» left on
+       2026-09-15 with its page. «/integrations» stays a root although it
+       left the rail on 2026-09-16: it opens in Home's pane, and a connector's
+       own page still needs an ancestor that is not Settings. */
     expect(roots).toEqual([
       "/", "/agents", "/assistant", "/chat", "/help", "/integrations",
-      "/management", "/meetings", "/platform", "/profile",
+      "/management", "/meetings", "/platform", "/profile", "/projects",
       "/settings", "/tasks", "/workflows",
     ]);
     for (const pattern of Object.keys(TRAIL)) {

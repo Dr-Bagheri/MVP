@@ -49,11 +49,23 @@ select t.denied($$delete from echo.admin_action$$,
 reset role;
 set local role echo_purge;
 
-select t.ok((select count(*) from echo.call) = 1,
-  'the purge job sees exactly one call: the one deleted 40 days ago');
+-- Properties, not a census. The purge role is ACTOR-INDEPENDENT, so what it
+-- sees is every expired call in the whole database, not the fixture's — the
+-- day a real call crosses its window on production (2026-09-16: one did, a
+-- failed take soft-deleted 2026-08-17) a `count(*) = 1` here reports the wall
+-- broken about a row the wall is admitting correctly. So: the expired fixture
+-- call is visible, the one deleted yesterday is not, and NOTHING the purge can
+-- see is inside its window — the last one is the rule itself, over however
+-- many rows there are.
 select t.ok(
-  (select id from echo.call) = 'c4000000-0000-4000-8000-000000000004',
-  'and it is the expired one, not the one deleted yesterday');
+  exists (select 1 from echo.call where id = 'c4000000-0000-4000-8000-000000000004'),
+  'the purge job sees the call deleted 40 days ago');
+select t.ok(
+  not exists (select 1 from echo.call where id = 'c5000000-0000-4000-8000-000000000005'),
+  'and not the one deleted yesterday');
+select t.ok(
+  (select bool_and(deleted_at is not null and purge_after <= now()) from echo.call),
+  'every call the purge job can see is past its window — whatever else is in the database');
 
 -- --- a call still inside its window is untouchable -------------------------
 select t.writes_nothing(
@@ -72,7 +84,8 @@ delete from echo.call_speaker       where call_id = 'c4000000-0000-4000-8000-000
 delete from echo.call_part          where call_id = 'c4000000-0000-4000-8000-000000000004';
 delete from echo.call               where id      = 'c4000000-0000-4000-8000-000000000004';
 
-select t.ok((select count(*) from echo.call) = 0,
+select t.ok(
+  not exists (select 1 from echo.call where id = 'c4000000-0000-4000-8000-000000000004'),
   'the expired call is physically gone');
 
 reset role;

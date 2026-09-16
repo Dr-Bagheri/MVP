@@ -20,6 +20,7 @@
 import { createPolicy, DEFAULT_MAX_TOOL_CALLS, filterDeclaredTools } from "./policy.ts";
 import { runPi, type PiModelRef } from "./pi.ts";
 import { modelForRun } from "./skills.ts";
+import { assertOrgVerified } from "./verification.ts";
 import { PLATFORM_MAP, REACH_RULE } from "./platform-map.ts";
 import { wrapTools, type DomainTool } from "./tools.ts";
 import type { AgentResult, AgentRunKind, AgentRunStore, AgentStep, Identity, Skill } from "./types.ts";
@@ -161,6 +162,11 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
       if (!identity.isActive) {
         throw new InactiveActorError("actor is not active");
       }
+      // (1b) db/0224: a workspace the platform has not verified spends
+      // nothing. The trigger under `runs.begin` is the wall; this is the same
+      // fact answered here so the refusal is typed on every path — the api's
+      // routes pre-check too, and this catches whichever one forgets.
+      assertOrgVerified(identity);
 
       const modelId = modelForRun(skill, request.agentModel ?? request.callerModel);
       /*

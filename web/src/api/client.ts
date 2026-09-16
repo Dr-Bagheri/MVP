@@ -520,6 +520,21 @@ export const api = {
   },
 
   /**
+   * Single sign-on from a work email (2026-09-16): the server mints the PKCE
+   * verifier and answers with the identity provider's URL; the caller only
+   * follows it. A refusal carries a CODE — `disabled` (the switch is off) or
+   * `not_configured` (no provider for that domain) — and the page says each
+   * in its own words.
+   */
+  async startSso(email: string): Promise<{ url: string }> {
+    return bff<{ url: string }>("/api/auth/sso", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
    * **LIVE** — `POST /api/auth/otp/verify`: the typed code becomes a session
    * cookie server-side; the browser gets `{ok:true}` and nothing else (M1).
    * The caller then routes by `identityState()` exactly as after a password.
@@ -711,6 +726,17 @@ export const api = {
     return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ accepts_signups: on, reason }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  /**
+   * db/0224 (M54): verify a workspace for agent use, or take it back. The
+   * door audits the act and answers whether anything changed.
+   */
+  async setPlatformOrganizationVerified(id: string, on: boolean, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ verified: on, reason }),
       headers: { "content-type": "application/json" },
     });
   },
@@ -1055,7 +1081,10 @@ export const api = {
 
   /** Flip one sign-in method — admin/owner; the wall is core's + SQL's. */
   async setAuthMethod(
-    provider: "google" | "github",
+    /* the closed set is core's SIGNIN_METHODS (db/0225: google, github,
+       apple, azure, sso); the server refuses a name outside it, and the
+       settings card draws its rows from that list */
+    provider: string,
     enabled: boolean,
   ): Promise<{ provider: string; enabled: boolean }> {
     return bff<{ provider: string; enabled: boolean }>(

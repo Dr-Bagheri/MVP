@@ -338,6 +338,11 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
       continue;                                  // no owner, no product write
     }
     if (!identity.isActive) continue;
+    /* db/0224: an unverified workspace spends nothing — and it is skipped
+       HERE, before the mailbox is read, rather than refused by the wall under
+       the run: a poll that reads the inbox and then hits the trigger would
+       re-read the same mail every round and log a failure each time */
+    if (identity.orgVerified === false) continue;
 
     const provider = row.provider as ConnectorProvider;
     try {

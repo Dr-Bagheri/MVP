@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  TAB_TRACK, TOOLBAR_GROUPS, TOOLBAR_ROW, sectionTabClass, toggleClass,
+  TAB_TRACK, Toolbar, sectionTabClass, toggleClass,
 } from "./sectionTabs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -249,60 +249,69 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       {/* ── ROW ONE: the kit's tracks (2026-09-15) — the views, the sorts,
              whose projects, and the one toggle; the same rails as the task
              board, because a person who has learned one has learned both. ── */}
-      <div className={TOOLBAR_ROW}>
-        <div className={TOOLBAR_GROUPS}>
-          <div className={TAB_TRACK}>
-            {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
-            {chip(view === "list", tTasks("viewList"), () => setView("list"))}
-            {chip(view === "calendar", tTasks("viewCalendar"), () => setView("calendar"))}
-            {chip(view === "archive", tTasks("viewArchive"), () => setView("archive"))}
-          </div>
-          <div className={TAB_TRACK}>
-            {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
-            {chip(sort === "name", t("sortName"), () => setSort("name"))}
-            {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
-          </div>
-          {/* WHOSE PROJECTS, IN ROW ONE (user directive, 2026-09-05: "in
-              projects put my projects in the first sub menu top before Due
-              today"); «همه» keeps the count. */}
-          <div className={TAB_TRACK}>
-            {chip(scope === "mine", t("scopeMine"), () => setScope("mine"))}
-            {chip(scope === "all", t("scopeAll"), () => setScope("all"), digits(Array.isArray(rows) ? rows.length : 0, locale))}
-          </div>
-          <div className={TAB_TRACK}>
+      {/* ── ROW ONE: THE TASK PAGE'S OWN ROW (user, 2026-09-16: "make it page
+             and its sub menu look like tasks page and sub menu"). The kit's
+             `Toolbar` rather than a row composed by hand — the same component
+             the board renders through, so the two cannot drift by a class —
+             with the views first, then the sorts where the board keeps its
+             priorities, then whose projects and the one toggle in one track,
+             the way the board keeps its two toggles together. ── */}
+      <Toolbar
+        end={
+          /* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
+             the add new project on top and add it like tasks in the column").
+             The way in is the dashed row inside each kanban column — the
+             board's own shape, and a project is made where it will sit. It is
+             still admin-only (0186), and still ABSENT rather than disabled for
+             everybody else: a greyed control is a promise the product has no
+             intention of keeping.
+
+             The LIST, CALENDAR and ARCHIVE views have no column to put it in,
+             so they carry the button — in R3's one coat (`.btn btn-primary`),
+             at the row's end, where every other page keeps its create. The
+             kanban does not. That is written down because it looks like an
+             inconsistency and is not one. */
+          isAdmin && view !== "kanban" ? (
             <button
               type="button"
-              aria-pressed={dueToday}
-              onClick={() => setDueToday((v) => !v)}
-              className={toggleClass(dueToday)}
+              onClick={() => setCreating(true)}
+              className="btn btn-primary"
             >
-              <IconClock width={12} height={12} />
-              {tTasks("dueTodayFilter")}
+              <IconPlus width={14} height={14} />
+              {t("newProject")}
             </button>
-          </div>
+          ) : undefined
+        }
+      >
+        <div className={TAB_TRACK}>
+          {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
+          {chip(view === "list", tTasks("viewList"), () => setView("list"))}
+          {chip(view === "calendar", tTasks("viewCalendar"), () => setView("calendar"))}
+          {chip(view === "archive", tTasks("viewArchive"), () => setView("archive"))}
         </div>
-        {/* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
-            the add new project on top and add it like tasks in the column").
-            The way in is the dashed row inside each kanban column now — the
-            board's own shape, and a project is made where it will sit. It is
-            still admin-only (0186), and still ABSENT rather than disabled for
-            everybody else: a greyed control is a promise the product has no
-            intention of keeping.
-
-            The LIST, CALENDAR and ARCHIVE views have no column to put it in,
-            so they carry the button; the kanban does not. That is written
-            down because it looks like an inconsistency and is not one. */}
-        {isAdmin && view !== "kanban" ? (
+        <div className={TAB_TRACK}>
+          {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
+          {chip(sort === "name", t("sortName"), () => setSort("name"))}
+          {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
+        </div>
+        {/* WHOSE PROJECTS, IN ROW ONE (user directive, 2026-09-05: "in
+            projects put my projects in the first sub menu top before Due
+            today"); «همه» keeps the count — and the toggle beside them, in
+            the same track, as the board's «فقط من» and «مهلت امروز» share one. */}
+        <div className={TAB_TRACK}>
+          {chip(scope === "mine", t("scopeMine"), () => setScope("mine"))}
+          {chip(scope === "all", t("scopeAll"), () => setScope("all"), digits(Array.isArray(rows) ? rows.length : 0, locale))}
           <button
             type="button"
-            onClick={() => setCreating(true)}
-            className="btn bg-accent text-on-accent shadow-accent hover:opacity-90"
+            aria-pressed={dueToday}
+            onClick={() => setDueToday((v) => !v)}
+            className={toggleClass(dueToday)}
           >
-            <IconPlus width={14} height={14} />
-            {t("newProject")}
+            <IconClock width={12} height={12} />
+            {tTasks("dueTodayFilter")}
           </button>
-        ) : null}
-      </div>
+        </div>
+      </Toolbar>
 
       {/* ── the views ────────────────────────────────────────────────── */}
       {rows === null ? (

@@ -92,6 +92,11 @@ export async function hasOrgKind(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "kind");
 }
 
+/** db/0224 (M54): the workspace-verification stamp the agent wall reads. */
+export async function hasOrgVerified(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "verified_at");
+}
+
 /** db/0081 (voice enrollment): the person voiceprint columns. */
 export async function hasVoiceprints(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "voiceprint");

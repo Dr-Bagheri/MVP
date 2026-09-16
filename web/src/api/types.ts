@@ -240,6 +240,13 @@ export interface Me extends User {
   onboarding_completed_at?: string | null;
   /** db/0223 — personal (founded at arrival) or team. ABSENT before 0223. */
   org_kind?: "personal" | "team";
+  /**
+   * db/0224 (M54) — whether the platform has verified this workspace for
+   * agent use. FALSE draws the «awaiting verification» notice and is what the
+   * assistant's `org_unverified` refusal means; ABSENT before 0224 draws
+   * nothing (a deployment with no wall has nothing to wait for).
+   */
+  org_verified?: boolean;
   /** the workspace's display name — served to every member since core's
       me() joined the org row; typed late (the served-and-never-typed
       inverse of the stored-and-never-served family) */

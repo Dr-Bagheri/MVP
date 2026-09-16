@@ -34,7 +34,11 @@ export async function GET(
     const res = await fetch(`${origin}/api/auth-methods`, { cache: "no-store" });
     const methods = (await res.json()) as { provider: string; enabled: boolean }[];
     const row = methods.find((m) => m.provider === provider);
-    if (row && !row.enabled) {
+    /* an ANSWERED list that does not name the provider is a schema that
+       has no switch for it yet (db/0225's rows on a deployment before it) —
+       the door is not on, and saying so beats handing GoTrue a provider it
+       may not know. Only an UNREACHABLE list falls open (the catch below). */
+    if (row === undefined || !row.enabled) {
       return Response.redirect(new URL("/en/sign-in?oauth=disabled", origin), 303);
     }
   } catch { /* fall open */ }

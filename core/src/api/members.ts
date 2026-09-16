@@ -20,7 +20,7 @@ import {
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
 import {
-  hasAgentsWeb, hasAssistantPrefs, hasAutonomyColumn, hasOnboarding, hasOrgKind,
+  hasAgentsWeb, hasAssistantPrefs, hasAutonomyColumn, hasOnboarding, hasOrgKind, hasOrgVerified,
   hasProfileContext, PINNED_AUTONOMY,
 } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
@@ -219,6 +219,13 @@ export interface MeRecord extends MemberRecord {
   onboarding_completed_at?: string | null;
   /** db/0223 — personal (founded at arrival) or team. ABSENT before 0223. */
   org_kind?: "personal" | "team";
+  /**
+   * db/0224 (M54): whether the platform has verified this workspace for agent
+   * use. FALSE = the agents refuse (the wall); ABSENT before 0224 — never a
+   * default, since a default of false would read as "everybody is refused"
+   * on a deployment that has no wall at all.
+   */
+  org_verified?: boolean;
 }
 
 /**
@@ -628,6 +635,7 @@ export function createMembersRepo(db: Db) {
       const withAgentsWeb = await hasAgentsWeb(db);
       const withOnboarding = await hasOnboarding(db);
       const withOrgKind = await hasOrgKind(db);
+      const withOrgVerified = await hasOrgVerified(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // The org join is LEFT for the same reason resolveIdentity's is: an
@@ -653,6 +661,7 @@ export function createMembersRepo(db: Db) {
                   ${withAgentsWeb ? "u.agents_web," : ""}
                   ${withOnboarding ? "u.onboarding, u.onboarding_completed_at," : ""}
                   ${withOrgKind ? "o.kind as org_kind," : ""}
+                  ${withOrgVerified ? "(o.verified_at is not null) as org_verified," : ""}
                   o.name as org_name
              from echo.app_user u
              left join echo.org o on o.id = u.org_id
@@ -725,6 +734,9 @@ export function createMembersRepo(db: Db) {
         ...(withOrgKind
           ? { org_kind: row.org_kind === "personal" ? "personal" as const : "team" as const }
           : {}),
+        /* db/0224: served only where read — the shell draws the "awaiting
+           verification" notice on false and nothing on absent */
+        ...(withOrgVerified ? { org_verified: row.org_verified === true } : {}),
       };
     },
 

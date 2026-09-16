@@ -9,7 +9,7 @@ import { Card } from "@/components/ui";
 export default function PendingPage() {
   const t = useTranslations("auth");
   return (
-    <Card>
+    <Card className="mx-auto w-full max-w-sm">
       <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-warning/15 text-warning">
         ⏳
       </div>

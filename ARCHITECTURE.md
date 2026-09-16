@@ -2755,3 +2755,53 @@ and unreachable in configuration (the 2026-08-15 shape).
 **Deliberately not decided here** (docs/B2C-STRUCTURE.md §4): billing per
 person vs per seat, self-serve deletion of a personal workspace, the Google
 button's return, the lesson videos.
+
+**[AMENDED 2026-09-16 — verification before the agents spend; the four
+doors]** User ruling: "after they enter they must need a verification so
+they can use the full system — the agents on the system use tokens, so if
+all can use it, it becomes problematic; for now I verify them to start using
+the agents, later we change it. Now I want them to have an easy entry, with
+an amazing experience in the login."
+
+Two halves, and the first is a wall (db/0224):
+
+- **A workspace is verified before its agents spend.** `echo.org.verified_at`
+  (null = not yet looked at). The wall is a BEFORE INSERT trigger on
+  `echo.agent_run` — every model call this product makes opens a run first
+  (invariant 5), from the assistant, the room's agents, the workflows, the
+  summarizer and the four pollers alike, so one trigger refuses the spend on
+  every path at once, including the path somebody adds next month. core/
+  reads the fact ONCE, with the identity (`Identity.orgVerified`; ABSENT on a
+  schema before the column means "no wall here", never false), pre-checks it
+  where a person is watching so the refusal arrives as a 403 with the code
+  `org_unverified` rather than as a 42501 inside a stream, and the run store
+  recognises the trigger's own HINT so any path that reaches it fails typed.
+  The summarizer SKIPS with a written reason (the call completes — the
+  transcript is the record); the pollers skip before reading a provider; a
+  workflow run parks retryable, as an inactive owner's does. What is NOT
+  gated: recording, transcription, the board, the rooms, the meetings, the
+  connections — the product.
+- **Who verifies:** the platform root, through the console
+  (`platform_set_org_verified`, both directions — D27: the exit is built with
+  the entrance), audited as `org_verification_set`. Every organisation alive
+  on the day 0224 landed is verified since it was born; the founding branch of
+  `register_account` is the ONE writer of an unverified row. The person sees
+  one sentence where the agents live (Home, the room) and the same sentence
+  as the assistant's refusal — never a silent agent.
+- **The four doors** (db/0225): the gate draws Google, Apple, Microsoft and
+  SSO above «یا» and the email field, in the reference's order, and the
+  password path is «already signed up» one press away. Each door is a SWITCH
+  in Settings · Sign-in methods — the three new ones arrive OFF — and a press
+  on an off door answers with the platform's own sentence, never a
+  provider's raw page; the operator flips a switch only after configuring
+  the provider in the Supabase project (docs/ONBOARDING.md §7). Q3 of the
+  B2C structure is thereby answered: the Google button is back, with three
+  beside it.
+- **The demo beside the door:** the gate is two halves — the door on the
+  physical right in both locales, the demo on the left: the video when
+  `NEXT_PUBLIC_DEMO_VIDEO_URL` names one, the product's own illustrated
+  scenes until then (never an empty player).
+
+The bar for "later we change it" is written down: when billing lands (Q1),
+verification becomes the billing state's own fact and this door is the
+first thing to retire.

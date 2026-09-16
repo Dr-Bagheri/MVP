@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <Card>
+      <Card className="mx-auto w-full max-w-sm">
         <h1 className="text-lg font-bold text-fg">{t("checkMailTitle")}</h1>
         <p className="mt-2 text-sm leading-7 text-fg-muted">{t("checkMailBody")}</p>
         <Link href="/sign-in" className="btn-secondary mt-5 w-full">
@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <Card>
+    <Card className="mx-auto w-full max-w-sm">
       <h1 className="text-lg font-bold text-fg">{t("forgotTitle")}</h1>
       <p className="mt-2 text-sm leading-7 text-fg-muted">{t("forgotBody")}</p>
 

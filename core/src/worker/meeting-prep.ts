@@ -217,6 +217,9 @@ export async function sweepMeetings(options: MeetingPrepOptions, log: StepLogger
       continue;
     }
     if (!identity.isActive) continue;
+    /* db/0224: an unverified workspace spends nothing — skipped before the
+       calendar is read, for mail-poll.ts's reason */
+    if (identity.orgVerified === false) continue;
 
     const provider = row.provider as ConnectorProvider;
     try {

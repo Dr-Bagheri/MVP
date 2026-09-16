@@ -100,6 +100,7 @@ import { digits, formatDate, formatTime } from "@/lib/format";
 import {
   IconCheck,
   IconGlobe,
+  IconCheckCircle,
   IconKey,
   IconPencil,
   IconRetry,
@@ -480,6 +481,28 @@ export default function PlatformControlPage() {
                   effect: o.accepts_signups ? t("effectCloseSignups") : t("effectOpenSignups"),
                   target: o.name,
                   run: (r) => api.setPlatformOrganizationSignups(o.id, !o.accepts_signups, r),
+                }),
+            } satisfies KebabItem,
+          ]
+        : []),
+      /* THE VERIFICATION (db/0224, M54). Both directions, one entry whose
+         label says which way it goes; offered only where the console can
+         SEE the fact (an explicit null or a stamp — a schema without the
+         column offers nothing, because it has no wall to open). */
+      ...(o.status === "active" && (o.verified_at === null || typeof o.verified_at === "string")
+        ? [
+            {
+              key: "verified",
+              label: o.verified_at === null ? t("verifyOrg") : t("unverifyOrg"),
+              icon: <IconCheckCircle />,
+              disabled: busy,
+              onSelect: () =>
+                setPending({
+                  key: `org-verified-${o.id}`,
+                  title: o.verified_at === null ? t("verifyOrg") : t("unverifyOrg"),
+                  effect: o.verified_at === null ? t("effectVerifyOrg") : t("effectUnverifyOrg"),
+                  target: o.name,
+                  run: (r) => api.setPlatformOrganizationVerified(o.id, o.verified_at === null, r),
                 }),
             } satisfies KebabItem,
           ]
@@ -884,9 +907,19 @@ export default function PlatformControlPage() {
                       orgTrash ? (
                         <PurgeBadge purgeAfter={o.purge_after} fmt={(d) => t("purgeIn", { days: d })} />
                       ) : (
-                        <Chip tone={o.status === "active" ? "success" : "danger"}>
-                          {o.status === "active" ? t("active") : t("suspended")}
-                        </Chip>
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <Chip tone={o.status === "active" ? "success" : "danger"}>
+                            {o.status === "active" ? t("active") : t("suspended")}
+                          </Chip>
+                          {/* db/0224: the verification, said beside the status
+                              — and ONLY on an explicit answer: a console on a
+                              schema before the column draws no claim at all */}
+                          {o.verified_at === null ? (
+                            <Chip tone="warning">{t("unverified")}</Chip>
+                          ) : typeof o.verified_at === "string" ? (
+                            <Chip tone="neutral">{t("verified")}</Chip>
+                          ) : null}
+                        </span>
                       ),
                   },
                   { key: "actions", header: t("colActions"), srOnly: true, cell: () => null },

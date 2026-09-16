@@ -10,7 +10,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { AssistantSession } from "@/api/types";
 import {
-  IconAgent, IconClose, IconDownload, IconMenu, IconPlus, IconShare, IconTrash, IconZap,
+  IconAgent, IconClose, IconDownload, IconMenu, IconPlug, IconPlus, IconShare, IconTrash, IconZap,
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold/Skeleton";
@@ -357,6 +357,13 @@ export function HomeSidebar({ sheet = false, onLeave }: {
         {appRow("agents", <IconAgent width={14} height={14} />, tPlatform("agents"),
           view === "agents",
           () => { router.push({ pathname: "/", query: { view: "agents" } } as never); })}
+        {/* INTEGRATIONS, UNDER THE AGENTS (user directive, 2026-09-16: "put
+            integrations out of the main menu and in the sub menu in home
+            under the agents"). The same row and the same pane: a connection
+            is what an agent works through, and the two had been a rail apart. */}
+        {appRow("integrations", <IconPlug width={14} height={14} />, tPlatform("integrations"),
+          view === "integrations",
+          () => { router.push({ pathname: "/", query: { view: "integrations" } } as never); })}
       </div>
 
       {/* ── the conversations, with no heading over them ─────────────────

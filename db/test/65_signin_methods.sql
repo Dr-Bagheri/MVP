@@ -6,12 +6,20 @@ set local role echo_app;
 -- ── the pre-identity read: NO actor is set, and the sign-in page's
 --    question still answers (this is the sign-in page's exact posture) ─────
 select set_config('echo.actor_id', '', true);
+-- the closed set itself (db/0225), not a count: `= 2` was a fact about the
+-- fixture wearing the costume of a fact about the wall, and it broke the day
+-- three doors joined the table — the property is that EVERY method the
+-- CHECK admits is readable with no actor, because the gate draws them all
 select t.ok(
-  (select count(*) from echo.signin_method) = 2,
-  'both methods are readable with no actor at all — the sign-in page is pre-identity');
+  (select array_agg(provider order by provider) from echo.signin_method)
+    = array['apple', 'azure', 'github', 'google', 'sso'],
+  'every sign-in method is readable with no actor at all — the sign-in page is pre-identity');
 select t.ok(
-  (select bool_and(enabled) from echo.signin_method),
-  'and both start enabled');
+  (select bool_and(enabled) from echo.signin_method where provider in ('google', 'github')),
+  'google and github start enabled');
+select t.ok(
+  not (select bool_or(enabled) from echo.signin_method where provider in ('apple', 'azure', 'sso')),
+  'the three doors 0225 added arrive OFF — a switch nobody has flipped past an unconfigured provider');
 
 -- ── a MEMBER is refused at the door ───────────────────────────────────────
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);

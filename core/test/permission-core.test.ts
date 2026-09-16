@@ -139,10 +139,16 @@ describe("identity resolution", () => {
     const { pools, log } = fakePools((sql) => (sql.includes("app_user") ? userRow({ role: "admin" }) : []));
     const identity = await resolveIdentity(createDb(pools), ALICE);
     expect(identity).toEqual({ userId: ALICE, orgId: "org-a", role: "admin", isActive: true });
-    // and it read as itself — actor set before the select
-    expect(log[0]!.sql).toContain("set_config('echo.actor_id'");
-    expect(log[0]!.params).toEqual(["echo_app", ALICE]);
-    expect(log[1]!.sql).toContain("app_user");
+    // and it read as itself — actor set before the select. Found by CONTENT,
+    // not by index: since db/0224 the resolver asks the catalogue whether the
+    // verification column exists before it opens the actor's transaction, and
+    // a catalogue probe is not a product read — what must hold is the ORDER
+    // of the two statements that are.
+    const setActor = log.findIndex((l) => l.sql.includes("set_config('echo.actor_id'"));
+    const readSelf = log.findIndex((l) => l.sql.includes("app_user"));
+    expect(setActor, "the actor was set").toBeGreaterThanOrEqual(0);
+    expect(log[setActor]!.params).toEqual(["echo_app", ALICE]);
+    expect(readSelf, "the person was read").toBeGreaterThan(setActor);
   });
 
   it("marks a pending signup inactive instead of throwing (M15)", async () => {

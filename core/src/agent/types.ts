@@ -23,6 +23,13 @@ export interface Identity {
   /** Active users only; a pending/disabled person cannot run an agent (M15). */
   isActive: boolean;
   /**
+   * db/0224 (M54): whether the platform has verified this workspace for agent
+   * use. `false` is the wall (no run opens); ABSENT means the schema predates
+   * the column — or a fixture never set it — and is read as "no wall here",
+   * never as false (agent/verification.ts says why the two must differ).
+   */
+  orgVerified?: boolean;
+  /**
    * Present only when `isActive` is false, and purely so the api can tell the
    * caller WHICH refusal this is — the three lead to different screens and,
    * for "suspended", to a different person to contact.

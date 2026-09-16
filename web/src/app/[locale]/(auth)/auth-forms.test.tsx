@@ -39,6 +39,7 @@ const register = vi.fn();
 const identityState = vi.fn();
 const setPassword = vi.fn();
 const oauthPasswordEnrollment = vi.fn();
+const startSso = vi.fn();
 
 vi.mock("@/api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/api/client")>();
@@ -52,6 +53,7 @@ vi.mock("@/api/client", async (importOriginal) => {
       identityState: () => identityState(),
       setPassword: (...args: unknown[]) => setPassword(...args),
       oauthPasswordEnrollment: () => oauthPasswordEnrollment(),
+      startSso: (...args: unknown[]) => startSso(...args),
     },
   };
 });
@@ -70,7 +72,10 @@ const askForCode = (email = "person@example.com") => {
 
 /** the secondary path: open the password form and fill it */
 const openPasswordForm = () => {
-  fireEvent.click(screen.getByRole("button", { name: "ورود با گذرواژه" }));
+  /* «حساب دارید؟ با گذرواژه وارد شوید» on the first screen (2026-09-16 —
+     the reference's "already signed up"), «ورود با گذرواژه» on the code
+     screen; one of the two is on screen at a time */
+  fireEvent.click(screen.getByRole("button", { name: /با گذرواژه/ }));
 };
 
 beforeEach(() => {
@@ -82,6 +87,7 @@ beforeEach(() => {
   identityState.mockReset();
   setPassword.mockReset();
   oauthPasswordEnrollment.mockReset();
+  startSso.mockReset();
   signIn.mockResolvedValue(undefined);
   requestEmailCode.mockResolvedValue(undefined);
   verifyEmailCode.mockResolvedValue(undefined);
@@ -340,30 +346,75 @@ describe("the OAuth arrival (?oauth=ok)", () => {
 });
 
 /**
- * NEITHER GATE OFFERS A PROVIDER (user directive, 2026-09-15: "remove these
- * two button git hub and google for now").
+ * THE FOUR DOORS (user directive, 2026-09-16: "options that you can connect
+ * with these 4 or email, or you already signed up").
  *
- * THE READ IS THE LOAD-BEARING HALF: the `beforeEach` stub answers
- * `/api/auth-methods` with BOTH providers enabled, so a missing link could
- * always be a link still waiting for its fetch. It cannot be here, because
- * the fetch never happens — nothing on the gate asks which providers are
- * enabled any more. That is a fact about the COMPONENT being unmounted rather
- * than about what it chose to draw, and it is what a re-added
- * `<OAuthButtons />` fails first.
+ * Drawn WITHOUT asking `/api/auth-methods` first — the `beforeEach` stub
+ * still answers, so "nothing asked" is the fetch never being called; the
+ * switch (db/0225) is read on the PRESS, by the routes, and an off door
+ * answers with the sentence. GitHub is not one of the four and must not
+ * appear. SSO is a button that opens its own field, and that field posts the
+ * work email and FOLLOWS the URL the server answers with — the one door the
+ * suite can walk end to end.
  */
-describe("the provider buttons are off the gate (2026-09-15)", () => {
-  it("offers neither Google nor GitHub on any of the three screens, and asks nothing about them", async () => {
+describe("the four doors on the gate (2026-09-16)", () => {
+  it("draws Google, Apple, Microsoft and SSO — not GitHub — and asks nothing before drawing", async () => {
     render(<SignInPage />);
     await screen.findByLabelText(/^رایانامه/);
-    expect(fetch, "something still asks which providers are enabled").not.toHaveBeenCalled();
-    expect(screen.queryByRole("link", { name: /Google/ })).toBeNull();
+    expect(fetch, "something still asks which providers are enabled before drawing").not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: /گوگل/ })).toHaveAttribute("href", "/api/auth/oauth/google");
+    expect(screen.getByRole("link", { name: /اپل/ })).toHaveAttribute("href", "/api/auth/oauth/apple");
+    expect(screen.getByRole("link", { name: /مایکروسافت/ })).toHaveAttribute("href", "/api/auth/oauth/azure");
+    expect(screen.getByRole("button", { name: /SSO/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /GitHub/ })).toBeNull();
-    expect(screen.queryByText(/یا ادامه با/)).toBeNull();
+    /* «already signed up» — the password path, one press away */
+    expect(screen.getByRole("button", { name: /حساب دارید/ })).toBeTruthy();
+  });
 
+  it("the doors are on the FIRST screen only — the code and password screens keep their own way back", async () => {
+    render(<SignInPage />);
+    await screen.findByLabelText(/^رایانامه/);
     openPasswordForm();
     await screen.findByLabelText(/^گذرواژه/);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(screen.queryByRole("link", { name: /Google/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /گوگل/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /SSO/ })).toBeNull();
+  });
+
+  it("SSO asks for the work email, posts it, and follows the provider's URL", async () => {
+    startSso.mockResolvedValue({ url: "https://idp.example.test/saml/start?x=1" });
+    const assign = vi.fn();
+    const real = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...real, assign, search: "", href: "http://localhost/fa/sign-in" },
+    });
+    try {
+      render(<SignInPage />);
+      await screen.findByLabelText(/^رایانامه/);
+      fireEvent.click(screen.getByRole("button", { name: /SSO/ }));
+      type(/^رایانامهٔ کاری/, "sara@acme.example");
+      fireEvent.click(screen.getByRole("button", { name: "ادامه" }));
+      await waitFor(() => expect(startSso).toHaveBeenCalledWith("sara@acme.example"));
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("https://idp.example.test/saml/start?x=1"));
+      expect(push, "SSO leaves the app; it never routes inside it").not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: real });
+    }
+  });
+
+  it("an SSO refusal names its kind and stays on the field", async () => {
+    const { BffError } = await import("@/api/client");
+    startSso.mockRejectedValue(new BffError(400, "invalid", "no single sign-on for this domain", "not_configured"));
+    render(<SignInPage />);
+    await screen.findByLabelText(/^رایانامه/);
+    fireEvent.click(screen.getByRole("button", { name: /SSO/ }));
+    type(/^رایانامهٔ کاری/, "sara@nowhere.example");
+    fireEvent.click(screen.getByRole("button", { name: "ادامه" }));
+    await waitFor(() => expect(startSso).toHaveBeenCalled());
+    /* still here: the field, and the way back */
+    expect(screen.getByLabelText(/^رایانامهٔ کاری/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "بازگشت" })).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

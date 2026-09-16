@@ -374,6 +374,10 @@ const SAY = {
     badCode: "این کد معتبر نیست یا منقضی شده است. در پلتفرم یک کد تازه بسازید و دوباره بفرستید.",
     silent: "چیزی شنیده نشد. دوباره ضبط کنید و کمی نزدیک‌تر صحبت کنید.",
     failed: "نتوانستم این پیام را تبدیل به تسک کنم. لطفاً دوباره بفرستید.",
+    /* db/0224: the workspace is in, its agents are not yet — said here rather
+       than answered with silence, because a bot that stops replying reads as
+       broken, not as waiting */
+    unverified: "کارگاه شما هنوز از سوی نورای تأیید نشده است؛ دستیارها پس از تأیید فعال می‌شوند و این پیام‌ها هم تبدیل به تسک خواهند شد.",
     card: (t: { title: string; who: string; folder: string; due: string; column: string }) =>
       ["تسک ساخته شد ✅", "", `📌 ${t.title}`,
         t.who ? `👤 ${t.who}` : "", t.folder ? `📁 ${t.folder}` : "",
@@ -387,6 +391,7 @@ const SAY = {
     badCode: "That code is not valid or has expired. Create a fresh one in the platform and send it again.",
     silent: "I could not hear anything. Please record again, a little closer.",
     failed: "I could not turn that into a task. Please send it again.",
+    unverified: "Your workspace has not been verified by NeurAI yet; the agents switch on after verification, and these messages will become tasks then.",
     card: (t: { title: string; who: string; folder: string; due: string; column: string }) =>
       ["Task created ✅", "", `📌 ${t.title}`,
         t.who ? `👤 ${t.who}` : "", t.folder ? `📁 ${t.folder}` : "",
@@ -680,6 +685,14 @@ export async function sweepTelegram(options: TelegramPollOptions, log: StepLogge
         try {
           const identity = await resolveIdentity(db, sender.user_id);
           if (!identity.isActive) continue;
+          /* db/0224: a note from a linked person in an unverified workspace
+             is skipped before a model reads it — the cursor still advances
+             with the batch, and the person's bot reply is the platform's
+             own sentence about verification, not a silence */
+          if (identity.orgVerified === false) {
+            await api.sendMessage(ctx.bearer, message.chat_id, SAY.fa.unverified).catch(() => undefined);
+            continue;
+          }
           await cardFor(options, api, identity, message, ctx.bearer, log);
           handled += 1;
         } catch (error) {

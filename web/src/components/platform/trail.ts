@@ -79,7 +79,13 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
      first row, so its trail says where you came from: «تسک‌ها / پروژه‌ها».
      A project itself is a panel over that page (R18); its old address
      redirects there, and the entity entry keeps that redirect's crumb data. */
-  "/projects": { label: "platform.projects", parent: "/tasks" },
+  /* A ROOT AGAIN (user, 2026-09-16: "put it in the main menu on top of the
+     tasks") — every rail entry is a root, and a crumb that said «تسک‌ها» over
+     a page the rail lists on its own would teach a hierarchy the rail
+     contradicts (the same argument that made Echo, Management and Settings
+     roots). [SUPERSEDES 2026-09-06's `parent: "/tasks"`, from the days it
+     was reached from the board's first row.] */
+  "/projects": { label: "platform.projects" },
   "/projects/[id]": { entity: true, parent: "/projects" },
 
   /* the connected accounts a workflow runs on, beside the workflows */

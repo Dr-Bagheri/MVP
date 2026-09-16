@@ -27,7 +27,7 @@ import { IconWarn } from "@/components/icons";
 export default function SuspendedPage() {
   const t = useTranslations("auth");
   return (
-    <Card>
+    <Card className="mx-auto w-full max-w-sm">
       {/* audit finding, 2026-09-03: the mark was a ⛔ character in a
           rounded-full well — an emoji doing icon work, which is the exact
           drift icons.tsx exists to end (a text glyph shares none of the

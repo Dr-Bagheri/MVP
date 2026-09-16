@@ -102,6 +102,8 @@ import { createLiveStt } from "./live-stt.ts";
 import { readRecognitionContext } from "../db/recognition-context.ts";
 import { hasOrgGlossary as orgGlossaryColumnExists } from "../db/capabilities.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
+import { assertOrgVerified, orgIsVerified } from "../agent/verification.ts";
+import { SIGNIN_METHODS } from "./vocabulary.ts";
 import { createMlClient } from "../worker/ml-client.ts";
 import { MATCH_MARGIN, MATCH_THRESHOLD, decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
@@ -525,7 +527,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.patch("/v1/auth-methods/:provider", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     const { provider } = request.params as { provider: string };
-    if (provider !== "google" && provider !== "github") {
+    /* the closed set lives in vocabulary.ts and the db CHECK names the same
+       names (core/test reads the migration) — never two spellings here */
+    if (!(SIGNIN_METHODS as readonly string[]).includes(provider)) {
       throw new ValidationError("unknown sign-in method");
     }
     const body = (request.body ?? {}) as { enabled?: unknown };
@@ -1737,6 +1741,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       if (typeof on !== "boolean") throw new ValidationError("accepts_signups must be a boolean");
       await platform.setOrganizationSignups(identity, id, on, body.reason);
       changed = true;
+    }
+    if ((body as { verified?: unknown }).verified !== undefined) {
+      /* db/0224 (M54): verify the workspace for agent use, or take it back */
+      const on = (body as { verified?: unknown }).verified;
+      if (typeof on !== "boolean") throw new ValidationError("verified must be a boolean");
+      changed = (await platform.setOrganizationVerified(identity, id, on, body.reason)) || changed;
     }
     return reply.send({ changed });
   });
@@ -3149,6 +3159,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
       throw new NotActivatedError("api keys may not run workflows");
     }
+    assertOrgVerified(identity); // db/0224 — a workflow run spends
     const { ref } = request.params as { ref: string };
     return reply.code(201).send(await workflowRuns.start(identity, ref));
   });
@@ -3930,6 +3941,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
        that ignored them, with nothing in the log to say so. `forRun` walks
        preference → org's first permitted → catalogue, the same rungs the
        workers walk; and the failure branches below now say WHICH nothing. */
+    /* db/0224: the room's agents are guests in a workspace the platform has
+       not verified — they stay silent, and the log says WHICH nothing (the
+       shell's notice on the room says it to the person) */
+    if (!orgIsVerified(identity)) {
+      app.log.warn({ channel_id: channelId, handle: named, reason: "org_unverified" }, "chat_agent_failed");
+      chatBus.publish(identity.orgId, {
+        type: "agent_failed", channel_id: channelId, handle: named,
+      });
+      return;
+    }
     const model = await models.forRun(identity);
     if (!model) {
       app.log.warn({ channel_id: channelId, handle: named, reason: "no_model" }, "chat_agent_failed");
@@ -4662,6 +4683,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.post("/v1/skills/dry-run", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    assertOrgVerified(identity); // db/0224 — a dry run spends a model call
     const body = (request.body ?? {}) as Record<string, unknown>;
     return reply.send(await skillDryRun.dryRun(identity, {
       prompt: typeof body.prompt === "string" ? body.prompt : "",
@@ -5281,6 +5303,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     /* the same dial the ask route reads (2026-09-06): a member whose org
        narrowed `assistant.ask` could still start a full run through here */
     await capabilities.require(identity, "assistant.ask");
+    assertOrgVerified(identity);
     // The session must exist, be the caller's, and not be archived — the
     // same resolve ask uses, which also refuses regenerating into an
     // archived thread ("done with this" stays said).
@@ -5381,6 +5404,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.post("/v1/assistant/ask", async (request, reply) => {
     const identity = await auth.requireActive(request);
     await capabilities.require(identity, "assistant.ask");
+    /* db/0224 (M54): an unverified workspace spends nothing — refused HERE,
+       before the stream opens, so the person gets a 403 with a code the
+       screen turns into a sentence rather than a run that dies inside SSE */
+    assertOrgVerified(identity);
     const body = (request.body ?? {}) as {
       question?: unknown; model?: unknown; call_id?: unknown; skill?: unknown;
       session_id?: unknown; call_ids?: unknown; web?: unknown;

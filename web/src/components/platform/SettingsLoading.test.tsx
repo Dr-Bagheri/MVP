@@ -176,8 +176,12 @@ describe("Settings · Sign-in methods", () => {
         { provider: "github", enabled: true },
       ]);
     });
-    expect(await screen.findByText("خاموش")).toBeTruthy();
-    expect(screen.getByText("فعال")).toBeTruthy();
+    /* five rows since db/0225 (google, github, apple, azure, sso): the two
+       the server named read as the server said, and the three it did NOT
+       name read «خاموش» — absent is off, never a default wearing an answer's
+       costume (the defect this test was written for, one more time) */
+    expect(await screen.findAllByText("خاموش")).toHaveLength(4);
+    expect(screen.getAllByText("فعال")).toHaveLength(1);
   });
 });
 

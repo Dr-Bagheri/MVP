@@ -9,7 +9,7 @@ import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
   TaskLabelRecord, TaskPriority, TaskTopicRecord, ProjectRecord,
 } from "@/api/types";
-import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
+import { ConfirmDialog } from "@/components/rowActions";
 import {
   LABEL_COLORS, NewTaskDialog, PRIORITY_CHIP, PRIORITY_ORDER, TONE_CHIP, TONE_DOT,
 } from "./tasks/TaskDialogs";
@@ -20,15 +20,15 @@ import {
   BoardAddRow, BoardCardDelete, BoardSlot,
 } from "./board/boardStyle";
 import { ProjectDialog } from "./ProjectDialog";
-import { TopicNameBox } from "./TopicNameBox";
+import { TopicAddButton, TopicChip, TopicStrip } from "./TopicStrip";
 import {
-  FILTER_TRACK, TAB_TRACK, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass, toggleClass,
+  TAB_TRACK, TRACK_DIVIDER, Toolbar, sectionTabClass, toggleClass,
 } from "./sectionTabs";
 import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
   IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
-  IconTrash, IconUser, IconVideo, IconPencil } from "@/components/icons";
+  IconUser, IconVideo } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
 import { dayKeyOf, digits, personName } from "@/lib/format";
 import { SkeletonLines } from "@/components/scaffold";
@@ -80,9 +80,6 @@ export function TaskBoard() {
   const [mineOnly, setMineOnly] = useState(false);
   const [dueToday, setDueToday] = useState(false);
   const [topic, setTopic] = useState<string>("all");
-  /* the folder strip's inline composer: adding, or the folder being renamed */
-  const [addingTopic, setAddingTopic] = useState(false);
-  const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
   /* every project, live and archived — the strip splits the board's folders
      into the ones that ARE a project's category and the plain ones (user,
      2026-09-05: "complete folder and its plus, and complete projects and its
@@ -280,30 +277,6 @@ export function TaskBoard() {
   const folders = board.topics.filter((entry) => !projectByTopic.has(entry.id));
   const projectTopics = board.topics.filter((entry) => projectByTopic.has(entry.id));
 
-  /* one chip for a folder and for a project's folder: the toggle, its count,
-     and a ⋯ whose items are the caller's — the picture never differs, only
-     what the menu offers */
-  const topicChip = (entry: TaskTopicRecord, glyph: React.ReactNode, items: Parameters<typeof KebabMenu>[0]["items"]) => (
-    <span
-      key={entry.id}
-      className={`${filterChipClass(topic === entry.id)} cursor-default pe-1`}
-    >
-      <button
-        type="button"
-        aria-pressed={topic === entry.id}
-        onClick={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
-        className="tap inline-flex items-center gap-1.5 hover:text-fg"
-      >
-        {glyph}
-        {entry.name}
-        <span className="badge-num rounded-md bg-surface-2 px-1 text-micro">
-          {digits(board.tasks.filter((x) => x.topic_id === entry.id).length, locale)}
-        </span>
-      </button>
-      <KebabMenu label={t("topicOptions")} triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100" items={items} />
-    </span>
-  );
-
   /* 2026-09-03: the theme's compact control, not a twelfth invented size —
      and character for character the toolbar chip Meetings.tsx already wears,
      which is the point: two boards showing the same row of filters must not
@@ -339,19 +312,10 @@ export function TaskBoard() {
             chip(priority === level, t(`priority_${level}`), () => setPriority(level)))}
         </div>
         <div className={TAB_TRACK}>
-          {/*
-           * THE WAY TO THE PROJECTS PAGE (user directive, 2026-09-05): before
-           * «مال من», admin-only (0186) because the rail entry left the same
-           * day and this is the door. A LINK in the pill's clothes — it leaves
-           * the page rather than filtering it, so it never wears the pressed
-           * state; the folder glyph says where it goes.
-           */}
-          {isAdmin ? (
-            <Link href="/projects" className={sectionTabClass(false)}>
-              <IconFolder width={12} height={12} />
-              {t("projectsLink")}
-            </Link>
-          ) : null}
+          {/* THE PROJECTS LINK LEFT THIS ROW (user, 2026-09-16: "take out the
+              projects from tasks, put it in the main menu on top of the
+              tasks"): projects is a rail entry again, and a door here beside
+              it would be the two-doors-to-one-room shape. */}
           {/* the two on/off filters: the same pill, lifted on its own —
               `aria-pressed` rather than `aria-selected`, since both can be on */}
           <button
@@ -375,128 +339,67 @@ export function TaskBoard() {
         </div>
       </Toolbar>
 
-      {/* ── the folder row: the board's folders, then its projects, each with
-             its own + (user, 2026-09-05). «بدون موضوع» left the strip the same
-             day — "in no folder" is a card's own fact, read on the card. */}
-      <div className={FILTER_TRACK}>
-        {/* 2026-09-03: the theme's control. This row and the toolbar row above
-            it are the same kind of chip and were TWO different boxes — h-9 /
-            rounded-xl up there, h-8 / rounded-lg down here — eight pixels
-            apart on one screen, which is the directive in miniature. */}
-        <button
-          type="button"
-          aria-pressed={topic === "all"}
-          onClick={() => setTopic("all")}
-          className={filterChipClass(topic === "all")}
-        >
-          <IconFolder width={12} height={12} />
-          {t("allTasks")}
-          <span className="badge-num rounded-md bg-surface-2 px-1 text-micro">
-            {digits(board.tasks.length, locale)}
-          </span>
-        </button>
-
-        {/* plain folders: the meetings chip, field for field (user directive,
-            2026-09-02: "the added sub menu should have edit and delete option,
-            fix it both in tasks and meetings") — the same menu component, so
-            the two boards cannot grow different answers to one question */}
-        {folders.map((entry) => topicChip(entry, <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />, [
-          {
-            key: "rename",
-            label: t("renameTopic"),
-            icon: <IconPencil width={14} height={14} />,
-            onSelect: () => { setAddingTopic(false); setRenamingTopic({ id: entry.id, name: entry.name }); },
-          },
-          {
-            key: "remove",
-            label: t("removeTopic"),
-            icon: <IconTrash width={14} height={14} />,
-            danger: true,
-            /* archived, not deleted — the cards are re-pointed to no-folder
-               by the schema */
-            onSelect: () => {
-              void api.updateTaskTopic(entry.id, { archived: true })
-                .then(() => { setTopic((cur) => (cur === entry.id ? "all" : cur)); load(); })
-                .catch(refusal);
-            },
-          },
-        ]))}
-
-        {/* THE FOLDER `+`, back (user, 2026-09-05: "return the previous new
-            folder plus … with the same functions as before, like a new folder
-            in meetings"): ONE composer for adding and renaming — the meetings
-            strip's own box, shared now. Not admin-gated: a folder is a
-            member's tool; a project (below) is an admin's. */}
-        {addingTopic || renamingTopic !== null ? (
-          <TopicNameBox
-            initial={renamingTopic?.name ?? ""}
-            placeholder={t("topicNamePlaceholder")}
-            cancelLabel={t("cancel")}
-            onCancel={() => { setAddingTopic(false); setRenamingTopic(null); }}
-            onSubmit={(name) => {
-              const target = renamingTopic;
-              const done = () => { setAddingTopic(false); setRenamingTopic(null); load(); };
-              void (target !== null
-                ? api.updateTaskTopic(target.id, { name })
-                : api.createTaskTopic(name).then(() => undefined))
-                .then(done)
-                .catch(() => { refusal(); done(); });
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            aria-label={t("addTopic")}
-            title={t("addTopic")}
-            onClick={() => setAddingTopic(true)}
-            /* the MEETINGS chip-row's add button, exactly: dashed, the same
-               square, in the same place */
-            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
-          >
-            <IconPlus width={12} height={12} />
-          </button>
-        )}
-
+      {/* ── THE THIRD ROW: the folder strip (user, 2026-09-16: "unify") — the
+             kit's own TopicStrip, read by the meetings page too. The board
+             hangs its PROJECTS after the `+`: a project's folder is the same
+             chip with a different menu, because the project owns the name
+             and renaming the category under it would leave the board and the
+             project disagreeing about what the thing is called (0181). ── */}
+      <TopicStrip
+        allLabel={t("allTasks")}
+        allCount={board.tasks.length}
+        active={topic}
+        onSelect={setTopic}
+        topics={folders.map((entry) => ({
+          id: entry.id, name: entry.name,
+          count: board.tasks.filter((x) => x.topic_id === entry.id).length,
+        }))}
+        labels={{
+          options: t("topicOptions"), rename: t("renameTopic"), remove: t("removeTopic"),
+          add: t("addTopic"), placeholder: t("topicNamePlaceholder"), cancel: t("cancel"),
+        }}
+        /* not admin-gated: a folder is a member's tool; a project (below) is an admin's */
+        onCreate={(name) => api.createTaskTopic(name)}
+        onRename={(id, name) => api.updateTaskTopic(id, { name })}
+        /* archived, not deleted — the cards are re-pointed to no-folder by the
+           schema; a lit chip that goes leaves the filter on «همه» */
+        onArchive={(id) => api.updateTaskTopic(id, { archived: true })
+          .then(() => setTopic((cur) => (cur === id ? "all" : cur)))}
+        onDone={load}
+        onRefused={refusal}
+      >
         <span className={TRACK_DIVIDER} aria-hidden />
-
-        {/* PROJECTS: the folders that are a project's category (0181). The chip
-            is the same chip; its menu opens the project, because the project
-            owns the name — renaming the category under it would leave the
-            board and the project disagreeing about what the thing is called. */}
         {projectTopics.map((entry) => {
           const project = projectByTopic.get(entry.id)!;
-          return topicChip(
-            entry,
-            project.icon !== null
-              ? <span className="text-sm leading-none" aria-hidden>{project.icon}</span>
-              : <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />,
-            [{
-              key: "open",
-              label: t("openProject"),
-              icon: <IconFolder width={14} height={14} />,
-              onSelect: () => router.push(`/projects?project=${project.id}`),
-            }],
+          return (
+            <TopicChip
+              key={entry.id}
+              name={entry.name}
+              count={board.tasks.filter((x) => x.topic_id === entry.id).length}
+              glyph={project.icon !== null
+                ? <span className="text-sm leading-none" aria-hidden>{project.icon}</span>
+                : <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />}
+              active={topic === entry.id}
+              onToggle={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
+              optionsLabel={t("topicOptions")}
+              items={[{
+                key: "open",
+                label: t("openProject"),
+                icon: <IconFolder width={14} height={14} />,
+                onSelect: () => router.push(`/projects?project=${project.id}`),
+              }]}
+            />
           );
         })}
-
         {isAdmin ? (
-          /* THE PROJECT `+` (user directive, 2026-09-05: "the plus in the
-             second top sub menu in tasks will open the new project pop up
-             window") — at the end of the projects section, the same dashed
-             square as the folder's. Admins only, and absent rather than
-             disabled: 0186 made creating a project an admin's act, so for a
-             member this button would open a dialog the wall refuses on save. */
-          <button
-            type="button"
-            aria-label={t("newProjectFolder")}
-            title={t("newProjectFolder")}
-            onClick={() => setCreatingProject(true)}
-            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
-          >
-            <IconPlus width={12} height={12} />
-          </button>
+          /* THE PROJECT `+` (user directive, 2026-09-05): at the end of the
+             projects section, the strip's own dashed square. Admins only, and
+             absent rather than disabled: 0186 made creating a project an
+             admin's act, so for a member this button would open a dialog the
+             wall refuses on save. */
+          <TopicAddButton label={t("newProjectFolder")} onClick={() => setCreatingProject(true)} />
         ) : null}
-      </div>
+      </TopicStrip>
 
       {/* ── the views ────────────────────────────────────────────────── */}
       {view === "kanban" ? (

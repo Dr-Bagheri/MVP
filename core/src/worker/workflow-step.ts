@@ -1244,6 +1244,12 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
         throw new StepError("owner_inactive",
           `the run's owner is ${identity.inactiveReason ?? "inactive"} — requeue once reinstated`, true);
       }
+      if (identity.orgVerified === false) {
+        // db/0224: the same shape as an inactive owner — parked retryable,
+        // and it heals the moment the platform verifies the workspace
+        throw new StepError("owner_unverified",
+          "the run's workspace is not verified yet — requeue once verified", true);
+      }
 
       // the message is TRANSPORT; the row is the truth (M7)
       const runRows = await db.withIdentity(identity, (tx: SqlTx) =>

@@ -1358,9 +1358,13 @@ export function AssistantSidebar() {
                 */}
                 {live.error ? (
                   <p className="text-group-label text-warning">
-                    {live.error.detail
-                      ? <span dir="ltr">{live.error.detail}</span>
-                      : t("failed")}
+                    {live.error.code === "org_unverified"
+                      /* db/0224: the coded refusal gets its own sentence, in
+                         the screen's language (the Hub's rule, one line) */
+                      ? tp("unverifiedRefusal")
+                      : live.error.detail
+                        ? <span dir="ltr">{live.error.detail}</span>
+                        : t("failed")}
                   </p>
                 ) : null}
                 {consent ? (

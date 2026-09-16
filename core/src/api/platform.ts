@@ -11,7 +11,7 @@ import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { MEMBER_ROLES, type MemberRole, type UserStatus } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasConsoleSightDoors } from "../db/capabilities.ts";
+import { hasConsoleSightDoors, hasOrgVerified } from "../db/capabilities.ts";
 
 export interface PlatformOverview {
   /** The signed-in root only; lets the console avoid offering self-removal. */
@@ -28,6 +28,12 @@ export interface PlatformOrganization {
   locale: string;
   /** Receives bare registrations (0149). At most one org platform-wide. */
   accepts_signups: boolean;
+  /**
+   * db/0224 (M54): when the platform verified this workspace for agent use;
+   * null = founded through the gate and not yet looked at (its agents cannot
+   * run). ABSENT on a deployment whose schema predates the column.
+   */
+  verified_at?: string | null;
   created_at: string;
   member_count: number;
   /** Soft-delete bookkeeping (0068). Null unless the org is in the purge window. */
@@ -96,6 +102,8 @@ interface OrganizationRow {
   status: OrgStatus;
   locale: string;
   accepts_signups: boolean;
+  /** selected only where db/0224's column exists */
+  verified_at?: Date | string | null;
   created_at: Date | string;
   member_count: string | number;
   deleted_at: Date | string | null;
@@ -267,8 +275,14 @@ export function createPlatformRepo(db: Db) {
        * the old policies still exist exactly as long as the door doesn't.
        */
       const viaDoor = await hasConsoleSightDoors(db);
+      /* db/0224: the door's RETURNS TABLE carries verified_at only from that
+         migration on, and a column named that the door does not return is a
+         42703 the screen reads as "could not load" — so it is selected only
+         where the catalogue says it exists */
+      const withVerified = await hasOrgVerified(db);
+      const verifiedCol = withVerified ? "o.verified_at," : "";
       const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<OrganizationRow>(viaDoor ? `
-        select o.id, o.name, o.status, o.locale, o.accepts_signups, o.created_at, o.deleted_at, o.purge_after,
+        select o.id, o.name, o.status, o.locale, o.accepts_signups, ${verifiedCol} o.created_at, o.deleted_at, o.purge_after,
                o.member_count
           from echo.platform_list_orgs() o
          where ${deletedClause}
@@ -276,7 +290,7 @@ export function createPlatformRepo(db: Db) {
          order by o.created_at desc, o.id desc
          offset $2 limit $3
       ` : `
-        select o.id, o.name, o.status, o.locale, o.accepts_signups, o.created_at, o.deleted_at, o.purge_after,
+        select o.id, o.name, o.status, o.locale, o.accepts_signups, ${verifiedCol} o.created_at, o.deleted_at, o.purge_after,
                count(u.id) as member_count
           from echo.org o
           left join echo.app_user u on u.org_id = o.id
@@ -292,6 +306,8 @@ export function createPlatformRepo(db: Db) {
         status: row.status,
         locale: row.locale,
         accepts_signups: row.accepts_signups === true,
+        /* served only where read — absent before 0224, a real null after */
+        ...(withVerified ? { verified_at: row.verified_at ? iso(row.verified_at) : null } : {}),
         created_at: iso(row.created_at),
         member_count: number(row.member_count),
         deleted_at: row.deleted_at ? iso(row.deleted_at) : null,
@@ -441,6 +457,26 @@ export function createPlatformRepo(db: Db) {
         "select echo.platform_set_org_signups($1, $2, $3::boolean, $4)",
         [identity.userId, org, on, validReason],
       ));
+    },
+
+    /**
+     * Verify a workspace for agent use, or take it back (db/0224, M54).
+     *
+     * The door decides everything — the root check, the audit line, whether
+     * anything changed — and answers the last as a boolean, so a press on an
+     * already-verified organisation is a no-op the console can say rather
+     * than a second audit line for nothing.
+     */
+    async setOrganizationVerified(
+      identity: Identity, orgId: string, on: boolean, actionReason: string,
+    ): Promise<boolean> {
+      const org = uuid(orgId, "organization id");
+      const validReason = reason(actionReason);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_set_org_verified($1, $2, $3::boolean, $4) as changed",
+        [identity.userId, org, on, validReason],
+      ));
+      return rows[0]?.changed === true;
     },
 
     async setUserStatus(

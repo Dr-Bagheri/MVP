@@ -38,7 +38,7 @@ its width (`PlatformShell`: `md:pe-assistant lg:pe-[var(--assistant-rail)]`).
 
 | Surface | Why no shell | Its own chrome |
 |---|---|---|
-| the gate (`/sign-in`, `/forgot`, `/reset`, `/pending`, `/suspended`) | there is no session yet | one `.card` in the middle of the page |
+| the gate (`/sign-in`, `/forgot`, `/reset`, `/pending`, `/suspended`) | there is no session yet | `/sign-in` is TWO HALVES (2026-09-16): the demo on the physical left (`(auth)/DemoPanel` — the video when `NEXT_PUBLIC_DEMO_VIDEO_URL` names one, the product's own scenes until then) and the door on the physical right in both locales, one `.card` with the four provider doors, «یا», the email field and «already signed up»; the other four screens are one `.card` in the middle of the page |
 | the guest door (`/join/[code]`) | the person has no account; every shell element would be a door that refuses | one `.card`, then the room |
 | the first-time flow (`/onboarding`, M54) | the person is in, but the flow is walked once, in order; every shell door leads out of it | `onboarding/OnboardingFrame`: the five-stage rail, its progress bar, the language pair; three layouts (split / centred / reveal) |
 
@@ -72,8 +72,17 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   a view switch) sit in `end`.
 - An on/off filter is `toggleClass(on)` with `aria-pressed` — the same pill,
   lifting on its own.
-- A THIRD row (the task board's folder strip) is row two's rail again:
-  `FILTER_TRACK`. The tasks page is the default for how a third row looks.
+- A THIRD row (the folder strip) is ONE component: `platform/TopicStrip` —
+  «همه» with its count, a chip per folder with its count and its ⋯ (rename,
+  archive), the inline name box, the dashed `+` — on row two's rail
+  (`FILTER_TRACK`). The task board and the meetings page both READ it
+  (2026-09-16, "unify"); the board hangs its projects after the `+` through
+  the same `TopicChip`. `topicStrip.guard` refuses a second drawing of a
+  folder chip. The tasks page is the default for how a third row looks.
+- The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
+  create button (R3), or — on Profile — «خروج» as a pill in its own
+  `TAB_TRACK` (2026-09-16), the row's own shape rather than a button of
+  another family.
 - An in-page SEARCH is a tool on its toolbar row, at the row's END edge, in
   the compact field (`.input-sm`, 34px like the pills beside it) — never a
   row of its own and never first in the row. Meetings is the shape; the

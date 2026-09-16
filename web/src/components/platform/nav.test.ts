@@ -95,7 +95,14 @@ describe("activeNavHref", () => {
        tile a person on that page is standing under.
        [SUPERSEDES the 2026-09-02 entry, which read: a top-level page that
        now lives in Settings' menu and no longer has a rail tile of its own.] */
-    expect(activeNavHref("/integrations")).toBe("/integrations");
+    /* [SUPERSEDED 2026-09-16.] Integrations left the rail for Home's sidebar
+       (user directive: "in the sub menu in home under the agents"), so no
+       tile lights for a person on a connector's own page — there is no
+       entry whose territory it is, and lighting Home for `/integrations/…`
+       would name a room the page is not in. The pane itself is `/?view=
+       integrations`, which lights Home as `/` does. */
+    expect(activeNavHref("/integrations")).toBeUndefined();
+    expect(NAV_PRIMARY.map((n) => n.key)).not.toContain("integrations");
   });
 
   it("controls: a real Management page and a real Settings page are untouched", () => {

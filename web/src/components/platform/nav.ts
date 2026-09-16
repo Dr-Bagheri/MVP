@@ -103,10 +103,20 @@ export const NAV_PRIMARY: readonly NavItem[] = [
      (2026-09-02: «dashboard, meetings, tasks»). The bar reads the way the
      rail reads, top to bottom, which is the only arrangement that does not
      have to be remembered twice. */
+  /*
+   * PROJECTS IS IN THE RAIL AGAIN, ABOVE TASKS (user directive, 2026-09-16:
+   * "take out the projects from tasks, put it in the main menu on top of the
+   * tasks"). The board's own first row carried its door from 2026-09-05; that
+   * link is gone with this entry — two doors to one room is the shape this
+   * file keeps warning about. Not in the bar: M22's four-slot ceiling holds
+   * Home · Meetings · Tasks · More, and an admin's surface reached from a
+   * desk earns no phone slot (the More sheet lists it).
+   */
+  { href: "/projects", key: "projects", inBar: false },
   { href: "/tasks", key: "tasks", inBar: true },
   /*
-   * PROJECTS IS NOT IN THE RAIL (user directive, 2026-09-05: "remove projects
-   * from the menu too").
+   * [SUPERSEDED 2026-09-16 — the entry above.] PROJECTS IS NOT IN THE RAIL
+   * (user directive, 2026-09-05: "remove projects from the menu too").
    *
    * It was added here on 2026-09-04 and the same week's directive moved the
    * door: an admin reaches /projects from the BOARD'S toolbar, beside the
@@ -174,7 +184,15 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * the org's configuration — an agent without its connections can do
    * nothing, and the two were a menu apart.
    */
-  { href: "/integrations", key: "integrations", inBar: false },
+  /*
+   * INTEGRATIONS LEFT THE RAIL FOR HOME'S SIDEBAR (user directive,
+   * 2026-09-16: "put integrations out of the main menu and in the sub menu
+   * in home under the agents"). It is a ROW under Agents in HomeSidebar now
+   * and opens in Home's view pane (`?view=integrations`), exactly as Agents
+   * and Workflows do; `/integrations` redirects into the pane so the
+   * breadcrumb, the agents' navigate tool and every bookmark still resolve.
+   * A connector's own page (`/integrations/[slug]`) keeps the shell.
+   */
   /*
    * ECHO IS OFF THE RAIL (user directive, 2026-09-02: "remove echo, we don't
    * need it any more — we need only its parts for future, keep the parts that

@@ -14,6 +14,7 @@
  */
 import { InvalidTimingError } from "../worker/transcript-mapping.ts";
 import { MissingIdentityError } from "../db/identity.ts";
+import { OrgUnverifiedError } from "../agent/verification.ts";
 
 /**
  * These two live here, with the mapping that gives them meaning, rather than
@@ -230,6 +231,19 @@ export function mapError(error: unknown): MappedError {
         ? "organization is suspended"
         : "forbidden";
     return { status: 403, body: { error: message, kind: error.kind }, ours: false };
+  }
+  if (error instanceof OrgUnverifiedError) {
+    /*
+     * db/0224 (M54): the workspace exists and the person is in; what is
+     * refused is the SPEND. `forbidden` on the wire — no fourth kind for the
+     * shell's taxonomy to learn — and the CODE is what the web turns into
+     * the sentence («این کارگاه هنوز تأیید نشده»), the refusal rule's shape.
+     */
+    return {
+      status: 403,
+      body: { error: "workspace awaits verification", kind: "forbidden", code: error.code },
+      ours: false,
+    };
   }
   if (error instanceof NotFoundError) {
     return { status: 404, body: { error: "not found", kind: "not_found" }, ours: false };

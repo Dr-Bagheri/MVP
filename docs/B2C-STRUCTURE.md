@@ -186,9 +186,48 @@ Yours to decide (not built, not blocking):
 |---|---|
 | Q1 | **Billing**: per-person subscription for a personal workspace, per-seat for a team — M15's "payment processing is a later seam". Which provider, and is there a free tier? (M15 says no trial; a B2C product with no trial and no free tier converts nobody — this is the decision that most changes the funnel.) |
 | Q2 | **Self-serve account deletion** for a personal workspace. Today deletion is the platform purge, root-walled. A person who owns their workspace should be able to end it; that is a definer door with a cool-off, and it is not written. |
-| Q3 | **Bring the Google button back** on the gate? The PKCE machinery is live and off "for now". For B2C, Google is the most-used door on every consumer product. |
+| Q3 | ~~**Bring the Google button back** on the gate?~~ **ANSWERED 2026-09-16**: the gate draws four doors — Google, Apple, Microsoft, SSO — above «یا» and the email field (docs/ONBOARDING.md §7). Google is on; the three new ones are switches that arrive OFF until the operator configures each provider in the Supabase project (docs/ONBOARDING.md §7). |
 | Q4 | **Videos.** The first-run door has a slot per lesson; there are no videos. Screen recordings of the real product (30–60 s each, five of them) are the thing to record once the flow is on production. |
 | Q5 | The «Where did you hear about us?» list — I wrote a plausible one; it should be YOUR channels. |
+
+## 4a. Verified before the agents spend (2026-09-16)
+
+User ruling, the day after the door opened: "after they enter they must
+need a verification so they can use the full system — the agents on the
+system use tokens, so if all can use it, it becomes problematic. For now I
+verify them to start using the agents; later we change it. Now I want them to
+have an easy entry."
+
+So the structure gains one fact and one door, and the shape of §2 does not
+move:
+
+- **`org.verified_at`** (db/0224): null for a workspace founded through the
+  gate and not yet looked at; every organisation alive before the migration
+  is verified since it was born; every other birth (the console, a demo, an
+  invitation into an existing org) takes the column's default and is verified
+  from its first second. The founding branch of `register_account` is the ONE
+  writer of an unverified row.
+- **The wall is a trigger on `echo.agent_run`**: no run opens for an
+  unverified organisation, on every model-spending path at once — the
+  assistant, the room's agents, the workflows, the summarizer, the pollers.
+  core/ carries the fact on the identity (`orgVerified`, absent = no wall),
+  pre-checks it where a person is watching (a 403 with the code
+  `org_unverified`, rendered as the screen's own sentence), skips the summary
+  with a written reason, and skips the polls before a provider is read.
+- **What still works unverified: everything else** — recording,
+  transcription, the board, the rooms, the meetings, the connections. The
+  person sees one sentence where the agents live (Home, the room), and the
+  assistant answers a question with the same sentence rather than silence.
+- **Who verifies: the platform root**, from the console's organisation row
+  («تأیید دسترسی دستیارها» / «لغو تأیید»), audited as `org_verification_set`,
+  both directions (D27).
+- **"Later we change it"**: the day billing lands (Q1), verification becomes
+  the billing state's own fact and this door retires first. Written down so
+  nobody mistakes the switch for the design.
+
+The operator's checklist for a new arrival is therefore two lines: watch
+the console for an organisation carrying «در انتظار تأیید», and press verify
+once a real person is behind it.
 
 ## 5. Seams left open, named
 

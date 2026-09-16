@@ -150,6 +150,11 @@ export const IconEnter = (p: SVGProps<SVGSVGElement>) => (
 export const IconChip = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M9.5 3.5V7M14.5 3.5V7M9.5 17v3.5M14.5 17v3.5M3.5 9.5H7M3.5 14.5H7M17 9.5h3.5M17 14.5h3.5" /></svg>
 );
+/* 2026-09-16: the profile row's «خروج» — a door with an arrow leaving it,
+   the same grid and stroke as every other glyph here */
+export const IconLogout = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M10 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5H10" /><path d="M14 8.5 17.5 12 14 15.5" /><path d="M17.5 12H9" /></svg>
+);
 export const IconPlug = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M9 3.5V8M15 3.5V8" /><path d="M6.5 8h11v3.5a5.5 5.5 0 0 1-11 0V8Z" /><path d="M12 17v3.5" /></svg>
 );
@@ -504,6 +509,7 @@ export const ICONS = {
   "moon": IconMoon,
   "play": IconPlay,
   "plug": IconPlug,
+  "logout": IconLogout,
   "plus": IconPlus,
   "print": IconPrint,
   "pulse": IconPulse,
