@@ -30,21 +30,37 @@ describe("product films", () => {
     expect(existsSync(resolve(process.cwd(), "public/demo/en/not-a-lesson.mp4"))).toBe(false);
   });
 
-  it("autoplays silently, advances only on completion, and lets a person choose a clip", () => {
+  it("autoplays silently with NO player chrome, advances only on completion, and lets a person choose a clip", () => {
     const { container } = render(<ProductDemo />);
     const video = container.querySelector("video")!;
     expect(play).toHaveBeenCalled();
     expect(video.muted).toBe(true);
-    expect(video.controls).toBe(true);
+    /* the film just plays (2026-09-16): no scrubber, no pause, no mute key */
+    expect(video.controls).toBe(false);
+    /* the carousel does not loop a clip — `ended` is what carries it to the next one */
+    expect(video.loop).toBe(false);
     fireEvent.pause(video);
     expect(video.getAttribute("src")).toBe("/demo/fa/meeting.mp4");
     fireEvent.ended(video);
     expect(container.querySelector("video")?.getAttribute("src")).toBe("/demo/fa/ask.mp4");
     fireEvent.click(screen.getByRole("button", { name: "کارها" }));
     expect(container.querySelector("video")?.getAttribute("src")).toBe("/demo/fa/tasks.mp4");
+    /* the film's one sentence and nothing under it — the «ten-second samples ·
+       fictional data · silent» caption left with its key, so this is asserted
+       as a count rather than as a text that no version could render */
+    expect(container.querySelectorAll("section > p")).toHaveLength(1);
   });
 
-  it("reduced motion keeps the poster, controls and chosen lesson without autoplay or auto-advance", () => {
+  it("a fixed lesson LOOPS — with no key to restart it, a film that stops on its last frame reads as broken", () => {
+    const { container } = render(<ProductDemo lesson="tasks" />);
+    const video = container.querySelector("video")!;
+    expect(video.loop).toBe(true);
+    expect(video.controls).toBe(false);
+    /* and there is no clip chooser under a film that was chosen for it */
+    expect(screen.queryByRole("group")).toBeNull();
+  });
+
+  it("reduced motion keeps the poster and the chosen lesson without autoplay or auto-advance", () => {
     reduced = true;
     const { container } = render(<ProductDemo />);
     const video = container.querySelector("video")!;

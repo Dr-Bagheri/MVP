@@ -35,22 +35,25 @@ lock illustration instead of inventing a new privacy workflow.
 - `web/src/components/onboarding/EntryTopBar.tsx`: platform-style public
   chrome with theme and same-page language choices; the onboarding stage
   tracker occupies its centre. The authenticated platform bar is unchanged.
-- `web/src/components/onboarding/ProductDemo.tsx`: native playback controls,
-  click-to-select playlist, reduced-motion/data-saver handling, visibility
-  pause/resume, and non-blocking load-error/retry state.
+- `web/src/components/onboarding/ProductDemo.tsx`: NO native playback
+  controls since 2026-09-16 (user directive: "just play, not with clip
+  options that you can stop or change the bar") — a fixed lesson loops, the
+  login playlist advances on completion; click-to-select playlist,
+  reduced-motion/data-saver handling, visibility pause/resume, and
+  non-blocking load-error/retry state.
 - Login: five selectable clips on the left; login on the right in either
   locale. On a narrow screen, the form comes first and the clips follow.
 - Onboarding: Meetings at welcome, Assistant at goals, Team at work, Tasks
   at places. All five clips are in the first-run lesson door on Home.
 - Existing `NEXT_PUBLIC_DEMO_VIDEO_URL` remains an optional login-only
-  override. Leave it unset for the bundled localized playlist. Overrides
-  are user-started with native controls.
+  override. Leave it unset for the bundled localized playlist. An override
+  autoplays muted and loops, with no controls, like the films.
 
-The playlist advances on video completion, never a wall-clock timer. Manual
-pause keeps the selected film. Reduced-motion users see the real poster and
-can play manually; their film does not auto-advance. Watching never blocks
+The playlist advances on video completion, never a wall-clock timer.
+Reduced-motion users see the real poster, which stands as the picture;
+their film does not auto-advance. Watching never blocks
 sign-in or onboarding continuation. Clips leaving the viewport or a hidden
-tab pause; a manually paused film does not resume on return.
+tab pause and resume on return.
 
 ## Rebuild
 

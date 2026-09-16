@@ -6,7 +6,22 @@ import { PRODUCT_DEMOS, productDemoMedia, type ProductDemoId } from "@/lib/produ
 import { useTheme } from "@/lib/useTheme";
 import type { Theme } from "@/lib/theme";
 
-/** Native, silent films. No timer advances a paused clip or interrupts a form. */
+/**
+ * Native, silent films. No timer advances a paused clip or interrupts a form.
+ *
+ * THE FILM JUST PLAYS (user directive, 2026-09-16: "make the video for
+ * onboarding and the sign-up page just play, not with clip options that you
+ * can stop or change the bar"). No `controls`: a scrubber, a pause key and a
+ * mute key on a ten-second silent loop are a player's chrome over a
+ * picture, and on the first screen a stranger sees they read as a thing to
+ * operate rather than a thing to watch. What a film needs to say for itself
+ * is on the page — its title in the chip row, its one sentence under it.
+ * A fixed lesson LOOPS (a film that stops on its last frame with no key to
+ * restart it reads as broken); the gate's carousel does not loop a clip, it
+ * advances to the next one on `ended`, which is the same continuity across
+ * five films. Reduced motion keeps the poster still, as before — and with no
+ * key to press, the poster IS the picture.
+ */
 export function ProductDemo({ lesson, autoPlay = true }: { lesson?: ProductDemoId; autoPlay?: boolean }) {
   const t = useTranslations("productDemo");
   const locale = useLocale();
@@ -32,8 +47,10 @@ export function ProductDemo({ lesson, autoPlay = true }: { lesson?: ProductDemoI
           ))}
         </div>
       )}
+      {/* the film's one sentence, and nothing under it: the «ten-second
+          samples · fictional data · silent» line left on the user's word
+          (2026-09-16) — a caption about the footage is not about the product */}
       <p className="mt-3 text-center text-sm leading-6 text-fg-muted">{t(`${active}Description`)}</p>
-      <p className="mt-2 text-center text-xs leading-5 text-fg-subtle">{t("sample")}</p>
     </section>
   );
 }
@@ -94,7 +111,7 @@ function DemoFilm({ lesson, theme, autoPlay, onEnded }: { lesson: ProductDemoId;
     <div>
       <video key={attempt} ref={videoRef} className="aspect-[4/3] w-full rounded-2xl bg-surface-2"
         width={1280} height={960} src={media.src} poster={media.poster}
-        controls muted playsInline preload="metadata" aria-label={t(`${lesson}Title`)} aria-describedby={descriptionId}
+        muted playsInline loop={onEnded === undefined} preload="metadata" aria-label={t(`${lesson}Title`)} aria-describedby={descriptionId}
         onError={() => setFailed(true)} onEnded={() => { if (allowAdvance.current && !document.hidden) onEnded?.(); }}>
         <track kind="captions" src={media.captions} srcLang={media.language} label={media.language === "fa" ? "فارسی" : "English"} />
         {t("unsupported")}

@@ -66,16 +66,17 @@ export function Lead({ children }: { children: ReactNode }) {
 
 /**
  * Back above, Continue below — the reference's arrangement. `ready` greys the
- * button until the step has an answer; on the dark stages the ink flips.
+ * button until the step has an answer. One coat: the dark stage's inverted
+ * pair left with the stage (2026-09-16), so every screen's Continue is the
+ * platform's own primary button.
  */
 export function StepActions({
-  onBack, onContinue, ready = true, label, dark = false,
+  onBack, onContinue, ready = true, label,
 }: {
   onBack?: (() => void) | undefined;
   onContinue?: (() => void) | undefined;
   ready?: boolean;
   label?: string | undefined;
-  dark?: boolean;
 }) {
   const t = useTranslations("onboarding");
   return (
@@ -83,7 +84,7 @@ export function StepActions({
       {onContinue ? (
         <button
           type="button"
-          className={`btn w-full max-w-sm ${dark ? "bg-bg text-fg hover:opacity-90" : "btn-primary"}`}
+          className="btn btn-primary w-full max-w-sm"
           disabled={!ready}
           onClick={onContinue}
         >
@@ -93,7 +94,7 @@ export function StepActions({
       {onBack ? (
         <button
           type="button"
-          className={`btn btn-ghost w-fit gap-1 ${dark ? "text-bg/70 hover:bg-bg/10 hover:text-bg" : ""}`}
+          className="btn btn-ghost w-fit gap-1"
           onClick={onBack}
         >
           <span className="inline-flex -scale-x-100" aria-hidden><IconChevronEnd width={14} height={14} /></span>

@@ -143,12 +143,30 @@ export function ScenePlane(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** a clock with the saved hours as a wedge — the savings screen's picture */
+export function SceneClock(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="240" cy="180" r="120" className="fill-surface" />
+      <path d="M240 180 L240 60 A120 120 0 0 1 344 120 z" className="fill-accent-soft" stroke="none" />
+      <circle cx="240" cy="180" r="120" />
+      <path d="M240 72 v14 M348 180 h-14 M240 288 v-14 M132 180 h14" />
+      <path d="M240 180 L240 96" className="stroke-accent" strokeWidth="6" />
+      <path d="M240 180 L300 214" strokeWidth="6" />
+      <circle cx="240" cy="180" r="7" className="fill-fg" stroke="none" />
+      <path d="M400 70 l6 16 l16 6 l-16 6 l-6 16 l-6 -16 l-16 -6 l16 -6 z" className="fill-warning/40 stroke-warning" />
+      <path d="M70 250 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 l10 -4 z" className="fill-warning/40 stroke-warning" />
+      <path d="M60 110 h40 M50 140 h60" className="stroke-warning" strokeWidth="5" />
+    </svg>
+  );
+}
+
 /** the soft swash behind the centred steps — a wave, not a wallpaper */
-export function Watermark({ className = "" }: { className?: string }) {
+export function Watermark() {
   return (
     <svg
       viewBox="0 0 1200 600"
-      className={`pointer-events-none absolute inset-0 h-full w-full text-fg ${className}`}
+      className="pointer-events-none absolute inset-0 h-full w-full text-fg"
       aria-hidden
       fill="none"
       stroke="currentColor"

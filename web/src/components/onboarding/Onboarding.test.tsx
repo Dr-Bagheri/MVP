@@ -160,6 +160,38 @@ describe("the live controls", () => {
   });
 });
 
+describe("the speed and the savings screens wear the questions' anatomy (2026-09-16)", () => {
+  /* the split layout is the one with an END-side picture: the questions
+     render an <aside>, the centred cards do not, and the retired dark stage
+     did not either — so the aside is what says these two screens are drawn
+     like the four before the microphone, and the h1 is the Title role every
+     question opens with (the dark savings screen opened with a <p>) */
+  it("the speed screen: a Title, the two speeds, the ratio on the picture side, the flow's own Continue", async () => {
+    me.mockResolvedValue({ ...PERSON, onboarding: { step: "faster" } });
+    const { container } = render(<Onboarding />);
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("آفرین!");
+    const aside = container.querySelector("aside");
+    expect(aside).not.toBeNull();
+    expect(aside).toHaveTextContent("سریع‌تر!");
+    expect(container.querySelector("aside svg")).not.toBeNull();
+    /* the two speeds sit on the start side, in a card */
+    expect(container.querySelector("section .card")).toHaveTextContent("۱۵۰ کلمه در دقیقه");
+    expect(screen.getByRole("button", { name: "ادامه" })).toHaveClass("btn-primary");
+    /* nothing is drawn on the inverted stage any more */
+    expect(container.querySelector(".bg-fg")).toBeNull();
+  });
+
+  it("the savings screen: a Title with the figure under it, the slider in a card, the picture side, «start working» in the same coat", async () => {
+    me.mockResolvedValue({ ...PERSON, onboarding: { step: "savings" } });
+    const { container } = render(<Onboarding />);
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("با نورای می‌توانی ذخیره کنی");
+    expect(container.querySelector("aside svg")).not.toBeNull();
+    expect(container.querySelector("section .card input[type=range]")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "شروع کار" })).toHaveClass("btn-primary");
+    expect(container.querySelector(".bg-fg")).toBeNull();
+  });
+});
+
 describe("the end of the flow, and the way out", () => {
   it("«start working» stamps the end ONCE and goes home — a double press is one completion", async () => {
     me.mockResolvedValue({ ...PERSON, onboarding: { step: "savings" } });

@@ -333,57 +333,83 @@ export function DictateScreen({ save, advance, back }: ScreenProps) {
   );
 }
 
-/* ── the two reveals ─────────────────────────────────────────────────────── */
+/* ── the two «look what you get» screens ─────────────────────────────────── */
 
+/**
+ * THE SPEED AND THE SAVINGS WEAR THE QUESTIONS' ANATOMY (user directive,
+ * 2026-09-16: "the two — faster and more hours — have different styles;
+ * change them and make them like the previous pages, same design, style and
+ * alignments"). They had been the reference's dark stage — inverted ink, a
+ * 6xl figure in the middle of the screen, their own button coat — the one
+ * place in the flow drawn in a second language, and the person who walked
+ * ten screens of one design met two of another at the end. Now they are
+ * split screens like the four questions before the microphone: a Title, one
+ * line, the figures in the flow's own card, the Back / Continue pair; the
+ * end side carries the picture, and on the speed screen the picture is where
+ * the headline ratio lives, the way the plane carried it. The dark stage
+ * left OnboardingFrame with them — a layout with no screen is a second
+ * design waiting to come back.
+ */
 export function FasterScreen({ advance, back }: ScreenProps) {
   const t = useTranslations("onboarding");
   const locale = useLocale();
   return (
     <>
-      <div className="flex flex-1 flex-col gap-10 md:flex-row md:items-center">
-        <div className="flex-1">
-          <h1 className="text-5xl font-bold md:text-6xl">{t("fasterTitle")}</h1>
-          <p className="mt-10 text-2xl font-semibold">{t("fasterLead")}</p>
-          <p className="mt-8 text-xs font-semibold text-bg/70">{t("fasterTyping")}</p>
-          <div className="mt-2 inline-block rounded-md bg-bg/15 px-4 py-2 text-base font-semibold">
+      <Title>{t("fasterTitle")}</Title>
+      <Lead>{t("fasterLead")}</Lead>
+      <div className="card mt-8 flex flex-col gap-5">
+        <div>
+          <p className="text-xs font-semibold text-fg-muted">{t("fasterTyping")}</p>
+          <div className="mt-2 inline-block rounded-md bg-surface-2 px-4 py-2 text-base font-semibold text-fg">
             {t("fasterWpm", { n: digits(TYPING_WPM, locale) })}
           </div>
-          <p className="mt-6 text-xs font-semibold text-bg/70">{t("fasterVoice")}</p>
-          <div className="mt-2 rounded-md bg-accent px-4 py-2 text-base font-semibold text-on-accent md:w-3/4">
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-fg-muted">{t("fasterVoice")}</p>
+          <div className="mt-2 rounded-md bg-accent px-4 py-2 text-base font-semibold text-on-accent">
             {t("fasterWpm", { n: digits(SPEAKING_WPM, locale) })}
           </div>
         </div>
-        <div className="flex flex-1 flex-col items-center text-center">
-          <div className="w-full max-w-xs text-bg">
-            <ScenePlane />
-          </div>
-          <p className="mt-4 text-6xl font-bold">
-            {t("fasterBig", { n: digits(SPEED_RATIO, locale) })}
-            <span className="ms-3 text-accent">{t("fasterBigWord")}</span>
-          </p>
-          <p className="mt-3 text-xl font-semibold">{t("fasterThan")}</p>
-        </div>
       </div>
-      <StepActions onBack={back} onContinue={advance} ready dark />
+      <StepActions onBack={back} onContinue={advance} ready />
     </>
   );
 }
 
-export function SavingsScreen({ answers, save, advance, back, finish }: ScreenProps & { finish: () => void }) {
+/** the speed screen's end side: the plane, and the ratio it is flying at */
+export function FasterPicture() {
+  const t = useTranslations("onboarding");
+  const locale = useLocale();
+  return (
+    <div className="flex flex-col items-center text-center">
+      <div className="w-full max-w-xs"><ScenePlane /></div>
+      <p className="mt-4 text-4xl font-bold leading-tight text-fg">
+        {t("fasterBig", { n: digits(SPEED_RATIO, locale) })}
+        <span className="ms-3 text-accent">{t("fasterBigWord")}</span>
+      </p>
+      <p className="mt-3 text-base font-semibold text-fg-muted">{t("fasterThan")}</p>
+    </div>
+  );
+}
+
+export function SavingsScreen({ answers, save, back, finish }: ScreenProps & { finish: () => void }) {
   const t = useTranslations("onboarding");
   const locale = useLocale();
   const hours = answers.typingHoursPerDay ?? TYPING_HOURS.default;
   const saved = hoursSavedPerWeek(hours);
   return (
     <>
-      <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <p className="text-2xl font-semibold">{t("savingsTitle")}</p>
-        <p className="mt-4 text-6xl font-bold md:text-7xl">
-          {t("savingsHours", { n: digits(saved, locale) })}
-          <span className="ms-3 text-accent">{t("savingsWeek")}</span>
-        </p>
-        <label className="mt-12 block w-full max-w-lg">
-          <span className="block text-base font-semibold">{t("savingsSlider")}</span>
+      <Title>{t("savingsTitle")}</Title>
+      {/* the figure is the title's second line, in the title's own size —
+          a number twice the size of the heading over it was the dark
+          stage's habit, not this flow's */}
+      <p className="mt-2 text-3xl font-bold leading-tight text-fg" aria-live="polite">
+        {t("savingsHours", { n: digits(saved, locale) })}
+        <span className="ms-2 text-accent">{t("savingsWeek")}</span>
+      </p>
+      <div className="card mt-8">
+        <label className="block">
+          <span className="block text-base font-semibold text-fg">{t("savingsSlider")}</span>
           <input
             type="range"
             min={TYPING_HOURS.min}
@@ -391,14 +417,15 @@ export function SavingsScreen({ answers, save, advance, back, finish }: ScreenPr
             step={1}
             value={hours}
             onChange={(e) => save({ typingHoursPerDay: Number(e.target.value) })}
-            className="mt-3 w-full accent-[rgb(var(--accent))]"
+            className="mt-4 w-full accent-[rgb(var(--accent))]"
             dir="ltr"
           />
-          <span className="mt-2 block text-base">{t("savingsHoursDay", { n: digits(hours, locale) })}</span>
+          <span className="mt-2 block text-base text-fg">{t("savingsHoursDay", { n: digits(hours, locale) })}</span>
         </label>
-        <p className="mt-6 text-xs text-bg/70">{t("savingsNote")}</p>
       </div>
-      <StepActions onBack={back} onContinue={() => { void advance; finish(); }} ready dark label={t("finish")} />
+      {/* CONSTRAINT — the figure is an estimate, and the line says on what */}
+      <p className="mt-4 text-sm leading-6 text-fg-muted">{t("savingsNote")}</p>
+      <StepActions onBack={back} onContinue={finish} ready label={t("finish")} />
     </>
   );
 }

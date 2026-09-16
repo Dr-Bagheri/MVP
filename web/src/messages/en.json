@@ -19,7 +19,6 @@
     "tasksDescription": "Give work an owner and a due date, then move it across your board.",
     "teamDescription": "Invite people by email. Their role and your sharing choices determine access.",
     "connectDescription": "Authorize a calendar connection, then review its events in your workspace.",
-    "sample": "10-second illustrative clips · sample data · no sound",
     "unsupported": "Your browser cannot play this video. Read the description below.",
     "unavailable": "The clip could not load. You can still continue.",
     "retry": "Retry video"
@@ -3757,7 +3756,7 @@
     "dictateNoKey": "Choose a shortcut key first, or press the microphone.",
     "dictateMic": "Speak",
     "fasterTitle": "Nice job!",
-    "fasterLead": "Speaking can be",
+    "fasterLead": "Speaking is faster than typing.",
     "fasterTyping": "Avg typing speed",
     "fasterVoice": "Your voice",
     "fasterWpm": "{n} words/min",

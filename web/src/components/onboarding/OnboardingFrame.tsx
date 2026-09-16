@@ -7,13 +7,19 @@ import { Watermark } from "./Illustrations";
 
 /**
  * THE FLOW'S CHROME: the five-stage rail across the top, a progress bar
- * under it, the language pair at its end, and one of three stages below.
+ * under it, the language pair at its end, and one of two stages below.
  *
  *   split     a question on the START side, a picture on the END side —
- *             the reference's default screen
+ *             the reference's default screen, and since 2026-09-16 the two
+ *             «look what you get» screens' too
  *   centred   one card in the middle of a washed ground (the microphone, the
  *             languages, the key, the message lesson)
- *   reveal    the dark stage for the two «look what you get» moments
+ *
+ * The reference's DARK STAGE for the speed and savings reveals is gone
+ * (user directive, 2026-09-16: "make them like the previous pages, same
+ * design and style and alignments") — an inverted screen at the end of a
+ * flow drawn in one design read as a second product, and a layout that no
+ * screen uses is a second design waiting to come back.
  *
  * It shares the public entry bar's platform chrome, but is NOT the full
  * platform shell (no app navigation or assistant): the person is
@@ -26,7 +32,7 @@ import { Watermark } from "./Illustrations";
  * breaks it at the joins (persianType.guard), so the emphasis here is the
  * weight and the ink, which read the same in both.
  */
-export type Layout = "split" | "centred" | "reveal";
+export type Layout = "split" | "centred";
 
 export function OnboardingFrame({
   step,
@@ -41,7 +47,7 @@ export function OnboardingFrame({
   children: ReactNode;
 }) {
   return (
-    <div className={`flex min-h-dvh flex-col ${layout === "reveal" ? "bg-fg text-bg" : "bg-bg text-fg"}`}>
+    <div className="flex min-h-dvh flex-col bg-bg text-fg">
       <EntryTopBar step={step} />
 
       {layout === "split" ? (
@@ -53,15 +59,10 @@ export function OnboardingFrame({
             <div className="w-full max-w-xl text-fg">{picture}</div>
           </aside>
         </div>
-      ) : layout === "centred" ? (
+      ) : (
         <div className="relative flex min-h-0 flex-1 flex-col items-center overflow-hidden px-6 py-8 md:py-12">
           <Watermark />
           <div className="relative w-full max-w-2xl">{children}</div>
-        </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden px-6 py-8 md:px-14 md:py-12">
-          <Watermark className="text-bg" />
-          <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
         </div>
       )}
     </div>

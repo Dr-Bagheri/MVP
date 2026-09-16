@@ -46,8 +46,8 @@ is a wall).
 | Set up | languages | the languages you speak (the UI language pre-chosen) | `languages[]` |
 | | hotkey | test the keyboard shortcut — choose a key, hold it, it turns green (the product's real push-to-talk binding) | `hotkey` |
 | Learn | dictate | use NeurAI to send a message — a mock team room, hold the key and speak (the composer's real dictation) | `dictated` |
-| | faster | «Nice job! speaking can be N× faster» — 40 vs 150 words/min, the dark reveal | — |
-| Personalize | savings | «with NeurAI you could save N hours a week» — a slider of typing hours a day, labelled as an estimate | `typingHoursPerDay` |
+| | faster | «Nice job! speaking is faster than typing» — 40 vs 150 words/min in the flow's card, the ×N ratio on the picture side (a split screen like the questions; the reference's dark stage left 2026-09-16) | — |
+| Personalize | savings | «with NeurAI you could save N hours a week» — the figure under the title, a slider of typing hours a day in a card, labelled as an estimate (split, same) | `typingHoursPerDay` |
 
 Nothing in the flow writes into the workspace it is introducing (no test
 recording, no model call) — the 2026-09-06 lesson. The product's own controls
@@ -74,8 +74,12 @@ opens twice.
 `web/public/demo/{fa,en}/`, with posters and captions. They are code-drawn
 illustrations of real workflows with sample data, not recordings of customer
 sessions. Login has the selectable playlist; relevant onboarding questions
-and the first-run choices use the same player. Reduced-motion/data-saver
-preferences disable autoplay; native controls remain. No remote embed or
+and the first-run choices use the same player. **The film just plays** (user
+directive, later the same day): no native controls — no scrubber, pause or
+mute key on a ten-second silent film — a fixed lesson loops and the login
+playlist advances on completion; the «ten-second samples · sample data ·
+silent» caption is gone. Reduced-motion/data-saver preferences disable
+autoplay and the poster stands as the picture. No remote embed or
 environment setting is required. See [PRODUCT-DEMOS.md](PRODUCT-DEMOS.md)
 for source mapping, regeneration, and verification. Login and onboarding
 share a platform-style top bar with the existing light/dark preference and

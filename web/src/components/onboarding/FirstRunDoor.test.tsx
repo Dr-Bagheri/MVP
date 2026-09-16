@@ -28,6 +28,8 @@ beforeEach(() => {
   me.mockReset().mockResolvedValue(DONE);
   updateOnboarding.mockReset().mockResolvedValue(DONE);
   startTour.mockReset();
+  /* a fresh tab: the door's own answer latch lives in sessionStorage */
+  sessionStorage.clear();
 });
 
 describe("firstRunDue — who sees the door", () => {
@@ -62,6 +64,39 @@ describe("the door", () => {
     fireEvent.click(screen.getByRole("button", { name: "بعداً" }));
     expect(startTour).not.toHaveBeenCalled();
     expect(updateOnboarding).toHaveBeenCalledWith({ answers: { firstRunSeen: true } });
+  });
+
+  /* THE GMAIL LESSON REMOUNTS HOME (its first stop, /integrations, redirects
+     into Home's pane), and the identity the read cache still holds was read
+     before the answer was sent — so the fixture keeps answering «unseen»,
+     exactly as production did (user report, 2026-09-16). The door must not
+     ask the server at all on that remount: the latch answers first. */
+  it("does NOT reopen when Home remounts over the lesson it just started, though the cached identity still says unseen", async () => {
+    const first = render(<FirstRunDoor />);
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("radio", { name: "جیمیل و تقویم را وصل کن" }));
+    fireEvent.click(screen.getByRole("button", { name: "همین حالا امتحان کن" }));
+    expect(startTour).toHaveBeenCalledWith([expect.objectContaining({ href: "/integrations" })]);
+    first.unmount();
+    expect(me).toHaveBeenCalledTimes(1);
+
+    /* the remount: the same stale answer, no dialog, and no second question to the server */
+    const { container } = render(<FirstRunDoor />);
+    await Promise.resolve();
+    expect(container.innerHTML).toBe("");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(me).toHaveBeenCalledTimes(1);
+  });
+
+  it("«later» is the same answer: a remount after it draws nothing either", async () => {
+    const first = render(<FirstRunDoor />);
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "بعداً" }));
+    first.unmount();
+    render(<FirstRunDoor />);
+    await Promise.resolve();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(me).toHaveBeenCalledTimes(1);
   });
 
   it("renders nothing for a person it is not due for", async () => {

@@ -43,12 +43,39 @@ export function firstRunDue(me: Me | null | undefined): boolean {
   return me.onboarding?.firstRunSeen !== true;
 }
 
+/**
+ * THE DOOR REOPENED OVER THE LESSON IT HAD JUST STARTED (user report,
+ * 2026-09-16: "when the help appears and I asked it to guide me for Gmail,
+ * it comes in front again"). `close()` sends the answer and starts the tour
+ * in the same breath, and the Gmail lesson's first stop is `/integrations`,
+ * which redirects into Home's own pane — so Home REMOUNTS, this door mounts
+ * with it and asks `api.me()` again, and the read cache (60 s) answers with
+ * the identity read BEFORE the answer was sent. The PATCH had not even
+ * responded; the cache could not know. The four other lessons land on pages
+ * that do not carry this door, which is why only Gmail showed it.
+ *
+ * So the answer is remembered in this TAB the moment it is given, and a
+ * remount asks the latch before it asks the server. `sessionStorage` rather
+ * than a module variable: a reload mid-lesson is the same tab and the same
+ * answer, while a new tab or another device asks the server, which by then
+ * holds the row. A write that failed leaves the server unmarked and the next
+ * tab asks again — the honest outcome for a door that must not nag.
+ */
+const ANSWERED_KEY = "neurai.firstRunAnswered";
+function answeredHere(): boolean {
+  try { return sessionStorage.getItem(ANSWERED_KEY) === "1"; } catch { return false; }
+}
+function rememberAnswered(): void {
+  try { sessionStorage.setItem(ANSWERED_KEY, "1"); } catch { /* private mode: the server's row is the memory */ }
+}
+
 export function FirstRunDoor() {
   const t = useTranslations("onboarding");
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState<Lesson>("meeting");
 
   useEffect(() => {
+    if (answeredHere()) return;
     let live = true;
     void api.me().then((me) => { if (live && firstRunDue(me)) setOpen(true); }).catch(() => undefined);
     return () => { live = false; };
@@ -58,6 +85,7 @@ export function FirstRunDoor() {
 
   const close = (chosen: Lesson | null) => {
     setOpen(false);
+    rememberAnswered();
     /* recorded either way — «later» is an answer too, and a door that
        reopens until pressed is a nag */
     void api.updateOnboarding({

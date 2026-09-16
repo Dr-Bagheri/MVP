@@ -8,10 +8,10 @@ import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
 import { notifyError } from "@/lib/notify";
 import { OnboardingFrame, type Layout } from "./OnboardingFrame";
-import { SceneLock } from "./Illustrations";
+import { SceneClock, SceneLock } from "./Illustrations";
 import { ProductDemo } from "./ProductDemo";
 import { DataScreen, GoalsScreen, PlacesScreen, WelcomeScreen, WorkScreen } from "./QuestionScreens";
-import { DictateScreen, FasterScreen, HotkeyScreen, LanguagesScreen, MicScreen, SavingsScreen } from "./SetupScreens";
+import { DictateScreen, FasterPicture, FasterScreen, HotkeyScreen, LanguagesScreen, MicScreen, SavingsScreen } from "./SetupScreens";
 import { nextStep, prevStep, resumeStep, type Answers, type StepId } from "./steps";
 
 /**
@@ -24,7 +24,7 @@ import { nextStep, prevStep, resumeStep, type Answers, type StepId } from "./ste
  * The reference (Wispr Flow's web onboarding) is followed step for step in
  * SHAPE — the five-stage rail, a question a screen, the picture beside it,
  * the centred cards for the microphone / language / key tests, the message
- * lesson, the dark reveal with the speed figures, the savings slider — and
+ * lesson, the speed figures, the savings slider — and
  * every question is OURS: what the product does (meetings, the assistant,
  * tasks, the room), the one permission the product actually holds (a voice
  * signature), and the key the product actually uses (push-to-talk).
@@ -54,8 +54,10 @@ const LAYOUT: Readonly<Record<StepId, Layout>> = {
   languages: "centred",
   hotkey: "centred",
   dictate: "centred",
-  faster: "reveal",
-  savings: "reveal",
+  /* the two «look what you get» screens are split screens like the
+     questions (2026-09-16) — the reference's dark stage is gone */
+  faster: "split",
+  savings: "split",
 };
 
 export function Onboarding() {
@@ -144,15 +146,17 @@ export function Onboarding() {
         : step === "work" ? <ProductDemo lesson="team" />
           : step === "places" ? <ProductDemo lesson="tasks" />
             : step === "data" ? <SceneLock />
-              : null;
+              : step === "faster" ? <FasterPicture />
+                : step === "savings" ? <SceneClock />
+                  : null;
 
   return (
     <OnboardingFrame step={step} layout={LAYOUT[step]} picture={picture}>
       {/* «later» — the way out, on every screen: a flow with no exit is a wall */}
-      <div className={`flex justify-end ${LAYOUT[step] === "reveal" ? "text-bg/70" : ""}`}>
+      <div className="flex justify-end">
         <button
           type="button"
-          className={`btn btn-sm ${LAYOUT[step] === "reveal" ? "text-bg/70 hover:bg-bg/10 hover:text-bg" : "text-fg-muted hover:text-fg"}`}
+          className="btn btn-sm text-fg-muted hover:text-fg"
           onClick={() => void skipAll()}
         >
           {t("skipAll")}
