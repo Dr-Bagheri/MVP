@@ -656,17 +656,36 @@ describe("the attendees row on the two create dialogs (2026-09-16)", () => {
     await userEvent.click(screen.getByRole("button", { name: /جلسه جدید/ }));
     const dialog = screen.getByRole("dialog");
 
-    /* the host: fixed, first, said to be the reader — and NOT offered as a
-       toggle, because a switch for the person the meeting belongs to is a
-       switch the server ignores */
-    expect(await within(dialog).findByText("میزبان (شما)")).toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: /دکتر باقری/ })).toBeNull();
+    /* A DROPDOWN, the same control as the folder row above it (2026-09-16,
+       later the same day): closed, it NAMES the host — the question the
+       field answers is who will be in the room, and the host always is. */
+    const control = await within(dialog).findByRole("combobox", { name: "شرکت‌کنندگان" });
+    expect(control).toHaveTextContent("دکتر باقری");
 
-    await userEvent.click(within(dialog).getByRole("button", { name: /رؤیا/ }));
-    expect(within(dialog).getByRole("button", { name: /رؤیا/ })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(control);
+    /* the host is a row that cannot be chosen: hiding them would answer "am
+       I on this?" with silence, and a toggle would offer a choice the
+       server ignores */
+    const host = await screen.findByRole("option", { name: /میزبان \(شما\)/ });
+    expect(host).toHaveAttribute("aria-disabled", "true");
+    expect(host).toHaveTextContent("دکتر باقری");
+    /* and the list says it takes MORE than one answer */
+    expect(host.closest("[role=listbox]")).toHaveAttribute("aria-multiselectable", "true");
+
+    const roya = screen.getByRole("option", { name: "رؤیا" });
+    expect(roya).toHaveAttribute("aria-selected", "false");
+    await userEvent.click(roya);
+    /* the panel STAYS OPEN — three people through a menu that shuts each
+       time is three round trips for one decision */
+    expect(screen.getByRole("option", { name: "رؤیا" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{Escape}");
+    expect(control).toHaveTextContent("رؤیا");
 
     await userEvent.type(within(dialog).getByPlaceholderText("نام مهمان…"), "مهمان تست{Enter}");
     expect(within(dialog).getByText("مهمان تست")).toBeInTheDocument();
+    /* a guest is not a row in the roster's list — it is a name somebody
+       invented — but the closed control counts them among who is coming */
+    expect(control).toHaveTextContent("مهمان تست");
     /* Enter in the guest box added a guest and did NOT start the meeting */
     expect(created).toHaveLength(0);
 
@@ -683,8 +702,12 @@ describe("the attendees row on the two create dialogs (2026-09-16)", () => {
     await waitFor(() => expect(screen.getByText("هنوز جلسه‌ای نیست. اولین جلسه را برنامه‌ریزی کن.")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: /جلسه پیش‌رو/ }));
     const dialog = screen.getByRole("dialog");
-    expect(await within(dialog).findByText("میزبان (شما)")).toBeInTheDocument();
+    const control = await within(dialog).findByRole("combobox", { name: "شرکت‌کنندگان" });
+    expect(control).toHaveTextContent("دکتر باقری");
     expect(within(dialog).getByPlaceholderText("نام مهمان…")).toBeInTheDocument();
+    /* and it is the SAME control as the folder above it — two comboboxes on
+       this dialog, not one dropdown and one open box of rows */
+    expect(within(dialog).getAllByRole("combobox")).toHaveLength(2);
   });
 });
 

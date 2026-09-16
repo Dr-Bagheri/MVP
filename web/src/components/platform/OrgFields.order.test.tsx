@@ -116,4 +116,14 @@ describe("Management · General — the org form's rows", () => {
     expect(screen.queryByText("تعویض تصویر")).toBeNull();
     expect(screen.queryByText("حذف")).toBeNull();
   });
+
+  it("holds the logo in a CIRCLE, like the profile photo (2026-09-16)", async () => {
+    render(<OrgFields />);
+    await screen.findByDisplayValue("شرکت نمونه");
+    const logo = document.querySelector('img[src="/org-logo.png"]') as HTMLElement;
+    /* the two rows were already the same control at the same size — the
+       corner was the last thing telling a reader they were two features */
+    expect(logo.className.split(/\s+/)).toContain("rounded-full");
+    expect(logo.className).not.toContain("rounded-lg");
+  });
 });

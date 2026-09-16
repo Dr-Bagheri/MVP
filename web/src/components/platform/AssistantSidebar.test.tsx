@@ -432,6 +432,32 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
     expect(container.querySelector('[data-icon="mic"]')).not.toBeNull();
   });
+
+  it("the composer's row is the send key and the MIC at its end — no `+` menu (2026-09-16)", async () => {
+    /*
+     * User directive: "remove the plus from the side menu ai assistant and
+     * put the mic there instead." Both halves, because the version that
+     * removed the menu and left the mic where it was is the likely half-done
+     * state and looks fine on its own.
+     *
+     * The ABSENCE is asserted on the menu's own trigger (a `+` glyph with a
+     * name), not on the word: its two keys left the catalogue with it, and a
+     * text query for a string that no longer exists cannot fail.
+     */
+    localStorage.setItem("neurai-assistant-sidebar", "1");
+    const { container } = await mount();
+    await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
+
+    const row = container.querySelector('[data-icon="mic"]')!.closest("button")!.parentElement!;
+    expect(row.querySelector('[data-icon="plus"]'), "the composer menu's `+` is still in the row").toBeNull();
+    /* the mic took its PLACE: last in the row, pushed to the far end */
+    const keys = [...row.children];
+    expect(keys[keys.length - 1]!.querySelector('[data-icon="mic"]')).not.toBeNull();
+    expect(keys[keys.length - 1]!.className).toContain("ms-auto");
+    /* the control: the send key is still at the row's start, so "the mic is
+       last" is a fact about an ordering rather than about an empty row */
+    expect(keys[0]!.getAttribute("type")).toBe("submit");
+  });
 });
 
 describe("the strip is structure, not a reward for the identity read (2026-09-05)", () => {

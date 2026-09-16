@@ -300,7 +300,7 @@ export function OrgFields() {
               rule is that only what is being fetched waits. */}
           <span className="flex flex-col gap-2">
             <span className="flex items-center gap-3">
-              <Skeleton className="h-12 w-12 rounded-lg" />
+              <Skeleton className="h-12 w-12 rounded-full" />
               <Skeleton className="h-8 w-28" />
             </span>
             <span className="text-caption leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
@@ -356,6 +356,10 @@ export function OrgFields() {
           the org name, then email, then website, remove the explanation and
           location"): the organisation's face before its name, and «توضیح»
           and «مکان» gone from the form. */}
+      {/* A CIRCLE, like the profile photo's (user, 2026-09-16: "make the
+          image place a circle like the profile image holder"). The two rows
+          were already the same control and the same size — the corner was the
+          last thing telling a reader they were two different features. */}
       {/* db/0103 — an uploaded FILE. It was a link until this deployment
           grew an image path; the address input is gone rather than kept
           beside the picker, because two ways to set one logo is two states
@@ -387,10 +391,10 @@ export function OrgFields() {
               <img
                 src={api.orgLogoUrl(logoVersion)}
                 alt=""
-                className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+                className="h-12 w-12 shrink-0 rounded-full border border-border object-cover"
               />
             ) : (
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-border text-xs text-fg-subtle">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-border text-xs text-fg-subtle">
                 —
               </span>
             )}

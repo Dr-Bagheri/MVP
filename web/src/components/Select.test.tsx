@@ -88,3 +88,71 @@ describe("Select", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 });
+
+/**
+ * MANY VALUES, SAME CONTROL (2026-09-16) — the meeting dialogs' attendees row.
+ * Each case is a thing the one-value mode must NOT start doing, which is why
+ * the single-value suite above stays exactly as it was: the union in the
+ * props is what keeps them apart, and these are what keep them honest.
+ */
+describe("Select · many values", () => {
+  it("says it takes several, marks every chosen row, and STAYS OPEN on a press", async () => {
+    const onToggle = vi.fn();
+    render(<Select values={["a", "c"]} options={OPTIONS} onToggle={onToggle} ariaLabel="حرف‌ها" />);
+    const trigger = screen.getByRole("combobox", { name: "حرف‌ها" });
+    /* the closed control reads the chosen labels, joined */
+    expect(trigger).toHaveTextContent("الف");
+    expect(trigger).toHaveTextContent("ج");
+
+    await userEvent.click(trigger);
+    expect(screen.getByRole("listbox")).toHaveAttribute("aria-multiselectable", "true");
+    expect(screen.getByRole("option", { name: "الف" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("option", { name: "ب" })).toHaveAttribute("aria-selected", "false");
+
+    await userEvent.click(screen.getByRole("option", { name: "ب" }));
+    expect(onToggle).toHaveBeenCalledWith("b");
+    /* THE ONE THAT MATTERS: picking three people through a menu that shuts
+       each time is three round trips for one decision */
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("shows the placeholder with nothing chosen, and a caller's own summary over the labels", async () => {
+    const { rerender } = render(
+      <Select values={[]} options={OPTIONS} onToggle={vi.fn()} placeholder="هیچ‌کس" ariaLabel="حرف‌ها" />,
+    );
+    expect(screen.getByRole("combobox", { name: "حرف‌ها" })).toHaveTextContent("هیچ‌کس");
+
+    rerender(
+      <Select values={["a", "b"]} options={OPTIONS} onToggle={vi.fn()} summary="دو حرف" ariaLabel="حرف‌ها" />,
+    );
+    const trigger = screen.getByRole("combobox", { name: "حرف‌ها" });
+    expect(trigger).toHaveTextContent("دو حرف");
+    /* the summary REPLACES the joined labels rather than joining them */
+    expect(trigger.textContent).not.toContain("الف");
+  });
+
+  it("THE CONTROL: one value still closes on a press, and says nothing about being multiple", async () => {
+    const onChange = vi.fn();
+    render(<Select value="a" options={OPTIONS} onChange={onChange} ariaLabel="حرف" />);
+    await userEvent.click(screen.getByRole("combobox", { name: "حرف" }));
+    expect(screen.getByRole("listbox")).not.toHaveAttribute("aria-multiselectable");
+    await userEvent.click(screen.getByRole("option", { name: "ب" }));
+    expect(onChange).toHaveBeenCalledWith("b");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("a disabled row is not chosen by a press — the host of a meeting is one", async () => {
+    const onToggle = vi.fn();
+    render(
+      <Select
+        values={[]}
+        onToggle={onToggle}
+        ariaLabel="حرف‌ها"
+        options={[{ value: "host", label: "میزبان", disabled: true }, ...OPTIONS]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: "حرف‌ها" }));
+    await userEvent.click(screen.getByRole("option", { name: "میزبان" }));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+});

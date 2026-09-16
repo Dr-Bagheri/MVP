@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { IconChevronRight } from "@/components/icons";
+import { IconCheck, IconChevronRight } from "@/components/icons";
 
 /**
  * THE PLATFORM'S DROPDOWN.
@@ -57,26 +57,73 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export function Select({
-  value, options, onChange, placeholder, disabled = false, className = "", ariaLabel, id,
-}: {
-  value: string;
+interface SelectBase {
   options: SelectOption[];
-  onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   ariaLabel?: string;
   id?: string;
-}) {
+}
+
+/**
+ * ONE VALUE OR MANY — and it is the SAME control (2026-09-16).
+ *
+ * The meeting dialogs ask who is coming, and the first version drew that as
+ * an always-open box of rows under the folder dropdown: two people-pickers
+ * in one form, one of them a list and one of them a menu (user: "make this
+ * one a dropdown as well, like the ones above, with the same dropdown
+ * style"). So the many-values case lives HERE, in the trigger and panel the
+ * rest of the product already opens, rather than in a second panel that
+ * would have to re-learn Radix's dialog rule, the flip at the viewport edge
+ * and the arrow keys — the four things this file's own header lists as the
+ * reason it is not hand-rolled.
+ *
+ * The shape is a UNION so the two cannot be mixed: a caller passes
+ * `value`/`onChange` or `values`/`onToggle`, never both, and a multi-select
+ * that quietly took the first of two answers is unrepresentable.
+ *
+ * What differs when there are many: the panel STAYS OPEN on a press (picking
+ * three people through a menu that shuts each time is three round trips for
+ * one decision), the listbox says `aria-multiselectable`, and a chosen row
+ * carries a check at its end — `aria-selected` is the fact, the glyph is how
+ * a person reads it without a screen reader.
+ */
+type SelectProps = SelectBase & (
+  | { value: string; onChange: (value: string) => void; values?: undefined; onToggle?: undefined; summary?: undefined }
+  | {
+      values: readonly string[];
+      onToggle: (value: string) => void;
+      /** the closed control's words; without it, the chosen labels joined */
+      summary?: string;
+      value?: undefined;
+      onChange?: undefined;
+    }
+);
+
+export function Select({
+  value, options, onChange, placeholder, disabled = false, className = "", ariaLabel, id,
+  values, onToggle, summary,
+}: SelectProps) {
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
   const listId = useId();
-  const selected = options.find((o) => o.value === value) ?? null;
+  const many = values !== undefined;
+  const chosen = (option: SelectOption) =>
+    many ? values.includes(option.value) : option.value === value;
+  const first = options.findIndex(chosen);
+  const selected: { label: string; dot?: string } | null = many
+    ? (values.length === 0
+        ? null
+        /* no dot when there are many: one leading colour for a row that
+           stands for several people says the wrong thing about all of them */
+        : { label: summary ?? options.filter(chosen).map((o) => o.label).join("، ") })
+    : options.find((o) => o.value === value) ?? null;
 
   const choose = (index: number) => {
     const option = options[index];
     if (option === undefined || option.disabled === true) return;
+    if (many) { onToggle(option.value); return; }
     onChange(option.value);
     setOpen(false);
   };
@@ -87,7 +134,7 @@ export function Select({
       onOpenChange={(next) => {
         /* the cursor starts on the CURRENT value, so the first arrow press
            moves from where the person is rather than from the top */
-        if (next) setCursor(Math.max(0, options.findIndex((o) => o.value === value)));
+        if (next) setCursor(Math.max(0, first));
         setOpen(next);
       }}
     >
@@ -121,7 +168,7 @@ export function Select({
           onKeyDown={(e) => {
             if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
               e.preventDefault();
-              setCursor(Math.max(0, options.findIndex((o) => o.value === value)));
+              setCursor(Math.max(0, first));
               setOpen(true);
             }
           }}
@@ -171,6 +218,7 @@ export function Select({
         <ul
           id={listId}
           role="listbox"
+          aria-multiselectable={many ? true : undefined}
           aria-activedescendant={`${listId}-${cursor}`}
           className="max-h-60 overflow-y-auto whitespace-nowrap outline-none"
         >
@@ -189,7 +237,7 @@ export function Select({
               id={`${listId}-${index}`}
               role="option"
               data-value={option.value}
-              aria-selected={option.value === value}
+              aria-selected={chosen(option)}
               aria-disabled={option.disabled === true ? true : undefined}
               onMouseEnter={() => setCursor(index)}
               onClick={() => choose(index)}
@@ -205,7 +253,7 @@ export function Select({
               className={`tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-xs ${
                 option.disabled === true
                   ? "cursor-not-allowed text-fg-subtle"
-                  : `cursor-pointer ${option.value === value ? "font-semibold text-accent" : "text-fg"}`
+                  : `cursor-pointer ${chosen(option) ? "font-semibold text-accent" : "text-fg"}`
               } ${index === cursor && option.disabled !== true ? "bg-surface-2" : ""}`}
             >
               {option.icon !== undefined ? (
@@ -214,6 +262,12 @@ export function Select({
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: option.dot }} aria-hidden />
               ) : null}
               <span className="min-w-0 flex-1">{option.label}</span>
+              {/* the check is the MANY case's only extra furniture: with one
+                  value the chosen row is the one the closed control shows, and
+                  with several there is nothing else to read them off */}
+              {many && chosen(option) ? (
+                <IconCheck width={12} height={12} className="shrink-0" aria-hidden />
+              ) : null}
             </li>
           ))}
         </ul>

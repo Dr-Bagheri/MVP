@@ -54,6 +54,18 @@ const REMAINING: Record<string, number> = {
      a real absence from a fetch in flight by the shape of the ternary is
      what a false-positive factory does. */
   "app/[locale]/management/server/page.tsx": 1,
+  /* NOT A SECTION THAT VANISHES, examined and left (2026-09-16). The one
+     match is `me === null ? null : personName(me, locale)` — the HOST's name
+     inside the attendees dropdown. The section's frame is fully drawn while
+     the identity read is in flight: the control, its border and its chevron
+     are all there, and what is missing is one name in the closed label. A
+     skeleton for a single name inside a trigger would be a grey bar that is
+     the same size as the word it replaces, which is not a frame — it is the
+     word, greyed. And `me === null` is BOTH states this product keeps apart
+     (still asking / nobody), so the honest render is the one that claims
+     neither. Listed rather than rewritten as `me && …`: the same branch in
+     another spelling is dodging the check, not answering it. */
+  "components/platform/MeetingAttendeesField.tsx": 1,
   /* NOT A LOADING STATE, and stays at 1 rather than being written around
      (2026-09-03, the management/settings sweep). The members roster's one
      match is `detailId === null ? null : rows.find(…)` — the flag for the

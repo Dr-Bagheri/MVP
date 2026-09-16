@@ -105,10 +105,24 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   both read it; a second «تعویض» button or a «حذف عکس» text link beside a
   picture is the second telling.
 - The two meeting create dialogs carry `platform/MeetingAttendeesField`
-  (2026-09-16): the host as a fixed first row, the roster as the project
-  dialog's people-picker rows, a typed name for a guest; colleagues are added
-  through 0202's attendees route AFTER the create, guests ride it as
-  `invitees`.
+  (2026-09-16): it is the KIT'S DROPDOWN, the same control as the folder row
+  above it — the host as a row that is visible and unselectable, the roster
+  as the rest, the closed control naming everyone who is coming. A guest is a
+  typed name in its own box under it, because a name that does not exist yet
+  cannot be a row in a list of people who do. Colleagues are added through
+  0202's attendees route AFTER the create, guests ride it as `invitees`.
+- `components/Select` takes ONE value or MANY, through a union in its props
+  (2026-09-16): `value`/`onChange`, or `values`/`onToggle` with an optional
+  `summary`. With many, the panel stays open on a press, the listbox says
+  `aria-multiselectable`, and a chosen row carries a check. There is no
+  second dropdown: a new picker adds a mode here, never a panel of its own.
+- The organisation's logo is a CIRCLE, the profile photo's shape
+  (2026-09-16): the two are one control at one size, and the corner was the
+  last thing telling a reader they were two features.
+- The assistant sidebar's composer is the send key at the row's start and the
+  MIC at its end (2026-09-16), and nothing else. Its `+` menu is gone —
+  «گفت‌وگوی تازه» lives in the panel's header (`SessionMenu`'s `onNew`), and
+  the connectors shortcut is Home's sidebar row and Settings · اتصال‌ها.
 - The task board draws no add-column slot (2026-09-16): the lane is exactly
   its columns.
 - The meetings page is TWO rows (2026-09-16, later): row one carries the

@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api, BffError } from "@/api/client";
-import type { AssistantSession, ConnectorStatus } from "@/api/types";
+import type { AssistantSession } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { FloorChip } from "./FloorChip";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
@@ -45,7 +45,6 @@ import { notify } from "@/lib/notify";
 import { Icon } from "@/components/icons";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
-  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { speak, speakQueued, stopSpeaking, subscribeSpeechPlayback } from "@/lib/voice";
@@ -1497,10 +1496,24 @@ export function AssistantSidebar() {
                     hotkey whose effect no visible control offers is a hidden
                     feature — and this panel had no mic at all, so "make it for
                     both" was really "give the sidebar the page's mic".
+
+                    IT TOOK THE MENU'S PLACE on 2026-09-16 (user: "remove the
+                    plus from the side menu ai assistant and put the mic there
+                    instead") — hence `ms-auto`, which was the `+`'s. Two keys
+                    at the two ends of the row now: the one pressed on every
+                    turn where the eye lands first, and the one pressed while
+                    speaking out at the edge, where a thumb reaches without
+                    crossing the box.
+
+                    WHAT WENT WITH THE MENU, said rather than discovered: its
+                    «گفت‌وگوی تازه» survives in the header (SessionMenu's own
+                    `onNew`, the same function), and its connectors shortcut
+                    does not — that door is Home's sidebar row and Settings ·
+                    اتصال‌ها, two places that still reach it.
                   */}
                   <button
                     type="button"
-                    className={`btn btn-icon shrink-0 ${micTone(dictation.status)}`}
+                    className={`btn btn-icon ms-auto shrink-0 ${micTone(dictation.status)}`}
                     aria-pressed={dictation.status === "listening"}
                     aria-label={tp("voice")}
                     title={tp("voice")}
@@ -1508,14 +1521,6 @@ export function AssistantSidebar() {
                   >
                     <Icon name="mic" size="sm" />
                   </button>
-                  <ComposerMenu
-                    className="ms-auto"
-                    onNewConversation={freshConversation}
-                    label={t("composerMenu")}
-                    newLabel={t("newConversation")}
-                    connectorsLabel={t("connectors")}
-                    manageLabel={t("manageConnectors")}
-                  />
                 </div>
               </div>
             </form>
@@ -1575,7 +1580,7 @@ export function AssistantSidebar() {
  *
  * Read on OPEN, never on mount. This component renders on every page in the
  * platform; a sessions request per navigation, for a menu nobody opened, is
- * the same waste `ComposerMenu` refuses below. The page is short on purpose —
+ * the same waste the composer's own menu refused. The page is short on purpose —
  * this is the recent handful, and the door to all of them is History.
  *
  * Titles are the SERVER's (M4: derived from the first question, never
@@ -1671,121 +1676,3 @@ function SessionMenu({
   );
 }
 
-/**
- * THE COMPOSER'S OWN MENU (user directive, 2026-09-03: "add a dropdown menu to
- * it that opens upward and in it new conversation and connectors. inside
- * connectors must be the option for our ai to use other platforms and apis").
- *
- * Two entries, and they are two different KINDS of thing on purpose:
- *
- *   · «گفت‌وگوی تازه» acts — it is the plus that used to sit in the header,
- *     moved to where a person is already looking when they decide to start
- *     over, which is the box they are about to type in;
- *   · «اتصال‌ها» is a SUBMENU listing what this assistant can reach outside
- *     the platform. Every row says what it IS — connected, expired, never
- *     set up — rather than offering a switch, because connecting is a consent
- *     flow with a provider's own screen in the middle of it and a toggle here
- *     would be a control that reads as wired and opens a redirect.
- *
- * The list is READ, never invented: `api.connectors()` is the same call the
- * Integrations screen makes. A hand-written list of providers here would be a
- * second claim about what the product supports, and the first thing to rot the
- * day one is added.
- *
- * `side="top"` — the composer is at the foot of a full-height column, so a
- * panel dropped below it opens into the viewport edge.
- */
-function ComposerMenu({
-  onNewConversation, label, newLabel, connectorsLabel, manageLabel, className = "",
-}: {
-  onNewConversation: () => void;
-  label: string;
-  newLabel: string;
-  connectorsLabel: string;
-  manageLabel: string;
-  className?: string;
-}) {
-  const router = useRouter();
-  const [connectors, setConnectors] = useState<ConnectorStatus[] | "failed" | null>(null);
-
-  /* read when the menu is OPENED, not on mount: this component renders on
-     every page in the platform, and a connectors request per navigation for a
-     menu nobody opened is a request nobody asked for */
-  const load = () => {
-    if (connectors !== null) return;
-    void api.connectors()
-      .then((rows) => setConnectors(rows))
-      .catch(() => setConnectors("failed"));
-  };
-
-  return (
-    <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={`btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg ${className}`}
-          aria-label={label}
-          title={label}
-        >
-          <Icon name="plus" size="sm" />
-        </button>
-      </DropdownMenuTrigger>
-      {/*
-        SMALLER, in both senses (user directive, 2026-09-03: "make the drop
-        down of the plus small both in text and size").
-        224px of panel with 13px rows, for two entries, on a column that is
-        itself a third of the screen — the menu was reading as a section rather
-        than as a choice. `min-w-0 w-44` and `text-xs` rows bring it down to
-        the size of what it holds. The rows are re-styled HERE and not in
-        `ui/dropdown-menu.tsx`: that primitive is the product's every menu, and
-        one composer's menu is not a reason to shrink the member row on the
-        management screen.
-      */}
-      <DropdownMenuContent
-        side="top"
-        align="start"
-        className="w-44 min-w-0 p-0.5 [&_[role=menuitem]]:gap-1.5 [&_[role=menuitem]]:px-2 [&_[role=menuitem]]:py-1 [&_[role=menuitem]]:text-xs"
-      >
-        <DropdownMenuItem onSelect={() => onNewConversation()}>
-          <Icon name="plus" size="sm" />
-          {newLabel}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Icon name="plug" size="sm" />
-            {connectorsLabel}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-52 min-w-0 p-0.5 [&_[role=menuitem]]:px-2 [&_[role=menuitem]]:py-1 [&_[role=menuitem]]:text-xs">
-            {connectors === null ? (
-              <div className="px-2 py-1.5"><SkeletonLines lines={2} /></div>
-            ) : connectors === "failed" ? (
-              <DropdownMenuItem disabled>{connectorsLabel}</DropdownMenuItem>
-            ) : (
-              connectors.map((row) => (
-                <DropdownMenuItem
-                  key={row.provider}
-                  onSelect={() => router.push("/integrations")}
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        row.status === "connected" ? "bg-accent" : "bg-fg-subtle"
-                      }`}
-                      aria-hidden
-                    />
-                    <span className="truncate">{row.account_label ?? row.provider}</span>
-                  </span>
-                </DropdownMenuItem>
-              ))
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => router.push("/integrations")}>
-              {manageLabel}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}

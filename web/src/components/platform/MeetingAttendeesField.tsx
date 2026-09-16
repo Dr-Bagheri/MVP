@@ -3,31 +3,36 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Me, OrgPersonRecord } from "@/api/types";
-import { Avatar } from "@/components/Avatar";
-import { IconCheck, IconClose, IconPlus } from "@/components/icons";
-import { personName, personPhoto } from "@/lib/format";
+import { Select } from "@/components/Select";
+import { IconClose, IconPlus } from "@/components/icons";
+import { personName } from "@/lib/format";
 
 /**
  * WHO IS COMING, asked when the meeting is made (user, 2026-09-16: "in the
  * pop-up window for new meetings and ahead meetings, add a row for attendees
  * as well that can be chosen from the users or simply just write down a
- * name; the host is the user and present").
+ * name; the host is the user and present") — as a DROPDOWN, the same one the
+ * folder row above it opens (same user, later the same day: "make this one a
+ * dropdown as well like the ones above, with the same dropdown style").
  *
- * Three kinds of row, and they are three facts rather than one list:
+ * Three kinds of person, and they are three facts rather than one list:
  *
- *   - THE HOST — the reader, fixed at the top and said to be them. The
- *     person making the meeting is on it and is the one who presses start
- *     (0202: the take is the host's), so there is nothing to choose.
+ *   - THE HOST — the reader. A row in the list, VISIBLE AND UNSELECTABLE,
+ *     which is what `SelectOption.disabled` is for: hiding them would answer
+ *     "am I on this?" with silence, and offering a toggle would offer a
+ *     choice the server ignores (0202: the take is the host's, and they are
+ *     the one who presses start).
  *   - A COLLEAGUE — an account on the roster (db/0202's `meeting_attendee`),
- *     picked here and ADDED after the row exists, in the one request that
+ *     chosen here and ADDED after the row exists, in the one request that
  *     also mints their invitation (`api.addMeetingAttendees`).
  *   - A GUEST — a typed name for somebody with no account here, which is
- *     exactly what 0202 left the `invitees` text list for.
+ *     exactly what 0202 left the `invitees` text list for. It keeps its own
+ *     box under the dropdown: a name that does not exist yet cannot be a row
+ *     in a list of people who do.
  *
- * The field holds the picks; the writes happen with the create, in the
- * dialog that owns the meeting, because a meeting has to exist before
- * anybody can be on it. The roster row is the project dialog's (2026-09-05),
- * because a person who has learned one people-picker has learned both.
+ * The closed control names everyone who is coming, host first — the question
+ * this field answers is "who will be in the room", and a control that showed
+ * only the colleagues would answer a narrower one than it was asked.
  */
 export function MeetingAttendeesField({ me, people, picked, onPicked, guests, onGuests }: {
   /** the reader — null while the identity read is in flight */
@@ -42,6 +47,8 @@ export function MeetingAttendeesField({ me, people, picked, onPicked, guests, on
   const t = useTranslations("meetings");
   const locale = useLocale();
   const [draft, setDraft] = useState("");
+
+  const hostName = me === null ? null : personName(me, locale);
   const others = (people ?? []).filter((p) => me === null || p.id !== me.id);
 
   const addGuest = () => {
@@ -52,57 +59,36 @@ export function MeetingAttendeesField({ me, people, picked, onPicked, guests, on
     setDraft("");
   };
 
+  /* EVERYONE, in the order they became part of the meeting: the host, the
+     colleagues, then the typed names. Passed as BOTH `summary` and
+     `placeholder` on purpose — the host is always coming, so the closed
+     control is never empty, and `placeholder` is this same sentence for the
+     case where no colleague has been chosen yet. */
+  const coming = [
+    ...(hostName === null ? [] : [hostName]),
+    ...others.filter((p) => picked.includes(p.id)).map((p) => personName(p, locale)),
+    ...guests,
+  ].join("، ");
+
   return (
-    <div>
+    <div data-attendees>
       <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldAttendees")}</span>
-      <div className="well max-h-48 space-y-1 overflow-y-auto p-1.5" data-attendees>
-        {me !== null ? (
-          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-fg" data-host>
-            <Avatar name={personName(me, locale)} src={me.avatar_url} size="xs" />
-            <span className="min-w-0 flex-1 truncate">{personName(me, locale)}</span>
-            <span className="text-micro text-fg-muted">{t("hostYou")}</span>
-          </div>
-        ) : null}
-        {people !== null && others.length === 0 && guests.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-fg-subtle">{t("noColleagues")}</p>
-        ) : null}
-        {others.map((person) => {
-          const on = picked.includes(person.id);
-          return (
-            <button
-              key={person.id}
-              type="button"
-              aria-pressed={on}
-              onClick={() => onPicked(on ? picked.filter((id) => id !== person.id) : [...picked, person.id])}
-              className={`tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-xs ${
-                on ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2"
-              }`}
-            >
-              <Avatar name={personName(person, locale)} src={personPhoto(person)} size="xs" />
-              <span className="min-w-0 flex-1 truncate">{personName(person, locale)}</span>
-              {on ? <IconCheck width={12} height={12} /> : null}
-            </button>
-          );
-        })}
-        {guests.map((name) => (
-          <div key={name} className="flex items-center gap-2 rounded-lg bg-accent-soft px-2 py-1.5 text-xs text-accent" data-guest>
-            {/* a guest is a typed NAME — no account, no row, no photo to be
-                handed; said with an explicit null rather than an omission,
-                which is what the photo guard reads as "forgot" */}
-            <Avatar name={name} src={null} size="xs" />
-            <span className="min-w-0 flex-1 truncate">{name}</span>
-            <button
-              type="button"
-              aria-label={t("removeGuest", { name })}
-              title={t("removeGuest", { name })}
-              onClick={() => onGuests(guests.filter((g) => g !== name))}
-              className="btn btn-icon text-current opacity-70 hover:opacity-100"
-            >
-              <IconClose width={12} height={12} />
-            </button>
-          </div>
-        ))}
-      </div>
+      <Select
+        ariaLabel={t("fieldAttendees")}
+        values={picked}
+        onToggle={(id) => onPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id])}
+        summary={coming}
+        placeholder={coming}
+        options={[
+          ...(hostName === null ? [] : [{
+            value: "__host",
+            label: `${hostName} — ${t("hostYou")}`,
+            disabled: true,
+          }]),
+          ...others.map((person) => ({ value: person.id, label: personName(person, locale) })),
+        ]}
+      />
+
       {/* A NAME for somebody with no account: Enter or the button adds it.
           `preventDefault` on Enter, because the dialog's primary is not this
           box's business — a typed name must not start a recording. */}
@@ -125,6 +111,28 @@ export function MeetingAttendeesField({ me, people, picked, onPicked, guests, on
           {t("addGuest")}
         </button>
       </div>
+
+      {/* the typed names, each with the way back out. They are NOT rows in the
+          dropdown: that list is the organisation's people, and a name somebody
+          invented belongs beside the box that invented it. */}
+      {guests.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {guests.map((name) => (
+            <span key={name} data-guest className="btn btn-sm cursor-default bg-accent-soft font-medium text-accent">
+              {name}
+              <button
+                type="button"
+                aria-label={t("removeGuest", { name })}
+                title={t("removeGuest", { name })}
+                onClick={() => onGuests(guests.filter((g) => g !== name))}
+                className="tap text-current opacity-70 hover:opacity-100"
+              >
+                <IconClose width={12} height={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
