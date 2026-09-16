@@ -550,6 +550,39 @@ the console; the three existing organisations were backfilled verified.
 
 ---
 
+## 7j. Deployment record — 2026-09-16, later (ec45c44: web only — the language into Settings, Persian default, the org form, the boards' rows)
+
+No migration and no core change: web on Vercel from the push (`Vercel – mvp`
+success on the commit status; the signed-in probe below is the deploy
+marker, since the settings page had two cards before it). Signed out from
+outside, a bare `/` with `Accept-Language: en-US` → 307 `/fa/sign-in` (our
+gate's own spelling, true before and after). **In the user's Chrome, signed
+in, whose browser asks for English (`navigator.languages` = en-US, en)**:
+`https://app.neurai.pt/` lands on **`/fa`** — the default is Persian for a
+browser that would have been sent to /en before this deploy. The top bar's
+end cluster reads bell · chat · theme with **zero** fa/en buttons. Settings ·
+General: three cards «پوسته», «زبان رابط», «تاریخ و زمان»; the language
+select reads «فارسی», the zone select **«تهران»** (was `Asia/Tehran`); the
+clock at the date card's other end read «۲۵ شهریور ۱۴۰۵ · ۰۵:۱۰:۱۶» and two
+seconds later «… ۰۵:۱۰:۱۸», on the title's line (tops 382 / 379) at the
+row's end (424–572 against the title at 1105–1172, RTL). Management ·
+General: the labels in document order are «نشان سازمان», «نام سازمان»,
+«ایمیل», «وب‌سایت», «زبان پیش‌فرض سازمان»; the inputs are org-name,
+org-email, org-website; no «توضیح», no «مکان», no «رایانامهٔ عمومی» anywhere
+on the page. Profile: zero `<dl>`, zero `.tile`, the identity form present.
+Tasks at 1280 with the assistant open (main 1212): row one's three rails at
+y=72 (231 / 267 / 238 wide), row two's tinted rail at y=122 **356 wide** —
+it had spanned the column — inside a `flex-wrap` row. Projects: row one's
+two rails at 72, row two's tinted rail at 122, 338 wide, in a wrap row, its
+items `tab:پروژه‌های من`, `tab:همه پروژه‌ها`, `button:مهلت امروز`. Security:
+ten session rows; the device column reads «اج» for the Edge session and
+«مرورگر» for the unbranded ones, with no Latin on the page but colleagues'
+names and a username. NOT read live: the zone dropdown's option labels —
+the tool's click did not hold the Radix panel open for a read; the
+`GeneralSettings.test` case pins every option Persian.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

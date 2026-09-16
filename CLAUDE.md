@@ -7187,3 +7187,96 @@ sessions) for the cross-session narrative.
   a meetings folder's ⋯ on the meetings page itself.
   db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
   web 1643 tests + gate + sweep.
+- 2026-09-16 (later — THE LANGUAGE MOVES INTO SETTINGS AND PERSIAN IS THE
+  DEFAULT, THE ORG FORM TAKES THE USER'S ORDER, THE TWO BOARDS' ROWS MATCH,
+  THE ZONES SPEAK PERSIAN, AND THE PROFILE BAR IS GONE; commit ec45c44; web
+  on Vercel, nothing in core or db): seven items from six screenshots.
+  **The order is the user's.** Management · General runs logo → name →
+  «ایمیل» → website → default language; «توضیح» and «مکان» left the form
+  (the columns stay on the wire — the diff-based patch cannot send a field
+  the form does not hold, and `OrgFields.order.test` pins the EXACT key set
+  of a save so a `description: null` clearing a column nobody touched cannot
+  ride along). The order is asserted as document position between the
+  labelled controls, and the two removed rows as absences twice each (label
+  AND saved value), because a form that dropped the label and kept the input
+  passes a label list.
+  **The language is a preference, not chrome.** The fa/en pair left the top
+  bar with its divider ("a rule with nothing on one side of it is a mark
+  that means nothing"); Settings · General carries a «زبان رابط» card — the
+  router's own `locales`, named in the screen's words, the same key the
+  profile's preferences row already used — keeping the pair's one rule (the
+  same route under the other prefix) and remembering the choice on the
+  profile row. **PERSIAN IS THE DEFAULT, reversing 2026-08-16**:
+  `defaultLocale: "fa"` AND `localeDetection: false`, because a default that
+  yields to the browser's Accept-Language is only a default for browsers
+  already set to Persian. The dead `AvatarMenu` — no importer, its own
+  English copy of the zone list and a second locale pair — is deleted.
+  **The clock.** «تاریخ و زمان» carries the exact date and time at the
+  title's other end, through the platform's own two formatters (so it IS the
+  two preferences under it, applied), ticking every second, mounted empty
+  and filled on the client (a server-written time is a hydration mismatch
+  wearing the wrong minute). **The verify-red came back GREEN and that was
+  the finding**: deleting the clock's own subscription changed nothing,
+  because the parent re-renders on every preference change for its own
+  selects — two copies of one wall, one unexercised, the shape this file has
+  recorded three times. The clock is `memo`ised now, so its subscription is
+  the ONLY path from the store to the reading, and the mutation is red by
+  name. **The second green was the probe, not the code**: the routing test
+  drove a SIGNED-OUT bare request, which our own gate answers with
+  `routing.defaultLocale` before next-intl's detection ever runs — /fa/sign-in
+  with detection ON as well. Rewritten on a live session: `/` with
+  `Accept-Language: en-US` lands on /fa, and with detection restored it lands
+  on /en, which is the red that makes the test a test.
+  **The zones speak Persian** («تهران», «دبی», «لندن», … «زمان جهانی»): one
+  list in `lib/timezones.ts`, the label key DERIVED from the id, and
+  `timezones.test` asking both catalogues for every member — with a control
+  zone the picker does not offer, which has no words. The sweep for other
+  English on the Persian screens (twenty pages, rendered text with scripts
+  rejected): the security page's browser and platform names («اج · ویندوز»)
+  now come from the catalogue; what remains Latin is data — colleagues'
+  names, a username, the owner's own job title, model ids and vendor slugs,
+  org names — and the audit log's machine text, which that file renders
+  `ltr font-mono` on purpose.
+  **The profile bar is gone** (avatar, name, role · org, two counts) with its
+  state, its two reads and its three keys; asserted as the absence of the
+  `<dl>`, since its words left the catalogue with it and a text query could
+  never find them again in any version — the vacuous-in-a-new-way trap of
+  2026-09-15, avoided by asserting structure.
+  **The two boards' rows.** The folder strip's tinted rail spanned the page
+  column while row one stopped at its last pill: a bare flex track is
+  block-level. `TopicStrip` draws its rail inside the kit's own `TOOLBAR_ROW`
+  now (asserted structurally in the meetings strip test — jsdom lays nothing
+  out, so the row above the rail is the honest ceiling; the width is read
+  live). And the projects page's «پروژه‌های من / همه پروژه‌ها / مهلت امروز»
+  is a real ROW TWO — `FilterChips` in a `Toolbar`, the tinted rail —
+  REVERSING the 2026-09-05 placement in row one, recorded as a reversal:
+  beside the task board, whose second row is its tinted strip, a grey third
+  track that wrapped under row one at laptop widths read as a different
+  design. The help sentence that still sent people to a projects link in the
+  tasks toolbar follows the rail.
+  **One catalogue trap, mine**: the splice inserted `settings.language` beside
+  an existing `settings.language` («زبان رابط», the profile row's) — a
+  duplicate key that `JSON.parse` resolves silently to the last one, so the
+  card rendered the OLD word and the test named the new one. A
+  duplicate-key scan over both files now precedes the write; the existing
+  word was the right one and stays.
+  Verified: web tsc 0; 1664 web tests (the one red is the recorded
+  `SpeakersDirectory.account` load flake, green alone); build gate; encoding
+  sweep (1458 files); verify-red by mutation on six behaviours, each red by
+  name after the two corrections above. Deployed: web on Vercel (nothing in
+  core or db).
+  **Proven on production in the user's Chrome** (runbook 7j has the
+  numbers): a browser that asks for English lands a signed-in bare URL on
+  /fa; the bar's end cluster is bell · chat · theme with zero fa/en buttons;
+  Settings · General carries the three cards, «فارسی» in the language
+  select, «تهران» in the zone select, and a clock that read two seconds
+  apart on the title's line at the row's end; the org form's labels run
+  logo · name · «ایمیل» · website · default language with no «توضیح» or
+  «مکان»; the profile has no `<dl>` and no tile; the tasks strip's tinted
+  rail is 356 wide inside a wrap row where it had spanned the 1212 column,
+  and the projects page's row two is the same tinted rail (338 wide) with
+  two tabs and the toggle; the security table says «اج» where it said
+  "Edge". NOT read live: the zone dropdown's options (the tool's click did
+  not hold the panel open) — pinned by the unit test.
+  db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
+  web 1664 tests + gate + sweep.
