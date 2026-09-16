@@ -7423,3 +7423,120 @@ sessions) for the cross-session narrative.
   delete; a create dialog).
   db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
   web 1677 tests + gate + sweep.
+- 2026-09-16 (later — A MEETING IS MADE WITH ITS PEOPLE, A PROJECT SITS IN A
+  FOLDER, A PICTURE IS ONE CONTROL, AND THE BOARD'S COLUMN SLOT LEAVES;
+  commit f525157; db 0226 on production; core deployed; web on Vercel): six
+  items from five screenshots, and the third of them corrected the morning's
+  reading of the projects row.
+  **The attendees row.** "In the pop-up window for new meetings and ahead
+  meetings, add a row for attendees that can be chosen from the users or
+  simply just write down a name; the host is the user and present."
+  `platform/MeetingAttendeesField` sits in both create dialogs: the host as a
+  FIXED first row named as the reader («میزبان (شما)») — the person making
+  the meeting is on it and is the one who presses start (0202: the take is
+  the host's), so there is nothing to choose; the roster as the project
+  dialog's people-picker rows; a typed name for a guest, Enter or the button
+  adding it and never starting the meeting. Colleagues are added through
+  0202's attendees route AFTER the row exists (one request adds and invites;
+  a refusal is SAID and the meeting stands), guests ride the create as
+  `invitees` — the text list 0202 left for people with no account.
+  **A project sits in a folder (db/0226).** The morning's round had drawn the
+  projects page's second row as a chip PER PROJECT with a `+` opening the
+  project dialog; the user: "the bar in project second sub menu is just
+  folder and new folder button, not the new projects — fix it." The board's
+  second row is its folders, the meetings page's is its folders, and the
+  projects page had nothing to put in the same row because a project had no
+  folder. `echo.project_folder` is modelled on the meeting folders (0151)
+  down to its purge line — an admin's to make and rename (0186: a folder
+  groups an admin's surface; a member who cannot make a project has no
+  folder to file one in), every active member reads, ARCHIVED never deleted
+  (no role holds DELETE; the db suite's closed allow-list says so);
+  `project.folder_id` through a composite FK whose SET NULL NAMES ITS COLUMN
+  (0188's class, asserted in the migration's own self-check and in test 129
+  by deleting the folder at owner altitude and reading the project's org
+  intact). Routes `GET/POST /v1/projects/folders`, `PATCH
+  /v1/projects/folders/:id` (a member's rename matches zero rows under the
+  policy and the repo turns that into a 404 rather than a success — 0191's
+  lesson); the BFF and the client mirror the meeting folders'; the record
+  carries `folder_id` on create and patch under the omit-leaves /
+  null-clears contract. The projects page's row two is the kit's TopicStrip
+  read EXACTLY as the board reads it — folder for folder, the board's own
+  labels, the inline box, `+` and ⋯ — and the row-one create button is BACK
+  on the views with no column (list, calendar, archive), where 2026-09-05
+  put it, because a folder's `+` cannot be a project's door. The project
+  dialog carries a «پوشه» select (only while there is a folder to choose —
+  a select with one answer is a question nobody asked; a project made while
+  a folder's chip is lit is filed there) and the detail's rail a «پوشه» row.
+  db/test/129 walks the matrix (16 checks; the member's rename is
+  `t.writes_nothing`, since an UPDATE walled by a policy is not refused).
+  **One picture control.** "Make the logo change like the profile image, put
+  a camera icon on the logo as well, and remove the edit button it already
+  has; for the profile photo remove the text «حذف عکس» and put the delete
+  icon instead — so they become the same." `platform/PictureControl`: the
+  picture, a camera badge on its corner that opens the picker, a trash
+  beside it while there is something to remove, the words as the buttons'
+  names only; the picker clears its input BEFORE handing the file over so
+  the same file twice still fires. The org logo lost its «تعویض» button and
+  its «انتخاب تصویر» button; the profile photo lost its text link; the
+  crop-and-accept flow and the logo's are-you-sure are untouched, because
+  what removal MEANS is each caller's. `IconCamera` joined the registry (the
+  avatar editor had inlined the glyph).
+  **The board's add-column slot is gone** ("remove the add column in tasks
+  as well"): the lane is exactly its columns; `api.createTaskColumn` stays
+  for an agent's hand on a person's yes. Asserted as STRUCTURE — every child
+  of the lane a section, as many as the columns — because the slot's key
+  left the catalogue with it and a text query for a string that no longer
+  exists is vacuous in a new way (2026-09-15).
+  **The sessions.** "Remove all the extra sessions in MVP and make one out
+  of all named neurai-mvp": this session is «neurai-mvp»; the two other MVP
+  sessions («Local setup with hosted Supabase», «GitHub MVP repository
+  setup») were ARCHIVED, not deleted — archiving is the reversible verb and
+  the Archived list restores them; the four sessions of other projects
+  (site, realstate, gym, app) were left alone.
+  **One test could not fail, found by the row that broke it.** The detail's
+  "says what a rename reaches" case read `getByText(/پوشه/)` and had been
+  matching the rail's «پوشهٔ برد» label — always there — rather than the
+  rename note, which says «دسته‌بندی» and not «پوشه» at all; the new
+  «پوشه» row made it throw on two matches. It asserts the sentence now.
+  The Avatar photo guard fired on the guest row (a typed name has no photo):
+  said with an explicit `src={null}` rather than an entry, since the
+  colleague rows beside it do carry theirs. And the throwaway Postgres from
+  the 2026-09-15 session was STILL RUNNING on 55432 — `run.mjs` died with
+  EPERM on its own data dir, which is that fact wearing an error; the
+  running instance was used as it stood (`migrate --local` applied the one
+  pending file), recorded in memory.
+  Verify-red by mutation on eleven web behaviours, each red on its own test:
+  the `+` offered to a member, the ⋯ given to a member, a chip filtering
+  nothing, the create button gone from the views with no column, the picked
+  colleagues never added, the host row gone, the picker keeping its file,
+  the trash drawn with nothing to remove, the photo's trash removing
+  nothing, the logo's trash never offered, a stray slot back in the lane;
+  and two flipped assertions of db/test/129 on the throwaway Postgres (the
+  set-null keeping the pointer; a member's rename writing something), each
+  turning the file red BY NAME — a green SQL file that is silently skipped
+  reads exactly like one that passed.
+  Verified: core tsc 0, 1887 core tests (the one red is the recorded history
+  ZWNJ contradiction); web tsc 0, 1686 web tests in 235 files (the load
+  flake stayed green), the build gate alone, the encoding sweep (1463
+  files); db 0226 + the suite on the throwaway Postgres (129 PASS, 102 purge
+  coverage, 109 set-null class, 30 agent wall; the two `auth.sessions` files
+  are the recorded local-shim reds), then 0226 on PRODUCTION with the suite
+  ("the wall holds"). Deployed: core f525157 on Hetzner (archive hashes
+  equal, both entrypoints parse under strip-types, both units active, health
+  ok, `/v1/projects/folders` 401 against `/v1/nonsense` 404, zero warnings
+  in the journal after); web on Vercel from the push.
+  **Proven on production in the user's Chrome** (runbook 7m has the
+  numbers): the projects kanban's row two is a 160px tinted rail holding
+  «همه پروژه‌ها ۱» and the dashed «پوشهٔ جدید» — no project chip, no
+  «پروژهٔ جدید» — with the four «افزودن پروژه» rows; the list view brings
+  «پروژهٔ جدید» back as `.btn btn-primary` in row one's end slot; both
+  meeting dialogs open with «شرکت‌کنندگان» between the folder and the mode,
+  the host row «دکتر باقری · میزبان (شما)», nine colleagues unpressed and
+  the guest field; the logo and the profile photo measure IDENTICALLY (45px
+  picture, a 26px camera badge on its corner, a 26px trash beside it, the
+  words only as the buttons' names, no retry glyph and no «انتخاب تصویر»);
+  the task board's lane is four sections and nothing else, scroll width
+  equal to client width. NOT pressed live: every write (a folder, a filed
+  project, a meeting with attendees, a photo or logo) — pinned by the tests.
+  db 226 migrations · core 1887 tests (1 pre-existing red, history ZWNJ) ·
+  web 1686 tests + gate + sweep.

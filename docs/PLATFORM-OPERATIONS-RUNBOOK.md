@@ -645,6 +645,59 @@ the inline box).
 
 ---
 
+## 7m. Deployment record — 2026-09-16, later (f525157: db/0226 project folders, core + web — the attendees row, the folders' strip, the picture control, the column slot)
+
+**Schema first (§3's order rule).** 0226 was applied to the throwaway
+Postgres on this laptop and the SQL suite run there (129 PASS with 16
+checks; 102 purge coverage, 109 the set-null class and 30 the agent wall
+all PASS; the two `auth.sessions` files are the recorded local-shim reds),
+then to PRODUCTION through the `.env` runner (`applied 0226_a_project_
+sits_in_a_folder.sql`) with the suite after it («the wall holds»). Then
+core: `git archive` of f525157, sha256 `654cc88537629c26` equal at both
+ends, `pnpm install --frozen-lockfile` («Done in 1.7s»), both entrypoints
+parse under `--experimental-strip-types`, `server.ts` on disk names
+`projects/folders` three times, both units `active`, health
+`{"ok":true}`; the altitude probe on the server reads **401** on
+`/v1/projects/folders` and `/v1/me` against **404** on `/v1/nonsense`;
+zero warning-level journal lines in the three minutes after the restart.
+Then the push: `Vercel – mvp` success on the commit status.
+
+**In the user's Chrome, signed in, at 1280 (root 15.06).**
+`/fa/projects`, kanban: row one three grey rails at y=72 (231 / 270 / 212
+wide — views, sorts, the two toggles at rest); row two the tinted rail
+**160px wide** at y=122 holding «همه پروژه‌ها ۱» (lit) and the dashed
+«پوشهٔ جدید» — NO chip named after a project, NO «پروژهٔ جدید» button,
+four «افزودن پروژه» rows in the columns. «لیست» pressed: «پروژهٔ جدید» is
+`.btn btn-primary` at 39.5px / 16px in row one's end slot (top 119: the
+slot wrapped to a second line at this width with the assistant open, the
+kit's own rule), the strip still there, zero column rows. `/fa/meetings`,
+«جلسه جدید» pressed: the dialog's field order is «عنوان جلسه *» ·
+«موضوع (پوشه)» · **«شرکت‌کنندگان»** · «نحوهٔ برگزاری»; the attendees box
+opens with the HOST row «دکتر باقری · میزبان (شما)», nine colleague rows
+each `aria-pressed="false"`, the guest field «نام مهمان…» at 32px and its
+«افزودن» key; closed, «جلسه پیش‌رو» pressed: one dialog titled «جلسه
+پیش‌رو» with the same host row, nine colleagues and the guest field beside
+its two date/time inputs. `/fa/management/general`: the logo (45px at
+950,137) wears a 26px camera badge at its lower corner (948,158) named
+«تعویض تصویر» and a 26px trash beside it (913,147) named «حذف»; the file
+input is still the row's labelled control («نشان سازمان», type file); the
+page's buttons are exactly «تعویض تصویر», «حذف», «فارسی», «ذخیره» — no
+retry glyph, no «انتخاب تصویر», and none of those words as rendered text.
+`/fa/profile`: the photo (45px at 950,137), its badge «تغییر عکس» at
+(948,158) and its trash «حذف عکس» at (913,147) — the SAME numbers as the
+logo's, which is what "so they become the same" measures as; no «حذف عکس»
+text on the page. `/fa/tasks`: the lane's children are four `<section>`s
+of 185px and nothing else, `scrollWidth === clientWidth` (773 = 773); the
+only dashed controls outside the columns are the strip's own «پوشهٔ جدید»
+and «پروژهٔ تازه».
+
+NOT pressed live (writes on the organisation's data): a folder's create,
+rename or archive, a project filed into one, a meeting created with
+attendees, a photo or logo changed or removed. Each is pinned by its unit
+test and by the verify-red mutations of the round.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
