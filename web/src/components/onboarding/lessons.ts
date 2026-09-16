@@ -1,4 +1,5 @@
 import type { TourStep } from "@/lib/tour";
+import { PRODUCT_DEMOS, type ProductDemoId } from "@/lib/productDemos";
 
 /**
  * THE FIRST-RUN DOOR'S FIVE LESSONS (M54 — "teach you how to work in
@@ -12,25 +13,10 @@ import type { TourStep } from "@/lib/tour";
  * `integrations-shelf`. Delete one of those attributes and the overlay skips
  * the step out loud rather than trapping the person under the dim.
  *
- * ── VIDEOS ────────────────────────────────────────────────────────────────
- *
- * The reference plays a short screen recording per choice. There are no
- * recordings yet, and a slot that pretends otherwise is the thing this repo
- * refuses to ship — so the door draws the lesson's illustration and says a
- * video is coming. When a recording exists, put its URL here (a file under
- * `public/onboarding/`, or a hosted MP4) and the door plays it instead. The
- * test asserts the slot renders a `<video>` only when a URL is present.
+ * Each lesson has a local film in both languages (lib/productDemos.ts).
  */
-export const LESSONS = ["meeting", "ask", "tasks", "team", "connect"] as const;
-export type Lesson = (typeof LESSONS)[number];
-
-export const ONBOARDING_VIDEOS: Readonly<Record<Lesson, string | null>> = {
-  meeting: null,
-  ask: null,
-  tasks: null,
-  team: null,
-  connect: null,
-};
+export const LESSONS = PRODUCT_DEMOS;
+export type Lesson = ProductDemoId;
 
 /** the lesson's one stop: where to go and what to ring; `t` localises the sentence */
 export function lessonSteps(lesson: Lesson, t: (key: string) => string): TourStep[] {

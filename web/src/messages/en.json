@@ -1,4 +1,29 @@
 {
+  "entryChrome": {
+    "brand": "NeurAI Platform",
+    "welcome": "Your workspace, with intelligence built in",
+    "language": "Interface language",
+    "switchTo_light": "Switch to light theme",
+    "switchTo_dark": "Switch to dark theme"
+  },
+  "productDemo": {
+    "label": "See NeurAI in action",
+    "choose": "Choose a product demo",
+    "meetingTitle": "Meetings",
+    "askTitle": "Assistant",
+    "tasksTitle": "Tasks",
+    "teamTitle": "Your team",
+    "connectTitle": "Connections",
+    "meetingDescription": "Record with Echo, then review the transcript, decisions, and next steps.",
+    "askDescription": "Ask about your meetings and follow the answer back to its source.",
+    "tasksDescription": "Give work an owner and a due date, then move it across your board.",
+    "teamDescription": "Invite people by email. Their role and your sharing choices determine access.",
+    "connectDescription": "Authorize a calendar connection, then review its events in your workspace.",
+    "sample": "10-second illustrative clips · sample data · no sound",
+    "unsupported": "Your browser cannot play this video. Read the description below.",
+    "unavailable": "The clip could not load. You can still continue.",
+    "retry": "Retry video"
+  },
   "admin": {
     "title": "Organization admin",
     "members": "Members",
@@ -303,7 +328,7 @@
     }
   },
   "auth": {
-    "emailTitle": "Log in to NeurAI",
+    "emailTitle": "Join NeurAI",
     "emailLead": "Enter your email; we'll send a sign-in link and a six-digit code.",
     "emailContinue": "Continue",
     "codeTitle": "Check your email",
@@ -337,8 +362,8 @@
     "demo_privacy": "Your data stays within your own reach.",
     "useCode": "Sign in with an email code",
     "fragmentLink": "That link opened in an unsupported form. Enter your email and type the six-digit code from the message.",
-    "signInTitle": "Sign in to NeurAI Platform",
-    "signUpTitle": "Create an account",
+    "signInTitle": "Sign in to NeurAI",
+    "signUpTitle": "Join NeurAI",
     "email": "Email",
     "working": "Working…",
     "finishPasswordOauth": "Choose a password before entering NeurAI Platform. You can use it with your email as well as Google or GitHub.",

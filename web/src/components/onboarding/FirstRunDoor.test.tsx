@@ -8,7 +8,7 @@ import type { Me } from "@/api/types";
  *
  * The door's own rule is pure (`firstRunDue`) so its matrix is asserted
  * without rendering; the rendered half asserts the two acts and the video
- * slot's two honest states.
+ * shipped films without changing the real lesson actions.
  */
 const me = vi.fn();
 const updateOnboarding = vi.fn();
@@ -17,14 +17,6 @@ vi.mock("@/api/client", () => ({
 }));
 const startTour = vi.fn();
 vi.mock("@/lib/tour", () => ({ startTour: (...args: unknown[]) => startTour(...args) }));
-
-/* the video registry is mocked per test: one lesson with a recording, the
-   rest without, so both states of the slot are reachable */
-const videos: Record<string, string | null> = { meeting: null, ask: null, tasks: null, team: null, connect: null };
-vi.mock("./lessons", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./lessons")>();
-  return { ...actual, ONBOARDING_VIDEOS: videos };
-});
 
 const { FirstRunDoor, firstRunDue } = await import("./FirstRunDoor");
 
@@ -36,7 +28,6 @@ beforeEach(() => {
   me.mockReset().mockResolvedValue(DONE);
   updateOnboarding.mockReset().mockResolvedValue(DONE);
   startTour.mockReset();
-  videos.ask = null;
 });
 
 describe("firstRunDue — who sees the door", () => {
@@ -81,16 +72,18 @@ describe("the door", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("plays a video only when the lesson has one; otherwise the illustration and «soon»", async () => {
+  it("switches the shipped Persian film with the chosen lesson; watching does not write or start a tour", async () => {
     render(<FirstRunDoor />);
     await screen.findByRole("dialog");
-    expect(document.querySelector("video")).toBeNull();
-    expect(screen.getByText(/ویدیوی این بخش/)).toBeTruthy();
+    expect(document.querySelector("video")?.getAttribute("src")).toBe("/demo/fa/meeting.mp4");
+    expect(document.querySelector("video")?.getAttribute("src")).not.toContain("ask");
 
-    videos.ask = "https://example.test/ask.mp4";
     fireEvent.click(screen.getByRole("radio", { name: "از دستیار بپرس" }));
     const video = document.querySelector("video");
-    expect(video?.getAttribute("src")).toBe("https://example.test/ask.mp4");
+    expect(video?.getAttribute("src")).toBe("/demo/fa/ask.mp4");
+    expect(video?.querySelector("track")?.getAttribute("src")).toBe("/demo/fa/ask.vtt");
     expect(screen.queryByText(/ویدیوی این بخش/)).toBeNull();
+    expect(updateOnboarding).not.toHaveBeenCalled();
+    expect(startTour).not.toHaveBeenCalled();
   });
 });

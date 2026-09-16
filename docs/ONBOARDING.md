@@ -70,12 +70,18 @@ now» / «later». «Try it now» starts a LESSON: the existing tour mechanism
 The choice is recorded (`firstRunSeen`, `firstRunChoice`); the door never
 opens twice.
 
-**Videos.** The reference plays a screen recording per choice. The slot is
-`ONBOARDING_VIDEOS` in `web/src/components/onboarding/lessons.ts` — every
-entry is `null` today and the door draws the lesson's illustration with «a
-short video is coming». Record five 30–60 s screencasts of the real product,
-put them under `web/public/onboarding/`, and set the URLs; the test asserts a
-`<video>` renders only when a URL is present.
+**Videos (2026-09-16).** Five silent 10-second product films now ship under
+`web/public/demo/{fa,en}/`, with posters and captions. They are code-drawn
+illustrations of real workflows with sample data, not recordings of customer
+sessions. Login has the selectable playlist; relevant onboarding questions
+and the first-run choices use the same player. Reduced-motion/data-saver
+preferences disable autoplay; native controls remain. No remote embed or
+environment setting is required. See [PRODUCT-DEMOS.md](PRODUCT-DEMOS.md)
+for source mapping, regeneration, and verification. Login and onboarding
+share a platform-style top bar with the existing light/dark preference and
+fa/en links; Persian is the router default. Onboarding's stage list lives
+in that bar, moving into a second row on mobile. Both languages' videos
+also follow the selected theme using separately rendered light/dark files.
 
 ## 4. Where things live
 
@@ -129,7 +135,7 @@ is on (Resend, since 2026-08-15 — the built-in sender allows ~3 mails an hour)
 - Tests: the gate (three screens, routing by the server's answer), the two
   routes (what GoTrue is asked, what the browser is told), the flow (every
   answer leaves the browser, resume, the stamp once, «later»), the door (the
-  real lesson, the video slot's two states), the shell's redirect with its
+  real lesson, localized video selection without writes), the shell's redirect with its
   control, the migration's matrix (db/test/127), core's merge statement.
 - **Not provable from this side:** a real email arriving and being clicked —
   it needs the template above and a mailbox. The first real sign-up through

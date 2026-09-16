@@ -8,7 +8,8 @@ import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
 import { notifyError } from "@/lib/notify";
 import { OnboardingFrame, type Layout } from "./OnboardingFrame";
-import { SceneConversation, SceneDesk, SceneFrames, SceneLock, ScenePeople } from "./Illustrations";
+import { SceneLock } from "./Illustrations";
+import { ProductDemo } from "./ProductDemo";
 import { DataScreen, GoalsScreen, PlacesScreen, WelcomeScreen, WorkScreen } from "./QuestionScreens";
 import { DictateScreen, FasterScreen, HotkeyScreen, LanguagesScreen, MicScreen, SavingsScreen } from "./SetupScreens";
 import { nextStep, prevStep, resumeStep, type Answers, type StepId } from "./steps";
@@ -138,10 +139,10 @@ export function Onboarding() {
 
   const props = { answers, save, advance, back };
   const picture =
-    step === "welcome" ? <SceneConversation />
-      : step === "goals" ? <SceneFrames />
-        : step === "work" ? <ScenePeople />
-          : step === "places" ? <SceneDesk />
+    step === "welcome" ? <ProductDemo lesson="meeting" />
+      : step === "goals" ? <ProductDemo lesson="ask" />
+        : step === "work" ? <ProductDemo lesson="team" />
+          : step === "places" ? <ProductDemo lesson="tasks" />
             : step === "data" ? <SceneLock />
               : null;
 

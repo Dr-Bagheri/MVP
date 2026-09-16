@@ -550,10 +550,10 @@ export default function SignInPage() {
      * a taller poster.
      */
     <div dir="ltr" className="mx-auto grid w-full max-w-6xl items-stretch gap-6 lg:grid-cols-2">
-      <div dir={dir} className="hidden lg:block">
+      <div dir={dir} className="order-2 lg:order-1">
         <DemoPanel />
       </div>
-      <div dir={dir} className="flex items-center justify-center">
+      <div dir={dir} className="order-1 flex items-center justify-center lg:order-2">
         <Card className="w-full max-w-md">{door}</Card>
       </div>
     </div>

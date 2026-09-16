@@ -2799,8 +2799,26 @@ Two halves, and the first is a wall (db/0224):
   beside it.
 - **The demo beside the door:** the gate is two halves — the door on the
   physical right in both locales, the demo on the left: the video when
-  `NEXT_PUBLIC_DEMO_VIDEO_URL` names one, the product's own illustrated
-  scenes until then (never an empty player).
+  `NEXT_PUBLIC_DEMO_VIDEO_URL` names one, otherwise the shipped product films.
+  **Amended 2026-09-16 (user: product clips on login and onboarding):** five
+  local, silent, 10-second MP4 lessons in Persian and English replace the
+  illustrated placeholders. They demonstrate existing behavior using clearly
+  labeled example data, never live customer content or onboarding-triggered
+  writes. Native playback controls, posters, captions, reduced-motion and
+  data-saver opt-outs; pause when hidden. The same films serve login, the
+  relevant onboarding question screens, and the first-run lesson door.
+  On mobile the login form comes first and the demos follow. The privacy
+  screen retains its lock illustration. Source mapping and regeneration:
+  `docs/PRODUCT-DEMOS.md`.
+  **Entry chrome amendment (2026-09-16, user):** login and onboarding share
+  `EntryTopBar`, using the platform's glass-chrome, brand marks and compact
+  controls without mounting authenticated search/notifications. The flow's
+  stage tracker occupies the centre (a second row on narrow screens). Both
+  surfaces offer the existing shared light/dark preference and same-route
+  fa/en links. This is an entry-flow exception to keeping language in General
+  Settings inside the platform, not a change to the authenticated TopBar.
+  Persian remains the router default; both languages' clips have light and
+  dark renders that follow that same theme store.
 
 The bar for "later we change it" is written down: when billing lands (Q1),
 verification becomes the billing state's own fact and this door is the

@@ -110,6 +110,15 @@ afterEach(() => {
 });
 
 describe("the email-code gate (M54)", () => {
+  it("uses the requested membership title, then the distinct sign-in title on the password path", async () => {
+    render(<SignInPage />);
+    expect(await screen.findByRole("heading", { level: 1, name: "عضویت در نورای" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1, name: "ورود به نورای" })).toBeNull();
+    openPasswordForm();
+    expect(await screen.findByRole("heading", { level: 1, name: "ورود به نورای" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1, name: "عضویت در نورای" })).toBeNull();
+  });
+
   it("«Continue» asks the server for a code, with the typed address", async () => {
     render(<SignInPage />);
     askForCode("person@example.com");

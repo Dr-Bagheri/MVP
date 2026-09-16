@@ -8,8 +8,8 @@ import { Overlay } from "@/components/platform/Overlay";
 import { IconCalendar, IconMic, IconRows, IconSparkle, IconUsers } from "@/components/icons";
 import { DIALOG_BODY } from "@/components/platform/tasks/panelStyle";
 import { startTour } from "@/lib/tour";
-import { LESSONS, ONBOARDING_VIDEOS, lessonSteps, type Lesson } from "./lessons";
-import { SceneConversation, SceneDesk, SceneFrames, ScenePeople, SceneLock } from "./Illustrations";
+import { LESSONS, lessonSteps, type Lesson } from "./lessons";
+import { ProductDemo } from "./ProductDemo";
 
 /**
  * «HOW WOULD YOU LIKE TO USE NEURAI FIRST?» — the reference's last screen,
@@ -21,10 +21,8 @@ import { SceneConversation, SceneDesk, SceneFrames, ScenePeople, SceneLock } fro
  * Either way the answer is saved with the person's onboarding, so the door
  * does not open again on the next visit or the next device.
  *
- * The preview is a VIDEO when one exists for the lesson and the lesson's
- * illustration when it does not (ONBOARDING_VIDEOS). There is no third
- * state: a door that plays nothing while looking like it should is the
- * thing this repo refuses to ship.
+ * Every lesson includes a shipped, localized film with illustrative data.
+ * Watching a film never records, invites, authorizes, or spends an AI call.
  *
  * Rendered only for a member whose flow is FINISHED (`onboarding_completed_at`
  * set) and who has not seen this — a person mid-flow is on /onboarding, not
@@ -37,16 +35,6 @@ const LESSON_ICON: Record<Lesson, React.ReactNode> = {
   team: <IconUsers width={16} height={16} />,
   connect: <IconCalendar width={16} height={16} />,
 };
-
-function preview(lesson: Lesson) {
-  switch (lesson) {
-    case "meeting": return <SceneConversation />;
-    case "ask": return <SceneFrames />;
-    case "tasks": return <SceneDesk />;
-    case "team": return <ScenePeople />;
-    case "connect": return <SceneLock />;
-  }
-}
 
 /** whether the door opens for this person — pure, so the test can ask it */
 export function firstRunDue(me: Me | null | undefined): boolean {
@@ -77,8 +65,6 @@ export function FirstRunDoor() {
     }).catch(() => undefined);
     if (chosen) startTour(lessonSteps(chosen, t));
   };
-
-  const video = ONBOARDING_VIDEOS[choice];
 
   return (
     <Overlay onClose={() => close(null)} label={t("firstRunTitle")} size="xl">
@@ -113,15 +99,8 @@ export function FirstRunDoor() {
             </button>
           </div>
         </div>
-        <div className="well flex min-h-64 flex-1 flex-col items-center justify-center p-6">
-          {video !== null ? (
-            <video className="w-full rounded-xl" controls preload="metadata" src={video} />
-          ) : (
-            <>
-              <div className="w-full max-w-sm text-fg">{preview(choice)}</div>
-              <p className="mt-3 text-xs text-fg-muted">{t("firstRunVideoSoon")}</p>
-            </>
-          )}
+        <div className="well flex min-w-0 flex-1 flex-col items-center justify-center p-3">
+          <ProductDemo lesson={choice} />
         </div>
       </div>
     </Overlay>

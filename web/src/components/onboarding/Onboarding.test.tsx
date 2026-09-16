@@ -40,6 +40,7 @@ beforeEach(() => {
   updateOnboarding.mockReset().mockResolvedValue(PERSON);
   resetPushToTalkForTest();
   window.scrollTo = vi.fn();
+  localStorage.clear();
 });
 
 describe("who the flow is for", () => {
@@ -77,6 +78,19 @@ describe("who the flow is for", () => {
 });
 
 describe("answers leave the browser as they are given", () => {
+  it("changing theme keeps the in-progress answer and does not submit another onboarding write", async () => {
+    render(<Onboarding />);
+    await screen.findByRole("heading", { level: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "دوست یا همکار" }));
+    expect(screen.getByRole("button", { name: "ادامه" })).toBeEnabled();
+    const writes = updateOnboarding.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "تغییر به پوستهٔ تیره" }));
+    expect(screen.getByRole("button", { name: "ادامه" })).toBeEnabled();
+    expect(updateOnboarding).toHaveBeenCalledTimes(writes);
+    expect(me).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "تغییر به پوستهٔ روشن" }));
+  });
+
   it("«Continue» waits for a choice; the choice is saved; Continue saves the next step and moves on", async () => {
     render(<Onboarding />);
     await screen.findByRole("heading", { level: 1 });
@@ -91,7 +105,7 @@ describe("answers leave the browser as they are given", () => {
     expect(updateOnboarding).toHaveBeenCalledWith({ answers: { step: "goals" } });
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("نورای چطور کمکت کند؟");
     /* the rail lights the stage of the step on screen */
-    expect(screen.getByText("ثبت‌نام").getAttribute("aria-current")).toBe("step");
+    expect(screen.getByText("ثبت‌نام").closest("li")?.getAttribute("aria-current")).toBe("step");
   });
 
   it("a multi-choice step saves the whole list each time, in option order", async () => {
