@@ -7611,3 +7611,73 @@ sessions) for the cross-session narrative.
   with no `+` glyph anywhere in it.
   db 226 migrations · core 1887 tests (1 pre-existing red, history ZWNJ) ·
   web 1692 tests + gate + sweep.
+- 2026-09-16 (later — THE FILMS JUST PLAY, THE TWO REVEALS WEAR THE
+  QUESTIONS' ANATOMY, AND THE FIRST-RUN DOOR STAYS SHUT OVER THE LESSON IT
+  STARTED; commit 54b442f on top of 8246870 (the other session's films);
+  web on Vercel, nothing in core or db): four items from four screenshots,
+  one of them a bug report.
+  **The film just plays.** "Make the video for onboarding and the sign-up
+  page just play, not with clip options that you can stop or change the
+  bar." `ProductDemo`'s `<video>` lost `controls`: a scrubber, a pause key
+  and a mute key on a ten-second silent film are a player's chrome over a
+  picture, and on the first screen a stranger sees they read as a thing to
+  operate. A fixed lesson LOOPS — with no key to restart it, a film that
+  stops on its last frame reads as broken — and the gate's carousel does
+  not loop a clip: `ended` carries it to the next one, the same continuity
+  across five films. The env-var override on the gate autoplays muted and
+  loops the same way. The caption «ویدیوهای نمونهٔ ۱۰ ثانیه‌ای · دادهٔ فرضی
+  · بدون صدا» left with its key from both catalogues: a line about the
+  footage is not about the product.
+  **The speed and the savings screens are split screens** like the four
+  questions before the microphone — a Title, one line, the figures in the
+  flow's own card, the Back / Continue pair in the platform's coat, the
+  picture on the end side. They had been the reference's dark stage
+  (inverted ink, a 6xl figure mid-screen, their own button coat): a person
+  who walked ten screens of one design met two of another at the end. The
+  ratio lives beside the plane on the picture side, the way the plane
+  carried it; the savings figure is the title's second line in the title's
+  own size, the slider in a card, the estimate's line under it. The
+  `reveal` layout left `OnboardingFrame` (a layout no screen uses is a
+  second design waiting to come back), `StepActions` lost its `dark` coat,
+  and `SceneClock` joined the illustrations.
+  **THE DOOR REOPENED OVER THE LESSON IT HAD JUST STARTED**, and the reason
+  is this file's own read cache. `close()` sends the answer and starts the
+  tour in one breath; the Gmail lesson's first stop is `/integrations`,
+  which since the morning redirects into Home's pane — so Home REMOUNTS,
+  the door mounts with it and asks `api.me()` again, and the cache (60 s)
+  answers with the identity read BEFORE the answer was sent: the PATCH had
+  not even responded, so no invalidation could have run. The four other
+  lessons land on pages that do not carry the door, which is why only
+  Gmail showed it. The answer is remembered in the TAB the moment it is
+  given (`sessionStorage` — a reload mid-lesson is the same tab and the
+  same answer; a new tab or device asks the server, which by then holds
+  the row; a failed write leaves the server unmarked and the next tab asks
+  again, the honest outcome), and a remount asks the latch before it asks
+  the server. Minted: **a write's cache invalidation runs when the write
+  RESPONDS, and a navigation the write's own caller starts in the same
+  breath reads the cache before that** — the stale answer is not a bug in
+  the cache, it is the order of two things one function did.
+  Tests: the door's remount with the production-shaped fixture (the
+  identity still answering unseen; no dialog, the server not asked a
+  second time) for «try it now» and for «later»; the films' chrome absent,
+  the fixed lesson looping and the carousel not, the caption as a COUNT
+  (its text left with its key — a text query could never fail again); the
+  two screens' anatomy as STRUCTURE (the split layout's `<aside>` with a
+  picture, an h1 Title, the card, the `btn-primary` Continue, nothing on
+  the inverted ground). Verify-red by mutation on ten behaviours, each red
+  on its own test — after one instrument note: the onboarding sources are
+  CRLF and the first mutation pass reported three anchors "not found", a
+  harness miss and not a finding.
+  Verified: web tsc 0; 1707 web tests in 237 files (the one red is the
+  recorded `selectMenuWidth` load flake, green alone); the guards and the
+  keys check; the build gate alone; the encoding sweep (1498 files).
+  **Proven on production** (runbook 7o): the gate, signed out in the
+  built-in pane, carries a `<video>` with `controls: false` and one
+  paragraph under it, the caption absent from rendered text and from the
+  flight payload with both controls held, and the film 8.8 s in and
+  playing on one read and advanced to the next clip 2.5 s later. NOT read
+  live: the two onboarding screens (the flow refuses a stamped member; a
+  fresh sign-up is a write on production) and the door's remount (the
+  owner's `firstRunSeen` is true) — pinned by the tests above.
+  db 226 migrations · core 1887 tests (1 pre-existing red, history ZWNJ) ·
+  web 1707 tests + gate + sweep.

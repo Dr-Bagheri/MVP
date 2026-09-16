@@ -724,6 +724,35 @@ and the mic itself (it opens the microphone).
 
 ---
 
+## 7o. Deployment record — 2026-09-16, later (54b442f: web only — the films just play, the two reveals wear the questions' anatomy, the first-run door stays shut over its lesson)
+
+No migration and no core change: web on Vercel from the push (`Vercel – mvp`
+success on the commit status, four polls). **In the built-in browser pane,
+signed OUT, at 1280×720** — the gate is the signed-out screen, and the user's
+Chrome holds the owner's session, which the gate routes home. `/fa/sign-in`:
+the `<video>` reads `controls: false` (no `controls` attribute in the DOM),
+`muted: true`, `loop: false` (the carousel), 486×364; the section under it
+carries exactly ONE paragraph (the film's sentence, «دربارهٔ جلساتت سؤال
+بپرس…») and the five chips «جلسات · دستیار · کارها · تیم شما · اتصال‌ها».
+The caption «ویدیوهای نمونهٔ ۱۰ ثانیه‌ای · دادهٔ فرضی · بدون صدا» is absent
+from the RENDERED text (SCRIPT/STYLE/TEMPLATE rejected) and from the flight
+payload too — its key left the catalogue — with the two controls that make
+the reading evidence: an on-screen string («عضویت در نورای») found, a
+catalogue-only string («حذف اتاق») not found. Playback with no chrome: the
+film was 8.8 s in and `paused: false` on one read, and 2.5 s later the
+element carried `/demo/fa/tasks.mp4` — it had reached its end and advanced
+to the next clip on `ended`, having already stepped from `meeting` to `ask`
+while the probe was set up.
+
+NOT read live, and why: the two onboarding screens (the flow refuses a
+member whose stamp is set — the owner's is — and a fresh sign-up is a write
+on production) and the first-run door's remount (the owner's `firstRunSeen`
+is already true, so the door does not open for them). Both are pinned by
+tests with the production-shaped fixture; the screens reuse the exact split
+frame the four question pages render live.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
