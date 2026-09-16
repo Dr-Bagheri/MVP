@@ -754,4 +754,19 @@ describe("a card carries its own delete, and a column carries none (2026-09-15)"
     expect(within(cardOf("کارت خودم")).getByRole("button", { name: "حذف تسک" })).toBeInTheDocument();
     expect(within(cardOf("کارت همکار")).queryByRole("button", { name: "حذف تسک" })).toBeNull();
   });
+
+  it("draws no add-column slot: the lane is exactly its columns (2026-09-16)", async () => {
+    /* user: "remove the add column in tasks as well". Asserted as STRUCTURE
+       rather than by the slot's name — its key left the catalogue with it,
+       and a text query for a string that no longer exists is vacuous in a new
+       way (2026-09-15). The lane is the parent of a column's section; every
+       child of it is a section, and there are as many as the board has
+       columns — the version with the strip had one more child, a button. */
+    render(<TaskBoard />);
+    const addRows = await screen.findAllByRole("button", { name: "افزودن تسک" });
+    const lane = addRows[0]!.closest("section")!.parentElement!;
+    expect(lane.children.length).toBeGreaterThan(0);
+    expect(Array.from(lane.children).every((el) => el.tagName === "SECTION")).toBe(true);
+    expect(lane.children).toHaveLength(addRows.length);
+  });
 });

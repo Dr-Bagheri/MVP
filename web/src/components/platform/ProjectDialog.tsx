@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { OrgPersonRecord, ProjectRecord, ProjectTone } from "@/api/types";
 import { Overlay } from "./Overlay";
+import { Select } from "@/components/Select";
 import { Avatar } from "@/components/Avatar";
 import { TONE_DOT } from "./tasks/TaskDialogs";
 import {
@@ -69,9 +70,16 @@ export const PROJECT_TONES: ProjectTone[] = [
    that drifts. */
 export const PROJECT_ICONS = ["📁", "🚀", "🎯", "🧩", "📈", "🛠️", "💡", "🌱"];
 
-export function ProjectDialog({ people, meId, onClose, onSaved }: {
+export function ProjectDialog({ people, meId, folders = [], defaultFolderId = null, onClose, onSaved }: {
   people: OrgPersonRecord[];
   meId: string | null;
+  /** the project folders (0226); with none, the row is not drawn — a select
+      with one answer is a question nobody asked */
+  folders?: Array<{ id: string; name: string }>;
+  /** the folder in view when the dialog opened — a project made while a
+      folder's chip is lit is filed there, as a card made on a filtered
+      board files under its folder */
+  defaultFolderId?: string | null;
   onClose: () => void;
   /** the record as the server created it */
   onSaved: (project: ProjectRecord) => void;
@@ -84,6 +92,8 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
   const [tone, setTone] = useState<ProjectTone>("blue");
   const [icon, setIcon] = useState<string | null>("📁");
   const [members, setMembers] = useState<string[]>([]);
+  /* the folder (0226): "" is «بدون پوشه», sent as no key at all */
+  const [folder, setFolder] = useState<string>(defaultFolderId ?? "");
   const [busy, setBusy] = useState(false);
   /* A REFUSED WRITE KEEPS THE DIALOG (2026-09-06, the check-up). It used to
      call an `onFailed` that every parent answered by CLOSING it — the name,
@@ -104,6 +114,8 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
       tone,
       icon,
       member_ids: members,
+      /* absent = «بدون پوشه»: the server's default, never an empty string */
+      ...(folder === "" ? {} : { folder_id: folder }),
     })
       .then(onSaved)
       .catch(() => { setBusy(false); notifyError(t("writeFailed")); });
@@ -145,6 +157,24 @@ export function ProjectDialog({ people, meId, onClose, onSaved }: {
             className={PANEL_TEXTAREA}
           />
         </label>
+
+        {/* THE FOLDER (0226) — only while there is one to choose: a select
+            whose only option is «بدون پوشه» asks a question with one answer.
+            The board's new-task dialog picks its folder the same way. */}
+        {folders.length > 0 ? (
+          <div>
+            <span className={FIELD_LABEL}>{t("fieldFolder")}</span>
+            <Select
+              value={folder}
+              ariaLabel={t("fieldFolder")}
+              onChange={setFolder}
+              options={[
+                { value: "", label: t("noFolder") },
+                ...folders.map((f) => ({ value: f.id, label: f.name })),
+              ]}
+            />
+          </div>
+        ) : null}
 
         <TonePicker value={tone} onChange={setTone} label={t("fieldTone")} />
 

@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { MeetingMode, MeetingRecord } from "@/api/types";
+import type { Me, MeetingMode, MeetingRecord, OrgPersonRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
 import { DIALOG_BODY } from "./tasks/panelStyle";
 import { Select } from "@/components/Select";
@@ -24,6 +24,7 @@ import {
 } from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { TopicStrip } from "./TopicStrip";
+import { MeetingAttendeesField } from "./MeetingAttendeesField";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/scaffold";
 import {
@@ -938,6 +939,18 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
   const [mode, setMode] = useState<MeetingMode>("in_person");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  /* WHO IS COMING (user, 2026-09-16): the host is the reader, a colleague is
+     an account added after the row exists, a guest is a typed name — see
+     MeetingAttendeesField. Both reads are the dialog's own: the list page
+     holds neither, and a modal that opens once costs one request each. */
+  const [me, setMe] = useState<Me | null>(null);
+  const [people, setPeople] = useState<OrgPersonRecord[] | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [guests, setGuests] = useState<string[]>([]);
+  useEffect(() => {
+    void api.me().then(setMe).catch(() => setMe(null));
+    void api.orgPeople().then(setPeople).catch(() => setPeople([]));
+  }, []);
   /* The upload's refusals used to be said HERE, on the reasoning that a
      toast on the list BEHIND this dialog is a sentence about a control the
      reader can no longer see. That reasoning is spent (2026-09-08): the
@@ -957,8 +970,18 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
       scheduled_at: new Date().toISOString(),
       mode,
       topic_id: topic === "" ? undefined : topic,
+      /* the typed names — 0202's text list, for people with no account */
+      invitees: guests,
     })
-      .then((m) => {
+      .then(async (m) => {
+        /* THE COLLEAGUES, once the row exists: 0202 adds and invites them in
+           one request. A refusal here is SAID rather than folded into the
+           success — the meeting stands, and the page's own picker is where
+           to finish; a silent swallow would read as the platform forgetting
+           the people it was just told about. */
+        if (picked.length > 0) {
+          await api.addMeetingAttendees(m.id, picked).catch(() => notifyError(t("attendeesFailed")));
+        }
         /* the hand-off is set BEFORE the navigation, because the page reads
            it on its first render — see lib/pendingUpload for why a module
            variable is the right durability here */
@@ -1035,6 +1058,11 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
             ]}
           />
         </Field>
+        <MeetingAttendeesField
+          me={me} people={people}
+          picked={picked} onPicked={setPicked}
+          guests={guests} onGuests={setGuests}
+        />
         <div>
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldMode")}</span>
           <ModePicker
@@ -1130,6 +1158,16 @@ function ScheduleMeetingDialog({ topics, onClose, onCreated, onRefused }: {
     return `${String(d.getHours()).padStart(2, "0")}:00`;
   });
   const [busy, setBusy] = useState(false);
+  /* WHO IS COMING — the same field as the record-now dialog's (2026-09-16):
+     a planned meeting has its people from the day it is planned */
+  const [me, setMe] = useState<Me | null>(null);
+  const [people, setPeople] = useState<OrgPersonRecord[] | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [guests, setGuests] = useState<string[]>([]);
+  useEffect(() => {
+    void api.me().then(setMe).catch(() => setMe(null));
+    void api.orgPeople().then(setPeople).catch(() => setPeople([]));
+  }, []);
 
   const ready = title.trim() !== "" && date !== "" && time !== "" && !busy;
 
@@ -1147,8 +1185,17 @@ function ScheduleMeetingDialog({ topics, onClose, onCreated, onRefused }: {
       scheduled_at: at.toISOString(),
       mode: "in_person",
       topic_id: topic === "" ? undefined : topic,
+      /* the typed names — 0202's text list, for people with no account */
+      invitees: guests,
     })
-      .then(onCreated)
+      .then(async (m) => {
+        /* the colleagues, once the row exists (0202: added and invited in
+           one request); a refusal is said, and the meeting stands */
+        if (picked.length > 0) {
+          await api.addMeetingAttendees(m.id, picked).catch(() => notifyError(t("attendeesFailed")));
+        }
+        onCreated(m);
+      })
       .catch(() => { setBusy(false); onRefused(); });
   };
 
@@ -1180,6 +1227,11 @@ function ScheduleMeetingDialog({ topics, onClose, onCreated, onRefused }: {
             ]}
           />
         </Field>
+        <MeetingAttendeesField
+          me={me} people={people}
+          picked={picked} onPicked={setPicked}
+          guests={guests} onGuests={setGuests}
+        />
         {/* the platform's own pickers, not the browser's: `<input type="date">`
             draws a Gregorian popup on a Persian-first product — the whole
             reason components/DateTimeFields.tsx exists. */}

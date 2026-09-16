@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Select } from "@/components/Select";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import type { Org, User } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
-import { Icon } from "@/components/icons";
+import { PictureControl } from "./PictureControl";
 import { FormPanel, FormRow, PanelFooter, Skeleton } from "@/components/scaffold";
 
 /**
@@ -136,7 +136,6 @@ export function OrgFields() {
   const [hasLogo, setHasLogo] = useState(false);
   const [logoVersion, setLogoVersion] = useState(0);
   const [logoBusy, setLogoBusy] = useState(false);
-  const logoInput = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
@@ -234,9 +233,8 @@ export function OrgFields() {
       notify(t("orgLogoFailed"), "warn");
     } finally {
       setLogoBusy(false);
-      /* clear the input so choosing the SAME file again still fires a
-         change event — otherwise a failed upload cannot be retried */
-      if (logoInput.current) logoInput.current.value = "";
+      /* the picker clears its own input before handing the file over
+         (PictureControl), so choosing the SAME file again still fires */
     }
   };
 
@@ -365,78 +363,38 @@ export function OrgFields() {
       <FormRow label={t("orgLogo")} htmlFor="org-logo">
         <span className="flex flex-col gap-2">
         <span className="flex flex-wrap items-center gap-3">
-          {hasLogo ? (
-            /* eslint-disable-next-line @next/next/no-img-element -- the
-               bytes come from our own BFF, not from a configured host the
-               image optimiser could be told about */
-            <img
-              src={api.orgLogoUrl(logoVersion)}
-              alt=""
-              className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
-            />
-          ) : (
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-border text-xs text-fg-subtle">
-              —
-            </span>
-          )}
-          <input
-            id="org-logo"
-            ref={logoInput}
-            type="file"
-            className="sr-only"
+          {/* ONE CONTROL WITH THE PROFILE PHOTO (user, 2026-09-16: "make the
+              logo change like profile image, put a camera icon on logo as
+              well, and remove the edit button that it already has"): the
+              picture with a camera badge on its corner, and a trash beside it
+              while there is one — `PictureControl`, the avatar editor's own.
+              The «تعویض» button that stood beside the picture is gone: a
+              second control for the thing the badge does is the second
+              telling this row had already lost its words to (2026-09-03). */}
+          <PictureControl
+            inputId="org-logo"
             accept="image/png,image/jpeg,image/webp"
-            disabled={busy || logoBusy}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void pickLogo(file);
-            }}
+            busy={busy || logoBusy}
+            hasPicture={hasLogo}
+            changeLabel={t("orgLogoReplace")}
+            removeLabel={t("orgLogoRemove")}
+            onPick={(file) => void pickLogo(file)}
+            onRemove={() => setConfirmLogoRemove(true)}
+            picture={hasLogo ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- the
+                 bytes come from our own BFF, not from a configured host the
+                 image optimiser could be told about */
+              <img
+                src={api.orgLogoUrl(logoVersion)}
+                alt=""
+                className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+              />
+            ) : (
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-border text-xs text-fg-subtle">
+                —
+              </span>
+            )}
           />
-          {/*
-            ICONS, NOT WORDS (user directive, 2026-09-03: "remove the text for
-            delete the image and just add the delete icon and for change also
-            just put a change icon").
-            Two labelled buttons beside a picture of the thing they act on were
-            saying what the picture already says. The words survive as `title`
-            and `aria-label`, so nothing is lost to a screen reader or to a
-            hover — what goes is the second telling.
-            NO icon while there is no logo: «انتخاب تصویر» is the first thing
-            somebody does here and a bare glyph would be a puzzle. A control
-            whose meaning comes from the image beside it needs the image to
-            exist first.
-          */}
-          {hasLogo ? (
-            <button
-              type="button"
-              className="btn btn-icon border border-border text-fg-muted hover:text-fg"
-              disabled={busy || logoBusy}
-              onClick={() => logoInput.current?.click()}
-              aria-label={t("orgLogoReplace")}
-              title={t("orgLogoReplace")}
-            >
-              <Icon name="retry" size="sm" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-sm border border-border font-medium text-fg"
-              disabled={busy || logoBusy}
-              onClick={() => logoInput.current?.click()}
-            >
-              {t("orgLogoChoose")}
-            </button>
-          )}
-          {hasLogo ? (
-            <button
-              type="button"
-              className="btn btn-icon text-danger hover:bg-danger/10"
-              disabled={busy || logoBusy}
-              onClick={() => setConfirmLogoRemove(true)}
-              aria-label={t("orgLogoRemove")}
-              title={t("orgLogoRemove")}
-            >
-              <Icon name="trash" size="sm" />
-            </button>
-          ) : null}
         </span>
         {/* the hint sits UNDER the control, not under the label (user
             directive, 2026-09-02): it describes the file the button

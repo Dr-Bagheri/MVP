@@ -15,7 +15,7 @@ import {
 } from "./tasks/TaskDialogs";
 import { TaskDetail } from "./tasks/TaskDetail";
 import {
-  BOARD_ADD_COLUMN, BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
+  BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
   BOARD_CARD_SLOT, BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE,
   BoardAddRow, BoardCardDelete, BoardSlot,
 } from "./board/boardStyle";
@@ -27,7 +27,7 @@ import {
 import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
-  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
+  IconCheck, IconClock, IconDots, IconFolder, IconRetry,
   IconUser, IconVideo } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
 import { dayKeyOf, digits, personName } from "@/lib/format";
@@ -628,10 +628,10 @@ export function TaskBoard() {
             </section>
           ))}
 
-          {/* a window.prompt is the browser's dialog, not ours — and it was
-              the one place on this board that still looked like somebody
-              else's product. Same inline shape as adding a card. */}
-          <AddColumnInline onAdded={load} onRefused={refusal} />
+          {/* NO ADD-COLUMN SLOT (user, 2026-09-16: "remove the add column in
+              tasks as well"): the columns are the board's structure, and the
+              lane is exactly its columns. `api.createTaskColumn` stays for
+              an agent's hand on a person's yes. */}
         </div>
       ) : null}
 
@@ -903,79 +903,6 @@ function Card({ task, labels, people, carried, onLift, onOver, onDrop, onCancel,
             <IconRetry width={12} height={12} aria-label={t("repeats")} />
           ) : null}
         </span>
-      </div>
-    </div>
-  );
-}
-
-/** the reference's foot-of-column composer: type, Enter, it lands on top */
-/**
- * ADDING A COLUMN, written the way adding a card is (user directive).
- *
- * It replaced a `window.prompt`, which is the browser's dialog and not
- * ours — the one control on this board that still looked like somebody
- * else's product, with somebody else's typeface and somebody else's buttons.
- * This is the same anatomy as the card adder it sits beside: a dashed
- * invitation that becomes a field with cancel and add.
- */
-function AddColumnInline({ onAdded, onRefused }: {
-  onAdded: () => void; onRefused: () => void;
-}) {
-  const t = useTranslations("tasks");
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-
-  const add = () => {
-    if (name.trim() === "") { setOpen(false); return; }
-    void api.createTaskColumn(name.trim())
-      .then(() => { setName(""); setOpen(false); onAdded(); })
-      .catch(onRefused);
-  };
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t("addColumn")}
-        title={t("addColumn")}
-        className={BOARD_ADD_COLUMN}
-      >
-        <IconPlus width={14} height={14} />
-      </button>
-    );
-  }
-  return (
-    <div className="card w-[13.75rem] shrink-0 border-accent p-2">
-      {/* NOT `.input-sm` (2026-09-03): the CARD is the box — border, ground and
-          corner are the column-shaped panel this composer becomes — so a themed
-          field would draw a second one inside it. Same shape as the topic
-          composer above, deliberately. */}
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") add();
-          if (e.key === "Escape") { setName(""); setOpen(false); }
-        }}
-        placeholder={t("columnNamePlaceholder")}
-        className="h-8 w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
-      />
-      {/* 2026-09-03: the theme's compact control on both. These two were a
-          TWELFTH shape — h-7 / rounded-lg / 11px — and the guard walked past
-          them only because neither spelled a centring class; a dialog footer
-          is the case `.btn-sm` was measured for. `disabled:opacity-50` goes
-          with them: `.btn` already carries the disabled treatment. */}
-      <div className="mt-1.5 flex justify-end gap-1.5">
-        <button type="button" onClick={() => { setName(""); setOpen(false); }}
-          className="btn btn-sm text-fg-muted hover:text-fg">
-          {t("cancel")}
-        </button>
-        <button type="button" onClick={add} disabled={name.trim() === ""}
-          className="btn btn-sm bg-accent text-on-accent">
-          {t("add")}
-        </button>
       </div>
     </div>
   );

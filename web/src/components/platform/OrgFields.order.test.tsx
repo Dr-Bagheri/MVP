@@ -100,4 +100,20 @@ describe("Management · General — the org form's rows", () => {
        column nobody touched, and `toMatchObject` would not see it */
     expect(Object.keys(updateOrg.mock.calls[0]![0] as object)).toEqual(["name"]);
   });
+
+  it("changes the logo through its own camera badge and removes it through a trash — no «انتخاب تصویر» or «تعویض» button beside it (2026-09-16)", async () => {
+    /* the PROFILE PHOTO's control, on the logo: the row's label still points
+       at the file input (the order test above reads it by that name), the
+       badge and the trash are named by their words, and neither word is
+       drawn as text */
+    render(<OrgFields />);
+    await screen.findByDisplayValue("شرکت نمونه");
+    const input = screen.getByLabelText("نشان سازمان") as HTMLInputElement;
+    expect(input.type).toBe("file");
+    expect(screen.getByRole("button", { name: "تعویض تصویر" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "حذف" })).toBeInTheDocument();
+    expect(screen.queryByText("انتخاب تصویر")).toBeNull();
+    expect(screen.queryByText("تعویض تصویر")).toBeNull();
+    expect(screen.queryByText("حذف")).toBeNull();
+  });
 });

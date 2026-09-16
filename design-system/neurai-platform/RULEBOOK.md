@@ -83,17 +83,34 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   one is longer in tasks, make it the same as the top length"): a bare flex
   track is block-level and spans the page column; inside the row it is as
   long as its chips, like every other rail.
-- The projects page is the board's two rows (2026-09-16, last): row one is
-  the views, the sorts, and a third grey track with «پروژه‌های من» and
-  «مهلت امروز» as `toggleClass` toggles — the board's own toggles, in the
-  board's own place; row two is the `TopicStrip` — «همه پروژه‌ها» with its
-  count, a chip per project carrying its OPEN work, an admin's ⋯ («ویرایش»
-  opens the project's panel at `/projects?project=`, «حذف» the one confirm
-  dialog), and the dashed `+` opening the whole project dialog (`onAdd`;
-  a project is people and a tone as well as a name). The row-one create
-  button is gone: the `+` reaches every view, and the kanban's columns keep
-  their «افزودن پروژه» rows. A chip's menu is the caller's (`menuFor`); an
-  empty menu draws no ⋯, so a member sees chips and nothing to press.
+- The projects page is the board's two rows (2026-09-16, corrected the same
+  day): row one is the views, the sorts, a third grey track with
+  «پروژه‌های من» and «مهلت امروز» as `toggleClass` toggles — the board's own
+  toggles in the board's own place — and, on the views with no column
+  (list, calendar, archive), the `.btn btn-primary` create in `end`; the
+  kanban's columns keep their «افزودن پروژه» rows. Row two is the
+  `TopicStrip` read EXACTLY as the board reads it — folder for folder:
+  «همه پروژه‌ها» with its count, a chip per PROJECT FOLDER (db/0226)
+  carrying how many projects sit in it, the ⋯ that renames in the inline
+  box or archives, the dashed `+` that opens that box. A chip filters the
+  page to the folder's projects; the project dialog and the detail's rail
+  carry the «پوشه» row. An admin's row (0186): `canAdd={isAdmin}` and an
+  empty `menuFor` for a member, who sees chips and nothing to press. The
+  strip's `+` is never a project's door — "the bar in the second sub menu is
+  just folder and new folder button, not the new projects".
+- A picture that can be changed is ONE control, `platform/PictureControl`
+  (2026-09-16): the picture, a camera badge on its corner that opens the
+  picker, a trash beside it while there is something to remove, the words
+  as the buttons' names only. The profile photo and the organisation's logo
+  both read it; a second «تعویض» button or a «حذف عکس» text link beside a
+  picture is the second telling.
+- The two meeting create dialogs carry `platform/MeetingAttendeesField`
+  (2026-09-16): the host as a fixed first row, the roster as the project
+  dialog's people-picker rows, a typed name for a guest; colleagues are added
+  through 0202's attendees route AFTER the create, guests ride it as
+  `invitees`.
+- The task board draws no add-column slot (2026-09-16): the lane is exactly
+  its columns.
 - The meetings page is TWO rows (2026-09-16, later): row one carries the
   slice filter AND the sort — a second grey `TAB_TRACK` with the field as
   tabs, a divider and the direction key, in row one's own pill — with the

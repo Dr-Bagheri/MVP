@@ -84,18 +84,12 @@ export const BOARD_CARD_SLOT =
 
 /** the add-COLUMN placeholder at the end of the lane: a narrower dashed column
     with the same floor, so it stands in the row as a column and not a strip */
-/**
- * THE ADD-COLUMN SLOT IS A STRIP, NOT A COLUMN (2026-09-15). It was a
- * column-wide (13.75rem) dashed box at the end of the lane, and on the 1280
- * laptop with the assistant open it was the ONE fixed width left there: the
- * four columns fit their share (748 in 762) and the slot pushed the lane
- * into a scroll by itself. It is the board's own dashed «+» now — the folder
- * strip's square, drawn column-tall — 34px wide with the label as its name,
- * so an admin still finds it at the lane's end and a member's lane (which
- * never draws it) and an admin's are the same width to within a strip.
- */
-export const BOARD_ADD_COLUMN =
-  "tap flex w-control-sm shrink-0 items-start justify-center self-stretch rounded-2xl border border-dashed border-border pt-4 text-fg-muted hover:border-border-strong hover:text-fg";
+/* THE ADD-COLUMN SLOT IS GONE (user, 2026-09-16: "remove the add column in
+   tasks as well"). It had been a column-wide dashed box, then (2026-09-15) a
+   34px dashed strip at the lane's end; the columns are the board's
+   structure now — a card is a thing, a column is the shelf it sits on (R17,
+   2026-09-15) — and the lane is exactly its columns. `api.createTaskColumn`
+   stays: an agent's hand may still add one on a person's yes. */
 
 /** the dashed row at the foot of a column that makes a new thing where it will live */
 export function BoardAddRow({ label, onClick }: { label: string; onClick: () => void }) {

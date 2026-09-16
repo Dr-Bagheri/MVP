@@ -415,6 +415,14 @@ export const IconFolder = (p: SVGProps<SVGSVGElement>) => (
 export const IconVideo = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3" y="7" width="12" height="10" rx="2" /><path d="m15 12 6-3.5v7z" /></svg>
 );
+/** a STILL camera — the badge on a picture that can be changed (the profile
+    photo and the organisation's logo wear the same one, 2026-09-16) */
+export const IconCamera = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M14.5 4h-5L7.8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.8l-1.7-2z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+);
 /** a caution triangle — something about THIS content needs reading before it
     is trusted (the summary's grounding flags). Deliberately not the danger
     trash/close family: nothing is destroyed and nothing failed; a claim is
@@ -537,6 +545,7 @@ export const ICONS = {
   "user": IconUser,
   "users": IconUsers,
   "video": IconVideo,
+  "camera": IconCamera,
   "voice": IconVoice,
   "warn": IconWarn,
   "zap": IconZap,

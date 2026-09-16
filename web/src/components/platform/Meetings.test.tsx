@@ -1,8 +1,8 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MeetingRecord } from "@/api/types";
-import { meetingFixture } from "@/test/fixtures";
+import type { MeetingRecord, OrgPersonRecord } from "@/api/types";
+import { meetingFixture, personFixture } from "@/test/fixtures";
 
 /**
  * The meetings LIST's contract facts, after the 2026-09-01 rebuild against
@@ -36,6 +36,9 @@ vi.mock("@/i18n/routing", () => ({
 const pushSpy = vi.fn();
 const updateSpy = vi.fn();
 let TOPICS: Array<{ id: string; name: string }> = [];
+/* the roster the attendees row offers (2026-09-16), and every add it sends */
+let PEOPLE: OrgPersonRecord[] = [];
+const attendeeWrites: Array<[string, string[]]> = [];
 /** every folder write the page sent, in order */
 const topicWrites: Array<[string, string]> = [];
 
@@ -68,7 +71,14 @@ vi.mock("@/api/client", () => ({
     meetingTopics: async () => TOPICS,
     /* the row's avatar read (the stack's photos). Stubbed empty: this suite
        is about the list's own logic, and the stack falls back to initials */
-    orgPeople: async () => [],
+    orgPeople: async () => PEOPLE,
+    /* the reader — the attendees row names them as the host (2026-09-16) */
+    me: async () => ({ id: "u-me", display_name: "دکتر باقری", display_name_en: null, avatar_url: null }),
+    /* 0202 — the colleagues, added after the row exists */
+    addMeetingAttendees: async (id: string, ids: string[]) => {
+      attendeeWrites.push([id, ids]);
+      return meeting({ id });
+    },
     createMeetingTopic: async (name: string) => { topicWrites.push(["create", name]); return { id: "t-new", name }; },
     updateMeetingTopic: async (id: string, patch: { name?: string; archived?: boolean }) => {
       topicWrites.push(["update", `${id}:${patch.name ?? (patch.archived === true ? "archived" : "")}`]);
@@ -123,6 +133,8 @@ vi.mock("@/lib/pendingUpload", () => ({
 import { Meetings } from "./Meetings";
 
 beforeEach(() => {
+  PEOPLE = [];
+  attendeeWrites.length = 0;
   LIST = [];
   created.length = 0;
   pushSpy.mockClear();
@@ -624,6 +636,58 @@ describe("Meetings", () => {
  * Enter commits, Escape leaves. The dialog of 2026-09-08 went with the reason
  * it existed (the inline box had replaced the picker, and there is no picker).
  */
+/**
+ * WHO IS COMING, asked at creation (user, 2026-09-16: "in the pop-up window
+ * for new meetings and ahead meetings, add a row for attendees as well that
+ * can be chosen from the users or simply just write down a name; the host
+ * is the user and present"). Both dialogs carry the same field; the
+ * record-now one is driven end to end here — the colleague lands through
+ * the attendees route AFTER the row exists, the typed name rides the create
+ * as `invitees`, and the host is a fixed row rather than a toggle.
+ */
+describe("the attendees row on the two create dialogs (2026-09-16)", () => {
+  it("names the host as the reader, adds a picked colleague after the create, and sends a typed guest as an invitee", async () => {
+    PEOPLE = [
+      personFixture({ id: "u-me", display_name: "دکتر باقری", display_name_en: null, role: "owner", username: "me" }),
+      personFixture({ id: "u-2", display_name: "رؤیا", display_name_en: null, role: "member", username: "roya" }),
+    ];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("هنوز جلسه‌ای نیست. اولین جلسه را برنامه‌ریزی کن.")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /جلسه جدید/ }));
+    const dialog = screen.getByRole("dialog");
+
+    /* the host: fixed, first, said to be the reader — and NOT offered as a
+       toggle, because a switch for the person the meeting belongs to is a
+       switch the server ignores */
+    expect(await within(dialog).findByText("میزبان (شما)")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /دکتر باقری/ })).toBeNull();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: /رؤیا/ }));
+    expect(within(dialog).getByRole("button", { name: /رؤیا/ })).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.type(within(dialog).getByPlaceholderText("نام مهمان…"), "مهمان تست{Enter}");
+    expect(within(dialog).getByText("مهمان تست")).toBeInTheDocument();
+    /* Enter in the guest box added a guest and did NOT start the meeting */
+    expect(created).toHaveLength(0);
+
+    await userEvent.type(screen.getByPlaceholderText("عنوان جلسه را بنویس"), "جلسهٔ فروش");
+    await userEvent.click(screen.getByRole("button", { name: /همین حالا ضبط کن/ }));
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0]!.invitees).toEqual(["مهمان تست"]);
+    await waitFor(() => expect(attendeeWrites).toEqual([["m-new", ["u-2"]]]));
+  });
+
+  it("the scheduling dialog carries the same row", async () => {
+    PEOPLE = [personFixture({ id: "u-me", display_name: "دکتر باقری", display_name_en: null, role: "owner", username: "me" })];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("هنوز جلسه‌ای نیست. اولین جلسه را برنامه‌ریزی کن.")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /جلسه پیش‌رو/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByText("میزبان (شما)")).toBeInTheDocument();
+    expect(within(dialog).getByPlaceholderText("نام مهمان…")).toBeInTheDocument();
+  });
+});
+
 describe("the folder strip's box", () => {
   it("the `+` opens the box, and Enter writes the new folder", async () => {
     TOPICS = [{ id: "t-p", name: "محصول" }];

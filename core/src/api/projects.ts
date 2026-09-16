@@ -21,7 +21,7 @@
  * Everything runs as the CALLER through withIdentity; 0181's policies are the
  * wall and this file adds no second opinion about who may see what.
  */
-import { NotFoundError, ValidationError } from "./errors.ts";
+import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import {
   iso,
   PROJECT_PRIORITIES, PROJECT_STAGES,
@@ -47,6 +47,8 @@ export interface ProjectRecord {
   created_at: string;
   /** the task category this project owns on the board (0181) */
   topic_id: string | null;
+  /** the projects page's folder (0226) — null is the ordinary state */
+  folder_id: string | null;
   member_ids: string[];
   /** live counts over that category — never stored */
   task_total: number;
@@ -175,6 +177,7 @@ const PROJECT_ROWS = `
   select p.id, p.name, p.summary, p.tone, p.icon, p.archived_at,
          p.created_by, p.created_at,
          p.stage, p.priority, p.lead_id, p.starts_on, p.due_on,
+         p.folder_id,
          tt.id as topic_id,
          ch.id as channel_id,
          coalesce(mem.ids, '{}') as member_ids,
@@ -211,6 +214,7 @@ function toProject(row: Record<string, unknown>): ProjectRecord {
     created_by: String(row.created_by),
     created_at: iso(row.created_at),
     topic_id: (row.topic_id as string | null) ?? null,
+    folder_id: (row.folder_id as string | null) ?? null,
     member_ids: ((row.member_ids as string[] | null) ?? []).map(String),
     task_total: Number(row.task_total ?? 0),
     task_done: Number(row.task_done ?? 0),
@@ -290,9 +294,13 @@ export function createProjectsRepo(db: Db) {
       icon?: unknown; member_ids?: unknown;
       stage?: unknown; priority?: unknown; lead_id?: unknown;
       starts_on?: unknown; due_on?: unknown;
+      /** 0226 — the folder it is filed in; the composite FK refuses a folder
+          the organisation does not hold, so nothing here has to */
+      folder_id?: unknown;
     },
   ): Promise<ProjectRecord> {
     const name = cleanName(input.name);
+    const folderId = typeof input.folder_id === "string" && input.folder_id !== "" ? input.folder_id : null;
     const summary = cleanSummary(input.summary);
     const tone = cleanTone(input.tone);
     const icon = cleanIcon(input.icon);
@@ -312,11 +320,11 @@ export function createProjectsRepo(db: Db) {
       const created = await tx.unsafe<Record<string, unknown>>(
         `insert into echo.project
            (org_id, name, summary, tone, icon, created_by,
-            stage, priority, lead_id, starts_on, due_on)
+            stage, priority, lead_id, starts_on, due_on, folder_id)
          values (echo.actor_org_id(), $1, $2, $3, $4, echo.actor_id(),
-                 $5, $6, $7, $8::date, $9::date)
+                 $5, $6, $7, $8::date, $9::date, $10)
          returning id`,
-        [name, summary, tone, icon, stage, priority, leadId, startsOn, dueOn],
+        [name, summary, tone, icon, stage, priority, leadId, startsOn, dueOn, folderId],
       );
       const id = String(created[0]!.id);
 
@@ -385,6 +393,13 @@ export function createProjectsRepo(db: Db) {
     if ("lead_id" in patch) {
       put("lead_id", typeof patch.lead_id === "string" && patch.lead_id !== ""
         ? patch.lead_id
+        : null);
+    }
+    /* 0226 — the same omit-leaves / null-clears contract: «بدون پوشه» is a
+       null inside a supplied key, never an omitted one */
+    if ("folder_id" in patch) {
+      put("folder_id", typeof patch.folder_id === "string" && patch.folder_id !== ""
+        ? patch.folder_id
         : null);
     }
     if ("starts_on" in patch) {
@@ -510,7 +525,67 @@ export function createProjectsRepo(db: Db) {
     });
   }
 
-  return { list, detail, create, update, setMember, workload, remove };
+  /**
+   * THE FOLDERS (0226) — the projects page's second row. Rows of their own,
+   * so a folder can exist before its first project and be renamed without
+   * touching the projects in it; ARCHIVED, never deleted (no role holds
+   * DELETE), and the projects in an archived folder keep pointing at it —
+   * the strip hides it, the record does not forget where a project was.
+   * The wall is the policy's (an admin's act, 0186): a member's create is
+   * refused by the database, and a member's rename matches zero rows — which
+   * this repo turns into a 404 rather than reporting as a success.
+   */
+  async function folders(identity: Identity): Promise<Array<{ id: string; name: string }>> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select f.id, f.name from echo.project_folder f
+          where f.archived_at is null order by f.name`, [],
+      );
+      return rows.map((row) => ({ id: row.id as string, name: row.name as string }));
+    });
+  }
+
+  async function createFolder(identity: Identity, name: string): Promise<{ id: string; name: string }> {
+    const clean = name.trim().slice(0, 80);
+    if (clean === "") throw new ValidationError("a folder needs a name", { code: "folder_name_required" });
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `insert into echo.project_folder (org_id, name, created_by)
+         values (echo.actor_org_id(), $1, echo.actor_id())
+         returning id, name`, [clean],
+      );
+      const row = rows[0];
+      if (!row) throw new ConflictError("the folder was not created");
+      return { id: row.id as string, name: row.name as string };
+    });
+  }
+
+  async function updateFolder(
+    identity: Identity, id: string, patch: { name?: string; archived?: boolean },
+  ): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      if (typeof patch.name === "string") {
+        const clean = patch.name.trim().slice(0, 80);
+        if (clean === "") throw new ValidationError("a folder needs a name", { code: "folder_name_required" });
+        const done = await tx.unsafe<Record<string, unknown>>(
+          `update echo.project_folder set name = $2 where id = $1 returning id`, [id, clean],
+        );
+        if (!done[0]) throw new NotFoundError();
+      }
+      if (typeof patch.archived === "boolean") {
+        const done = await tx.unsafe<Record<string, unknown>>(
+          `update echo.project_folder set archived_at = $2 where id = $1 returning id`,
+          [id, patch.archived ? new Date().toISOString() : null],
+        );
+        if (!done[0]) throw new NotFoundError();
+      }
+    });
+  }
+
+  return {
+    list, detail, create, update, setMember, workload, remove,
+    folders, createFolder, updateFolder,
+  };
 }
 
 export type ProjectsRepo = ReturnType<typeof createProjectsRepo>;

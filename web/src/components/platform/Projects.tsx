@@ -30,7 +30,7 @@ import { Avatar } from "@/components/Avatar";
 import { TONE_CHIP, TONE_DOT } from "./tasks/TaskDialogs";
 import {
   IconChevronRight, IconClock, IconFolder,
-  IconPencil, IconPeople3, IconTrash, IconUser,
+  IconPeople3, IconPlus, IconUser,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
 import { dayKeyOf, digits, formatDate, monthGridAt, personName, personPhoto } from "@/lib/format";
@@ -111,10 +111,13 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
   const [board, setBoard] = useState<Board | null>(null);
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
   const [scope, setScope] = useState<Scope>("all");
-  /* THE STRIP'S FILTER (2026-09-16): «همه پروژه‌ها» or one project's id —
-     the same «همه» + chips every strip on the product has, so a person who
-     has learned the board's row has learned this one */
-  const [projectFilter, setProjectFilter] = useState<string>("all");
+  /* THE STRIP'S FILTER (2026-09-16, corrected the same day — "the bar in
+     project second sub menu is just folder and new folder button, not the
+     new projects"): «همه پروژه‌ها» or one FOLDER's id (0226) — the board's
+     row, folder for folder, so a person who has learned the board's second
+     row has learned this one */
+  const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [view, setView] = useState<View>("kanban");
   const [sort, setSort] = useState<Sort>("recent");
   const [dueToday, setDueToday] = useState(false);
@@ -127,6 +130,9 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
     void api.projects({ archived: view === "archive" })
       .then(setRows)
       .catch(() => setRows("failed"));
+    /* the folders (0226) — their own read, like the board's; a failed read
+       is an empty strip, never a failed page */
+    void api.projectFolders().then(setFolders).catch(() => setFolders([]));
     /* the board, for the column, the deadlines and «مهلت امروز» — a failed
        read leaves an EMPTY board rather than null, so the kanban draws its
        columns and says nothing rather than looking like it is still loading */
@@ -212,7 +218,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
     if (!Array.isArray(rows)) return [];
     const today = dayKeyOf(new Date());
     const list = rows.filter((p) => {
-      if (projectFilter !== "all" && p.id !== projectFilter) return false;
+      if (folderFilter !== "all" && p.folder_id !== folderFilter) return false;
       if (scope === "mine" && !(meId !== null && p.member_ids.includes(meId))) return false;
       if (!dueToday) return true;
       /* «مهلت امروز» on a project means UNFINISHED work due today. A done
@@ -235,7 +241,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       }
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [rows, scope, projectFilter, sort, dueToday, meId, locale, cardsOf]);
+  }, [rows, scope, folderFilter, sort, dueToday, meId, locale, cardsOf]);
 
   const chip = (active: boolean, label: string, onClick: () => void, count?: string) => (
     <button
@@ -262,13 +268,36 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
              with the views first, then the sorts where the board keeps its
              priorities, then whose projects and the one toggle in one track,
              the way the board keeps its two toggles together. ── */}
-      {/* NO CREATE BUTTON IN THIS ROW (2026-09-16): the strip below carries
-          the board's own dashed `+` on every view, and the kanban's columns
-          keep their «افزودن پروژه» rows — a third door here would be two
-          doors to one dialog on one screen. (2026-09-05 had taken it off the
-          kanban for the same reason and left it on the views that have no
-          column; the strip reaches all of them.) */}
-      <Toolbar>
+      <Toolbar
+        end={
+          /* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
+             the add new project on top and add it like tasks in the column").
+             The way in is the dashed row inside each kanban column — the
+             board's own shape, and a project is made where it will sit. It is
+             still admin-only (0186), and still ABSENT rather than disabled for
+             everybody else: a greyed control is a promise the product has no
+             intention of keeping.
+
+             The LIST, CALENDAR and ARCHIVE views have no column to put it in,
+             so they carry the button — in R3's one coat (`.btn btn-primary`),
+             at the row's end, where every other page keeps its create. The
+             kanban does not. That is written down because it looks like an
+             inconsistency and is not one. (2026-09-16, for a few hours, the
+             strip's `+` stood in for it on every view — until the user said
+             the strip is for FOLDERS; a folder's `+` cannot be a project's
+             door, so the button is back where 2026-09-05 put it.) */
+          isAdmin && view !== "kanban" ? (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="btn btn-primary"
+            >
+              <IconPlus width={14} height={14} />
+              {t("newProject")}
+            </button>
+          ) : undefined
+        }
+      >
         <div className={TAB_TRACK}>
           {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
           {chip(view === "list", tTasks("viewList"), () => setView("list"))}
@@ -309,58 +338,43 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         </div>
       </Toolbar>
 
-      {/* ── ROW TWO: THE BOARD'S STRIP (user, 2026-09-16: "after all
-             projects in the second sub menu should be the plus like the
-             tasks for a new folder, with the same style and function; when
-             created, have the three-dot button to edit and delete in it").
-             The kit's TopicStrip, read here as the board and the meetings
-             page read it: «همه پروژه‌ها» with its count, a chip per project
-             carrying its open-work count and its ⋯ — «ویرایش» opens the
-             project's own panel, «حذف» the platform's one confirm dialog —
-             and the dashed `+`, which opens the WHOLE project dialog rather
-             than the inline box (a project is people and a tone as well as a
-             name; 2026-09-05's reasoning, kept). Admins only for the `+` and
-             the ⋯, absent rather than disabled (0186, 0191). A chip filters
-             the page to that one project, as every strip's chip filters. ── */}
+      {/* ── ROW TWO: THE FOLDERS (user, 2026-09-16, correcting the morning's
+             round: "the bar in project second sub menu is just folder and new
+             folder button, not the new projects"). The kit's TopicStrip with
+             the board's own labels and the board's own behaviour, folder for
+             folder: «همه پروژه‌ها» with its count, a chip per folder (0226)
+             carrying how many projects sit in it, the ⋯ that renames in the
+             inline box or archives, and the dashed `+` that opens that box.
+             A chip filters the page to the projects in that folder.
+             An admin's row (0186: a folder groups an admin's surface) — a
+             member sees the chips and neither the ⋯ nor the `+`, absent
+             rather than disabled. The door for a PROJECT is row one's (list,
+             calendar, archive) and the kanban's columns' — a project is not a
+             folder, and this row makes folders. ── */}
       <TopicStrip
         allLabel={t("scopeAll")}
         allCount={Array.isArray(rows) ? rows.length : 0}
-        active={projectFilter}
-        onSelect={setProjectFilter}
-        topics={(Array.isArray(rows) ? rows : []).map((p) => ({
-          id: p.id, name: p.name, count: cardsOf(p).filter((task) => !task.done).length,
+        active={folderFilter}
+        onSelect={setFolderFilter}
+        topics={folders.map((f) => ({
+          id: f.id, name: f.name,
+          count: (Array.isArray(rows) ? rows : []).filter((p) => p.folder_id === f.id).length,
         }))}
-        glyph={(topic) => {
-          const p = Array.isArray(rows) ? rows.find((row) => row.id === topic.id) : undefined;
-          return p?.icon
-            ? <span className="text-sm leading-none" aria-hidden>{p.icon}</span>
-            : <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[p?.tone ?? "grey"] ?? "bg-accent"}`} aria-hidden />;
-        }}
         labels={{
-          options: tTasks("topicOptions"), rename: t("edit"), remove: tCommon("delete"), add: t("newProject"),
+          options: tTasks("topicOptions"), rename: tTasks("renameTopic"), remove: tTasks("removeTopic"),
+          add: tTasks("addTopic"), placeholder: tTasks("topicNamePlaceholder"), cancel: tTasks("cancel"),
         }}
-        menuFor={(topic) => {
-          if (!isAdmin) return [];
-          const p = Array.isArray(rows) ? rows.find((row) => row.id === topic.id) : undefined;
-          if (!p) return [];
-          return [
-            {
-              key: "edit",
-              label: t("edit"),
-              icon: <IconPencil width={14} height={14} />,
-              onSelect: () => router.push({ pathname: "/projects", query: { project: p.id } } as never),
-            },
-            {
-              key: "delete",
-              label: tCommon("delete"),
-              icon: <IconTrash width={14} height={14} />,
-              danger: true,
-              onSelect: () => setCondemned(p),
-            },
-          ];
-        }}
-        onAdd={() => setCreating(true)}
         canAdd={isAdmin}
+        /* an EMPTY menu draws no ⋯ (TopicChip): a member may rename nothing */
+        menuFor={isAdmin ? undefined : () => []}
+        onCreate={(name) => api.createProjectFolder(name)}
+        onRename={(id, name) => api.updateProjectFolder(id, { name })}
+        /* archived, not deleted — the projects in it keep their pointer and
+           the strip stops showing it; a lit chip that goes leaves «همه» on */
+        onArchive={(id) => api.updateProjectFolder(id, { archived: true })
+          .then(() => setFolderFilter((cur) => (cur === id ? "all" : cur)))}
+        onDone={load}
+        onRefused={() => notifyError(t("writeFailed"))}
       />
 
       {/* ── the views ────────────────────────────────────────────────── */}
@@ -457,6 +471,8 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
 
       {creating ? (
         <ProjectDialog
+          folders={folders}
+          defaultFolderId={folderFilter === "all" ? null : folderFilter}
           people={people}
           meId={meId}
           onClose={() => setCreating(false)}

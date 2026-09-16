@@ -1,0 +1,14 @@
+/* 0226 — one project folder: rename or archive, forwarded verbatim. */
+import { coreFetch, errorResponse, readJson } from "@/server/core";
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    await coreFetch(`/v1/projects/folders/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: await readJson(request),
+    });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

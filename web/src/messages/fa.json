@@ -1656,6 +1656,13 @@
     "trendWindow": "{delta} در {days} روز گذشته"
   },
   "meetings": {
+    "fieldAttendees": "شرکت‌کنندگان",
+    "hostYou": "میزبان (شما)",
+    "guestNamePlaceholder": "نام مهمان…",
+    "addGuest": "افزودن",
+    "removeGuest": "حذف {name}",
+    "noColleagues": "همکار دیگری در سازمان نیست.",
+    "attendeesFailed": "جلسه ساخته شد، ولی افزودن شرکت‌کنندگان انجام نشد؛ از صفحهٔ جلسه اضافه کنید.",
     "recallHeading": "پیش‌تر تصمیم‌گیری شده",
     "recallUntitled": "جلسهٔ بی‌عنوان",
     "recallShared": "{n} واژهٔ مشترک",
@@ -2540,6 +2547,8 @@
     "signOutTitle": "نشست"
   },
   "projects": {
+    "fieldFolder": "پوشه",
+    "noFolder": "بدون پوشه",
     "addMember": "افزودن عضو",
     "addProject": "افزودن پروژه",
     "andMore": "و {n} مورد دیگر",
@@ -2753,7 +2762,6 @@
     "orgLocale_en": "انگلیسی",
     "orgLocale_fa": "فارسی",
     "orgLogo": "نشان سازمان",
-    "orgLogoChoose": "انتخاب تصویر",
     "orgLogoFailed": "تصویر ذخیره نشد. یک فایل پی‌ان‌جی، جی‌پگ یا وب‌پی کمتر از ۵۱۲ کیلوبایت انتخاب کنید.",
     "orgLogoHint": "یک تصویر پی‌ان‌جی، جی‌پگ یا وب‌پی — حداکثر ۵۱۲ کیلوبایت.",
     "orgLogoRemove": "حذف",
@@ -3002,7 +3010,6 @@
   "tasks": {
     "add": "افزودن",
     "addAssignee": "افزودن مسئول",
-    "addColumn": "افزودن ستون",
     "all": "همه",
     "allTasks": "همه تسک‌ها",
     "addTopic": "پوشهٔ جدید",
@@ -3025,7 +3032,6 @@
     "checklistEmpty": "موردی ندارد.",
     "close": "بستن",
     "columnColor": "تغییر رنگ ستون",
-    "columnNamePlaceholder": "نام ستون…",
     "column_backlog": "بک‌لاگ",
     "column_doing": "در حال انجام",
     "column_done": "انجام‌شده",

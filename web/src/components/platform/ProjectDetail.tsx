@@ -88,6 +88,8 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
   const [workload, setWorkload] = useState<ProjectWorkloadRow[] | null>(null);
   const [labels, setLabels] = useState<TaskLabelRecord[]>([]);
   const [topics, setTopics] = useState<TaskTopicRecord[]>([]);
+  /* the project folders (0226) — the rail's «پوشه» row picks from them */
+  const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [condemned, setCondemned] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -102,6 +104,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
 
   useEffect(() => {
     void api.orgPeople().then(setPeople).catch(() => setPeople([]));
+    void api.projectFolders().then(setFolders).catch(() => setFolders([]));
   }, []);
 
   const tasksEpoch = useRefreshEpoch("tasks");
@@ -340,6 +343,32 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
             <Avatar name={personName(lead, locale)} src={personPhoto(lead)} size="xs" />
             <span className={RAIL_VALUE}>{personName(lead, locale)}</span>
           </span>
+        )}
+      </div>
+
+      {/* ── THE FOLDER (0226) ────────────────────────────────────────────
+          The projects page's second row filters by these; the rail is where
+          a project is put in one. «بدون پوشه» is a null inside a supplied
+          key — the omit-leaves / null-clears contract of every other row. */}
+      <div>
+        <span className={RAIL_LABEL}>{t("fieldFolder")}</span>
+        {isAdmin ? (
+          <Select
+            value={project.folder_id ?? ""}
+            onChange={(v) => patch({ folder_id: v === "" ? null : v })}
+            ariaLabel={t("fieldFolder")}
+            options={[
+              { value: "", label: t("noFolder") },
+              ...folders.map((f) => ({ value: f.id, label: f.name })),
+            ]}
+          />
+        ) : (
+          (() => {
+            const folder = folders.find((f) => f.id === project.folder_id) ?? null;
+            return folder === null
+              ? <span className={RAIL_EMPTY}>{t("noFolder")}</span>
+              : <span className={RAIL_VALUE}>{folder.name}</span>;
+          })()
         )}
       </div>
 

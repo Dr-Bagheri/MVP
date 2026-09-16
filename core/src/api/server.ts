@@ -3547,6 +3547,36 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await projects.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
   });
 
+  /* the project FOLDERS (0226) — the projects page's second row: rows of
+     their own, so a folder can exist before its first project and be renamed
+     without touching the projects in it. An admin's to make and rename (0186:
+     a folder groups an admin's surface); every active member reads. */
+  app.get("/v1/projects/folders", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send({ folders: await projects.folders(identity) });
+  });
+
+  app.post("/v1/projects/folders", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { name?: unknown };
+    if (typeof body.name !== "string") throw new ValidationError("name must be a string");
+    return reply.code(201).send(await projects.createFolder(identity, body.name));
+  });
+
+  app.patch("/v1/projects/folders/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: unknown; archived?: unknown };
+    await projects.updateFolder(identity, id, {
+      ...(typeof body.name === "string" ? { name: body.name } : {}),
+      ...(typeof body.archived === "boolean" ? { archived: body.archived } : {}),
+    });
+    return reply.code(204).send();
+  });
+
   /* who is carrying what, counted from the board (0186) */
   /* 0191 — deleting a project deletes the PROJECT. The board keeps its
      folder and the room keeps its conversation; the wall admits only an

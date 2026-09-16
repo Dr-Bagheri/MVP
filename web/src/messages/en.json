@@ -1656,6 +1656,13 @@
     "trendWindow": "{delta} in the last {days} days"
   },
   "meetings": {
+    "fieldAttendees": "Attendees",
+    "hostYou": "Host (you)",
+    "guestNamePlaceholder": "Guest name…",
+    "addGuest": "Add",
+    "removeGuest": "Remove {name}",
+    "noColleagues": "No other colleagues in the organisation.",
+    "attendeesFailed": "The meeting was created, but the attendees could not be added; add them from the meeting's page.",
     "recallHeading": "Already decided",
     "recallUntitled": "Untitled meeting",
     "recallShared": "{n} words in common",
@@ -2540,6 +2547,8 @@
     "signOutTitle": "Session"
   },
   "projects": {
+    "fieldFolder": "Folder",
+    "noFolder": "No folder",
     "addMember": "Add a member",
     "addProject": "Add project",
     "andMore": "and {n} more",
@@ -2753,7 +2762,6 @@
     "orgLocale_en": "English",
     "orgLocale_fa": "Persian",
     "orgLogo": "Logo",
-    "orgLogoChoose": "Choose image",
     "orgLogoFailed": "That image was not saved. Choose a PNG, JPEG or WebP file under 512KB.",
     "orgLogoHint": "A PNG, JPEG or WebP image, up to 512KB.",
     "orgLogoRemove": "Remove",
@@ -3002,7 +3010,6 @@
   "tasks": {
     "add": "Add",
     "addAssignee": "Add an assignee",
-    "addColumn": "Add column",
     "all": "All",
     "allTasks": "All tasks",
     "addTopic": "New folder",
@@ -3025,7 +3032,6 @@
     "checklistEmpty": "Nothing here yet.",
     "close": "Close",
     "columnColor": "Column colour",
-    "columnNamePlaceholder": "Column name…",
     "column_backlog": "Backlog",
     "column_doing": "In progress",
     "column_done": "Done",

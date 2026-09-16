@@ -1748,6 +1748,8 @@ export const api = {
        form people abandon, and every one of them is editable in the panel */
     stage?: ProjectStage; priority?: ProjectPriority; lead_id?: string | null;
     starts_on?: string | null; due_on?: string | null;
+    /* 0226 — the folder it is filed in; absent = «بدون پوشه» */
+    folder_id?: string | null;
   }): Promise<ProjectRecord> {
     return bff("/api/projects", {
       method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
@@ -1767,6 +1769,8 @@ export const api = {
        is a date, and an instant would need a zone nobody chose. */
     stage: ProjectStage; priority: ProjectPriority; lead_id: string | null;
     starts_on: string | null; due_on: string | null;
+    /* 0226 — null CLEARS (back to «بدون پوشه»), an omitted key leaves it */
+    folder_id: string | null;
   }>): Promise<ProjectRecord> {
     return bff(`/api/projects/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
@@ -1786,6 +1790,29 @@ export const api = {
   async setProjectMember(id: string, userId: string, on: boolean): Promise<void> {
     await bff<undefined>(`/api/projects/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`, {
       method: on ? "PUT" : "DELETE",
+    });
+  },
+  /* the project FOLDERS (0226) — the projects page's second row: rows of
+     their own, so one can exist before its first project and be renamed
+     without rewriting the projects in it (the meeting folders' shape) */
+  async projectFolders(): Promise<Array<{ id: string; name: string }>> {
+    const body = await cachedRead(
+      "project-folders",
+      () => bff<{ folders: Array<{ id: string; name: string }> }>("/api/projects/folders"),
+      BURST_TTL_MS,
+    );
+    return body.folders;
+  },
+  async createProjectFolder(name: string): Promise<{ id: string; name: string }> {
+    return bff("/api/projects/folders", {
+      method: "POST", body: JSON.stringify({ name }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async updateProjectFolder(id: string, patch: { name?: string; archived?: boolean }): Promise<void> {
+    await bff<null>(`/api/projects/folders/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch),
+      headers: { "content-type": "application/json" },
     });
   },
 
