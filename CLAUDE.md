@@ -7076,3 +7076,114 @@ sessions) for the cross-session narrative.
   green alone (the selectMenuWidth class).
   db 223 migrations · core 1866 tests (1 pre-existing red) · web 1631 tests +
   gate + sweep.
+- 2026-09-16 (THE GATE GETS FOUR DOORS AND THE DEMO BESIDE IT, AND A
+  WORKSPACE IS VERIFIED BEFORE ITS AGENTS SPEND; commit 28af01e; db
+  0224–0225 on production; core deployed; web on Vercel): one directive,
+  seven items, five screenshots and two Wispr Flow references.
+  **The strip is one component.** "All meetings should look like the
+  projects with the edit three dot in it and the plus after it for new one,
+  and the place in the third row. Unify." The task board's folder row —
+  chip, count, ⋯ (rename / archive), the dashed `+`, the inline name box —
+  is `platform/TopicStrip.tsx` now and BOTH boards read it; the meetings
+  page had carried a dropdown, a kebab and a dialog for the same folders
+  since 2026-09-08, the one place a folder was a different shape.
+  `topicStrip.guard` refuses a second drawing. The strip owns the two
+  pieces of interaction state a folder row has (adding, renaming), because a
+  caller holding them is a caller that can hold them differently; the task
+  board hangs its projects section after the `+` through the same chip.
+  **The shell moves three doors**: «خروج» is a pill in profile's row-one END
+  slot (the bottom danger button gone); Integrations left the rail for a row
+  under Agents in Home's sidebar, opening in Home's pane, `/integrations`
+  redirecting into it; Projects took its own rail entry ABOVE Tasks (a trail
+  root, its toolbar through the kit with a `.btn btn-primary` create) and
+  the projects LINK left the tasks row — the board's project folders stay,
+  they are data, not a door. The live recording strip is drawn flat like the
+  finished player: solid bars from the middle, no grain, glow or ramp.
+  **The gate is a split page** — the door on the physical RIGHT always
+  (the grid is `dir="ltr"`, because the person named the side on the RTL
+  screen and a logical column would swap it in English), the demo on the
+  left (a video when `NEXT_PUBLIC_DEMO_VIDEO_URL` is set, else the product's
+  own illustrated scenes cycling), four doors Google / Apple / Microsoft /
+  SSO drawn regardless of state, «یا», the email field, «حساب دارید؟ با
+  گذرواژه وارد شوید». Each door is a db switch: 0225 widens the
+  `signin_method` check to apple, azure and sso, the three rows arrive OFF,
+  and a press on an off door answers a sentence — the oauth start route
+  refuses an ABSENT row as firmly as a disabled one. SSO is GoTrue's own
+  dance (`POST /auth/v1/sso` with `skip_http_redirect`) behind a PKCE cookie.
+  `SIGNIN_METHODS` lives in core's vocabulary; `signin-methods.test.ts`
+  derives the migration's check from the file and asserts equality, so the
+  two cannot drift quietly.
+  **VERIFICATION — the door stays open, the AGENTS are walled (0224).**
+  "After they enter they must need a verification code so they can use the
+  full system — the agents on system use tokens, so if all can use it, it
+  becomes problematic; for now I verify them." `echo.org.verified_at`,
+  backfilled `= created_at` for every existing org; `register_account`
+  rebuilt from 0223's text so a FOUNDING personal org is born NULL (a
+  console-born org is verified at birth); a BEFORE INSERT trigger on
+  `echo.agent_run` raises 42501 with HINT `org_unverified` — the wall is on
+  the table every model call must write to first, so no route, worker or
+  future path can spend a token past it; `platform_set_org_verified`
+  (root-walled, audited as `org_verification_set`, a no-op returns false)
+  is the console's «تأیید دسترسی دستیارها»; `platform_list_orgs` was
+  DROP+CREATEd to carry `verified_at` (a `RETURNS TABLE` is a contract —
+  0152). core: `agent/verification.ts` is the FUNNEL — `Identity.orgVerified`
+  is ABSENT when the column is not there (no wall) and only an explicit
+  `false` refuses; the runtime pre-checks before `runs.begin`; the run store
+  translates the trigger's error into `OrgUnverifiedError` so a path that
+  reached the wall without the pre-check still fails TYPED; `mapError` says
+  403 `org_unverified`; five routes guard; the four unattended workers skip
+  a `false` and say which nothing it is. web: a banner on Home and in Chat,
+  the sentence in the Hub toast and the sidebar, the console chip
+  «تأییدشده» / «در انتظار تأیید» with its kebab action. Test 128 walks the
+  matrix (14): founding → unverified, console-born → verified, the agent
+  refused 42501, root verifies (true) and again (false), the list door
+  carries the fact, taken back → refused, owner refused, agent role no
+  execute, trigger fn not PUBLIC, two audit rows. Cost said out loud: a
+  person who founds a workspace through the gate cannot run an agent until
+  the root presses the button — "later we change it" (billing) is the bar.
+  **Two count traps fired on production, and neither was about this
+  batch.** `65_signin_methods` asserted `count(*) = 2` on a table 0225 grew
+  to five; `40_purge` asserted `count(*) = 1` on the purge role, which is
+  ACTOR-INDEPENDENT and sees every expired call in the database — one real
+  call crossed its window at 00:04 UTC today, in the gap between the nightly
+  purge sweeps (last 03:39 UTC 09-15, `callsPurged: 0`; next 03:37 UTC
+  today takes it). Both assert the property now: the closed set of methods,
+  the expired fixture call visible and yesterday's not, and `bool_and(past
+  its window)` over whatever rows exist. Rule 9's count clause, met in two
+  files that had passed for weeks.
+  Verify-red by mutation: the runtime gate removed → only the runtime test
+  red; the store's translation removed → only the store test red; the
+  TopicStrip lift removed → only the meetings strip test red. Also fixed on
+  the way: `permission-core`'s index assertions on the actor log (the
+  resolver's capability probe now precedes `set_config`; asserted by
+  content and order), `VerificationBanner` reading `api.me()` inside a
+  promise so a mock without it cannot throw synchronously into a render,
+  and `control.guard` firing twice on `DemoPanel` — both true (a section
+  with corner + height + flex + centring; a dot button carrying geometry).
+  Deployed: 0224–0225 on production with the suite ("the wall holds"); core
+  28af01e on Hetzner (both units active, health 200, ask / PATCH org 401
+  against a 404 control, zero warnings after); web on Vercel from the push.
+  **Proven on production** (runbook 7i has the numbers): the gate signed
+  out at 1280 — RTL document, the split grid `dir="ltr"`, the form on the
+  RIGHT (721–1113) and the demo on the LEFT (98–629), four doors, «یا», the
+  password link, no video, the scenes cycling; `POST /api/auth/sso` answers
+  the off-switch sentence (`disabled`). Signed in: the meetings strip is the
+  THIRD row at 173 under 72 and 122 on the tinted rail, the topic dropdown
+  gone — the org has no meeting folder, so a chip's ⋯ was read on the task
+  board, the same component, beside its `+`; the rail reads projects ABOVE
+  tasks with no integrations entry; «اتصال‌ها» sits directly under «عامل‌ها»
+  in Home's sidebar and opens the shelf in the pane, the verification banner
+  absent for the verified org (both controls held); «خروج از حساب» is a
+  `btn-sm` pill on row one's line at the column's end; the console shows
+  three «تأییدشده» chips. Kit note kept from the reading: «پروژهٔ جدید» is
+  absent on the kanban BY DESIGN (the columns' «افزودن پروژه» rows are the
+  door, 2026-09-05) and on the list view sits in row one's end slot at
+  1920 — at 1280 with the assistant open row one wraps its three tracks and
+  the slot lands on a third line, which is the kit's own rule. Two probe
+  traps met again: the built-in pane's first JS read came back at vw 0
+  (re-read right after a screenshot), and a page's `view` is state, not a
+  URL parameter — the tab has to be pressed. NOT proven live: a recording
+  take (the flat strip needs a real take — a write on the org's data), and
+  a meetings folder's ⋯ on the meetings page itself.
+  db 225 migrations · core 1879 tests (1 pre-existing red, history ZWNJ) ·
+  web 1643 tests + gate + sweep.

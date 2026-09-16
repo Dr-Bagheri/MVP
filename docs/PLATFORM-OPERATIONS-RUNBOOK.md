@@ -467,6 +467,89 @@ configuration.
 
 ---
 
+## 7i. Deployment record — 2026-09-16 (28af01e: four doors, the verification wall, db/0224–0225)
+
+Migrations first (§5), both from this laptop through the `.env` loader (7f):
+`0224_a_workspace_is_verified_before_its_agents_spend` (the column and its
+backfill, `register_account` rebuilt with a NULL founding stamp, the
+`agent_run` trigger, `platform_set_org_verified`, `platform_list_orgs`
+DROP+CREATE with `verified_at`) and `0225_the_gate_learns_apple_microsoft_and_sso`
+(the `signin_method` check widened, three rows OFF). Self-checks ran on
+production and rolled their probes back. The fixture suite's FIRST run
+against production failed two files, neither about these migrations:
+`65_signin_methods` asserted `count(*) = 2` on a table that now holds five,
+and `40_purge` asserted `count(*) = 1` on the purge role — which is
+actor-independent and sees the whole database's expired calls: ONE real
+call (a failed take soft-deleted 2026-08-17) crossed its window at 00:04 UTC
+today, after the nightly `neurai-purge.timer` last ran (03:39 UTC 09-15,
+`callsPurged: 0`) and before its next sweep (03:37 UTC today). Nothing is
+wrong with the purge; the tests were counting. Both assert the property now,
+and the re-run reads **"the wall holds"** — 128 at 14 checks against the
+live door, 40 at 23, 65 at 10. Read afterwards at owner altitude (counts and
+switch names only): 3 orgs, all verified with `verified_at = created_at`;
+the trigger present; the trigger function, `platform_set_org_verified` and
+`platform_list_orgs` not executable by PUBLIC; `platform_list_orgs` carries
+`verified_at`; `signin_method` reads google/github on, apple/azure/sso off.
+
+Then §3 for core at 28af01e: archive 24 677 747 bytes, sha256 `eb75a866…`
+equal on both ends; markers on disk before restarting
+(`core/src/agent/verification.ts` present, `setOrganizationVerified` ×1 in
+platform.ts, `SIGNIN_METHODS` ×2 in vocabulary.ts, `assertOrgVerified` ×5 in
+server.ts); `pnpm install` had nothing to do; both entrypoints parse under
+strip-types; both units `active`, `/health` `{"ok":true}`, zero level≥40
+journal lines in the minute after; the probes at the server: `POST
+/v1/assistant/ask` **401**, `PATCH /v1/platform/organizations/x` **401**,
+`GET /v1/nonsense` **404**.
+
+Web on Vercel from the same push (`fra1`, live at 00:51 UTC: `GET
+/api/auth/sso` **405** where `/api/nonsense` 404s — the route is POST-only,
+and 405 is the not-404 that says it exists). From outside: `POST
+/api/auth/sso` with `{"email":"example.com"}` → 400 `code: disabled` (the
+switch is off — the sentence, never a provider page); with no usable field →
+400 `invalid`. The gate, signed out, in the built-in browser at 1280 (the
+first JS read came back at vw 0 — a hidden pane lays out at zero; re-read
+right after a screenshot): `<html dir="rtl">`, the split grid `dir="ltr"`
+(1084 wide, display grid, 2 children), the FORM on the right at 721–1113 and
+the demo section on the left at 98–629, buttons «ادامه با گوگل / اپل /
+مایکروسافت / ورود سازمانی (SSO)», «یا», an email input, «حساب دارید؟ با
+گذرواژه وارد شوید», zero `<video>` (no demo URL set — the scenes cycled
+between two screenshots), catalogue-only control 0. In the user's Chrome,
+signed in, 1280 with the assistant open: **meetings** — rows at 72 and 122
+and the folder strip THIRD at 173 wearing the tinted rail
+(`FILTER_TRACK`), «همه جلسات ۰», the dashed `+` labelled «موضوع جدید», the
+page's only combobox the top-bar search (the topic dropdown is gone); the
+org has no meeting folder, so a chip's ⋯ could not be read there — it was
+read on **tasks**, the SAME component: «دیتابیس صوتی ۰» carrying its ⋯
+(«گزینه‌ها») beside «پوشهٔ جدید» and «پروژهٔ تازه»; **projects** — the
+rail reads home / meetings / **projects (182) / tasks (235)** top to bottom,
+no integrations entry; the toolbar's tracks are the board's; «پروژهٔ جدید»
+absent on the kanban (the columns' «افزودن پروژه» rows are the door) and
+present on the list view as `.btn btn-primary` — at 1280 with the assistant
+open row one WRAPS (three tracks) and the end slot lands at y=166; through
+the 1920 iframe instrument (root 16.34) it sits in row one at y=80, 601–707,
+39px tall, at the row's end; **home** `/fa?view=integrations` — the sidebar
+«گفت‌وگوها» lists «عامل‌ها» at 133 and «اتصال‌ها» directly under it at 170
+(`aria-pressed` true), the pane 13 tiles / 6 «متصل است», the verification
+banner ABSENT with both controls («اتصال» on screen 1, «تأیید دسترسی
+دستیارها» catalogue-only 0); **profile** — «خروج از حساب» is a `btn btn-sm`
+pill with its glyph at 422–538 on the row-one line (top 75, 32px, = the
+menu's tabs), in its own end track at 419–542 flush with the column's end
+(the menu track sits at 806–1188), zero danger buttons; **console** — three
+«تأییدشده» chips, zero «در انتظار تأیید», three kebabs.
+
+**Operator steps outstanding:** (1) the Supabase Magic Link template
+(docs/ONBOARDING.md §5) — unchanged from 7h; (2) Apple, Azure and SSO exist
+as doors on the gate and as switches in Settings · Sign-in methods, all OFF
+until the provider is configured in Supabase Auth and the switch flipped —
+a press on an off door answers a sentence, never a broken redirect;
+(3) `NEXT_PUBLIC_DEMO_VIDEO_URL` in Vercel turns the gate's left half from
+the illustrated scenes into the demo video; (4) a workspace founded through
+the gate is born UNVERIFIED — its agents refuse (403 `org_unverified`, the
+banner on Home) until the platform root presses «تأیید دسترسی دستیارها» in
+the console; the three existing organisations were backfilled verified.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
