@@ -1,8 +1,9 @@
 "use client";
 
 import {
-  FilterChips, TAB_TRACK, Toolbar, filterChipClass, sectionTabClass,
+  TAB_TRACK, Toolbar, sectionTabClass, toggleClass,
 } from "./sectionTabs";
+import { TopicStrip } from "./TopicStrip";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -29,7 +30,7 @@ import { Avatar } from "@/components/Avatar";
 import { TONE_CHIP, TONE_DOT } from "./tasks/TaskDialogs";
 import {
   IconChevronRight, IconClock, IconFolder,
-  IconPeople3, IconPlus, IconUser,
+  IconPencil, IconPeople3, IconTrash, IconUser,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
 import { dayKeyOf, digits, formatDate, monthGridAt, personName, personPhoto } from "@/lib/format";
@@ -110,6 +111,10 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
   const [board, setBoard] = useState<Board | null>(null);
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
   const [scope, setScope] = useState<Scope>("all");
+  /* THE STRIP'S FILTER (2026-09-16): «همه پروژه‌ها» or one project's id —
+     the same «همه» + chips every strip on the product has, so a person who
+     has learned the board's row has learned this one */
+  const [projectFilter, setProjectFilter] = useState<string>("all");
   const [view, setView] = useState<View>("kanban");
   const [sort, setSort] = useState<Sort>("recent");
   const [dueToday, setDueToday] = useState(false);
@@ -207,6 +212,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
     if (!Array.isArray(rows)) return [];
     const today = dayKeyOf(new Date());
     const list = rows.filter((p) => {
+      if (projectFilter !== "all" && p.id !== projectFilter) return false;
       if (scope === "mine" && !(meId !== null && p.member_ids.includes(meId))) return false;
       if (!dueToday) return true;
       /* «مهلت امروز» on a project means UNFINISHED work due today. A done
@@ -229,7 +235,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       }
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [rows, scope, sort, dueToday, meId, locale, cardsOf]);
+  }, [rows, scope, projectFilter, sort, dueToday, meId, locale, cardsOf]);
 
   const chip = (active: boolean, label: string, onClick: () => void, count?: string) => (
     <button
@@ -256,33 +262,13 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
              with the views first, then the sorts where the board keeps its
              priorities, then whose projects and the one toggle in one track,
              the way the board keeps its two toggles together. ── */}
-      <Toolbar
-        end={
-          /* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
-             the add new project on top and add it like tasks in the column").
-             The way in is the dashed row inside each kanban column — the
-             board's own shape, and a project is made where it will sit. It is
-             still admin-only (0186), and still ABSENT rather than disabled for
-             everybody else: a greyed control is a promise the product has no
-             intention of keeping.
-
-             The LIST, CALENDAR and ARCHIVE views have no column to put it in,
-             so they carry the button — in R3's one coat (`.btn btn-primary`),
-             at the row's end, where every other page keeps its create. The
-             kanban does not. That is written down because it looks like an
-             inconsistency and is not one. */
-          isAdmin && view !== "kanban" ? (
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="btn btn-primary"
-            >
-              <IconPlus width={14} height={14} />
-              {t("newProject")}
-            </button>
-          ) : undefined
-        }
-      >
+      {/* NO CREATE BUTTON IN THIS ROW (2026-09-16): the strip below carries
+          the board's own dashed `+` on every view, and the kanban's columns
+          keep their «افزودن پروژه» rows — a third door here would be two
+          doors to one dialog on one screen. (2026-09-05 had taken it off the
+          kanban for the same reason and left it on the views that have no
+          column; the strip reaches all of them.) */}
+      <Toolbar>
         <div className={TAB_TRACK}>
           {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
           {chip(view === "list", tTasks("viewList"), () => setView("list"))}
@@ -294,45 +280,88 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           {chip(sort === "name", t("sortName"), () => setSort("name"))}
           {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
         </div>
-      </Toolbar>
-
-      {/* ── ROW TWO: whose projects, and the one toggle (user, 2026-09-16:
-             "the two sub menu top for tasks and projects must look the same,
-             fix it with same style"). This REVERSES the 2026-09-05 placement
-             in row one — written down as a reversal rather than quietly
-             moved: beside the task board, whose second row is its tinted
-             folder strip, a grey third track that wrapped under row one at
-             laptop widths read as a different design. Row two is the kit's
-             FilterChips (icon, label, count — R3's row-two chip), inside a
-             Toolbar row so the rail is as long as its chips and no longer.
-             «همه» keeps its count; the toggle rides the same rail, lifting
-             on its own. ── */}
-      <Toolbar>
-        <FilterChips<Scope>
-          label={t("scopeLabel")}
-          chips={[
-            { key: "mine", label: t("scopeMine"), icon: <IconUser width={12} height={12} /> },
-            {
-              key: "all",
-              label: t("scopeAll"),
-              icon: <IconFolder width={12} height={12} />,
-              count: digits(Array.isArray(rows) ? rows.length : 0, locale),
-            },
-          ]}
-          active={scope}
-          onSelect={setScope}
-        >
+        {/* ── THE TWO TOGGLES, IN ROW ONE (user, 2026-09-16: "my projects and
+               today due must go up in the first sub menu like in the tasks,
+               with the same first row style"): the board's own third track —
+               `toggleClass` with `aria-pressed`, the same pill lifting on its
+               own, IconUser and IconClock as on the board. «همه پروژه‌ها»
+               did not come with them: it is the strip's «همه» below, where
+               every strip keeps its count. ── */}
+        <div className={TAB_TRACK}>
+          <button
+            type="button"
+            aria-pressed={scope === "mine"}
+            onClick={() => setScope((s) => (s === "mine" ? "all" : "mine"))}
+            className={toggleClass(scope === "mine")}
+          >
+            <IconUser width={12} height={12} />
+            {t("scopeMine")}
+          </button>
           <button
             type="button"
             aria-pressed={dueToday}
             onClick={() => setDueToday((v) => !v)}
-            className={filterChipClass(dueToday)}
+            className={toggleClass(dueToday)}
           >
             <IconClock width={12} height={12} />
             {tTasks("dueTodayFilter")}
           </button>
-        </FilterChips>
+        </div>
       </Toolbar>
+
+      {/* ── ROW TWO: THE BOARD'S STRIP (user, 2026-09-16: "after all
+             projects in the second sub menu should be the plus like the
+             tasks for a new folder, with the same style and function; when
+             created, have the three-dot button to edit and delete in it").
+             The kit's TopicStrip, read here as the board and the meetings
+             page read it: «همه پروژه‌ها» with its count, a chip per project
+             carrying its open-work count and its ⋯ — «ویرایش» opens the
+             project's own panel, «حذف» the platform's one confirm dialog —
+             and the dashed `+`, which opens the WHOLE project dialog rather
+             than the inline box (a project is people and a tone as well as a
+             name; 2026-09-05's reasoning, kept). Admins only for the `+` and
+             the ⋯, absent rather than disabled (0186, 0191). A chip filters
+             the page to that one project, as every strip's chip filters. ── */}
+      <TopicStrip
+        allLabel={t("scopeAll")}
+        allCount={Array.isArray(rows) ? rows.length : 0}
+        active={projectFilter}
+        onSelect={setProjectFilter}
+        topics={(Array.isArray(rows) ? rows : []).map((p) => ({
+          id: p.id, name: p.name, count: cardsOf(p).filter((task) => !task.done).length,
+        }))}
+        glyph={(topic) => {
+          const p = Array.isArray(rows) ? rows.find((row) => row.id === topic.id) : undefined;
+          return p?.icon
+            ? <span className="text-sm leading-none" aria-hidden>{p.icon}</span>
+            : <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[p?.tone ?? "grey"] ?? "bg-accent"}`} aria-hidden />;
+        }}
+        labels={{
+          options: tTasks("topicOptions"), rename: t("edit"), remove: tCommon("delete"), add: t("newProject"),
+        }}
+        menuFor={(topic) => {
+          if (!isAdmin) return [];
+          const p = Array.isArray(rows) ? rows.find((row) => row.id === topic.id) : undefined;
+          if (!p) return [];
+          return [
+            {
+              key: "edit",
+              label: t("edit"),
+              icon: <IconPencil width={14} height={14} />,
+              onSelect: () => router.push({ pathname: "/projects", query: { project: p.id } } as never),
+            },
+            {
+              key: "delete",
+              label: tCommon("delete"),
+              icon: <IconTrash width={14} height={14} />,
+              danger: true,
+              onSelect: () => setCondemned(p),
+            },
+          ];
+        }}
+        onAdd={() => setCreating(true)}
+        canAdd={isAdmin}
+      />
 
       {/* ── the views ────────────────────────────────────────────────── */}
       {rows === null ? (

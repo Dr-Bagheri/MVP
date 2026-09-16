@@ -83,10 +83,17 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   one is longer in tasks, make it the same as the top length"): a bare flex
   track is block-level and spans the page column; inside the row it is as
   long as its chips, like every other rail.
-- Row two on the projects page is `FilterChips` in a `Toolbar` («پروژه‌های
-  من» / «همه پروژه‌ها» with its count, and the «مهلت امروز» toggle) — the
-  tinted rail, content-width, so the tasks and projects pages carry the same
-  two rows (2026-09-16, reversing the 2026-09-05 placement in row one).
+- The projects page is the board's two rows (2026-09-16, last): row one is
+  the views, the sorts, and a third grey track with «پروژه‌های من» and
+  «مهلت امروز» as `toggleClass` toggles — the board's own toggles, in the
+  board's own place; row two is the `TopicStrip` — «همه پروژه‌ها» with its
+  count, a chip per project carrying its OPEN work, an admin's ⋯ («ویرایش»
+  opens the project's panel at `/projects?project=`, «حذف» the one confirm
+  dialog), and the dashed `+` opening the whole project dialog (`onAdd`;
+  a project is people and a tone as well as a name). The row-one create
+  button is gone: the `+` reaches every view, and the kanban's columns keep
+  their «افزودن پروژه» rows. A chip's menu is the caller's (`menuFor`); an
+  empty menu draws no ⋯, so a member sees chips and nothing to press.
 - The meetings page is TWO rows (2026-09-16, later): row one carries the
   slice filter AND the sort — a second grey `TAB_TRACK` with the field as
   tabs, a divider and the direction key, in row one's own pill — with the

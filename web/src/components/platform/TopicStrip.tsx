@@ -50,8 +50,9 @@ export interface TopicStripLabels {
   remove: string;
   /** the `+`'s name and title */
   add: string;
-  placeholder: string;
-  cancel: string;
+  /** the inline box's words — absent when the `+` opens a dialog (`onAdd`) */
+  placeholder?: string;
+  cancel?: string;
 }
 
 export type TopicMenuItem = Parameters<typeof KebabMenu>[0]["items"][number];
@@ -84,11 +85,16 @@ export function TopicChip({ name, count, glyph, active, onToggle, items, options
         {name}
         <span className={FILTER_COUNT}>{digits(count, locale)}</span>
       </button>
-      <KebabMenu
-        label={optionsLabel}
-        triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100"
-        items={items}
-      />
+      {/* no ⋯ over an empty menu: a member on the projects page has nothing
+          to edit or delete, and a button that opens nothing is a door that
+          refuses */}
+      {items.length > 0 ? (
+        <KebabMenu
+          label={optionsLabel}
+          triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100"
+          items={items}
+        />
+      ) : null}
     </span>
   );
 }
@@ -121,6 +127,9 @@ export function TopicStrip({
   onArchive,
   onDone,
   onRefused,
+  onAdd,
+  menuFor,
+  canAdd = true,
   children,
   end,
 }: {
@@ -133,13 +142,28 @@ export function TopicStrip({
   labels: TopicStripLabels;
   /** the mark before a folder's name; the default is the board's green dot */
   glyph?: (topic: TopicStripItem) => ReactNode;
-  onCreate: (name: string) => Promise<unknown>;
-  onRename: (id: string, name: string) => Promise<unknown>;
+  onCreate?: (name: string) => Promise<unknown>;
+  onRename?: (id: string, name: string) => Promise<unknown>;
   /** ARCHIVED, never deleted — the things in it are re-pointed by the schema */
-  onArchive: (id: string) => Promise<unknown>;
+  onArchive?: (id: string) => Promise<unknown>;
   /** re-read after any write, success or refusal — the row must show the truth */
-  onDone: () => void;
-  onRefused: () => void;
+  onDone?: () => void;
+  onRefused?: () => void;
+  /**
+   * THE `+` OPENS SOMETHING ELSE (the projects page, 2026-09-16): a project
+   * is more than a name — people, a tone, a summary — so its `+` opens the
+   * whole dialog rather than the inline box. Given, the box is never drawn.
+   */
+  onAdd?: () => void;
+  /**
+   * A chip's own menu, in place of rename/archive (the projects page:
+   * «ویرایش», «حذف»). An EMPTY list draws no ⋯ at all — a member on that
+   * page may edit nothing, and a menu of nothing is a door that refuses.
+   */
+  menuFor?: (topic: TopicStripItem) => TopicMenuItem[];
+  /** whether the `+` is offered at all — absent rather than disabled for
+      somebody the wall refuses (0186: a project is an admin's act) */
+  canAdd?: boolean;
   /** appended after the `+`: the task board's projects section */
   children?: ReactNode;
   /** the row's OTHER END: the meetings page's view switch and search key
@@ -151,10 +175,28 @@ export function TopicStrip({
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
-  const settle = () => { setAdding(false); setRenaming(null); onDone(); };
-  const write = (p: Promise<unknown>) => {
-    void p.then(settle).catch(() => { onRefused(); settle(); });
+  const settle = () => { setAdding(false); setRenaming(null); onDone?.(); };
+  const write = (p: Promise<unknown> | undefined) => {
+    if (!p) { settle(); return; }
+    void p.then(settle).catch(() => { onRefused?.(); settle(); });
   };
+  /* the default menu: rename in the inline box, archive through the caller
+     — used by every strip that did not bring its own */
+  const defaultMenu = (topic: TopicStripItem): TopicMenuItem[] => [
+    {
+      key: "rename",
+      label: labels.rename,
+      icon: <IconPencil width={14} height={14} />,
+      onSelect: () => { setAdding(false); setRenaming({ id: topic.id, name: topic.name }); },
+    },
+    {
+      key: "remove",
+      label: labels.remove,
+      icon: <IconTrash width={14} height={14} />,
+      danger: true,
+      onSelect: () => write(onArchive?.(topic.id)),
+    },
+  ];
 
   return (
     /* THE ROW, THEN THE RAIL. A bare flex track is block-level and takes the
@@ -189,38 +231,25 @@ export function TopicStrip({
              somebody has to hunt for the way off */
           onToggle={() => onSelect(active === topic.id ? "all" : topic.id)}
           optionsLabel={labels.options}
-          items={[
-            {
-              key: "rename",
-              label: labels.rename,
-              icon: <IconPencil width={14} height={14} />,
-              onSelect: () => { setAdding(false); setRenaming({ id: topic.id, name: topic.name }); },
-            },
-            {
-              key: "remove",
-              label: labels.remove,
-              icon: <IconTrash width={14} height={14} />,
-              danger: true,
-              onSelect: () => write(onArchive(topic.id)),
-            },
-          ]}
+          items={menuFor ? menuFor(topic) : defaultMenu(topic)}
         />
       ))}
 
       {adding || renaming !== null ? (
         <TopicNameBox
           initial={renaming?.name ?? ""}
-          placeholder={labels.placeholder}
-          cancelLabel={labels.cancel}
+          placeholder={labels.placeholder ?? ""}
+          cancelLabel={labels.cancel ?? ""}
           onCancel={() => { setAdding(false); setRenaming(null); }}
           onSubmit={(name) => {
             const target = renaming;
-            write(target !== null ? onRename(target.id, name) : onCreate(name));
+            write(target !== null ? onRename?.(target.id, name) : onCreate?.(name));
           }}
         />
-      ) : (
-        <TopicAddButton label={labels.add} onClick={() => setAdding(true)} />
-      )}
+      ) : canAdd ? (
+        /* the `+`: the inline box by default, or whatever the caller opens */
+        <TopicAddButton label={labels.add} onClick={onAdd ?? (() => setAdding(true))} />
+      ) : null}
 
       {children}
     </div>

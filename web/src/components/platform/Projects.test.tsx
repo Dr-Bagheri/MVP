@@ -1,5 +1,14 @@
 import { personFixture } from "@/test/fixtures";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { TAB_TRACK } from "./sectionTabs";
+
+/* ONE NAME, TWO PLACES (2026-09-16): row two is the board's strip, so every
+   project's name is on screen twice — on its CHIP and on its CARD. A text
+   query for a name would meet both and throw. The chip is a toggle (it
+   carries `aria-pressed`, as every pill on the two rows does) and the card
+   never is, so text queries in this file are the CARDS and the chips are
+   reached by ROLE. `configure` here is per file — vitest isolates modules. */
+configure({ defaultIgnore: "script, style, [aria-pressed]" });
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgPersonRecord, ProjectRecord, TaskCardRecord, TaskColumnRecord } from "@/api/types";
@@ -228,7 +237,7 @@ describe("Projects", () => {
     /* the control: the page still rendered, so "no button" is not "no page".
        The second row's chip carries a count beside its label, so the name is
        matched loosely — an exact string here would break on the number. */
-    expect(screen.getByRole("tab", { name: /همه پروژه‌ها/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /همه پروژه‌ها/ })).toBeInTheDocument();
   });
 
   it("a project dragged to a column asks, then moves ONLY its open cards there", async () => {
@@ -284,7 +293,7 @@ describe("Projects", () => {
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
     expect(screen.getByText("پروژهٔ دیگری")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("tab", { name: "پروژه‌های من" }));
+    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
     await waitFor(() => expect(screen.queryByText("پروژهٔ دیگری")).toBeNull());
     expect(screen.getByText("پروژهٔ من")).toBeInTheDocument();
   });
@@ -304,7 +313,7 @@ describe("Projects", () => {
     render(<Projects isAdmin meId={null} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("tab", { name: "پروژه‌های من" }));
+    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
     /* THE SUBJECT: neither project renders. A filter that treated null as
        "no filter" would show both, which is the defect this test is for. */
     await waitFor(() => expect(screen.queryByText("پروژهٔ من")).toBeNull());
@@ -589,22 +598,36 @@ describe("the way in moved into the column (2026-09-05)", () => {
     /* one per column — a project is made where it will sit */
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: /افزودن پروژه/ })).toHaveLength(2));
-    expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
+    /* "no button on top" is about ROW ONE: since 2026-09-16 the strip below
+       carries the board's dashed `+` under the same name, so the absence is
+       asserted as "no primary-coated create in the toolbar" — the `+` that
+       IS there is the strip's square, and it says so by its dash */
+    const plus = screen.getByRole("button", { name: "پروژهٔ جدید" });
+    expect(plus.className).toContain("border-dashed");
+    expect(plus.className).not.toContain("btn-primary");
+    expect(document.querySelectorAll("button.btn-primary")).toHaveLength(0);
   });
 
-  it("keeps the top button on the views that HAVE no column", async () => {
+  it("offers the strip's `+` on the views that HAVE no column, in place of the old top button", async () => {
     /* the control, and the reason the rule is written down: list, calendar
-       and archive have nowhere to put an in-column row, so they keep the
-       button. A version that removed it everywhere leaves an admin unable to
-       create a project from three of the four views. */
+       and archive have nowhere to put an in-column row — 2026-09-05 kept a
+       top button there for it; 2026-09-16 replaced it with the strip's own
+       `+`, which reaches every view. A version that removed the button and
+       forgot the strip leaves an admin unable to create a project from three
+       of the four views. */
     COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
     render(<Projects isAdmin meId="u-1" />);
     await screen.findByText("پروژهٔ الف");
 
     await userEvent.click(screen.getByRole("button", { name: "لیست" }));
-    expect(await screen.findByRole("button", { name: /پروژهٔ جدید/ })).toBeInTheDocument();
+    const plus = await screen.findByRole("button", { name: "پروژهٔ جدید" });
+    expect(plus.className).toContain("border-dashed");
     expect(screen.queryByRole("button", { name: /افزودن پروژه/ })).toBeNull();
+    expect(document.querySelectorAll("button.btn-primary")).toHaveLength(0);
+    /* and it opens the WHOLE project dialog, not the inline name box */
+    await userEvent.click(plus);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
   it("shows a MEMBER neither control", async () => {
@@ -724,5 +747,121 @@ describe("a project card carries its own delete (2026-09-15)", () => {
       .closest("[role='alertdialog'], [role='dialog']") as HTMLElement;
     await userEvent.click(within(again).getByRole("button", { name: "حذف" }));
     await waitFor(() => expect(deleted).toEqual(["p-a"]));
+  });
+});
+
+/**
+ * THE PAGE IS THE BOARD'S TWO ROWS (user, 2026-09-16: "my projects and today
+ * due must go up in the first sub menu like in the tasks with the same first
+ * row style; and after all projects in the second sub menu should be the
+ * plus like the tasks for a new folder, with the same style and function,
+ * and when created have the three-dot button to edit and delete in it").
+ *
+ * Row one: the two toggles in the board's own grey rail, beside the views.
+ * Row two: the kit's TopicStrip — «همه پروژه‌ها» with its count, a chip per
+ * project carrying its OPEN work, a ⋯ for an admin (edit → the panel, delete
+ * → the one confirm dialog), and the dashed `+` opening the project dialog.
+ * Each case fails against the shape that shipped the morning before, where
+ * the two toggles sat on row two's tinted rail and there was no strip.
+ */
+describe("the projects page is the board's two rows (2026-09-16)", () => {
+  it("keeps «پروژه‌های من» and «مهلت امروز» in ROW ONE's grey rail, in the row the views are in", async () => {
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    const mine = screen.getByRole("button", { name: "پروژه‌های من" });
+    const today = screen.getByRole("button", { name: "مهلت امروز" });
+    const kanban = screen.getByRole("button", { name: "کانبان" });
+    /* the SAME rail class as the views' — row one's grey TAB_TRACK, not row
+       two's tinted one — and the SAME row: the Toolbar the views sit in.
+       Asserted as identity with the views' own ancestors rather than as a
+       class name on its own, because the tinted rail carries the same
+       geometry and differs by one token. */
+    expect(mine.parentElement!.className).toBe(TAB_TRACK);
+    expect(today.parentElement).toBe(mine.parentElement);
+    expect(kanban.parentElement!.className).toBe(TAB_TRACK);
+    expect(mine.parentElement!.parentElement).toBe(kanban.parentElement!.parentElement);
+    /* toggles, not tabs: on with a press, off with the next */
+    expect(mine).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(mine);
+    expect(mine).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(mine);
+    expect(mine).toHaveAttribute("aria-pressed", "false");
+    expect(today).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("draws ROW TWO as the strip: «همه» with the count, a chip per project with its OPEN work, a press filtering to it", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [
+      project({ id: "p-a", name: "پروژهٔ الف", topic_id: "t-a" }),
+      project({ id: "p-b", name: "پروژهٔ ب", topic_id: "t-b" }),
+    ];
+    TASKS = [
+      card({ id: "k-1", topic_id: "t-a", done: false }),
+      card({ id: "k-2", topic_id: "t-a", done: false }),
+      /* a DONE card under the same project — the count is the open work, so
+         a version counting every card would say three here */
+      card({ id: "k-3", topic_id: "t-a", done: true }),
+      card({ id: "k-4", topic_id: "t-b", done: false }),
+    ];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    const all = screen.getByRole("button", { name: /^همه پروژه‌ها/ });
+    const chipA = screen.getByRole("button", { name: /^پروژهٔ الف/ });
+    const chipB = screen.getByRole("button", { name: /^پروژهٔ ب/ });
+    expect(within(all).getByText("۲")).toBeInTheDocument();
+    expect(within(chipA).getByText("۲")).toBeInTheDocument();
+    expect(within(chipB).getByText("۱")).toBeInTheDocument();
+    expect(all).toHaveAttribute("aria-pressed", "true");
+
+    /* a press keeps that project's card and drops the other's; the chip
+       shows it is lit; a second press lifts the filter again */
+    await userEvent.click(chipA);
+    await waitFor(() => expect(screen.queryByText("پروژهٔ ب")).toBeNull());
+    expect(screen.getByText("پروژهٔ الف")).toBeInTheDocument();
+    expect(chipA).toHaveAttribute("aria-pressed", "true");
+    expect(all).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(chipA);
+    await waitFor(() => expect(screen.getByText("پروژهٔ ب")).toBeInTheDocument());
+    expect(all).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("a chip's ⋯ offers an admin «ویرایش» — the project's own panel — and «حذف» through the one confirm dialog", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    /* the strip's ⋯ — the chip's own, named as every strip names it */
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌ها" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "ویرایش" }));
+    /* R18: edit is the PANEL over the list, at the list's own address with
+       the project in the query — not a page, not a second dialog */
+    expect(pushSpy).toHaveBeenCalledWith({ pathname: "/projects", query: { project: "p-a" } });
+
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌ها" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "حذف" }));
+    const dialog = (await screen.findByText("حذف پروژه؟"))
+      .closest("[role='alertdialog'], [role='dialog']") as HTMLElement;
+    /* nothing deleted until the yes */
+    expect(deleted).toEqual([]);
+    await userEvent.click(within(dialog).getByRole("button", { name: "حذف" }));
+    await waitFor(() => expect(deleted).toEqual(["p-a"]));
+  });
+
+  it("shows a MEMBER the chips and neither the ⋯ nor the `+`", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin={false} meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    /* the DISCRIMINATING half: the chip is there — a strip that renders
+       nothing for a member would pass the two absences below */
+    expect(screen.getByRole("button", { name: /^پروژهٔ الف/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "گزینه‌ها" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "پروژهٔ جدید" })).toBeNull();
   });
 });
