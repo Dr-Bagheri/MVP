@@ -57,7 +57,9 @@ describe("the sessions table", () => {
     expect(screen.getByText("همین دستگاه")).toBeTruthy();
 
     /* the records-table gesture: the OTHER row's ⋯ */
-    await openRowMenu("Firefox · Linux");
+    /* the label is the catalogue's word for the parse (2026-09-16), so the
+       Persian page names the browser in Persian */
+    await openRowMenu("فایرفاکس · لینوکس");
     fireEvent.click(screen.getByText("پایان این نشست"));
     /* nothing ends before the popup's own consent */
     expect(ended).not.toHaveBeenCalled();
@@ -71,7 +73,7 @@ describe("the sessions table", () => {
        so the current row answers too, with the honest act for the session you
        are riding: sign-out, through the avatar menu's own flow */
     await act(async () => { render(<SecuritySettings />); });
-    await openRowMenu("Edge · Windows");
+    await openRowMenu("اج · ویندوز");
     expect(screen.queryByText("پایان این نشست")).toBeNull();
     fireEvent.click(screen.getByText("خروج از حساب در این دستگاه"));
     await act(async () => {});

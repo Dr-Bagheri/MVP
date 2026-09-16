@@ -400,6 +400,20 @@ export function formatTime(iso: string, locale: string): string {
   return digits(`${pad(hh)}:${pad(mm)}`, locale);
 }
 
+/**
+ * The clock WITH its seconds — Settings · General's live reading (user,
+ * 2026-09-16: "put the exact date and time"). Hours and minutes come off the
+ * platform's zone exactly as `formatTime`'s do; the seconds come off the
+ * instant, because every offset in use is a whole number of minutes and a
+ * zone therefore never moves the seconds hand.
+ */
+export function formatTimeSeconds(iso: string, locale: string): string {
+  const date = new Date(iso);
+  const { hh, mm } = partsIn(date, resolvedTimezone());
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return digits(`${pad(hh)}:${pad(mm)}:${pad(date.getUTCSeconds())}`, locale);
+}
+
 /** Clock for players and timestamps: m:ss / h:mm:ss. */
 export function formatClock(totalSeconds: number, locale = "fa"): string {
   const s = Math.max(0, Math.floor(totalSeconds));

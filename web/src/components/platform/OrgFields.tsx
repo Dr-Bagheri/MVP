@@ -120,9 +120,12 @@ export function OrgFields() {
      form's empty box is a string; the patch turns "" into an explicit
      null, which is what CLEARS the column (absent would leave it). */
   const [publicEmail, setPublicEmail] = useState("");
-  const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
-  const [location, setLocation] = useState("");
+  /* `description` and `location` LEFT THIS FORM (user, 2026-09-16: "remove
+     the explanation and location"). The columns stay on the wire and in the
+     row (db/0102); nothing here reads or writes them, so a value an admin set
+     before today is left exactly as it was — the diff-based patch cannot
+     send a field it does not hold. */
   /**
    * db/0103 — the logo is a FILE now, not an address, so it is not part of
    * the diff-based patch at all: bytes go up the moment one is chosen and
@@ -146,9 +149,7 @@ export function OrgFields() {
         setName(row.name);
         setLocale(row.locale);
         setPublicEmail(row.public_email ?? "");
-        setDescription(row.description ?? "");
         setWebsiteUrl(row.website_url ?? "");
-        setLocation(row.location ?? "");
         setHasLogo(row.has_logo === true);
         setOrgAnswer("ok");
       })
@@ -175,9 +176,7 @@ export function OrgFields() {
        column's check refuses a blank so they cannot both exist */
     const face = [
       ["public_email", publicEmail, org.public_email],
-      ["description", description, org.description],
       ["website_url", websiteUrl, org.website_url],
-      ["location", location, org.location],
     ] as const;
     for (const [key, value, saved] of face) {
       const trimmed = value.trim();
@@ -205,9 +204,7 @@ export function OrgFields() {
       setName(updated.name);
       setLocale(updated.locale);
       setPublicEmail(updated.public_email ?? "");
-      setDescription(updated.description ?? "");
       setWebsiteUrl(updated.website_url ?? "");
-      setLocation(updated.location ?? "");
       setHasLogo(updated.has_logo === true);
       notify(t("orgSaved"));
     } catch {
@@ -293,7 +290,9 @@ export function OrgFields() {
     const field = <Skeleton className="h-10 w-full" />;
     return (
       <FormPanel>
-        <FormRow label={tAdmin("orgName")}>{field}</FormRow>
+        {/* THE ORDER IS THE USER'S (2026-09-16): the logo first, then the
+            name, the email, the website, the default language — the frame
+            reserves the rows in the order the form will draw them. */}
         <FormRow label={t("orgLogo")}>
           {/* the logo row is not a field: a 48px square and a button beside
               it, so a 40px bar here would reserve the wrong space and move
@@ -309,10 +308,9 @@ export function OrgFields() {
             <span className="text-caption leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
           </span>
         </FormRow>
+        <FormRow label={tAdmin("orgName")}>{field}</FormRow>
         <FormRow label={t("orgEmail")}>{field}</FormRow>
-        <FormRow label={t("orgDescription")}>{field}</FormRow>
         <FormRow label={t("orgWebsite")}>{field}</FormRow>
-        <FormRow label={t("orgLocation")}>{field}</FormRow>
         {/* the locale picker is `input w-auto` — a bar the field's full width
             would reserve a control twice the size of the one arriving */}
         <FormRow label={t("orgLocale")}><Skeleton className="h-10 w-40" /></FormRow>
@@ -356,16 +354,10 @@ export function OrgFields() {
   return (
     <>
     <FormPanel>
-      <FormRow label={tAdmin("orgName")} htmlFor="org-name">
-        <input
-          id="org-name"
-          className="input"
-          value={name}
-          disabled={busy}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </FormRow>
-
+      {/* THE ORDER IS THE USER'S (2026-09-16: "put the logo first row, then
+          the org name, then email, then website, remove the explanation and
+          location"): the organisation's face before its name, and «توضیح»
+          and «مکان» gone from the form. */}
       {/* db/0103 — an uploaded FILE. It was a link until this deployment
           grew an image path; the address input is gone rather than kept
           beside the picker, because two ways to set one logo is two states
@@ -453,6 +445,16 @@ export function OrgFields() {
         </span>
       </FormRow>
 
+      <FormRow label={tAdmin("orgName")} htmlFor="org-name">
+        <input
+          id="org-name"
+          className="input"
+          value={name}
+          disabled={busy}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </FormRow>
+
       <FormRow label={t("orgEmail")} htmlFor="org-email">
         <input
           id="org-email"
@@ -465,16 +467,6 @@ export function OrgFields() {
         />
       </FormRow>
 
-      <FormRow label={t("orgDescription")} htmlFor="org-description">
-        <input
-          id="org-description"
-          className="input"
-          value={description}
-          disabled={busy}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </FormRow>
-
       <FormRow label={t("orgWebsite")} htmlFor="org-website">
         <input
           id="org-website"
@@ -484,16 +476,6 @@ export function OrgFields() {
           value={websiteUrl}
           disabled={busy}
           onChange={(event) => setWebsiteUrl(event.target.value)}
-        />
-      </FormRow>
-
-      <FormRow label={t("orgLocation")} htmlFor="org-location">
-        <input
-          id="org-location"
-          className="input"
-          value={location}
-          disabled={busy}
-          onChange={(event) => setLocation(event.target.value)}
         />
       </FormRow>
 

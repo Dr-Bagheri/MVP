@@ -5,7 +5,7 @@ import { useLocale } from "next-intl";
 import { KebabMenu } from "@/components/rowActions";
 import { IconFolder, IconPencil, IconPlus, IconTrash } from "@/components/icons";
 import { digits } from "@/lib/format";
-import { FILTER_COUNT, FILTER_TRACK, filterChipClass } from "./sectionTabs";
+import { FILTER_COUNT, FILTER_TRACK, TOOLBAR_ROW, filterChipClass } from "./sectionTabs";
 import { TopicNameBox } from "./TopicNameBox";
 
 /**
@@ -152,6 +152,14 @@ export function TopicStrip({
   };
 
   return (
+    /* THE ROW, THEN THE RAIL. A bare flex track is block-level and takes the
+       page column's whole width — the tinted strip spanned the screen while
+       row one's rails stopped at their last pill (user, 2026-09-16: "the
+       second one is longer in tasks, make it the same as the top length").
+       Inside the kit's own row — `TOOLBAR_ROW`, the flex-wrap row every
+       Toolbar draws — the rail is as long as what is in it, like every other
+       rail on the page. */
+    <div className={TOOLBAR_ROW}>
     <div className={FILTER_TRACK}>
       <button
         type="button"
@@ -210,6 +218,7 @@ export function TopicStrip({
       )}
 
       {children}
+    </div>
     </div>
   );
 }

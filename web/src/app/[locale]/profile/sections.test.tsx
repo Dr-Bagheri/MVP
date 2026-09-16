@@ -100,6 +100,12 @@ describe("each section renders its own content, and only its own", () => {
     await open();
     expect(screen.getByDisplayValue("سارا"), "the identity form is missing").toBeTruthy();
     expect(screen.getByRole("button", { name: "خروج از حساب" })).toBeTruthy();
+    /* THE STAT BAR IS GONE (user, 2026-09-16: "remove this bar from
+       profile") — the avatar-name-role tile with its two counts stood above
+       the form as a `<dl>`; asserted as an absence of the STRUCTURE, since
+       its words left the catalogue with it and a text query could never
+       find them again in any version */
+    expect(document.querySelector("dl"), "the profile's stat bar is back").toBeNull();
     /* the neighbours must be ABSENT, not merely further down: a version that
        renders all four panels and changes only the heading passes every
        positive assertion in this file */

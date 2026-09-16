@@ -228,7 +228,7 @@ describe("Projects", () => {
     /* the control: the page still rendered, so "no button" is not "no page".
        The second row's chip carries a count beside its label, so the name is
        matched loosely — an exact string here would break on the number. */
-    expect(screen.getByRole("button", { name: /همه پروژه‌ها/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /همه پروژه‌ها/ })).toBeInTheDocument();
   });
 
   it("a project dragged to a column asks, then moves ONLY its open cards there", async () => {
@@ -284,7 +284,7 @@ describe("Projects", () => {
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
     expect(screen.getByText("پروژهٔ دیگری")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    await userEvent.click(screen.getByRole("tab", { name: "پروژه‌های من" }));
     await waitFor(() => expect(screen.queryByText("پروژهٔ دیگری")).toBeNull());
     expect(screen.getByText("پروژهٔ من")).toBeInTheDocument();
   });
@@ -304,7 +304,7 @@ describe("Projects", () => {
     render(<Projects isAdmin meId={null} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    await userEvent.click(screen.getByRole("tab", { name: "پروژه‌های من" }));
     /* THE SUBJECT: neither project renders. A filter that treated null as
        "no filter" would show both, which is the defect this test is for. */
     await waitFor(() => expect(screen.queryByText("پروژهٔ من")).toBeNull());

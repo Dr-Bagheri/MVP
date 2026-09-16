@@ -7,7 +7,6 @@ import { Switch } from "@/components/Switch";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
-import { Avatar } from "@/components/Avatar";
 import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
 import { TelegramLink } from "@/components/platform/TelegramLink";
@@ -16,7 +15,7 @@ import { TwoPane, type PaneGroup } from "@/components/platform/TwoPane";
 import { TAB_TRACK, sectionTabClass } from "@/components/platform/sectionTabs";
 import { IconLogout } from "@/components/icons";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
-import { digits, modelLabel, personName } from "@/lib/format";
+import { modelLabel } from "@/lib/format";
 import { signOutThisDevice } from "@/lib/signOut";
 import { notify, notifyError } from "@/lib/notify";
 import { storeTheme, type Theme } from "@/lib/theme";
@@ -161,17 +160,6 @@ export default function ProfilePage({
   const [username, setUsername] = useState("");
   /** Profile context (0080) — drafts, same clear-vs-omit rules as the names. */
   const [jobTitle, setJobTitle] = useState("");
-  /**
-   * The header's two counts, derived from reads this page can already make.
-   *
-   * `undefined` until both answer — the tiles render «—» there, because a
-   * zero shown while the read is still out is a claim about the person that
-   * happens to be wrong for a second. A failed read leaves it undefined too:
-   * "we could not look" and "there are none" must not be the same number.
-   */
-  const [stats, setStats] = useState<{ meetings: number; tasksDone: number } | undefined>(undefined);
-
-
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [saving, setSaving] = useState(false);
   /* FIELD ERRORS ONLY, from 2026-09-08. A refusal that names an input
@@ -188,24 +176,6 @@ export default function ProfilePage({
     setUsername(user.username ?? "");
     setJobTitle(user.job_title ?? "");
   }
-
-  useEffect(() => {
-    let alive = true;
-    void Promise.all([api.meetings(), api.taskBoard()])
-      .then(([meetings, board]) => {
-        if (!alive) return;
-        /* `done` is the task's OWN flag, not "whichever column is last":
-           a board can be renamed and reordered, and a count that depended on
-           a column's position would change without anyone finishing
-           anything. */
-        setStats({
-          meetings: meetings.length,
-          tasksDone: board.tasks.filter((task) => task.done).length,
-        });
-      })
-      .catch(() => undefined);
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
     // `null` is "no identity" (401), not "an empty profile" — adopting it
@@ -327,34 +297,6 @@ export default function ProfilePage({
   if (!me)
     return (
       <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small" actions={signOut}>
-          <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
-            <div className="flex min-w-0 items-center gap-3">
-              {/* 2026-09-03: h-12, because the header's mark is `<Avatar
-                  size="lg">` (48) now. A skeleton that reserves the OLD box
-                  moves the layout on arrival by exactly the amount it exists
-                  to prevent — and it moves it silently, since a 56px grey
-                  circle and a 48px one look equally plausible while loading. */}
-              <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
-              <div className="min-w-0 space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-28" />
-              </div>
-            </div>
-            <dl className="flex shrink-0 items-center gap-6">
-              {(["statMeetings", "statTasksDone"] as const).map((key) => (
-                <div key={key} className="text-center">
-                  {/* the LABEL is not a value — it is the same word before and
-                      after the read, so it renders now and only the figure
-                      above it waits. `dd`, not a bare span: the loaded tile is
-                      a dd/dt pair and a dt with no dd is a different list. */}
-                  <dd>
-                    <Skeleton className="mx-auto h-6 w-8" />
-                  </dd>
-                  <dt className="text-caption text-fg-muted">{t(key)}</dt>
-                </div>
-              ))}
-            </dl>
-          </section>
 
           <Section>
             <FormPanel>
@@ -393,65 +335,6 @@ export default function ProfilePage({
       {active === "identity" ? (
         <>
 
-        {/* THE PERSON, AND WHAT THEY HAVE DONE (user directive, after the
-            reference's own profile header): avatar, name, role, and the
-            three counts. The counts come from the SERVER's own summary —
-            deriving them here would be a second arithmetic that disagrees
-            with the dashboard's on an ordinary Tuesday — and each renders
-            «—» while it is still unknown, never a zero, because "we have
-            not looked yet" and "there are none" are different facts. */}
-        <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
-          <div className="flex min-w-0 items-center gap-3">
-            {/* THE PHOTO, when there is one (user directive: "the profile
-                avatar or image should set in the place of it, why its
-                empty"). The initial is the FALLBACK, not the design — a
-                header showing a letter under a card where the person just
-                uploaded their face reads as the upload not having worked.
-
-                2026-09-03: the platform's avatar, not a fifth hand-drawn one.
-                `lg` is the token for the page's SUBJECT, and this page had two
-                marks for one person — 56px here, 64px in the editor below —
-                neither of which was a size anything named. They are both `lg`
-                now; converting only one would have widened the gap from 8px to
-                16, which is the user's complaint made worse rather than the
-                class string made tidier. */}
-            {/* no `shrink-0` here: the component already carries it, and a
-                second copy is the restated-size defect one utility down */}
-            <Avatar name={personName(me, locale)} src={me.avatar_url} size="lg" />
-            <span className="min-w-0">
-              <span className="block truncate text-lg font-bold text-fg">{personName(me, locale)}</span>
-              {/* audit finding, 2026-09-02: `profile.role_owner|admin|member`
-                  existed in NEITHER locale, so anyone without a job title read
-                  the literal string «profile.role_member» under their own name
-                  — the dashboard.widget.ask shape exactly. keys.test skips
-                  computed keys, and locale PARITY cannot see a key missing
-                  from both, so nothing was ever going to go red. Keys added to
-                  fa.json and en.json in the wording tasks.role_* already uses;
-                  verified on the rendered page in both directions. */}
-              <span className="block truncate text-xs text-fg-muted">
-                {me.job_title ? me.job_title : t(`role_${me.role ?? "member"}`)}
-                {me.org_name ? ` · ${me.org_name}` : ""}
-              </span>
-            </span>
-          </div>
-          {/* TWO counts, not three. The reference shows a decisions total as
-              well and there is no read for one per person — a tile that can
-              only ever show a dash is a promise, not a metric, so it is
-              absent rather than permanently empty. */}
-          <dl className="flex shrink-0 items-center gap-6">
-            {([
-              ["statMeetings", stats?.meetings],
-              ["statTasksDone", stats?.tasksDone],
-            ] as const).map(([key, value]) => (
-              <div key={key} className="text-center">
-                <dd className="badge-num text-xl font-bold text-fg">
-                  {value === undefined ? "—" : digits(value, locale)}
-                </dd>
-                <dt className="text-caption text-fg-muted">{t(key)}</dt>
-              </div>
-            ))}
-          </dl>
-        </section>
 
         <Section>
           <FormPanel>

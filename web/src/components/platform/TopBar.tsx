@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useLocale } from "next-intl";
-import { Link, usePathname, useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import type { User } from "@/api/types";
 import { IconMoon, IconSun } from "@/components/icons";
@@ -16,14 +15,15 @@ import { registerPageMenuAnchor } from "./pageMenuAnchor";
 import { registerPresenceAnchor } from "./presenceAnchor";
 
 /**
- * The platform top bar (M22): en/fa switcher · global search · avatar.
+ * The platform top bar (M22): the trail · global search · bell, chat, theme.
  *
  * Search moved here from the side menu by user directive — it is global, not a
- * destination among destinations.
+ * destination among destinations. The en/fa switcher that opened this comment
+ * for a month left on 2026-09-16 for Settings · General (a set-once-a-year
+ * control is a preference, not chrome).
  *
- * At 375 three controls plus breathing room do not fit, so the locale switcher
- * folds into the avatar menu (it is a set-once-a-year control) and search
- * collapses to its icon. Both are visible from `md` up.
+ * At 375 three controls plus breathing room do not fit, so search collapses
+ * to its icon; the chat and theme buttons are visible from `md` up.
  */
 /* `isPlatformRoot` stays in the signature and is unused HERE: the platform
    console's own guard reads it, and every caller passes it. Dropping the prop
@@ -37,11 +37,8 @@ export function TopBar({
   me: User | null | undefined;
   isPlatformRoot?: boolean;
 }) {
-  const locale = useLocale();
   const tPlatform = useTranslations("platform");
   const theme = useTheme();
-  const router = useRouter();
-  const pathname = usePathname();
   const anchorCleanupRef = useRef<() => void>(() => undefined);
   const setPresenceAnchorRef = useCallback((node: HTMLDivElement | null) => {
     anchorCleanupRef.current();
@@ -54,12 +51,12 @@ export function TopBar({
     pageMenuCleanupRef.current = node ? registerPageMenuAnchor(node) : () => undefined;
   }, []);
   useEffect(() => () => pageMenuCleanupRef.current(), []);
-  /*
-   * Switching locale re-renders the SAME route under the other prefix, so the
-   * user stays where they were. Sending them home on a language change would
-   * lose their place for a preference toggle.
-   */
-  const switchTo = (next: "fa" | "en") => router.replace(pathname, { locale: next });
+  /* THE LOCALE PAIR LEFT THIS BAR (user, 2026-09-16: "remove the fa, en
+     version from the top menu and put it in settings general page"). The
+     language is a preference now, chosen once in Settings · General beside
+     the theme and the calendar — GeneralSettings.tsx keeps the one rule the
+     pair had (the same route under the other prefix, so nobody loses their
+     place). */
 
   return (
     /* audit finding, 2026-09-02: the bar was `h-14` (56px) while
@@ -334,19 +331,22 @@ export function TopBar({
           */}
           {/*
             THE END CLUSTER'S ORDER IS THE USER'S (2026-09-06): "the order is
-            from the end: en - fa | theme mode - chat - notification".
+            from the end: en - fa | theme mode - chat - notification" — and
+            since 2026-09-16 the pair and its divider are gone (the language
+            lives in Settings · General), so the cluster reads bell, chat,
+            theme.
 
             Read from the bar's EDGE inward, so DOM order — which is
             start→end in both directions — is the reverse: the bell nearest
-            the centre, then chat, then the theme, the divider, and the
-            locale pair at the very edge. In Persian the whole cluster
-            mirrors with the document and the reading still starts at the
-            edge, which is why the order is written logically rather than as
-            left and right.
+            the centre, then chat, then the theme at the very edge. In Persian
+            the whole cluster mirrors with the document and the reading still
+            starts at the edge, which is why the order is written logically
+            rather than as left and right.
 
-            One SIZE too, and it is the locale pair's: `.btn-icon-sm` is the
-            compact square this bar needed and the theme did not have — the
-            three icon buttons stood at 28 beside two 34px words.
+            One SIZE too: `.btn-icon-sm` is the compact square this bar
+            needed and the theme did not have — the three icon buttons stood
+            at 28 beside two 34px words when the pair was here, and the
+            height stays now that it is not.
           */}
           {me === null ? null : <NotificationBell />}
 
@@ -371,41 +371,9 @@ export function TopBar({
             {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
           </button>
 
-          {/* the divider the user asked for — between the theme and the
-              things that are not it. It hides with the controls it separates:
-              below md the locale pair folds away and a rule with nothing on
-              one side of it is a mark that means nothing. */}
-          <span className="mx-0.5 hidden h-5 w-px bg-fg/10 md:block" aria-hidden />
-
-          {/* audit finding, 2026-09-02: the two segments were a 36px,
-              12px-cornered group written by hand — invisible to the control
-              guard, whose regex reads only quoted class strings and these are
-              a template literal. The theme's segmented shape is `.btn-sm`,
-              and the meetings toolbar directly under this bar renders its own
-              segments exactly this way (Meetings.tsx:194) — same pair, same
-              active face, so the bar and the page below it stop disagreeing
-              about what a segmented control looks like. */}
-          <div className="hidden items-center gap-1 md:flex">
-            {(["fa", "en"] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => switchTo(l)}
-                aria-current={l === locale ? "true" : undefined}
-                /* the segment marks itself by FILL, not by an outline —
-                   the same move the rest of the platform made on 2026-09-08.
-                   A bordered resting segment is two hairlines in a row of
-                   controls that otherwise has none. */
-                className={`btn btn-sm font-medium ${
-                  l === locale
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "text-fg-muted hover:bg-surface-2/60 hover:text-fg"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
+          {/* the divider went WITH the pair (2026-09-16): it stood between
+              the theme and the things that were not it, and a rule with
+              nothing on one side of it is a mark that means nothing. */}
 
         </div>
       </div>

@@ -91,19 +91,25 @@ export function SecuritySettings() {
    * "Edge" alone cannot tell a person which of their machines a row is.
    * Order matters twice: Edge's UA contains "Chrome", Chrome's contains
    * "Safari"; the specific brand is asked first each time.
+   *
+   * The words come from the CATALOGUE (user, 2026-09-16: "check if there are
+   * other english text in fa version, translate them as well"): the parse
+   * yields a closed set of nine names, and a closed set rendered raw was the
+   * one Latin string left on the Persian security page — «اج · ویندوز» is
+   * what the screen says now, the way the sign-in page already says «گوگل».
    */
   const agentLabel = (agent: string | null): string => {
     if (!agent) return t("deviceUnknown");
-    const browser = /edg/i.test(agent) ? "Edge"
-      : /firefox/i.test(agent) ? "Firefox"
-      : /chrome|crios/i.test(agent) ? "Chrome"
-      : /safari/i.test(agent) ? "Safari"
+    const browser = /edg/i.test(agent) ? t("ua_edge")
+      : /firefox/i.test(agent) ? t("ua_firefox")
+      : /chrome|crios/i.test(agent) ? t("ua_chrome")
+      : /safari/i.test(agent) ? t("ua_safari")
       : t("deviceBrowser");
-    const platform = /windows/i.test(agent) ? "Windows"
-      : /iphone|ipad|ios/i.test(agent) ? "iOS"
-      : /android/i.test(agent) ? "Android"
-      : /mac os|macintosh/i.test(agent) ? "macOS"
-      : /linux/i.test(agent) ? "Linux"
+    const platform = /windows/i.test(agent) ? t("ua_windows")
+      : /iphone|ipad|ios/i.test(agent) ? t("ua_ios")
+      : /android/i.test(agent) ? t("ua_android")
+      : /mac os|macintosh/i.test(agent) ? t("ua_macos")
+      : /linux/i.test(agent) ? t("ua_linux")
       : null;
     return platform ? `${browser} · ${platform}` : browser;
   };

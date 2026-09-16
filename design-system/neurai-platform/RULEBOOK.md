@@ -79,6 +79,14 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   (2026-09-16, "unify"); the board hangs its projects after the `+` through
   the same `TopicChip`. `topicStrip.guard` refuses a second drawing of a
   folder chip. The tasks page is the default for how a third row looks.
+  The strip draws its rail INSIDE a `TOOLBAR_ROW` (2026-09-16, "the second
+  one is longer in tasks, make it the same as the top length"): a bare flex
+  track is block-level and spans the page column; inside the row it is as
+  long as its chips, like every other rail.
+- Row two on the projects page is `FilterChips` in a `Toolbar` («پروژه‌های
+  من» / «همه پروژه‌ها» with its count, and the «مهلت امروز» toggle) — the
+  tinted rail, content-width, so the tasks and projects pages carry the same
+  two rows (2026-09-16, reversing the 2026-09-05 placement in row one).
 - The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
   create button (R3), or — on Profile — «خروج» as a pill in its own
   `TAB_TRACK` (2026-09-16), the row's own shape rather than a button of

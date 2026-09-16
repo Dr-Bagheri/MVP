@@ -19,7 +19,6 @@ vi.mock("@/i18n/routing", () => ({
     <a href={typeof href === "string" ? href : "#"} {...rest}>{children}</a>
   ),
 }));
-vi.mock("./AvatarMenu", () => ({ AvatarMenu: () => <button type="button">Avatar</button> }));
 vi.mock("./Breadcrumbs", () => ({ Breadcrumbs: () => <nav>Calls</nav> }));
 vi.mock("./NotificationBell", () => ({
   NotificationBell: () => <button type="button" aria-label="bell">Bell</button>,
@@ -210,7 +209,7 @@ describe("the bar's own doors (2026-09-05)", () => {
  * locales and "en on the right" is only true in one of them.
  */
 describe("the top bar's end cluster", () => {
-  it("runs bell → chat → theme → divider → fa → en, so the locale pair sits at the very edge", () => {
+  it("runs bell → chat → theme, and nothing after the theme — the locale pair left for Settings (2026-09-16)", () => {
     const { container } = render(<TopBar me={ME} />);
     const theme = screen.getByRole("button", { name: "themeToggle" });
     const cluster = theme.parentElement!;
@@ -219,24 +218,21 @@ describe("the top bar's end cluster", () => {
       if (el.getAttribute("aria-label") === "chat") return "chat";
       if (el.getAttribute("aria-label") === "themeToggle") return "theme";
       if (el.tagName === "SPAN" && el.className.includes("w-px")) return "divider";
-      /* the pair is a GROUP of two buttons — the cluster's child is the div,
-         and the buttons inside it are named by their own text */
       if ([...el.querySelectorAll("button")].some((b) => b.textContent === "fa")) return "locales";
       return null;
     }).filter(Boolean);
-    expect(order).toEqual(["bell", "chat", "theme", "divider", "locales"]);
+    expect(order).toEqual(["bell", "chat", "theme"]);
 
-    /* the pair inside its own group, fa before en — the edge is en's */
-    const [fa, en] = ["fa", "en"].map((l) => screen.getByRole("button", { name: l }));
-    // eslint-disable-next-line no-bitwise
-    expect(fa!.compareDocumentPosition(en!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    /* the divider is between the theme and the pair, not decoration at the end */
-    // eslint-disable-next-line no-bitwise
-    expect(theme.compareDocumentPosition(fa!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* asserted as ABSENCES, because the bar that still carried the pair and
+       its divider rendered perfectly and was only wrong beside the settings
+       page that now holds the language: no fa/en buttons anywhere in the bar,
+       and no divider left standing with nothing on one side of it */
+    expect(screen.queryByRole("button", { name: "fa" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "en" })).toBeNull();
     expect(container.querySelector("[data-platform-topbar]")).not.toBeNull();
   });
 
-  it("puts every control in the row at the locale pair's height, and none at the dense 28", () => {
+  it("puts every control in the row at the compact height, and none at the dense 28", () => {
     /*
      * The discriminating half: asserting that the buttons carry a compact
      * class is satisfied by a bar that also carries the 28px square somewhere
@@ -340,21 +336,6 @@ describe("R23: the bar is a sheet, not a ruled strip", () => {
     expect(classes).toContain("md:block");
   });
 
-  it("marks the active locale by FILL, never by an outline", () => {
-    /* the resting segment had a `border-border` edge — two hairlines in a row
-       of controls that, after R23, has none. The active face is the accent
-       tint; the check is that neither face draws a border at all. */
-    render(<TopBar me={ME} />);
-    for (const l of ["fa", "en"]) {
-      const seg = screen.getByRole("button", { name: l });
-      expect(seg.className.split(/\s+/), `the ${l} segment is outlined`).not.toContain("border");
-    }
-    /* whichever one is current — the mocked locale decides, and naming it
-       here would make the assertion a fact about the mock */
-    const active = ["fa", "en"]
-      .map((l) => screen.getByRole("button", { name: l }))
-      .find((b) => b.getAttribute("aria-current") === "true");
-    expect(active, "no segment is marked current").toBeDefined();
-    expect(active!.className).toContain("bg-accent-soft");
-  });
+  /* the "active locale by FILL" case left with the pair (2026-09-16): the
+     language is a Select on Settings · General now — GeneralSettings.test */
 });

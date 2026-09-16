@@ -545,6 +545,15 @@ describe("Meetings", () => {
 
     const all = screen.getByRole("button", { name: /همه جلسات/ });
     expect(all).toHaveTextContent("۲");
+    /* THE RAIL SITS INSIDE A ROW (2026-09-16: "the second one is longer in
+       tasks, make it the same as the top length"). jsdom lays nothing out,
+       so the honest ceiling is the structure the width comes from: the
+       chip's rail has a wrapping row above it, the same `flex-wrap` row every
+       Toolbar draws — a bare rail dropped into the page column takes the
+       column's whole width, and that version passes every other line here. */
+    const rail = all.parentElement!;
+    expect(rail.className).toContain("bg-accent-soft");
+    expect(rail.parentElement!.className.split(/\s+/), "the strip's rail stands in no row").toContain("flex-wrap");
     const folder = await screen.findByRole("button", { name: /محصول/ });
     expect(folder).toHaveTextContent("۱");
     expect(screen.getAllByRole("button", { name: "گزینه‌های موضوع" })).toHaveLength(1);

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  TAB_TRACK, Toolbar, sectionTabClass, toggleClass,
+  FilterChips, TAB_TRACK, Toolbar, filterChipClass, sectionTabClass,
 } from "./sectionTabs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,7 +29,7 @@ import { Avatar } from "@/components/Avatar";
 import { TONE_CHIP, TONE_DOT } from "./tasks/TaskDialogs";
 import {
   IconChevronRight, IconClock, IconFolder,
-  IconPeople3, IconPlus,
+  IconPeople3, IconPlus, IconUser,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
 import { dayKeyOf, digits, formatDate, monthGridAt, personName, personPhoto } from "@/lib/format";
@@ -294,23 +294,44 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           {chip(sort === "name", t("sortName"), () => setSort("name"))}
           {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
         </div>
-        {/* WHOSE PROJECTS, IN ROW ONE (user directive, 2026-09-05: "in
-            projects put my projects in the first sub menu top before Due
-            today"); «همه» keeps the count — and the toggle beside them, in
-            the same track, as the board's «فقط من» and «مهلت امروز» share one. */}
-        <div className={TAB_TRACK}>
-          {chip(scope === "mine", t("scopeMine"), () => setScope("mine"))}
-          {chip(scope === "all", t("scopeAll"), () => setScope("all"), digits(Array.isArray(rows) ? rows.length : 0, locale))}
+      </Toolbar>
+
+      {/* ── ROW TWO: whose projects, and the one toggle (user, 2026-09-16:
+             "the two sub menu top for tasks and projects must look the same,
+             fix it with same style"). This REVERSES the 2026-09-05 placement
+             in row one — written down as a reversal rather than quietly
+             moved: beside the task board, whose second row is its tinted
+             folder strip, a grey third track that wrapped under row one at
+             laptop widths read as a different design. Row two is the kit's
+             FilterChips (icon, label, count — R3's row-two chip), inside a
+             Toolbar row so the rail is as long as its chips and no longer.
+             «همه» keeps its count; the toggle rides the same rail, lifting
+             on its own. ── */}
+      <Toolbar>
+        <FilterChips<Scope>
+          label={t("scopeLabel")}
+          chips={[
+            { key: "mine", label: t("scopeMine"), icon: <IconUser width={12} height={12} /> },
+            {
+              key: "all",
+              label: t("scopeAll"),
+              icon: <IconFolder width={12} height={12} />,
+              count: digits(Array.isArray(rows) ? rows.length : 0, locale),
+            },
+          ]}
+          active={scope}
+          onSelect={setScope}
+        >
           <button
             type="button"
             aria-pressed={dueToday}
             onClick={() => setDueToday((v) => !v)}
-            className={toggleClass(dueToday)}
+            className={filterChipClass(dueToday)}
           >
             <IconClock width={12} height={12} />
             {tTasks("dueTodayFilter")}
           </button>
-        </div>
+        </FilterChips>
       </Toolbar>
 
       {/* ── the views ────────────────────────────────────────────────── */}
