@@ -300,25 +300,28 @@ export function Meetings() {
      one; 2026-09-16 it sat here with the view switch beside it.) */
   const searchKey = (
     <div className="flex shrink-0 items-center">
-      {/* the width animates on the WRAPPER, so the field slides open along
-          the row rather than appearing; the input inside is mounted only
-          while open, so Escape and a re-press tear it down cleanly */}
-      <span
-        className="inline-block overflow-hidden transition-[width] duration-200"
-        style={{ width: searchOpen ? "12rem" : 0 }}
-      >
-        {searchOpen ? (
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
-            placeholder={t("searchMeetings")}
-            aria-label={t("searchMeetings")}
-            className="h-control-icon w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
-          />
-        ) : null}
-      </span>
+      {/* The field APPEARS at its width rather than sliding open. The
+          2026-09-16 wrapper animated `width` 0 → 12rem, and measured on
+          production (2026-09-17) the box holding it stayed 26px and the
+          wrapper's used width 0 until a forced relayout: Chrome sizes a
+          `shrink-0` flex container's intrinsic width at the child's FIRST
+          frame of the transition and does not re-run it as the animated
+          width grows, so the field was open, focused, 180px wide — and
+          clipped to nothing. Without the transition it is 180px on the
+          first frame. Mounted only while open, so Escape and a re-press
+          tear it down cleanly; it stands BEFORE the key in the row, which
+          is the key's start side (see the note above). */}
+      {searchOpen ? (
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
+          placeholder={t("searchMeetings")}
+          aria-label={t("searchMeetings")}
+          className="h-control-icon w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
+        />
+      ) : null}
       <button
         type="button"
         aria-label={t("searchMeetings")}
