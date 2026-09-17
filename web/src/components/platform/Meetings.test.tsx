@@ -233,39 +233,48 @@ describe("Meetings", () => {
     expect(screen.getByText("جلسهٔ محصول")).toBeInTheDocument();
   });
 
-  it("the search is a KEY in row one beside the view switch: no field until pressed, the field beside its key, closing clears (2026-09-16; row one since «ج»)", async () => {
+  it("the view keys sit in the slices' own track, and the search is a KEY at the END of the folder line whose field opens toward the chips (2026-09-17)", async () => {
     /*
-     * "Put the search there as well with just the icon; if pressed it will
-     * open up horizontally in the row and you can type in it" (2026-09-16),
-     * and design «ج» (2026-09-17) moved the key and the view switch up into
-     * ROW ONE, leaving the strip a bare line of folders. Asserted as
-     * STRUCTURE: the view keys are a segmented control in the Toolbar the
-     * slice filter's track is in, the search key is one of that row's
-     * controls beside it; no field exists until the key is pressed; the field
-     * appears beside its key; and closing the key CLEARS the query — the half
-     * that matters, since a filter nobody can see is a list that lies.
+     * "Add the list and calendar to the first set of items in the first
+     * sub-menu like the tasks, and bring the search icon to the second row at
+     * the end of it and open it to the right in the fa version" (2026-09-17,
+     * on the row design «ج» had shipped that morning). Asserted as
+     * STRUCTURE, since jsdom lays nothing out: the two view keys are children
+     * of the slice filter's own track (ONE rail in row one, not a second);
+     * the search key is in the strip's row and NOT in row one; no field
+     * exists until the key is pressed; the field is the key's PRECEDING
+     * sibling — the start side, the right on a Persian screen — so it opens
+     * toward the chips and never off the row's edge; and closing the key
+     * CLEARS the query — the half that matters, since a filter nobody can
+     * see is a list that lies.
      */
     LIST = [meeting({ id: "m-a", title: "جلسهٔ فروش" }), meeting({ id: "m-b", title: "جلسهٔ محصول" })];
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ فروش")).toBeInTheDocument());
 
+    const sliceRail = screen.getByRole("tab", { name: "گذشته" }).parentElement!;
+    const list = screen.getByRole("button", { name: "فهرست" });
+    const calendar = screen.getByRole("button", { name: "تقویم" });
+    expect(list.parentElement, "the list key left the slices' track").toBe(sliceRail);
+    expect(calendar.parentElement, "the calendar key left the slices' track").toBe(sliceRail);
+    expect(sliceRail.className, "the track is not the segmented control").toContain("bg-surface-2");
+    const rowOne = sliceRail.parentElement!;
+    expect(rowOne.querySelectorAll('[role="tablist"]'), "a second track in row one").toHaveLength(1);
+
     expect(screen.queryByPlaceholderText("جست‌وجوی جلسه"), "a box before the key is pressed").toBeNull();
     const key = screen.getByRole("button", { name: "جست‌وجوی جلسه" });
-    const sliceRail = screen.getByRole("tab", { name: "گذشته" }).parentElement!;
-    expect(key.parentElement!.parentElement, "the search key is not in row one").toBe(sliceRail.parentElement);
-    expect(key.className, "the key is not one of the row's controls").toMatch(/\bbtn-ghost\b/);
-    const views = screen.getByRole("button", { name: "فهرست" }).parentElement!;
-    expect(views.className, "the view keys are not a segmented control").toContain("bg-surface-2");
-    expect(views.contains(screen.getByRole("button", { name: "تقویم" }))).toBe(true);
-    expect(views.parentElement, "the view switch is not in row one").toBe(sliceRail.parentElement);
-    /* and the strip below is a line of folders and nothing else */
     const strip = screen.getByRole("button", { name: /همه جلسات/ }).parentElement!;
-    expect(strip.contains(key)).toBe(false);
-    expect(strip.contains(views)).toBe(false);
+    expect(strip.parentElement!.contains(key), "the search key is not in the folder line's row").toBe(true);
+    expect(strip.contains(key), "the key is inside the chip line rather than at the row's end").toBe(false);
+    expect(rowOne.contains(key), "the search key is still in row one").toBe(false);
+    expect(key.className, "the key is not the line's own square").toMatch(/\bbtn-icon\b/);
 
     await userEvent.click(key);
     const box = screen.getByPlaceholderText("جست‌وجوی جلسه");
     expect(key.parentElement!.contains(box), "the field opened somewhere other than beside its key").toBe(true);
+    /* the field PRECEDES the key in the row — on the Persian screen that is
+       to its right, toward the chips */
+    expect(box.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING, "the field opens on the key's far side").toBeTruthy();
     expect(key).toHaveAttribute("aria-pressed", "true");
     await userEvent.type(box, "فروش");
     await waitFor(() => expect(screen.queryByText("جلسهٔ محصول")).toBeNull());

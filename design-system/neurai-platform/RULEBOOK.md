@@ -149,24 +149,27 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
   the connectors shortcut is Home's sidebar row and Settings · اتصال‌ها.
 - The task board draws no add-column slot (2026-09-16): the lane is exactly
   its columns.
-- The meetings page is TWO rows (2026-09-16, later; design «ج» 2026-09-17):
-  row one carries the slice filter as the segmented control, «مرتب‌سازی»
-  reading its field on the row (the three fields as radio rows, the
-  direction «تازه‌ترین اول» as a check row under them), the list/calendar
-  keys as a second segmented control, and the SEARCH KEY beside them — a
-  glyph (`btn-ghost btn-sm`) until pressed and then a field growing into the
-  row beside it (closing it clears the query) — with the two create buttons
-  in `end` at `btn-sm`; row two is the `TopicStrip` and nothing else, a bare
-  line of folder chips. A search is a key on the row, never a box beside it.
+- The meetings page is TWO rows (2026-09-16, later; design «ج» 2026-09-17,
+  corrected the same day): row one carries ONE segmented control — the slice
+  filter, a `TRACK_DIVIDER`, then the list/calendar keys with their words
+  on the pills (the task board's shape: one rail, two questions) — and
+  «مرتب‌سازی» reading its field on the row (the three fields as radio rows,
+  the direction «تازه‌ترین اول» as a check row under them), with the two
+  create buttons in `end` at `btn-sm`; row two is the `TopicStrip` — a bare
+  line of folder chips — with the SEARCH KEY in its `end` slot: at the
+  row's END (the left edge of a Persian screen), a glyph (`btn-ghost
+  btn-icon`, the line's own 28) until pressed and then a field that opens on
+  the key's START side, toward the chips (closing it clears the query). A
+  search is a key on a row, never a box beside it.
 - The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
   create button (R3), or — on Profile — «خروج» as a pill in its own
   `TAB_TRACK` (2026-09-16), the row's own shape rather than a button of
   another family.
-- An in-page SEARCH is a tool on its toolbar row — never a row of its own
-  and never first in the row: a KEY that opens into a field on the pages
-  that carry a segmented row (meetings, design «ج»), or the compact field
-  (`.input-sm`, 34px like the controls beside it) at the row's END edge on
-  the integrations and console pages.
+- An in-page SEARCH is a tool at the END of a toolbar row — never a row of
+  its own and never first in the row: a KEY at the end of the folder line
+  that opens into a field toward the chips (meetings, 2026-09-17), or the
+  compact field (`.input-sm`, 34px like the controls beside it) at the row's
+  END edge on the integrations and console pages.
 - A menu of ROUTES (Settings, Management, Profile, Help) is the same track:
   `TwoPane` renders its links with `sectionTabClass`.
 - A tab strip inside a dialog is the same track: `panelStyle.TAB_BAR` is

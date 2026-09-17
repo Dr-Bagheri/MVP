@@ -20,7 +20,7 @@ import {
   IconRows, IconSearch, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import {
-  MenuCheck, MenuRadio, MenuSeparator, TAB_TRACK, Toolbar, ToolbarMenu, sectionTabClass,
+  MenuCheck, MenuRadio, MenuSeparator, TAB_TRACK, TRACK_DIVIDER, Toolbar, ToolbarMenu, sectionTabClass,
 } from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { TopicStrip } from "./TopicStrip";
@@ -237,22 +237,26 @@ export function Meetings() {
     });
   }, [rows, filter, topic, query, sort, descending, locale]);
 
-  /* THE VIEW SWITCH'S KEY: an icon-only segmented pill — the pair IS a
-     segmented control in row one since design «ج» (2026-09-17).
-     `aria-label` and `aria-pressed` are not optional here — an icon-only
-     control has no accessible name unless it is given one, and this is
-     exactly the kind that is easy to leave nameless because the glyph
-     "obviously" says list. */
+  /* THE VIEW SWITCH'S KEYS sit INSIDE the slice filter's own track, after a
+     divider (user, 2026-09-17: "add the list and calendar to the first set
+     of items in the first sub-menu, like the tasks") — ONE segmented control
+     in row one, the way the task board's views share one rail across a
+     `TRACK_DIVIDER`. They are the row's second question (list or calendar)
+     beside its first (which slice), so they are `aria-pressed` toggles
+     rather than tabs of a second tablist; the word is on the pill, as it is
+     on every other pill in the track — an icon-only pair beside three worded
+     pills read as two controls, which is what was asked to end. (2026-09-17,
+     earlier the same day: a second track beside this one; 2026-09-16: the
+     strip's end.) */
   const viewKey = (mode: "list" | "calendar", label: string, icon: React.ReactNode) => (
     <button
       type="button"
-      aria-label={label}
-      title={label}
       aria-pressed={view === mode}
       onClick={() => setView(mode)}
-      className={`${sectionTabClass(view === mode)} px-2`}
+      className={sectionTabClass(view === mode)}
     >
       {icon}
+      {label}
     </button>
   );
 
@@ -280,6 +284,53 @@ export function Meetings() {
     setSearchOpen(open);
     if (!open) setQuery("");
   };
+
+  /* THE SEARCH KEY, AT THE END OF THE FOLDER LINE (user, 2026-09-17: "bring
+     the search icon to the second row at the end of it, and open it to the
+     right in the fa version, so the search icon will be at the left side of
+     the second sub-menu"). The row's END is the LEFT edge of a Persian
+     screen, so the key stands at the left of the folder line, in the strip's
+     own `end` slot. The field is the key's PRECEDING sibling, so it opens on
+     the key's START side — to the RIGHT in Persian, toward the chips, and to
+     the left in English — never off the row's edge. A glyph until pressed
+     (2026-09-16); closing it CLEARS the query, since a filter nobody can see
+     is a list that lies. `btn-icon` (28) is the line's own height: the
+     dashed `+` on the same line is that square, and a 34px key on a 24px
+     line reads as a second row. (Earlier on 2026-09-17 the key sat in row
+     one; 2026-09-16 it sat here with the view switch beside it.) */
+  const searchKey = (
+    <div className="flex shrink-0 items-center">
+      {/* the width animates on the WRAPPER, so the field slides open along
+          the row rather than appearing; the input inside is mounted only
+          while open, so Escape and a re-press tear it down cleanly */}
+      <span
+        className="inline-block overflow-hidden transition-[width] duration-200"
+        style={{ width: searchOpen ? "12rem" : 0 }}
+      >
+        {searchOpen ? (
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
+            placeholder={t("searchMeetings")}
+            aria-label={t("searchMeetings")}
+            className="h-control-icon w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
+          />
+        ) : null}
+      </span>
+      <button
+        type="button"
+        aria-label={t("searchMeetings")}
+        title={t("searchMeetings")}
+        aria-pressed={searchOpen}
+        onClick={() => toggleSearch()}
+        className="btn-ghost btn-icon"
+      >
+        <IconSearch width={14} height={14} />
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -314,6 +365,10 @@ export function Meetings() {
           {chip(filter === "past", t("filterPast"), () => setFilter("past"))}
           {chip(filter === "ahead", t("filterAhead"), () => setFilter("ahead"))}
           {chip(filter === "archived", t("filterArchived"), () => setFilter("archived"))}
+          {/* the divider, then the views: one rail, two questions (see viewKey) */}
+          <span className={TRACK_DIVIDER} aria-hidden />
+          {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
+          {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
         </div>
 
         {/* ── THE SORT AS A MENU (design «ج», the user's choice of 2026-09-17):
@@ -348,49 +403,6 @@ export function Meetings() {
           </MenuCheck>
         </ToolbarMenu>
 
-        {/* ── THE VIEW SWITCH AND THE SEARCH KEY, IN ROW ONE (design «ج»): the
-               list/calendar keys as a second segmented control, and the
-               search as a KEY beside it — a glyph until pressed, then a
-               field that grows into the row (2026-09-16); closing it clears
-               the query, since a filter nobody can see is a list that lies.
-               They lived at the strip's end until «ج» made the strip a bare
-               line of folders. ── */}
-        <div role="tablist" className={TAB_TRACK}>
-          {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
-          {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
-        </div>
-        <div className="flex shrink-0 items-center">
-          <button
-            type="button"
-            aria-label={t("searchMeetings")}
-            title={t("searchMeetings")}
-            aria-pressed={searchOpen}
-            onClick={() => toggleSearch()}
-            className="btn-ghost btn-sm px-2"
-          >
-            <IconSearch width={14} height={14} />
-          </button>
-          {/* the width animates on the WRAPPER, so the field slides open
-              along the row rather than appearing; the input inside is
-              mounted only while open, so Escape and a re-press tear it
-              down cleanly */}
-          <span
-            className="inline-block overflow-hidden transition-[width] duration-200"
-            style={{ width: searchOpen ? "12rem" : 0 }}
-          >
-            {searchOpen ? (
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
-                placeholder={t("searchMeetings")}
-                aria-label={t("searchMeetings")}
-                className="h-control-sm w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
-              />
-            ) : null}
-          </span>
-        </div>
       </Toolbar>
 
 
@@ -404,6 +416,7 @@ export function Meetings() {
              went with the reason it existed: the inline box had replaced the
              picker, and there is no picker to replace now. ── */}
       <TopicStrip
+        end={searchKey}
         allLabel={t("allMeetings")}
         allCount={Array.isArray(rows) ? rows.length : 0}
         active={topic}

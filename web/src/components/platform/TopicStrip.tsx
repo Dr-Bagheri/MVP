@@ -168,8 +168,8 @@ export function TopicStrip({
   canAdd?: boolean;
   /** appended after the `+`: the task board's projects section */
   children?: ReactNode;
-  /** the row's OTHER END: the meetings page's view switch and search key
-      (2026-09-16), in the row's own end slot so the two sit at the edge the
+  /** the row's OTHER END: the meetings page's search key
+      (2026-09-16, back 2026-09-17), in the row's own end slot so it sits at the edge the
       create button sits on in the row above */
   end?: ReactNode;
 }) {
