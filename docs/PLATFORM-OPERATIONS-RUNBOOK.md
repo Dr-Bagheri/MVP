@@ -828,6 +828,48 @@ that is an org-wide write on real data, and the whole path is proven against
 fixtures, Word and a real print instead. The assistant's draft spends a
 provider run, so it waits for a real press.
 
+## 7r. Deployment record — 2026-09-17, later (5a2807a: db/0229 the signatures, core + web — the minutes are signed by the people in the room)
+
+Migration first, then core on Hetzner, then the push (Vercel). 0229 applied on
+production and the fixture suite re-run there — «the wall holds», **77 PASS**,
+with **132_the_minutes_are_signed (29 checks)**, **50_identity_search_gateway
+(30)** (the closed DELETE list grew its two argued entries) and **102_purge_
+coverage (3)** (the purge learned both tables) among them. Locally the same
+132 was flipped twice — an admin reading a colleague's signature on file, an
+outsider signing — and went red by name each time, with the control green
+either side.
+
+Core: archive hashes equal end to end (`67c765ca65f1236a`), both entrypoints
+parse under strip-types, both units active, health `{"ok":true}`, **zero**
+level≥warning journal lines after the restart. The six new routes read **401**
+signed out — `GET`/`PUT` `/v1/me/signature`, `GET`/`POST` `/v1/meetings/:id/
+signatures`, `DELETE …/signatures/me`, `GET …/signatures/:userId/image` —
+against `GET /v1/nonsense/signature` **404**. The BFF, read cache-busted from
+outside **90 s** after the push: `/api/me/signature` went **404 → 401** (the
+route did not exist before this build, so the flip IS the deploy marker), the
+meeting routes 401, an empty POST body **400** and a real one **401** (the
+2026-09-04 pair), the control 404.
+
+**Read on production in the user's Chrome.** The summary tab of Sina's meeting
+carries a FIFTH section «۵. امضای حاضران» as the last section inside the card
+(23 px above the card's foot), reading «هنوز کسی امضا نکرده است.» with **no
+control** — and that absence is the policy answering, not a gap: the server's
+own record says `can_sign: false`, because the signed-in owner is neither the
+host (Sina) nor on the roster. Being the org owner buys nothing here, which is
+the design. The profile's identity section carries «امضا» directly under the
+photo: a white 136×45 well reading «ثبت نشده», the camera badge at **26 px**
+(= the photo's), no trash — the empty state, since `/api/me/signature` answers
+404 for this account.
+
+NOT exercised live, and why: every write. Signing, withdrawing and uploading a
+signature are writes on the organisation's own records, and this org holds
+two meetings, neither hosted by nor including the signed-in account — so the
+positive half (the control drawn for a host; a picture landing in the
+document's row) is pinned by the unit matrix (eleven mutations red, control
+green) and by 132 on the fixture, and the first real signing is the screen's
+own proof. Word's rendering of a body data-URI image was measured on the
+letterhead round (7q) and is relied on here rather than re-measured.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

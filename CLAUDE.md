@@ -7825,3 +7825,89 @@ sessions) for the cross-session narrative.
   Pre-existing and untouched: core's `history.test.ts` ZWNJ red from the
   September merge.
   db 228 migrations · core 1910 tests · web 1767 tests + gate + sweep.
+- 2026-09-17 (later — THE MINUTES ARE SIGNED BY THE PEOPLE IN THE ROOM;
+  commit 5a2807a; db/0229 on production; core + web deployed): user
+  directive, "add place at the end of the summary that each attendant can
+  add their own signature there … and in the end when the host is printing
+  it all of their real signatures that were uploaded in jpg or png are
+  already added there."
+  **TWO TABLES, BECAUSE TWO FACTS.** `user_signature` is a person's
+  signature ON FILE — read and written by its owner ALONE; an admin cannot
+  fetch a colleague's, and neither can the org owner, because a picture of a
+  signature is the one thing about a person that must not be lying around
+  to paste under a sentence they never agreed to. `meeting_signature` is
+  that picture PLACED on a meeting: a SNAPSHOT of the bytes at signing time,
+  keyed (meeting, person), readable by everybody who reads the meeting —
+  the host prints the document and the document carries it, so signing IS
+  showing. A snapshot rather than a pointer, so a person who later uploads
+  a different picture does not silently re-sign their whole history (132
+  asserts it). Who may sign is the host or the roster, asked through a
+  definer helper `actor_on_meeting` rather than an EXISTS that runs as the
+  caller (D9, 0227's own shape); the insert policy names the actor on the
+  row, so "somebody signed for me" is unrepresentable. ONCE, then
+  withdrawn, never edited — no UPDATE grant exists on a placed signature,
+  so re-signing is two acts done on purpose. 0146's `minutes_signatures`
+  (a jsonb of NAMES any colleague may append) stays unread: a signature
+  anybody can write in your name is a name in a list.
+  **Which nothing a refused signing is** (rule 12): the insert-select from
+  the file inserts ZERO rows when nothing is on file and raises nothing —
+  that zero is `no_signature_on_file`, fixable in the profile; a second
+  signing is the primary key (23505 → `already_signed`); not-in-the-room is
+  the policy's 42501 → the 404 every unwritable row is. With a picture in
+  the POST body the file is upserted and the meeting signed in ONE
+  transaction, so a first signing is not a trip to the profile and back —
+  and the ORDER is asserted, because the other order signs with what was
+  on file a moment ago, which for a first-time signer is nothing.
+  **The screen.** The summary tab's fifth section lists who signed (name,
+  moment, the picture on WHITE whatever the theme — a transparent PNG over
+  the dark surface is invisible) and draws ONE control for the reader in the
+  state the server says they are in: withdraw, sign with the file, or
+  upload-and-sign; a colleague not in the room gets the list and no control.
+  The document's signature table takes the roster by KEY (an account id —
+  two colleagues may share a name; the twins test) and prints the picture
+  in the signer's row with the moment under it, a blank line for everybody
+  else (paper minutes are still signed by hand, and a missing row would say
+  they were not there). The signatures are read FRESH at every export —
+  "the host printed it and mine was not on it" is the one report this
+  feature must never produce, and a test seeds exactly that race. Word gets
+  the picture as a body data URI — the one place Word loads one, measured
+  on the letterhead round — beside a letterhead that never is; the test
+  holds both in one file. The profile's identity section carries the
+  signature through the platform's one picture control, with three
+  differences said in its header: no crop (a signature is wide and low), no
+  white fill (`lib/signatureImage.ts` keeps the transparency — the sibling
+  module paints paper first, and the test asserts the ABSENCE of that fill),
+  and removal ASKS, saying the signed meetings keep their snapshot.
+  **Instruments, both directions.** The migration's derived purge-coverage
+  check fired on its own first local run — `agent_message_feedback` and
+  `agent_session_share` are deleted through a `using` join and carry no
+  `where org_id`, so the tighter pattern reported two covered tables
+  missing; it reads 0202's own pattern now. The full web suite went red on
+  the profile page's tests: their api mocks lacked `mySignatureUrl`, and a
+  mock that omits a method the component calls does not fake "none on
+  file", it throws into the render — the methods were added to both mocks
+  AND the editor now asks the route from inside a promise (the
+  VerificationBanner's lesson), so the next page test with a thin mock gets
+  an empty state rather than a crashed section. Verify-red by mutation on
+  eleven behaviours, control green either side, each red on exactly its own
+  test: the signature hung on the first row rather than by key, no picture
+  printed, the control drawn for a reader not in the room, the export
+  printing the tab's stale list, the picked picture never sent, every
+  refusal reported as the generic line, a white ground under the signature,
+  the placed signatures never fetched, nothing-on-file reported as signed,
+  the arriving picture never filed, a withdraw naming no actor.
+  **Proven on production** (runbook 7r): 0229 with the suite (77 PASS, the
+  wall holds); core's six routes 401 against a 404 control, zero warnings;
+  the BFF's `/api/me/signature` flipped 404 → 401 ninety seconds after the
+  push (a route that did not exist is its own deploy marker); in the user's
+  Chrome, the fifth section is the card's last, reading «هنوز کسی امضا نکرده
+  است.» with NO control on Sina's meeting — the policy answering
+  (`can_sign: false`: the org owner is neither host nor on the roster, and
+  rank buys nothing here) — and the profile's «امضا» row under the photo
+  with the white well, «ثبت نشده», and the camera badge at the photo's 26 px.
+  NOT exercised live: every write (this org's two meetings are neither
+  hosted by nor include the signed-in account, and a write on the org's
+  records is what cost the board on 2026-09-06) — the first real signing is
+  the screen's own proof.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1786 tests + gate + sweep.
