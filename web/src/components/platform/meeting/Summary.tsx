@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { MeetingItem, MeetingRecord, Me, Org } from "@/api/types";
+import type { MeetingItem, MeetingRecord, MeetingSignaturesRecord, Me, Org } from "@/api/types";
 import { parseSummary, SummaryBody } from "@/components/echo/SummaryBody";
 import { IconAsk, IconDownload, IconPencil, IconPrint, IconRetry, IconUpload } from "@/components/icons";
 import { KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold";
 import { openAssistant } from "@/lib/assistantBus";
-import { digits, formatDate } from "@/lib/format";
+import { digits, formatDate, personName } from "@/lib/format";
 import { meetingPeople } from "@/lib/meetingPeople";
 import { notifyError } from "@/lib/notify";
 import { LetterheadDialog } from "./LetterheadDialog";
 import { minutesDocument, minutesWordFile } from "./minutesDocument";
-import { forgetLetterhead, letterheadForDocument } from "@/lib/minutesFile";
+import { forgetLetterhead, letterheadForDocument, signaturesForDocument } from "@/lib/minutesFile";
+import { deriveSignature, SIGNATURE_ACCEPT, SignatureError } from "@/lib/signatureImage";
 
 /**
  * خلاصهٔ جلسه — the meeting's SUMMARY, composed from facts the platform
@@ -113,7 +114,8 @@ export function SummaryTab({ meeting, callId }: {
    * to disagree about who was in a meeting — which is precisely the class of
    * defect the two corrections above already were.
    */
-  const attendees = meetingPeople(meeting, locale).map((person) => person.name);
+  const people = meetingPeople(meeting, locale);
+  const attendees = people.map((person) => person.name);
 
   /**
    * The CURRENT summary version, read here rather than passed down: this tab
@@ -171,6 +173,62 @@ export function SummaryTab({ meeting, callId }: {
     return () => { alive = false; };
   }, []);
   const isAdmin = me !== null && (me.role === "admin" || me.role === "owner");
+
+  /*
+   * THE SIGNATURES (db/0229) — who has signed, and the three facts about the
+   * reader that decide the one control at the foot of the document: may they
+   * sign (host or roster), is there a signature on file, have they signed.
+   * Read from the server rather than derived here: the roster is on screen,
+   * but "on file" is a fact only their own row answers, and drawing a sign
+   * button for somebody the policy would refuse is a promise the product
+   * will not keep.
+   */
+  const [sigs, setSigs] = useState<MeetingSignaturesRecord | null | "failed">(null);
+  const [signing, setSigning] = useState(false);
+  const [signNote, setSignNote] = useState<string | null>(null);
+  const signatureInput = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.meetingSignatures(meeting.id)
+      .then((r) => { if (alive) setSigs(r); })
+      .catch(() => { if (alive) setSigs("failed"); });
+    return () => { alive = false; };
+  }, [meeting.id]);
+
+  /* a refusal names WHICH nothing: no signature on file is fixable in the
+     profile, already signed is the primary key, and anything else is the
+     generic line — the sentences are the catalogue's, keyed by the code */
+  const signFailure = (error: unknown): string => {
+    if (error instanceof SignatureError) return t(error.code);
+    const code = error instanceof BffError ? error.code : undefined;
+    if (code === "no_signature_on_file" || code === "already_signed") return t(`sign_${code}`);
+    if (code === "signature_too_large" || code === "signature_not_an_image") return t(code);
+    return t("signFailed");
+  };
+
+  /** SIGN with the signature on file, or with a picture chosen right here
+      (`file`) — one request either way, the server files and signs together */
+  const sign = (file?: File) => {
+    setSigning(true);
+    setSignNote(null);
+    void (file === undefined ? Promise.resolve(undefined) : deriveSignature(file).then((d) => d.base64))
+      .then((base64) => api.signMeeting(meeting.id, base64))
+      .then((record) => {
+        setSigs(record);
+        setSignNote(t("signedByYou"));
+      })
+      .catch((error: unknown) => setSignNote(signFailure(error)))
+      .finally(() => setSigning(false));
+  };
+
+  const withdrawSignature = () => {
+    setSigning(true);
+    setSignNote(null);
+    void api.withdrawMeetingSignature(meeting.id)
+      .then((record) => setSigs(record))
+      .catch(() => setSignNote(t("signFailed")))
+      .finally(() => setSigning(false));
+  };
 
   /* «آماده‌سازی متن با دستیار» — the composed prose lands in the EDITOR, not
      in the file: a model's paragraph goes into a document people sign only
@@ -243,8 +301,15 @@ export function SummaryTab({ meeting, callId }: {
    * session of its own.
    */
   const buildDocument = async (target: "browser" | "word"): Promise<string> => {
+    /* the signatures are read FRESH for every export — a colleague may have
+       signed since this tab loaded, and the one report this feature must
+       never produce is "the host printed it and mine was not on it" */
+    const placed = await api.meetingSignatures(meeting.id).catch(() => null);
     const args = {
-      t, locale, meeting, attendees, summaryBlocks, decisions,
+      t, locale, meeting,
+      people: people.map((p) => ({ key: p.key, name: p.name })),
+      signatures: placed === null ? [] : await signaturesForDocument(meeting.id, placed),
+      summaryBlocks, decisions,
       actions: actionRows,
       sheet: await sheetForDocument(),
     };
@@ -581,6 +646,91 @@ export function SummaryTab({ meeting, callId }: {
                   ))}
                 </ul>
               )}
+        </section>
+
+        {/*
+          THE SIGNATURES, at the foot of the document (user directive,
+          2026-09-17: "add place at the end of the summary that each attendant
+          can add their own signature there … and when the host is printing
+          it, all of their real signatures … are already added there").
+
+          Who has signed is a list everybody sees; the CONTROL is drawn for the
+          reader alone and only in the state the server says they are in —
+          signed (withdraw), on file (one press), or nothing on file (a picker,
+          which files and signs in one request). A colleague who was not in
+          the room gets the list and no control: db/0229's policy would refuse
+          them, and a button that meets a refusal explains nothing.
+        */}
+        <section className="mt-4" aria-label={t("minutesSignatures")}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-accent">{digits(5, locale)}. {t("minutesSignatures")}</h3>
+            {sigs !== null && sigs !== "failed" && sigs.can_sign ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {signNote !== null ? (
+                  <span className="text-caption text-fg-muted">{signNote}</span>
+                ) : null}
+                {sigs.signed ? (
+                  <button type="button" onClick={withdrawSignature} disabled={signing}
+                    className="btn btn-sm border border-border font-medium text-fg-muted hover:text-fg disabled:opacity-50">
+                    {t("signatureWithdraw")}
+                  </button>
+                ) : sigs.has_signature_on_file ? (
+                  <button type="button" onClick={() => sign()} disabled={signing}
+                    className="btn btn-sm gap-1.5 bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+                    <IconPencil width={12} height={12} />
+                    {signing ? t("signing") : t("signMinutes")}
+                  </button>
+                ) : (
+                  <>
+                    <input
+                      ref={signatureInput}
+                      type="file"
+                      accept={SIGNATURE_ACCEPT}
+                      className="sr-only"
+                      aria-label={t("signMinutesUpload")}
+                      disabled={signing}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        /* reset FIRST, so choosing the same file twice still fires */
+                        event.target.value = "";
+                        if (file) sign(file);
+                      }}
+                    />
+                    <button type="button" onClick={() => signatureInput.current?.click()} disabled={signing}
+                      className="btn btn-sm gap-1.5 bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+                      <IconUpload width={12} height={12} />
+                      {signing ? t("signing") : t("signMinutesUpload")}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+          {sigs === null ? <SkeletonLines lines={1} className="mt-1.5" />
+            : sigs === "failed" ? <p className="mt-1.5 text-sm text-fg-muted">{t("signaturesFailed")}</p>
+              : sigs.signatures.length === 0
+                ? <p className="mt-1.5 text-sm text-fg-muted">{t("signaturesNone")}</p>
+                : (
+                  <ul className="mt-1.5 flex flex-wrap gap-2">
+                    {sigs.signatures.map((row) => (
+                      <li key={row.user_id} className="well flex items-center gap-2.5 px-2.5 py-1.5">
+                        {/* on WHITE, whatever the theme: a signature is dark ink
+                            on paper, and a transparent PNG over the dark surface
+                            is invisible — the letterhead preview's own reason */}
+                        {/* eslint-disable-next-line @next/next/no-img-element -- a session-scoped bytes route, not a static asset */}
+                        <img
+                          src={api.meetingSignatureImageUrl(meeting.id, row.user_id)}
+                          alt=""
+                          className="h-8 max-w-[7rem] rounded bg-white object-contain p-0.5"
+                        />
+                        <span className="text-xs">
+                          <span className="block text-fg">{personName(row, locale)}</span>
+                          <span className="block text-caption text-fg-subtle">{formatDate(row.signed_at, locale)}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
         </section>
       </article>
 

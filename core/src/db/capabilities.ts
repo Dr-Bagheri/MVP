@@ -219,6 +219,12 @@ export async function hasOrgSheet(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "sheet_bytes");
 }
 
+/** db/0229: the minutes are signed — a person's signature on file and the
+    one placed on a meeting land together, so one table answers for both. */
+export async function hasMeetingSignatures(db: Db): Promise<boolean> {
+  return hasTable(db, "meeting_signature");
+}
+
 /** db/0096: person.team + person.voiceprint_samples (they land together). */
 export async function hasPersonTeams(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "team");

@@ -1,5 +1,7 @@
-import type { Org } from "@/api/types";
-import { minutesDocument, minutesWordFile, type SheetForDocument } from "@/components/platform/meeting/minutesDocument";
+import type { MeetingSignaturesRecord, Org } from "@/api/types";
+import {
+  minutesDocument, minutesWordFile, type SheetForDocument, type SignatureForDocument,
+} from "@/components/platform/meeting/minutesDocument";
 import { parseSummary } from "@/components/echo/SummaryBody";
 import { meetingPeople } from "@/lib/meetingPeople";
 import fa from "@/messages/fa.json";
@@ -81,6 +83,53 @@ export function forgetLetterhead(): void {
   cached = null;
 }
 
+/** bytes → base64, chunked: `fromCharCode(...aMillionBytes)` overflows the
+    argument list — the same helper the letterhead reads through */
+async function base64OfResponse(response: Response): Promise<string> {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = "";
+  for (let at = 0; at < bytes.length; at += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(at, at + 8192));
+  }
+  return btoa(binary);
+}
+
+/**
+ * THE SIGNATURES PLACED ON A MEETING, as the document needs them: each
+ * picture as a DATA URI (the letterhead's reason — the file travels), keyed
+ * by the signer's account id, which is what `meetingPeople` keys a member
+ * by, so the row and its signature meet in the table.
+ *
+ * Read fresh on every export, never cached: a colleague may have signed
+ * since the tab was opened, and "the host printed it and my signature was
+ * not on it" is the one report this feature must never produce.
+ *
+ * A picture that cannot be fetched is LEFT OUT and the rest still print —
+ * one missing signature is a blank line somebody signs by hand, and refusing
+ * the whole document for it would trade the record for a decoration.
+ */
+export async function signaturesForDocument(
+  meetingId: string,
+  placed: MeetingSignaturesRecord,
+): Promise<SignatureForDocument[]> {
+  const { api } = await import("@/api/client");
+  const out: SignatureForDocument[] = [];
+  for (const row of placed.signatures) {
+    try {
+      const response = await fetch(api.meetingSignatureImageUrl(meetingId, row.user_id));
+      if (!response.ok) continue;
+      out.push({
+        key: row.user_id,
+        dataUrl: `data:${row.mime};base64,${await base64OfResponse(response)}`,
+        signedAt: row.signed_at,
+      });
+    } catch {
+      /* left out, said above */
+    }
+  }
+  return out;
+}
+
 /**
  * Everything one meeting's document needs, read under the caller's own
  * session. The assistant's door: the summary tab already holds this state and
@@ -96,6 +145,12 @@ export async function minutesDocumentFor(
   const versions = meeting.call_id === null
     ? [] : await api.getSummaries(meeting.call_id).catch(() => []);
   const org = await api.org().catch(() => null);
+  /* the signatures placed so far — an unreadable list prints as none rather
+     than refusing the document (the same posture as the letterhead) */
+  const placed = await api.meetingSignatures(meetingId)
+    .catch((): MeetingSignaturesRecord => ({
+      signatures: [], can_sign: false, has_signature_on_file: false, signed: false,
+    }));
   /* the language the person is READING, taken from the rendered document
      rather than guessed: this code runs with no React context around it, and
      `<html lang>` is what the shell actually set */
@@ -104,7 +159,8 @@ export async function minutesDocumentFor(
     t: catalogueFor(locale),
     locale,
     meeting,
-    attendees: meetingPeople(meeting, locale).map((p) => p.name),
+    people: meetingPeople(meeting, locale).map((p) => ({ key: p.key, name: p.name })),
+    signatures: await signaturesForDocument(meetingId, placed),
     summaryBlocks: parseSummary(versions[versions.length - 1]?.body ?? ""),
     decisions: items.filter((i) => i.kind === "decision").map((i) => i.body),
     actions: items.filter((i) => i.kind === "action"),

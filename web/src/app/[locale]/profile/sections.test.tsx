@@ -47,6 +47,12 @@ vi.mock("@/api/client", async (importOriginal) => {
       updateProfile: vi.fn(),
       setPreferredModel: vi.fn(),
       setLocale: vi.fn(),
+      /* db/0229: the identity section carries the signature on file, whose
+         editor asks the bytes route for its state — a mock that omitted it
+         would not fake "none on file", it would throw into the render */
+      mySignatureUrl: () => "/api/me/signature",
+      uploadMySignature: vi.fn(),
+      clearMySignature: vi.fn(),
       meetings: async () => [],
       taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
       telegramLink: async () => ({

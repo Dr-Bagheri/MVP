@@ -77,6 +77,7 @@ import { createNamedSkillResolver, listResolvedSkills, SUMMARIZER_SLUG } from ".
 import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTelegramLinkRepo } from "./telegram-link.ts";
+import { createSignaturesRepo } from "./signatures.ts";
 import { createLiveRecallRepo } from "./live-recall.ts";
 import { createSkillDryRun } from "./skill-dry-run.ts";
 import { isConnectorProvider } from "./connector-providers.ts";
@@ -316,6 +317,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   }).catch(() => undefined);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const telegramLink = createTelegramLinkRepo(options.db);
+  const signatures = createSignaturesRepo(options.db);
   const liveRecall = createLiveRecallRepo(options.db);
   const skillDryRun = createSkillDryRun(options.db, {
     apiKey: options.openrouterKey,
@@ -5094,6 +5096,120 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     await capabilities.require(identity, "org.settings");
     await org.setSheet(identity, null);
     return reply.code(204).send();
+  });
+
+  // ---- the minutes' signatures (db/0229) ----------------------------------
+  /**
+   * A person's signature ON FILE — theirs alone. GET answers bytes (404 when
+   * they have none, which the profile draws as «هنوز امضایی ثبت نشده»); PUT
+   * takes the picture base64'd; DELETE drops it. The MIME comes from the
+   * BYTES, the letterhead's rule: a browser's claim about what it read is a
+   * claim, and this is the one place that decides.
+   */
+  app.get("/v1/me/signature", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "signature");
+    const image = await signatures.mine(identity);
+    if (!image) return reply.code(404).send({ error: "not found", kind: "not_found" });
+    return reply
+      .header("content-type", image.mime)
+      /* private and never cached across people: the URL is the same for
+         everybody and the picture is not */
+      .header("cache-control", "private, no-store")
+      .send(image.bytes);
+  });
+
+  /** the picture from a JSON body, or a refusal that names why — shared by
+      the profile's PUT and the meeting's sign-and-file */
+  const signatureImageFrom = (body: { image_base64?: unknown } | null): { bytes: Buffer; mime: string } => {
+    if (typeof body?.image_base64 !== "string" || body.image_base64 === "") {
+      throw new ValidationError("send the signature as base64 in image_base64",
+        { code: "signature_missing" });
+    }
+    const bytes = Buffer.from(body.image_base64, "base64");
+    if (bytes.length === 0) throw new ValidationError("the signature is empty", { code: "signature_missing" });
+    /* 0229's ceiling — restated so the caller gets a sentence and not a
+       23514, and the constraint is what keeps the sentence true */
+    if (bytes.length > 1024 * 1024) {
+      throw new ValidationError("a signature tops out at 1MB", { code: "signature_too_large", params: { max: "1MB" } });
+    }
+    const mime = sniffImage(bytes);
+    if (!mime) {
+      throw new ValidationError("the signature is not a PNG, JPEG or WebP", { code: "signature_not_an_image" });
+    }
+    return { bytes, mime };
+  };
+
+  app.put("/v1/me/signature", {
+    /* 1MB of picture is 1.4MB of base64; the headroom is so an oversized
+       upload meets THIS route's named refusal rather than Fastify's 413 */
+    bodyLimit: 2 * 1024 * 1024,
+  }, async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "signature");
+    const image = signatureImageFrom(request.body as { image_base64?: unknown } | null);
+    await signatures.setMine(identity, image);
+    return reply.code(201).send({ uploaded: true, mime: image.mime });
+  });
+
+  app.delete("/v1/me/signature", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "signature");
+    await signatures.setMine(identity, null);
+    return reply.code(204).send();
+  });
+
+  /**
+   * The signatures ON A MEETING: who signed (names resolved from user
+   * management), and the three facts about the caller the summary tab draws
+   * its one control from — may they sign, do they have a signature on file,
+   * have they signed already.
+   */
+  app.get("/v1/meetings/:id/signatures", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await signatures.forMeeting(identity, id));
+  });
+
+  /**
+   * SIGN. The body may carry the picture (`image_base64`) for a person who
+   * has none on file yet — it is filed and the meeting signed in one
+   * transaction, so the first signing is not a trip to the profile and
+   * back. Refusals are the repo's: `no_signature_on_file` (409) is fixable
+   * in the profile, `already_signed` (409) is the primary key, and "not in
+   * this meeting" is the policy's 404 — the shape every unwritable row has.
+   */
+  app.post("/v1/meetings/:id/signatures", {
+    bodyLimit: 2 * 1024 * 1024,
+  }, async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "signature");
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { image_base64?: unknown };
+    const image = typeof body.image_base64 === "string" && body.image_base64 !== ""
+      ? signatureImageFrom(body)
+      : undefined;
+    return reply.code(201).send(await signatures.sign(identity, id, image));
+  });
+
+  /** WITHDRAW your own — never a colleague's, which the policy keeps true */
+  app.delete("/v1/meetings/:id/signatures/me", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "signature");
+    const { id } = request.params as { id: string };
+    return reply.send(await signatures.withdraw(identity, id));
+  });
+
+  /** one placed signature's picture — what the document builder embeds */
+  app.get("/v1/meetings/:id/signatures/:userId/image", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id, userId } = request.params as { id: string; userId: string };
+    const image = await signatures.image(identity, id, userId);
+    if (!image) return reply.code(404).send({ error: "not found", kind: "not_found" });
+    return reply
+      .header("content-type", image.mime)
+      .header("cache-control", "private, no-store")
+      .send(image.bytes);
   });
 
   // ---- audit logs (M25, Settings · COMPLIANCE) ----------------------------

@@ -81,13 +81,40 @@ export interface SheetForDocument {
   sideMm: number;
 }
 
+/** one person on the roster, as the document names them — `key` is the
+    account id (or `invitee:<name>` for somebody without one), which is what
+    a placed signature is matched to; two colleagues may share a name */
+export interface PersonForDocument {
+  key: string;
+  name: string;
+}
+
+/**
+ * A signature PLACED on this meeting (db/0229): the picture as a data URI —
+ * for the letterhead's reason, a document that fetched it would arrive at
+ * Word and at a print window with nothing to show — and the moment it was
+ * placed, which prints under it. Word loads a data URI in a body <img>
+ * perfectly well (that is how the letterhead's two failures were told
+ * apart), so unlike the sheet this needs no MHTML part.
+ */
+export interface SignatureForDocument {
+  /** the signer's `PersonForDocument.key` */
+  key: string;
+  dataUrl: string;
+  signedAt: string;
+}
+
 export interface MinutesDocumentArgs {
   /** the meetings catalogue, in the reader's language */
   t: (key: string, vars?: Record<string, string | number>) => string;
   locale: string;
   meeting: MeetingRecord;
-  /** the roster, already resolved by `meetingPeople` */
-  attendees: string[];
+  /** the roster, already resolved by `meetingPeople` — the names in the
+      حاضران line and the rows of the signature table */
+  people: PersonForDocument[];
+  /** the signatures placed on this meeting, matched to `people` by key.
+      A person with none gets a blank line to sign on paper. */
+  signatures: SignatureForDocument[];
   /** the summary as the SCREEN parsed it — one parse, two renderings */
   summaryBlocks: SummaryBlock[];
   decisions: string[];
@@ -107,8 +134,9 @@ export const SHEET_PART = "letterhead.png";
 const DASH = "—";
 
 export function minutesDocument(args: MinutesDocumentArgs): string {
-  const { t, locale, meeting, attendees, summaryBlocks, decisions, actions, sheet } = args;
+  const { t, locale, meeting, people, signatures, summaryBlocks, decisions, actions, sheet } = args;
   const rtl = locale === "fa";
+  const attendees = people.map((p) => p.name);
 
   const item = (x: string, i: number) => `<p>${digits(i + 1, locale)}. ${esc(x)}</p>`;
 
@@ -156,12 +184,24 @@ export function minutesDocument(args: MinutesDocumentArgs): string {
         esc(r.due_on === null ? DASH : formatDate(dayAsInstant(r.due_on), locale))}</td></tr>`).join("")
     }</tbody></table>`;
 
-  /* A PLACE TO SIGN — not an approval ladder: paper minutes are signed by the
-     people who were in the room, and nothing in this product reads these
-     boxes back. Omitted entirely when the roster is empty, because an empty
+  /* THE SIGNATURES — one row per person in the room. Somebody who signed in
+     the product (db/0229) has their picture in the cell with the moment under
+     it; somebody who did not has a blank line, because paper minutes are
+     still signed by hand and a grid with their name missing would say they
+     were not there. Not an approval ladder: a signature changes no state of
+     the meeting, unlocks nothing and closes nothing (the 2026-09-09 ruling
+     stands) — it is a fact about a person, printed where paper would carry
+     it. Omitted entirely when the roster is empty, because an empty
      signature grid is a form nobody can complete. */
-  const signHtml = attendees.length === 0 ? "" : `<h2>${esc(t("minutesSignatures"))}</h2>
-<table class="sign"><tbody>${attendees.map((n) => `<tr><th>${esc(n)}</th><td></td></tr>`).join("")}</tbody></table>`;
+  const signatureOf = new Map(signatures.map((s) => [s.key, s] as const));
+  const signHtml = people.length === 0 ? "" : `<h2>${esc(t("minutesSignatures"))}</h2>
+<table class="sign"><tbody>${people.map((p) => {
+    const signed = signatureOf.get(p.key);
+    return `<tr><th>${esc(p.name)}</th><td>${signed === undefined ? "" : `<img class="autograph" height="53" src="${
+      /* a data URI is not user text, but the attribute is still a quoted
+         string in a document handed to two parsers — escaping costs nothing */
+      esc(signed.dataUrl)}" alt=""><span class="signed-at">${esc(formatDate(signed.signedAt, locale))}</span>`}</td></tr>`;
+  }).join("")}</tbody></table>`;
 
   const top = sheet?.topMm ?? 18;
   const bottom = sheet?.bottomMm ?? 18;
@@ -211,6 +251,8 @@ th { background: #f2f2f2; font-weight: 700; }
 table.meta th { width: 30%; }
 table.sign { page-break-inside: avoid; }
 table.sign td { height: 16mm; }
+table.sign td img.autograph { display: block; height: 14mm; max-width: 55mm; }
+table.sign td .signed-at { display: block; font-size: 8.5pt; color: #666; }
 .none { color: #666; }
 ${sheet === null ? "" : `
 /* the paper: the page area IS the sheet now, so the box sits at its origin */

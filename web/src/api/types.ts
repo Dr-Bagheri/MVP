@@ -28,6 +28,8 @@ export type { AgentCard, ConnectorItem, ConnectorProvider, ConnectorSourceKind, 
 /* 0144 tasks + 0145 meetings, inherited from the producer (never mirrored) */
 export type {
   MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature, MeetingAttendee,
+  /* db/0229 — the minutes' signatures */
+  MeetingSignatureRow, MeetingSignaturesRecord,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,

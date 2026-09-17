@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { meetingFixture } from "@/test/fixtures";
 import {
   minutesDocument, minutesWordFile, SHEET_PART,
-  type MinutesDocumentArgs, type SheetForDocument,
+  type MinutesDocumentArgs, type SheetForDocument, type SignatureForDocument,
 } from "./minutesDocument";
 
 /**
@@ -27,9 +27,23 @@ const SHEET: SheetForDocument = {
   dataUrl: "data:image/png;base64,AAAA", topMm: 52, bottomMm: 30, sideMm: 22,
 };
 
-const args = (sheet: SheetForDocument | null): MinutesDocumentArgs => ({
+/** the roster as `meetingPeople` keys it: an account id per member */
+const PEOPLE = [{ key: "u1", name: "رؤیا" }, { key: "u2", name: "سینا" }];
+
+/** a placed signature (db/0229) — the payload is NOT the sheet's "AAAA", so
+    the Word assertion that the letterhead never travels as a data URI can
+    still distinguish the two pictures */
+const SIGNED_BY_SINA: SignatureForDocument = {
+  key: "u2", dataUrl: "data:image/png;base64,U0lHTkFUVVJF", signedAt: "2026-09-17T10:00:00.000Z",
+};
+
+const args = (
+  sheet: SheetForDocument | null,
+  signatures: SignatureForDocument[] = [],
+): MinutesDocumentArgs => ({
   t, locale: "fa", meeting: MEETING,
-  attendees: ["رؤیا", "سینا"],
+  people: PEOPLE,
+  signatures,
   summaryBlocks: [{ kind: "para", text: "دربارهٔ بودجه گفت‌وگو شد." }],
   decisions: ["قرارداد تمدید شود"],
   actions: [],
@@ -54,7 +68,8 @@ function htmlPartOf(mhtml: string): string {
   const body = html.slice(html.indexOf(CRLF + CRLF) + 4).replace(/\s+/g, "");
   return Buffer.from(body, "base64").toString("utf8");
 }
-const word = (sheet: SheetForDocument | null) => minutesWordFile(args(sheet));
+const word = (sheet: SheetForDocument | null, signatures: SignatureForDocument[] = []) =>
+  minutesWordFile(args(sheet, signatures));
 
 describe("the minutes on the organisation's letterhead", () => {
   it("gives the BROWSER a full-page sheet and a clear area that repeats", () => {
@@ -133,5 +148,57 @@ describe("the minutes on the organisation's letterhead", () => {
       expect(each).toContain("minutesDocKind");
       expect(each).toContain("minutesSignatures");
     }
+  });
+});
+
+/**
+ * THE SIGNATURES ON THE PAGE (user directive, 2026-09-17: "when the host is
+ * printing it, all of their real signatures that were uploaded in jpg or png
+ * are already added there").
+ */
+describe("the signatures placed on the minutes (db/0229)", () => {
+  it("prints a placed signature in its person's row and leaves the others a blank line", () => {
+    const html = minutesDocument(args(null, [SIGNED_BY_SINA]));
+    /* the picture ITSELF, in the signer's own row — a data URI, for the
+       letterhead's reason: the file travels and cannot fetch */
+    expect(html).toContain(`<th>سینا</th><td><img class="autograph" height="53" src="${SIGNED_BY_SINA.dataUrl}"`);
+    /* the moment under it */
+    expect(html).toContain('class="signed-at"');
+    /* and the person who has not signed keeps a blank line — paper minutes
+       are still signed by hand, and a missing row would say they were not
+       there */
+    expect(html).toContain("<th>رؤیا</th><td></td>");
+    expect(html.match(/class="autograph"/g)).toHaveLength(1);
+  });
+
+  it("matches a signature to its row by KEY, never by name", () => {
+    /* two colleagues with one display name: the signature belongs to the
+       SECOND account, and a name-keyed match would hang it on the first row
+       (or on both) */
+    const twins = [{ key: "u1", name: "سینا" }, { key: "u2", name: "سینا" }];
+    const html = minutesDocument({ ...args(null, [SIGNED_BY_SINA]), people: twins });
+    const rows = html.split("<tr>").filter((r) => r.startsWith("<th>سینا</th>"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.startsWith("<th>سینا</th><td></td></tr>")).toBe(true);
+    expect(rows[1]).toContain('class="autograph"');
+  });
+
+  it("carries the signature into Word's copy as a body data URI, beside a letterhead that never is", () => {
+    /* MEASURED on the letterhead round: Word loads a data URI in an ordinary
+       body <img> and refuses one in a header shape — so the signature rides
+       inline while the sheet stays an MHTML part. Both halves in one file. */
+    const markup = htmlPartOf(word(SHEET, [SIGNED_BY_SINA]));
+    expect(markup).toContain(SIGNED_BY_SINA.dataUrl);
+    expect(markup).not.toContain(SHEET.dataUrl);
+    expect(markup).toContain(`<v:imagedata src="${SHEET_PART}"`);
+  });
+
+  it("prints no picture where nothing was signed — the control", () => {
+    for (const each of [minutesDocument(args(null)), word(SHEET)]) {
+      expect(each).not.toContain('class="autograph"');
+      expect(each).not.toContain(SIGNED_BY_SINA.dataUrl);
+    }
+    /* the rows are still there to sign by hand */
+    expect(minutesDocument(args(null))).toContain("<th>رؤیا</th><td></td>");
   });
 });

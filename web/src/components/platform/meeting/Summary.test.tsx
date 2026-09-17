@@ -17,6 +17,9 @@ const meetingItems = vi.fn();
 const org = vi.fn();
 const me = vi.fn();
 const composeMinutesText = vi.fn();
+const meetingSignatures = vi.fn();
+const signMeeting = vi.fn();
+const withdrawMeetingSignature = vi.fn();
 /*
  * EVERY METHOD THE COMPONENT CALLS. A mock that omits one does not fake «this
  * organisation has no letterhead» — it THROWS, inside a promise, and the
@@ -31,9 +34,19 @@ vi.mock("@/api/client", () => ({
     me: (...a: unknown[]) => me(...a),
     composeMinutesText: (...a: unknown[]) => composeMinutesText(...a),
     orgSheetUrl: () => "/api/org/sheet",
+    meetingSignatures: (...a: unknown[]) => meetingSignatures(...a),
+    signMeeting: (...a: unknown[]) => signMeeting(...a),
+    withdrawMeetingSignature: (...a: unknown[]) => withdrawMeetingSignature(...a),
+    meetingSignatureImageUrl: (m: string, u: string) => `/api/meetings/${m}/signatures/${u}/image`,
   },
-  BffError: class extends Error { constructor(readonly status: number) { super("bff"); } },
+  BffError: class extends Error {
+    constructor(readonly status: number, readonly kind?: string, readonly detail?: string, readonly code?: string) { super("bff"); }
+  },
 }));
+
+/** nobody has signed and the reader is not in the room — the ordinary
+    fixture for every test that is not about signing */
+const NOBODY_SIGNED = { signatures: [], can_sign: false, has_signature_on_file: false, signed: false };
 
 const { SummaryTab } = await import("./Summary");
 
@@ -103,6 +116,7 @@ describe("the summary tab carries the summary", () => {
     meetingItems.mockResolvedValue([]);
     org.mockResolvedValue({ id: "o1", name: "شرکت" });
     me.mockResolvedValue({ id: "u1", role: "member" });
+    meetingSignatures.mockResolvedValue(NOBODY_SIGNED);
   });
 
   it("renders the summary's paragraphs on screen", async () => {
@@ -250,6 +264,7 @@ describe("the document's row, and the shape it exports (2026-09-17)", () => {
     org.mockResolvedValue({ id: "o1", name: "شرکت" });
     me.mockResolvedValue({ id: "u1", role: "member" });
     getSummaries.mockResolvedValue([]);
+    meetingSignatures.mockResolvedValue(NOBODY_SIGNED);
   });
 
   it("puts the name, the date and the controls in the DOCUMENT'S OWN box", async () => {
@@ -442,6 +457,7 @@ describe("the letterhead, and the assistant's draft (2026-09-17)", () => {
     getSummaries.mockResolvedValue([]);
     org.mockResolvedValue({ id: "o1", name: "شرکت" });
     me.mockResolvedValue({ id: "u1", role: "member" });
+    meetingSignatures.mockResolvedValue(NOBODY_SIGNED);
     forgetLetterhead();
   });
 
@@ -538,5 +554,157 @@ describe("the letterhead, and the assistant's draft (2026-09-17)", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "minutesCompose" }));
     await waitFor(() => expect(screen.getByText("minutesComposeEmpty")).toBeTruthy());
     expect(screen.queryByText("minutesComposeFailed")).toBeNull();
+  });
+});
+
+/**
+ * THE SIGNATURES AT THE FOOT OF THE DOCUMENT (user directive, 2026-09-17:
+ * "add place at the end of the summary that each attendant can add their own
+ * signature there … and when the host is printing it, all of their real
+ * signatures that were uploaded in jpg or png are already added there").
+ */
+describe("the signatures at the foot of the document (db/0229)", () => {
+  const SINA = {
+    user_id: "u2", display_name: "سینا سپاسی", display_name_en: "Sina Sepasi",
+    username: "sina", mime: "image/png", signed_at: "2026-09-17T10:00:00.000Z",
+  };
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    LOCALE = "fa";
+    meetingItems.mockResolvedValue([]);
+    getSummaries.mockResolvedValue([]);
+    org.mockResolvedValue({ id: "o1", name: "شرکت" });
+    me.mockResolvedValue({ id: "u1", role: "member" });
+    forgetLetterhead();
+  });
+
+  it("lists who signed, and draws the sign control only for somebody in the room", async () => {
+    /* THE PAIR. A reader who was not in the meeting sees the list and no
+       control — db/0229's policy would refuse them, and a button that meets
+       a refusal explains nothing. A reader on the roster with a signature on
+       file gets the one press. */
+    meetingSignatures.mockResolvedValue({ ...NOBODY_SIGNED, signatures: [SINA] });
+    renderTab("c1");
+    const foot = await screen.findByRole("region", { name: "minutesSignatures" });
+    await within(foot).findByText("سینا سپاسی");
+    expect(within(foot).queryByRole("button", { name: "signMinutes" })).toBeNull();
+    expect(within(foot).queryByRole("button", { name: "signMinutesUpload" })).toBeNull();
+
+    cleanup();
+    meetingSignatures.mockResolvedValue({ ...NOBODY_SIGNED, can_sign: true, has_signature_on_file: true });
+    renderTab("c1");
+    const mine = await screen.findByRole("region", { name: "minutesSignatures" });
+    expect(await within(mine).findByRole("button", { name: "signMinutes" })).toBeTruthy();
+    /* nobody yet, said as which nothing */
+    expect(within(mine).getByText("signaturesNone")).toBeTruthy();
+  });
+
+  it("signs with the signature on file in one press, and the list follows the server's answer", async () => {
+    meetingSignatures.mockResolvedValue({ ...NOBODY_SIGNED, can_sign: true, has_signature_on_file: true });
+    const ME = { ...SINA, user_id: "u1", display_name: "رؤیا" };
+    signMeeting.mockResolvedValue({ signatures: [ME], can_sign: true, has_signature_on_file: true, signed: true });
+    renderTab("c1");
+    await userEvent.click(await screen.findByRole("button", { name: "signMinutes" }));
+
+    /* no picture in the request: the one on file is what lands */
+    expect(signMeeting).toHaveBeenCalledWith(MEETING.id, undefined);
+    const foot = screen.getByRole("region", { name: "minutesSignatures" });
+    /* the SERVER's record is adopted — the row, and the control flipping to
+       withdraw — rather than this tab assuming the write landed */
+    await within(foot).findByRole("button", { name: "signatureWithdraw" });
+    expect(within(foot).getByText("signedByYou")).toBeTruthy();
+    expect(within(foot).queryByRole("button", { name: "signMinutes" })).toBeNull();
+    expect(within(foot).getByText("رؤیا")).toBeTruthy();
+  });
+
+  it("takes a picture right there when nothing is on file, and files and signs in ONE request", async () => {
+    meetingSignatures.mockResolvedValue({ ...NOBODY_SIGNED, can_sign: true, has_signature_on_file: false });
+    signMeeting.mockResolvedValue({ ...NOBODY_SIGNED, can_sign: true, has_signature_on_file: true, signed: true });
+    /* the deriving step ends in a canvas jsdom does not paint */
+    vi.stubGlobal("createImageBitmap", async () => ({ width: 300, height: 90, close: () => {} }));
+    const proto = globalThis.HTMLCanvasElement.prototype as unknown as { getContext: unknown; toDataURL: unknown };
+    proto.getContext = () => ({ drawImage: () => {} });
+    proto.toDataURL = () => "data:image/png;base64,U0lH";
+
+    renderTab("c1");
+    const foot = await screen.findByRole("region", { name: "minutesSignatures" });
+    /* the upload door, not the plain sign: there is nothing on file to sign
+       with, and a button that would meet `no_signature_on_file` is the
+       refusal this branch exists to pre-empt */
+    expect(await within(foot).findByRole("button", { name: "signMinutesUpload" })).toBeTruthy();
+    expect(within(foot).queryByRole("button", { name: "signMinutes" })).toBeNull();
+
+    const input = within(foot).getByLabelText("signMinutesUpload") as HTMLInputElement;
+    await userEvent.upload(input, new File([PNG], "sig.png", { type: "image/png" }));
+    await waitFor(() => expect(signMeeting).toHaveBeenCalledWith(MEETING.id, "U0lH"));
+    await within(foot).findByRole("button", { name: "signatureWithdraw" });
+  });
+
+  it("takes a signature back on the reader's own press, and adopts the server's answer", async () => {
+    const ME = { ...SINA, user_id: "u1", display_name: "رؤیا" };
+    meetingSignatures.mockResolvedValue({ signatures: [ME], can_sign: true, has_signature_on_file: true, signed: true });
+    withdrawMeetingSignature.mockResolvedValue({ ...NOBODY_SIGNED, can_sign: true, has_signature_on_file: true });
+    renderTab("c1");
+    await userEvent.click(await screen.findByRole("button", { name: "signatureWithdraw" }));
+    expect(withdrawMeetingSignature).toHaveBeenCalledWith(MEETING.id);
+    const foot = screen.getByRole("region", { name: "minutesSignatures" });
+    await within(foot).findByRole("button", { name: "signMinutes" });
+    expect(within(foot).queryByText("رؤیا")).toBeNull();
+    expect(within(foot).getByText("signaturesNone")).toBeTruthy();
+  });
+
+  it("names WHICH nothing when signing is refused", async () => {
+    /* "you have no signature on file" is fixable in the profile; "you
+       already signed" is the primary key; both must not arrive as the
+       generic "try again", which sends somebody to press the same button */
+    meetingSignatures.mockResolvedValue({ ...NOBODY_SIGNED, can_sign: true, has_signature_on_file: true });
+    const { BffError } = await import("@/api/client");
+    signMeeting.mockRejectedValue(new BffError(409, "conflict", undefined, "already_signed"));
+    renderTab("c1");
+    await userEvent.click(await screen.findByRole("button", { name: "signMinutes" }));
+    await screen.findByText("sign_already_signed");
+    expect(screen.queryByText("signFailed")).toBeNull();
+  });
+
+  it("prints every placed signature into the exported document, in its signer's row", async () => {
+    /* the half no screen assertion can see, and the whole point of the
+       directive: the picture is fetched FRESH at export and inlined in the
+       row of the person it belongs to — matched by ACCOUNT, which is how the
+       roster keys a member, never by name */
+    meetingSignatures.mockResolvedValue({ ...NOBODY_SIGNED, signatures: [SINA] });
+    const fetched: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      fetched.push(url);
+      return new Response(PNG, { headers: { "content-type": "image/png" } });
+    }));
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    const html = await savedDocument();
+
+    expect(fetched).toContain(`/api/meetings/${MEETING.id}/signatures/u2/image`);
+    expect(html).toContain(`<th>سینا سپاسی</th><td><img class="autograph" height="53" src="data:image/png;base64,`);
+    /* the host, who has not signed, keeps a blank line to sign by hand */
+    expect(html).toContain("<th>رؤیا</th><td></td>");
+    /* and the guest without an account, likewise */
+    expect(html).toContain("<th>آوا</th><td></td>");
+    expect(html.match(/class="autograph"/g)).toHaveLength(1);
+  });
+
+  it("re-reads the signatures at export rather than printing the list the tab loaded with", async () => {
+    /* the one report this feature must never produce: "the host printed it
+       and mine was not on it". The tab loaded with nobody signed; by the
+       time the ⋯ is pressed, a colleague has. */
+    meetingSignatures
+      .mockResolvedValueOnce(NOBODY_SIGNED)
+      .mockResolvedValueOnce({ ...NOBODY_SIGNED, signatures: [SINA] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(PNG, { headers: { "content-type": "image/png" } })));
+    renderTab("c1");
+    const foot = await screen.findByRole("region", { name: "minutesSignatures" });
+    await within(foot).findByText("signaturesNone");
+    const html = await savedDocument();
+    expect(meetingSignatures).toHaveBeenCalledTimes(2);
+    expect(html).toContain(`<th>سینا سپاسی</th><td><img class="autograph"`);
   });
 });

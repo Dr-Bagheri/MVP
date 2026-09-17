@@ -70,7 +70,9 @@ import type {
   User,
   UserStatus,
   WorkflowCard, MeetingAttachment, MeetingItem, MeetingItemKind, CallTranslation, TranslationStatus,
-  DemoOrganization, DemoLanguage, SeedJobStart, SeedJobView } from "./types";
+  DemoOrganization, DemoLanguage, SeedJobStart, SeedJobView,
+  /* db/0229 — the minutes' signatures */
+  MeetingSignaturesRecord } from "./types";
 
 /** one `echo.workflow_schedule` row as core's workflowRuns.schedules() serves it (UTC on the record) */
 export interface WorkflowSchedule {
@@ -2649,6 +2651,68 @@ export const api = {
       the logo's does — the URL never changes when the sheet does */
   orgSheetUrl(version = 0): string {
     return version > 0 ? `/api/org/sheet?v=${version}` : "/api/org/sheet";
+  },
+
+  // ---- the minutes' signatures (db/0229) ---------------------------------
+
+  /**
+   * The caller's own signature ON FILE. `version` busts the browser's cache
+   * the way the logo's does — the URL never changes when the picture does.
+   * Answers 404 while they have none, which the profile draws as its empty
+   * state rather than as an error.
+   */
+  mySignatureUrl(version = 0): string {
+    return version > 0 ? `/api/me/signature?v=${version}` : "/api/me/signature";
+  },
+
+  /** the picture base64'd (lib/signatureImage.ts derives it); the server
+      sniffs the MIME from the bytes and decides for itself */
+  async uploadMySignature(image_base64: string): Promise<{ uploaded: boolean; mime: string }> {
+    return bff("/api/me/signature", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ image_base64 }),
+    });
+  },
+
+  /** drop the signature on file. The ones already PLACED on meetings stay:
+      they are snapshots, and a signed record does not un-sign itself. */
+  async clearMySignature(): Promise<void> {
+    await bff("/api/me/signature", { method: "DELETE" });
+  },
+
+  /** who signed a meeting, and what the caller may do about it */
+  async meetingSignatures(meetingId: string): Promise<MeetingSignaturesRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(meetingId)}/signatures`);
+  },
+
+  /**
+   * SIGN. With `image_base64` the picture is filed AND the meeting signed in
+   * one request — the first signing is not a trip to the profile and back;
+   * without it, the signature already on file is what lands. Refusals carry
+   * a code: `no_signature_on_file`, `already_signed`.
+   */
+  async signMeeting(meetingId: string, image_base64?: string): Promise<MeetingSignaturesRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(meetingId)}/signatures`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(image_base64 === undefined ? {} : { image_base64 }),
+    });
+  },
+
+  /**
+   * Take your own signature back off a meeting. Not in the confirm guard's
+   * vocabulary on purpose: it is the reversible half of the same control —
+   * pressing sign again puts it back — and the picture on file is untouched.
+   */
+  async withdrawMeetingSignature(meetingId: string): Promise<MeetingSignaturesRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(meetingId)}/signatures/me`, { method: "DELETE" });
+  },
+
+  /** one placed signature's picture — the summary tab's preview and what
+      the document builder fetches to inline */
+  meetingSignatureImageUrl(meetingId: string, userId: string): string {
+    return `/api/meetings/${encodeURIComponent(meetingId)}/signatures/${encodeURIComponent(userId)}/image`;
   },
 
   /**

@@ -52,6 +52,12 @@ vi.mock("@/api/client", async (importOriginal) => {
       updateProfile: (patch: unknown) => updateProfile(patch),
       setPreferredModel: vi.fn(),
       setLocale: vi.fn(),
+      /* db/0229: the identity section carries the signature on file, whose
+         editor asks the bytes route for its state — a mock that omitted it
+         would not fake "none on file", it would throw into the render */
+      mySignatureUrl: () => "/api/me/signature",
+      uploadMySignature: vi.fn(),
+      clearMySignature: vi.fn(),
       /* the header's two counts. They are a DIFFERENT subject from this
          file's — what matters here is that a failing or slow read of them
          cannot break the form, which is why they answer empty rather than

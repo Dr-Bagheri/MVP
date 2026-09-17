@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
 import { AvatarEditor } from "@/components/platform/AvatarEditor";
+import { SignatureEditor } from "@/components/platform/SignatureEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
 import { TelegramLink } from "@/components/platform/TelegramLink";
 import { ExportAccountData } from "@/components/platform/ExportAccountData";
@@ -340,6 +341,15 @@ export default function ProfilePage({
           <FormPanel>
             <FormRow label={t("photo")}>
               <AvatarEditor me={me} onSaved={adopt} />
+            </FormRow>
+
+            {/* THE SIGNATURE ON FILE (db/0229): the picture of their hand that
+                signs a meeting's minutes from the summary tab. Beside the
+                photo because it is the same kind of thing — a picture of the
+                person, changed in place — and nowhere else, because nobody but
+                its owner may ever fetch it. */}
+            <FormRow label={t("signature")}>
+              <SignatureEditor />
             </FormRow>
 
             <FormRow label={t("displayName")} htmlFor="profile-name">

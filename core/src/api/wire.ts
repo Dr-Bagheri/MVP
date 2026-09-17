@@ -36,6 +36,8 @@
 
 export type { CallSummary, CallPart } from "./calls.ts";
 export type { OrgRecord } from "./org.ts";
+/* db/0229 — the minutes' signatures: who signed, and what the caller may do */
+export type { MeetingSignatureRow, MeetingSignaturesRecord } from "./signatures.ts";
 export type { AuditEntry, AuditSource, AuditPage, AuditCursor } from "./audit.ts";
 /**
  * The Management·Server shapes. Published because FE3 was otherwise going to
