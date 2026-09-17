@@ -1348,6 +1348,31 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     }, ["meeting"]),
     effect: "ui",
   },
+  {
+    name: "export_meeting_minutes",
+    label: { fa: "گرفتن صورت‌جلسه", en: "Exporting the minutes" },
+    /*
+     * A FILE, on their own device. The document is composed in their browser
+     * from what they can already read, on the organisation's letterhead when
+     * it has one — so this hand adds no reach, only a way to ask for the
+     * document without opening the page.
+     *
+     * WORD ONLY, and the description says why rather than offering a `format`
+     * that half works: the PDF is the same document sent to the printer, and
+     * a browser opens a print dialog only for a press a person made. Offering
+     * "pdf" here would be a parameter that silently does something else.
+     */
+    description:
+      "Download one meeting's minutes (صورت‌جلسه) as a Word document, on the "
+      + "organisation's letterhead if one has been uploaded. Name the meeting "
+      + "by its title, as list_meetings returned it. For a PDF, tell the "
+      + "person to press PDF on the meeting's summary tab: a print dialog can "
+      + "only be opened by their own press.",
+    parameters: obj({
+      meeting: str("The meeting's title, as list_meetings returned it."),
+    }, ["meeting"]),
+    effect: "write",
+  },
 
   /*
    * ── THE AGENTS GET THEIR HANDS (user directive, 2026-09-05) ──────────────

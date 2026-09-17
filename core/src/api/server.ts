@@ -87,6 +87,7 @@ import { createChatRepo, roomTranscript } from "./chat.ts";
 import { createInvitesRepo } from "./invites.ts";
 import { createChatBus, createTicketBook } from "./chatStream.ts";
 import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
+import { composeMinutes, composeMinutesInput, wordBudget } from "./minutes-compose.ts";
 import { createDemoOrgsRepo, type DemoOrgsRepo } from "./demo-orgs.ts";
 import { createSeedJobs } from "./demo-seed/jobs.ts";
 import { authAdminFromEnv } from "./demo-seed/auth-users.ts";
@@ -2003,6 +2004,103 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         { code: "meeting_has_no_record" });
     }
     return reply.send(await meetings.extractItems(identity, id, meeting.call_id));
+  });
+
+  /**
+   * «آماده‌سازی متن رسمی» — the minutes' PROSE, written for the page.
+   *
+   * What it composes and what it deliberately does not: the account of the
+   * discussion, and nothing else. The roster, the decisions and the action
+   * table are rows the product already holds — asking a model to restate
+   * them would put a second, differently-worded copy of the ledger into the
+   * document people sign. See minutes-compose.ts for the whole argument.
+   *
+   * IT WRITES NOTHING. The answer goes back to the browser that asked, for
+   * the person to read before it goes into a file; a composed paragraph that
+   * came out wrong is a draft somebody discards rather than a summary version
+   * that overwrote the pipeline's. Saving it, if they want it saved, is the
+   * existing `edit_summary` door and their own press.
+   *
+   * The word budget comes from the ORGANISATION'S LETTERHEAD (0228): a sheet
+   * with a deep header leaves less room, and "fit inside it" is the whole
+   * request. With no letterhead the budget is the plain page's.
+   */
+  app.post("/v1/meetings/:id/minutes-text", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    /* spends a model run on the org's key: a gateway key holds no such
+       authority, the same posture as every other pass on this page */
+    refuseApiKey(identity, "minutes text");
+    const { id } = request.params as { id: string };
+    const meeting = await meetings.detail(identity, id);
+
+    if ((options.openrouterKey ?? "") === "") {
+      throw new ValidationError("this deployment has no model provider configured",
+        { code: "provider_unconfigured" });
+    }
+
+    /* the material: the current summary and the ledger, read under the
+       CALLER — a paragraph composed from rows they cannot see would be the
+       agent lending them an authority they do not have */
+    const versions = meeting.call_id === null
+      ? [] : await transcripts.summaries(identity, meeting.call_id);
+    const current = versions[versions.length - 1];
+    const summary = current?.body ?? "";
+    const items = await meetings.items(identity, id);
+    if (summary.trim() === "" && items.length === 0) {
+      /* a SETTING of the world: there is nothing yet to re-tell, and saying
+         "failed" would send somebody looking for a broken button */
+      return reply.send({ body: null, words: 0, reason: "nothing_to_compose" });
+    }
+
+    const org_ = await org.get(identity);
+    const budget = wordBudget(org_.sheet?.top_mm ?? 20, org_.sheet?.bottom_mm ?? 20);
+
+    const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<{ preferred_model: string | null; allowed_models: string[] | null }>(
+        `select u.preferred_model, o.allowed_models
+           from echo.app_user u join echo.org o on o.id = u.org_id
+          where u.id = $1 limit 1`,
+        [identity.userId],
+      ),
+    );
+    /* the same ladder every unattended pass climbs, through the same funnel:
+       `firstServable` is where the no-Claude rule is true for a rung nobody
+       typed (the 2026-08-29 ruling) */
+    const callerModel = firstServable(
+      rows[0]?.preferred_model, rows[0]?.allowed_models?.[0], options.defaultModel,
+    ) ?? undefined;
+    if (callerModel === undefined) {
+      throw new ValidationError("no model is available to compose with", { code: "no_model" });
+    }
+
+    const runs = createAgentRunStore({ db: options.db, identity });
+    const runtime = createAgentRuntime({ runs });
+    const { body } = await composeMinutes({
+      runtime, identity, callId: meeting.call_id, callerModel,
+      apiKey: options.openrouterKey, deps: options.toolDeps,
+      input: composeMinutesInput({
+        title: meeting.title,
+        dateLabel: meeting.scheduled_at,
+        attendees: [
+          ...(meeting.host_name === null ? [] : [meeting.host_name]),
+          ...meeting.attendees.map((a) => a.display_name),
+          ...meeting.invitees,
+        ],
+        summary,
+        decisions: items.filter((i) => i.kind === "decision").map((i) => i.body),
+        actions: items.filter((i) => i.kind === "action").map((i) => i.body),
+        words: budget,
+      }),
+    });
+    if (body === null) {
+      /* the null IS the forfeit (M21), and it is named: a provider that
+         refused is not a meeting with nothing to say */
+      app.log.warn(
+        { meeting_id: id, event: "minutes_text_unread" },
+        "the minutes text could not be composed; the document is unchanged",
+      );
+    }
+    return reply.send({ body, words: budget, ...(body === null ? { reason: "unread" } : {}) });
   });
 
   /**
@@ -4898,6 +4996,103 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireAdmin(request);
     await capabilities.require(identity, "org.settings");
     await org.setLogo(identity, null);
+    return reply.code(204).send();
+  });
+
+  // ---- the letterhead (db/0228) ------------------------------------------
+  /**
+   * سربرگ — the page the minutes are printed on.
+   *
+   * READ BY ANY ACTIVE MEMBER, for the logo's reason one step further: the
+   * export is composed in the browser of whoever pressed the button, so a
+   * letterhead only an admin could fetch would mean the same meeting produces
+   * a different document depending on who asked for it.
+   */
+  app.get("/v1/org/sheet", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const image = await org.sheet(identity);
+    if (!image) return reply.code(404).send({ error: "not found", kind: "not_found" });
+    return reply
+      .header("content-type", image.mime)
+      /* private, for the logo's reason: this is one organisation's paper */
+      .header("cache-control", "private, max-age=300")
+      .send(image.bytes);
+  });
+
+  /**
+   * ONE REQUEST CARRIES THE WHOLE LETTERHEAD — the image and the clear area
+   * together, as JSON with the bytes base64'd.
+   *
+   * The logo's route takes raw bytes and this one does not, deliberately: a
+   * letterhead is a page image AND the three numbers that say where its text
+   * may go, and those arrive from one dialog in one act. Two requests would
+   * make a half-set sheet reachable — a new page under the old margins — for
+   * the length of a network hop, which is exactly the state the preview the
+   * admin just looked at did not show them.
+   */
+  app.post("/v1/admin/org/sheet", {
+    /* the column's ceiling is 3MB (0228); base64 inflates by a third, and the
+       margin above that is so an oversized file meets THIS route's named
+       refusal rather than Fastify's generic 413 */
+    bodyLimit: 6 * 1024 * 1024,
+  }, async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "org.settings");
+    const body = request.body as {
+      image_base64?: unknown; source_mime?: unknown;
+      top_mm?: unknown; bottom_mm?: unknown; side_mm?: unknown;
+    };
+    if (typeof body?.image_base64 !== "string" || body.image_base64 === "") {
+      throw new ValidationError("send the page image as base64 in image_base64");
+    }
+    const bytes = Buffer.from(body.image_base64, "base64");
+    if (bytes.length === 0) throw new ValidationError("the page image is empty");
+    if (bytes.length > 3 * 1024 * 1024) {
+      throw new ValidationError("a letterhead page tops out at 3MB",
+        { code: "sheet_too_large", params: { max: "3MB" } });
+    }
+    /* the MIME comes from the BYTES. The browser derives this image from
+       whatever was uploaded, so the claim on the way in is doubly a claim —
+       and this is the one place that decides. */
+    const mime = sniffImage(bytes);
+    if (!mime) {
+      throw new ValidationError("the page image is not a PNG, JPEG or WebP",
+        { code: "sheet_not_an_image" });
+    }
+    /* what they ACTUALLY uploaded, kept for the sentence beside the preview
+       and constrained to the five 0228 accepts — an unknown source is a
+       caller mistake worth naming, not something to store and puzzle over */
+    const SOURCES = new Set([
+      "image/png", "image/jpeg", "image/webp", "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]);
+    const sourceMime = typeof body.source_mime === "string" && SOURCES.has(body.source_mime)
+      ? body.source_mime
+      : mime;
+    await org.setSheet(identity, { bytes, mime, sourceMime });
+    if (body.top_mm !== undefined || body.bottom_mm !== undefined || body.side_mm !== undefined) {
+      await org.setSheetMargins(identity, {
+        topMm: Number(body.top_mm), bottomMm: Number(body.bottom_mm), sideMm: Number(body.side_mm),
+      });
+    }
+    return reply.code(201).send({ uploaded: true, mime, source_mime: sourceMime });
+  });
+
+  /** the clear area alone — see `setSheetMargins` for why it is its own act */
+  app.patch("/v1/admin/org/sheet", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "org.settings");
+    const body = request.body as { top_mm?: unknown; bottom_mm?: unknown; side_mm?: unknown };
+    await org.setSheetMargins(identity, {
+      topMm: Number(body?.top_mm), bottomMm: Number(body?.bottom_mm), sideMm: Number(body?.side_mm),
+    });
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/admin/org/sheet", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "org.settings");
+    await org.setSheet(identity, null);
     return reply.code(204).send();
   });
 

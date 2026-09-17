@@ -3,14 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { MeetingItem, MeetingRecord } from "@/api/types";
+import type { MeetingItem, MeetingRecord, Me, Org } from "@/api/types";
 import { parseSummary, SummaryBody } from "@/components/echo/SummaryBody";
-import { IconAsk, IconDownload, IconPencil, IconPrint, IconRetry } from "@/components/icons";
+import { IconAsk, IconDownload, IconPencil, IconPrint, IconRetry, IconUpload } from "@/components/icons";
+import { KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold";
 import { openAssistant } from "@/lib/assistantBus";
 import { digits, formatDate } from "@/lib/format";
 import { meetingPeople } from "@/lib/meetingPeople";
 import { notifyError } from "@/lib/notify";
+import { LetterheadDialog } from "./LetterheadDialog";
+import { minutesDocument, minutesWordFile } from "./minutesDocument";
+import { forgetLetterhead, letterheadForDocument } from "@/lib/minutesFile";
 
 /**
  * خلاصهٔ جلسه — the meeting's SUMMARY, composed from facts the platform
@@ -36,15 +40,14 @@ import { notifyError } from "@/lib/notify";
  * is a migration, not a component edit.
  */
 
-/** HTML-escape for the exported document — every interpolated string is
-    USER OR MODEL text, and document.write of a raw title is stored XSS */
-function esc(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+/*
+ * The document itself moved to `minutesDocument.ts` (2026-09-17). It is no
+ * longer a string this component happens to build: it is a صورت‌جلسه that has
+ * to come out the same through two readers — Word and the browser's print —
+ * and, when the organisation has uploaded a letterhead, land inside the clear
+ * area of their own paper. That is a thing with rules, so it has a file and
+ * its own tests.
+ */
 
 /*
  * The heading-slicer that used to live here is GONE. It parsed the summary's
@@ -146,16 +149,66 @@ export function SummaryTab({ meeting, callId }: {
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /*
+   * THE ORGANISATION, for its LETTERHEAD (db/0228) — and who is reading, so
+   * the ⋯ offers uploading one only to somebody the server would let upload
+   * it. An admin-only row drawn for a member is a promise the product will
+   * not keep; a missing read is not a refusal, so both start as null and the
+   * entry simply is not there until the answer arrives.
+   */
+  const [org, setOrg] = useState<Org | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  const [orgReads, setOrgReads] = useState(0);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void api.org().then((o) => { if (alive) setOrg(o); }).catch(() => { if (alive) setOrg(null); });
+    return () => { alive = false; };
+  }, [orgReads]);
+  useEffect(() => {
+    let alive = true;
+    void api.me().then((u) => { if (alive) setMe(u); }).catch(() => { if (alive) setMe(null); });
+    return () => { alive = false; };
+  }, []);
+  const isAdmin = me !== null && (me.role === "admin" || me.role === "owner");
+
+  /* «آماده‌سازی متن با دستیار» — the composed prose lands in the EDITOR, not
+     in the file: a model's paragraph goes into a document people sign only
+     after somebody has read it and pressed save. */
+  const [composing, setComposing] = useState(false);
+  const composeText = () => {
+    setComposing(true);
+    setRerunNote(null);
+    void api.composeMinutesText(meeting.id)
+      .then((answer) => {
+        if (answer.body === null) {
+          /* WHICH nothing: a provider that refused is not a meeting with
+             nothing to say, and neither is a meeting with nothing recorded
+             yet — the route names both and so does this */
+          setRerunNote(answer.reason === "nothing_to_compose"
+            ? t("minutesComposeEmpty") : t("minutesComposeFailed"));
+          return;
+        }
+        setDraft(answer.body);
+        setRerunNote(t("minutesComposed"));
+      })
+      .catch(() => setRerunNote(t("minutesComposeFailed")))
+      .finally(() => setComposing(false));
+  };
+
   const rows = Array.isArray(items) ? items : [];
   const decisions = useMemo(
     () => rows.filter((r) => r.kind === "decision").map((r) => r.body),
     [rows],
   );
-  const actions = useMemo(
-    () => rows.filter((r) => r.kind === "action")
-      .map((r) => (r.owner === null ? r.body : `${r.body} — ${r.owner}`)),
-    [rows],
-  );
+  /*
+   * THE ROWS, not a rendering of them. The screen writes «کار — مسئول» on one
+   * line and the document gives مسئول and مهلت columns of their own, so a
+   * flattened string here would mean the file could never carry a deadline
+   * the panel beside it displays — two renderings of one fact is fine, two
+   * DERIVATIONS is how they come to disagree.
+   */
+  const actionRows = useMemo(() => rows.filter((r) => r.kind === "action"), [rows]);
 
   /**
    * ONE derivation, two consumers: the section on screen and the section in
@@ -177,49 +230,59 @@ export function SummaryTab({ meeting, callId }: {
     [summary],
   );
 
-  const documentHtml = () => {
-    const item = (x: string, i: number) => `<p>${i + 1}. ${esc(x)}</p>`;
-    /* The exported document reads the SAME parse the screen does. It used to
-       write one <p> per line, so a Word file downloaded from this page carried
-       «**Next steps**» and «* Refresh the demo data» as literal text — the
-       screen's defect, printed. Headings become <h3>, bullets a <ul>, numbered
-       lines an <ol>; anything the dialect does not recognise is a paragraph,
-       which is the parser's own rule and is why nothing can be dropped.
-       Still escaped here and not in the parser: this is a string being
-       concatenated into HTML, while the screen renders text nodes React escapes
-       for it — escaping twice would put `&amp;` in front of a reader. */
-    const summaryHtml = summaryBlocks
-      .map((b) =>
-        b.kind === "heading" ? `<h3>${esc(b.text)}</h3>`
-          : b.kind === "bullets" ? `<ul>${b.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`
-            : b.kind === "numbered" ? `<ol>${b.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>`
-              : `<p>${esc(b.text)}</p>`)
-      .join("");
-    return `<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>${esc(meeting.title)}</title></head><body style="font-family:Vazirmatn,Tahoma,sans-serif">
-<h1>${esc(t("summaryDocTitle", { title: meeting.title }))}</h1>
-<p>${esc(t("minutesDate"))}: ${esc(formatDate(meeting.scheduled_at, locale))}</p>
-<h2>${esc(t("minutesAttendees"))}</h2>${attendees.length === 0 ? `<p>${esc(t("minutesNoAttendees"))}</p>` : attendees.map((n) => `<p>${esc(n)}</p>`).join("")}
-<h2>${esc(t("minutesSummary"))}</h2>${summaryHtml === "" ? `<p>${esc(t("minutesNoSummary"))}</p>` : summaryHtml}
-<h2>${esc(t("ext_decisions"))}</h2>${decisions.length === 0 ? `<p>${esc(t("minutesNoDecisions"))}</p>` : decisions.map(item).join("")}
-<h2>${esc(t("ext_actions"))}</h2>${actions.length === 0 ? `<p>${esc(t("minutesNoActions"))}</p>` : actions.map(item).join("")}
-</body></html>`;
+  /**
+   * THE FILE THIS PAGE HANDS OVER.
+   *
+   * Built by `minutesDocument` — see that file for the صورت‌جلسه's shape and
+   * for why the organisation's letterhead has to be expressed twice, once for
+   * Word and once for the browser's print.
+   *
+   * ASYNC, because the letterhead is bytes: the page image lives behind the
+   * api and has to become a data URI before it can travel inside a document
+   * that Word will open from disk and a print window will render with no
+   * session of its own.
+   */
+  const buildDocument = async (target: "browser" | "word"): Promise<string> => {
+    const args = {
+      t, locale, meeting, attendees, summaryBlocks, decisions,
+      actions: actionRows,
+      sheet: await sheetForDocument(),
+    };
+    /* the WORD file is an MHTML archive when there is a letterhead, because
+       that is the only form Word repeats an image from (minutesDocument.ts
+       has the three measurements); the print window gets the HTML. */
+    return target === "word" ? minutesWordFile(args) : minutesDocument(args);
   };
 
+  /* the letterhead comes from `lib/minutesFile`, which the assistant's own
+     `export_meeting_minutes` reads too: one loader, one cache, and the two
+     doors cannot produce different-looking documents for one meeting */
+  const sheetForDocument = () => letterheadForDocument(org);
+
   const downloadWord = () => {
-    const blob = new Blob(["﻿", documentHtml()], { type: "application/msword" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${meeting.title.slice(0, 60)}.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void buildDocument("word").then((html) => {
+      const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${meeting.title.slice(0, 60)}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
   };
+
   const printPdf = () => {
+    /* the window is opened INSIDE the press, before any await: a popup that
+       is not the direct result of a gesture is one the browser blocks, and
+       fetching the letterhead first is exactly such an await */
     const win = window.open("", "_blank");
     if (win === null) return;
-    win.document.write(documentHtml());
-    win.document.close();
-    win.print();
+    void buildDocument("browser").then((html) => {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.print();
+    });
   };
 
   const saveDraft = () => {
@@ -262,13 +325,40 @@ export function SummaryTab({ meeting, callId }: {
 
   return (
     <div className="space-y-3">
-      {/* ── the toolbar, ABOVE the document ──
-          Word and PDF used to sit at the foot of a status rail beside the
-          card, which put the two controls a reader reaches for most below
-          the fold of a document as long as its meeting. */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      {/*
+        ── ONE ROW: what this document is, and what can be done with it ──
+        (user directive, 2026-09-17: "in summaries put the title and the date
+        of the meeting on one side, in fa version on left, and in the same row
+        put a three dot kebab menu with pdf and word download in it; keep the
+        generate again out as it is, near the three dot".)
+
+        The title and the date came OUT of the card, where they stood centred
+        above the first section, into the row that already held the controls.
+
+        PINNED PHYSICALLY, not logically, and deliberately: the side was named
+        while looking at the PERSIAN screen, where left is the inline END — and
+        an English document header with its title on the right is simply wrong.
+        `rtl:flex-row-reverse` lays both locales out left-to-right (title left,
+        controls right) while leaving the text inside each to its own
+        direction, which a `dir` on the row would not.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rtl:flex-row-reverse">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-bold text-fg">
+            {t("summaryDocTitle", { title: meeting.title })}
+          </h2>
+          <p className="mt-0.5 text-caption text-fg-subtle">
+            <span className="badge-num" dir="ltr">MTG-{meeting.id.slice(0, 8)}</span>
+            {" · "}
+            {t("minutesDate")}: {formatDate(meeting.scheduled_at, locale)}
+          </p>
+        </div>
+
+        {/* the same left-to-right order inside the group, so the ⋯ lands on
+            the row's outer corner in both locales */}
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 rtl:flex-row-reverse">
         {rerunNote !== null ? (
-          <span className="me-auto text-caption text-fg-muted">{rerunNote}</span>
+          <span className="text-caption text-fg-muted">{rerunNote}</span>
         ) : null}
         {/*
           «تولید دوباره» — THE SAME BUTTON, A DIFFERENT EXTRACTOR.
@@ -329,29 +419,54 @@ export function SummaryTab({ meeting, callId }: {
             {rerunning ? t("rerunning") : t("rerun")}
           </button>
         ) : null}
-        <button type="button" onClick={downloadWord}
-          className="btn btn-sm gap-1.5 border border-border bg-surface font-medium text-fg hover:bg-border">
-          <IconDownload width={12} height={12} />
-          Word
-        </button>
-        <button type="button" onClick={printPdf}
-          className="btn btn-sm gap-1.5 border border-border bg-surface font-medium text-fg hover:bg-border">
-          <IconPrint width={12} height={12} />
-          PDF
-        </button>
+        {/*
+          THE TWO EXPORTS MOVED INTO THE ⋯ and «تولید دوباره» stayed out, which
+          is the directive's own division and a sound one: the regenerate is
+          the row's frequent act, while Word and PDF are the two ways of taking
+          the SAME document away — a menu is where a reader looks for a format,
+          and two more buttons beside the title is a toolbar again.
+        */}
+        <KebabMenu
+          label={t("summaryExport")}
+          items={[
+            {
+              key: "word", label: "Word",
+              icon: <IconDownload width={14} height={14} />,
+              onSelect: downloadWord,
+            },
+            {
+              key: "pdf", label: "PDF",
+              icon: <IconPrint width={14} height={14} />,
+              onSelect: printPdf,
+            },
+            /* the ASSISTANT's own entry, beside the two formats because it is
+               about the same document: it writes the account of the meeting to
+               the length the letterhead leaves, and leaves it in the editor */
+            ...(callId === null ? [] : [{
+              key: "compose",
+              label: composing ? t("minutesComposing") : t("minutesCompose"),
+              icon: <IconAsk width={14} height={14} />,
+              disabled: composing,
+              onSelect: composeText,
+            }]),
+            /* and the paper itself — an ADMIN's, because it is the whole
+               organisation's stationery rather than this meeting's */
+            ...(isAdmin ? [{
+              key: "sheet",
+              label: org?.sheet?.mime == null ? t("sheetUpload") : t("sheetChange"),
+              icon: <IconUpload width={14} height={14} />,
+              onSelect: () => setSheetOpen(true),
+            }] : []),
+          ]}
+        />
+        </div>
       </div>
 
+      {/* the card's own centred header is GONE — its title and date are the
+          row above, and a document that names itself twice on one screen is
+          the second place for the two to disagree */}
       <article className="tile p-6" aria-label={t("tabSummary")}>
-        <header className="border-b border-border pb-3 text-center">
-          <h2 className="text-lg font-bold text-fg">{t("summaryDocTitle", { title: meeting.title })}</h2>
-          <p className="mt-1 text-caption text-fg-subtle">
-            <span className="badge-num" dir="ltr">MTG-{meeting.id.slice(0, 8)}</span>
-            {" · "}
-            {t("minutesDate")}: {formatDate(meeting.scheduled_at, locale)}
-          </p>
-        </header>
-
-        <section className="mt-4">
+        <section>
           <h3 className="text-sm font-bold text-accent">{digits(1, locale)}. {t("minutesAttendees")}</h3>
           {attendees.length === 0 ? (
             <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoAttendees")}</p>
@@ -453,19 +568,34 @@ export function SummaryTab({ meeting, callId }: {
         <section className="mt-4">
           <h3 className="text-sm font-bold text-accent">{digits(4, locale)}. {t("ext_actions")}</h3>
           {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
-            : actions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
+            : actionRows.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
               : (
                 <ul className="mt-1.5 space-y-1.5">
-                  {actions.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm leading-6 text-fg">
+                  {actionRows.map((row) => (
+                    <li key={row.id} className="flex items-start gap-2 text-sm leading-6 text-fg">
                       <span className="mt-2 h-1 w-3 shrink-0 rounded-full bg-fg-subtle" aria-hidden />
-                      {item}
+                      {row.owner === null ? row.body : `${row.body} — ${row.owner}`}
                     </li>
                   ))}
                 </ul>
               )}
         </section>
       </article>
+
+      {/* the organisation's paper. Re-read on save rather than assumed: the
+          ⋯ entry's own words («بارگذاری» vs «تعویض») come from the record, so
+          a screen that kept the old one would offer to upload a sheet that is
+          already there. */}
+      {sheetOpen ? (
+        <LetterheadDialog
+          current={org?.sheet ?? null}
+          onClose={() => setSheetOpen(false)}
+          onSaved={() => {
+            forgetLetterhead();
+            setOrgReads((n) => n + 1);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

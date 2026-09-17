@@ -1086,3 +1086,51 @@ describe("the take's one row, and the people beside it (2026-09-16)", () => {
     expect(within(rail).getByText("۱ در جلسه")).toBeInTheDocument();
   });
 });
+
+describe("the meeting's name rides with the tabs (2026-09-17)", () => {
+  /*
+   * User directive: "remove the name of the meeting from the top inside the
+   * page, we don't need it there — instead add it in front of overview, into
+   * the content."
+   *
+   * It was a heading block above every stage, restating the trail one line
+   * higher. What makes this assertable rather than cosmetic is WHERE it
+   * landed: a title that merely still exists somewhere on the page satisfies
+   * the old layout too, so the claim here is the ROW — the name and the four
+   * tabs in one track, the name first.
+   */
+  it("labels the tab row, in front of «نمای کلی»", async () => {
+    MEETING = meeting({ call_id: "c-1", title: "جلسهٔ فروش" });
+    CALL = call({ status: "ready" });
+    render(<MeetingPage id="m-1" />);
+
+    const tablist = await screen.findByRole("tablist", { name: "پس از جلسه" });
+    const heading = screen.getByRole("heading", { name: "جلسهٔ فروش" });
+    /* the toolbar's own group holds both — a name in a block of its own
+       above the row is the shape this replaced */
+    const row = heading.closest("div")!;
+    expect(within(row).getByRole("tablist", { name: "پس از جلسه" })).toBe(tablist);
+    /* IN FRONT OF the tabs, in document order — `Node.DOCUMENT_POSITION_
+       FOLLOWING` is the direction-free way to say it, since «front» on this
+       page is the right-hand end */
+    expect(heading.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    /* and said ONCE: the old block plus this one would be two */
+    expect(screen.getAllByRole("heading", { name: "جلسهٔ فروش" })).toHaveLength(1);
+  });
+
+  it("gives a live take no title block at all — the trail is where the name is", async () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", title: "جلسهٔ فروش" });
+    engineIsRecording("c-1");
+    render(<MeetingPage id="m-1" />);
+    await screen.findByRole("status");
+
+    /* the page's top bar is GONE on the ordinary take, heading and all: with
+       the name moved, what was left was an empty flex child spending the
+       column's gap above the stage */
+    expect(screen.queryByRole("heading", { name: "جلسهٔ فروش" })).toBeNull();
+    /* the CONTROL — it is the title that left, not the stage: the take's own
+       row is still there, with the finish on it */
+    expect(screen.getByRole("button", { name: "پایان و پردازش" })).toBeInTheDocument();
+  });
+});

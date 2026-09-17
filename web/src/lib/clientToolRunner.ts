@@ -140,6 +140,10 @@ const NAMING: Readonly<Record<string, Naming>> = {
   update_chat_room: { subject: ["room"], to: ["name"], flag: "archived" },
   create_chat_room: { subject: ["name"] },
   invite_to_meeting: { subject: ["invitees"] },
+  /* a FILE leaves the building when this one runs, so the card names the
+     meeting it will be about — «گرفتن صورت‌جلسه» alone is a yes to any of
+     them */
+  export_meeting_minutes: { subject: ["meeting"] },
 };
 
 const EXCERPT_CHARS = 60;

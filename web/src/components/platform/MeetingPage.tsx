@@ -1,6 +1,6 @@
 "use client";
 
-import { SectionTabs } from "./sectionTabs";
+import { SectionTabs, Toolbar } from "./sectionTabs";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
@@ -501,12 +501,33 @@ export function MeetingPage({ id }: { id: string }) {
     });
   };
 
+  /* WHETHER THERE IS A TOP BAR AT ALL. With the meeting's name gone from it,
+     the bar holds only the things that are not part of a running take — the
+     host-only sentence, the orphaned finish, the failed retry, the upload
+     lane's way back — and on an ordinary meeting that is none of them. */
+  const topBarActs = (!isHost && view === "live")
+    || takeOrphaned
+    || (isHost && (engineFailed || view === "awaitingFile"));
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* ── the page's own top bar: the meeting, and the one act ────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="min-w-0 truncate text-base font-bold text-fg">{meeting.title}</h1>
+      {/*
+        ── the page's own top bar: the acts, and nothing else ──────────────
+        THE MEETING'S NAME LEFT THIS BAR (user directive, 2026-09-17: "remove
+        the name of the meeting from the top inside the page, we don't need it
+        there — instead add it in front of overview, into the content").
 
+        It was a heading block above every stage, restating what the trail
+        already says one line higher (`useCrumbTitle` puts it there). It is in
+        the post stage's tab row now, at the row's start, where it labels the
+        four tabs it belongs to.
+
+        The bar renders only when it HAS something: an empty flex child still
+        spends the column's `gap-4`, which is 16px of nothing above the stage
+        on every ordinary meeting.
+      */}
+      {topBarActs ? (
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           {/*
             THE ON-AIR LIGHT AND THE TWO ACTS LEFT THIS BAR (user directive,
@@ -565,6 +586,7 @@ export function MeetingPage({ id }: { id: string }) {
           ) : null}
         </div>
       </div>
+      ) : null}
 
       <input
         ref={uploadInput}
@@ -909,7 +931,19 @@ function PostStage({ meeting, call, me, locale, onBackToMeetings }: {
           a 2px underline under the active word */}
       {/* THE KIT'S TRACK (2026-09-15): the same rail and pill every page's
           first sub-menu wears, read from sectionTabs rather than drawn here */}
-      <SectionTabs label={t("stage_post")} tabs={tabs} active={tab} onSelect={setTab} />
+      {/*
+        THE MEETING'S NAME RIDES IN FRONT OF THE TABS (user directive,
+        2026-09-17: "instead add it in front of overview … into the content").
+        It came out of a heading block at the top of the page — a second
+        rendering of what the trail already says — and sits here, at the row's
+        start, as the label of the four tabs that belong to it. Still an `h1`:
+        the page needs one, and this is the only place it now says which
+        meeting a reader is looking at.
+      */}
+      <Toolbar>
+        <h1 className="min-w-0 truncate text-sm font-bold text-fg">{meeting.title}</h1>
+        <SectionTabs label={t("stage_post")} tabs={tabs} active={tab} onSelect={setTab} />
+      </Toolbar>
 
       {/*
         THE ITEMS PANEL IS NOT GATED ON A RECORDING (0160). Everything else in

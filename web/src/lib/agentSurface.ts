@@ -37,6 +37,7 @@ export const SURFACE_TOOLS: readonly string[] = [
   "create_meeting",
   "create_task",
   "open_meeting",
+  "export_meeting_minutes",
 
   /* ── M49: everything a person can do ─────────────────────────────────
      Each has an executor below and a spec in core's registry; the seam test
@@ -1977,6 +1978,54 @@ export async function executeClientTool(
         return { ok: true, detail: `opened «${hit.title}»` };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "that meeting could not be opened") };
+      }
+    }
+    /**
+     * THE MINUTES, AS A FILE — «صورت‌جلسهٔ جلسهٔ دوشنبه را بده».
+     *
+     * Composed in the person's own browser from what they can already read,
+     * through the SAME builder the summary tab's Word button uses: one
+     * document, two doors. Nothing is written anywhere; what this adds is
+     * being able to ask for the file without opening the page.
+     *
+     * The letterhead comes with it when the organisation has one, because it
+     * comes from the same builder — a hand that produced a different-looking
+     * document from the button beside it would be the two-spellings defect
+     * wearing a file extension.
+     */
+    case "export_meeting_minutes": {
+      const name = typeof a.meeting === "string" ? a.meeting.trim() : "";
+      if (!name) return { ok: false, detail: "a meeting title is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const rows = await api.meetings();
+        const lowered = name.toLowerCase();
+        const exact = rows.filter((m) => (m.title ?? "").toLowerCase() === lowered);
+        /* the same resolution rule as `open_meeting`, and for the stronger
+           reason: a wrong meeting OPENED is a back button, a wrong meeting
+           DOWNLOADED is a document somebody may send on */
+        const partial = exact.length === 1
+          ? exact : rows.filter((m) => (m.title ?? "").toLowerCase().includes(lowered));
+        if (partial.length === 0) return { ok: false, detail: "no meeting matched that title" };
+        if (partial.length > 1) {
+          return {
+            ok: false,
+            detail: `several meetings matched: ${partial.slice(0, 5).map((m) => `«${m.title}»`).join("، ")} — ask the user which`,
+          };
+        }
+        const hit = partial[0]!;
+        const { minutesDocumentFor } = await import("./minutesFile");
+        const html = await minutesDocumentFor(hit.id);
+        const blob = new Blob(["﻿", html], { type: "application/msword" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${(hit.title ?? "meeting").slice(0, 60)}.doc`;
+        link.click();
+        URL.revokeObjectURL(url);
+        return { ok: true, detail: `downloaded the minutes of «${hit.title}» as a Word document` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the minutes could not be exported") };
       }
     }
     case "rename_record": {

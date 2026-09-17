@@ -2610,6 +2610,59 @@ export const api = {
   },
 
   /**
+   * THE LETTERHEAD (db/0228) — the page the minutes are printed on.
+   *
+   * The image and the three margins go up TOGETHER, in one request: they are
+   * one object, and a new page under the old clear area is a state the
+   * preview the admin just approved never showed them.
+   */
+  async uploadOrgSheet(sheet: {
+    /** the derived page image, base64 (see lib/letterhead.ts) */
+    image_base64: string;
+    /** what they actually uploaded — a PDF, a Word template, an image */
+    source_mime: string;
+    top_mm: number;
+    bottom_mm: number;
+    side_mm: number;
+  }): Promise<{ uploaded: boolean; mime: string; source_mime: string }> {
+    return bff("/api/org/sheet", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(sheet),
+    });
+  },
+
+  /** the clear area alone — an admin nudging the box does not re-send 3MB */
+  async setOrgSheetMargins(m: { top_mm: number; bottom_mm: number; side_mm: number }): Promise<void> {
+    await bff("/api/org/sheet", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(m),
+    });
+  },
+
+  async clearOrgSheet(): Promise<void> {
+    await bff("/api/org/sheet", { method: "DELETE" });
+  },
+
+  /** where the page image lives; `version` busts the browser's cache the way
+      the logo's does — the URL never changes when the sheet does */
+  orgSheetUrl(version = 0): string {
+    return version > 0 ? `/api/org/sheet?v=${version}` : "/api/org/sheet";
+  },
+
+  /**
+   * «آماده‌سازی متن با دستیار» — the minutes' prose, composed to the
+   * letterhead's clear area. Writes NOTHING: the answer is a draft, and
+   * saving it is the person's own press on `editSummary`.
+   */
+  async composeMinutesText(meetingId: string): Promise<{
+    body: string | null; words: number; reason?: string;
+  }> {
+    return bff(`/api/meetings/${encodeURIComponent(meetingId)}/minutes-text`, { method: "POST" });
+  },
+
+  /**
    * M41 P1 — the workflow engine's manual trigger and run ledger.
    * **LIVE** — `/api/workflows/…` → core `/v1/workflows/…`.
    */

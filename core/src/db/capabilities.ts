@@ -213,6 +213,12 @@ export async function hasOrgLogoBytes(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "logo_bytes");
 }
 
+/** db/0228: the organisation's letterhead — the page image and its margins
+    land together, so one column answers for all six. */
+export async function hasOrgSheet(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "sheet_bytes");
+}
+
 /** db/0096: person.team + person.voiceprint_samples (they land together). */
 export async function hasPersonTeams(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "team");

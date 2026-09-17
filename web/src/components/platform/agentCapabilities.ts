@@ -58,6 +58,7 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "list_meeting_folders",
       "create_meeting", "update_meeting", "add_meeting_item", "approve_minutes",
       "archive_meeting", "invite_to_meeting", "open_meeting",
+      "export_meeting_minutes",
       "update_meeting_item", "extract_meeting_items", "create_meeting_topic",
       "set_meeting_join_code", "update_meeting_topic",
     ],

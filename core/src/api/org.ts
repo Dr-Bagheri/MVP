@@ -43,7 +43,7 @@ import { changedFields, record } from "./admin-actions.ts";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
-import { hasAutonomyCeiling, hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile, hasSignupPolicy } from "../db/capabilities.ts";
+import { hasAutonomyCeiling, hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile, hasOrgSheet, hasSignupPolicy } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface OrgRecord {
@@ -81,6 +81,26 @@ export interface OrgRecord {
    */
   has_logo?: boolean;
   /**
+   * db/0228 — the organisation's LETTERHEAD, as its facts rather than its
+   * bytes. ABSENT as a group until the migration runs; `mime: null` inside
+   * the group is the ordinary state of an organisation that has not uploaded
+   * one, which is a different thing from a deployment that cannot hold one.
+   *
+   * The margins travel WITH it because they are part of the same object: a
+   * letterhead is a page with a clear area, and the numbers are useless
+   * beside a different sheet. The image itself has its own route — this
+   * record is read on screens that only need to know there IS one.
+   */
+  sheet?: {
+    mime: string | null;
+    /** what the admin uploaded (a PDF, a Word template, an image) — read by
+        the screen so a wrongly-read file is visible, never by the exports */
+    source_mime: string | null;
+    top_mm: number;
+    bottom_mm: number;
+    side_mm: number;
+  };
+  /**
    * db/0075 — the highest autonomy any member's assistant may reach here.
    * A member's effective setting is `least(their choice, this)`, and that
    * clamp has been live in `actorAutonomy` since 0075 landed. What did NOT
@@ -105,6 +125,17 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
   // absent stays absent on an un-migrated deployment
   ...(row.glossary !== undefined ? { glossary: (row.glossary as string[] | null) ?? [] } : {}),
   ...(row.has_logo !== undefined ? { has_logo: row.has_logo === true } : {}),
+  ...(row.sheet_top_mm !== undefined
+    ? {
+        sheet: {
+          mime: (row.sheet_mime as string | null) ?? null,
+          source_mime: (row.sheet_source_mime as string | null) ?? null,
+          top_mm: Number(row.sheet_top_mm),
+          bottom_mm: Number(row.sheet_bottom_mm),
+          side_mm: Number(row.sheet_side_mm),
+        },
+      }
+    : {}),
   ...(row.autonomy_ceiling !== undefined
     ? { autonomy_ceiling: String(row.autonomy_ceiling) } : {}),
   ...(row.allowed_email_domains !== undefined
@@ -125,6 +156,10 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
 const PROFILE_COLUMNS = ", public_email, description, website_url, location, logo_url, social_links";
 /* the logo's PRESENCE, never its bytes — see OrgRecord.has_logo */
 const LOGO_COLUMN = ", (logo_bytes is not null) as has_logo";
+/* db/0228's letterhead, likewise: its FACTS, never the page image. The mime
+   doubles as "is there one" — with 0228's whole-or-nothing constraint, a mime
+   and bytes cannot disagree about that. */
+const SHEET_COLUMNS = ", sheet_mime, sheet_source_mime, sheet_top_mm, sheet_bottom_mm, sheet_side_mm";
 /** db/0075's cap. Its own probe: it landed in a different migration. */
 const CEILING_COLUMN = ", autonomy_ceiling";
 /** db/0112's wall. Its own probe likewise. */
@@ -167,6 +202,84 @@ export function createOrgRepo(db: Db) {
         ));
     },
 
+    /**
+     * db/0228 — the LETTERHEAD's page image.
+     *
+     * Read by any active member, like the logo and for the same reason: the
+     * export runs in the browser of whoever pressed the button, and a
+     * letterhead an admin can see and a colleague cannot would mean the same
+     * meeting produces two different documents depending on who asked.
+     */
+    async sheet(identity: Identity): Promise<{ bytes: Buffer; mime: string } | null> {
+      if (!(await hasOrgSheet(db))) return null;
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ sheet_bytes: Buffer | null; sheet_mime: string | null }>(
+          `select sheet_bytes, sheet_mime from echo.org where id = $1`,
+          [identity.orgId],
+        ));
+      const row = rows[0];
+      if (!row?.sheet_bytes || !row.sheet_mime) return null;
+      return { bytes: row.sheet_bytes, mime: row.sheet_mime };
+    },
+
+    /**
+     * Store or clear the whole letterhead. `null` clears the image and the
+     * source together (0228's whole-or-nothing constraint is the wall; this
+     * mirrors it) and LEAVES THE MARGINS: they are the admin's measurements
+     * of their own paper, and an upload of the same sheet a minute later
+     * should not make them measure it again.
+     */
+    async setSheet(
+      identity: Identity,
+      sheet: { bytes: Buffer; mime: string; sourceMime: string } | null,
+    ): Promise<void> {
+      if (!(await hasOrgSheet(db))) throw new ConflictError("not_migrated");
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `update echo.org
+              set sheet_bytes = $2, sheet_mime = $3, sheet_source_mime = $4
+            where id = $1`,
+          [identity.orgId, sheet?.bytes ?? null, sheet?.mime ?? null, sheet?.sourceMime ?? null],
+        ));
+    },
+
+    /**
+     * The clear area, without re-uploading the sheet. Its own operation
+     * because that is how it is used: an admin uploads once and then nudges
+     * the box until the text sits inside their header — a round trip carrying
+     * three megabytes per nudge is a feature nobody would use twice.
+     *
+     * The numbers are re-spoken here and walled by 0228's check: the api
+     * restating a constraint is how a caller gets a sentence instead of a
+     * 23514, and the constraint is what makes the sentence true.
+     */
+    async setSheetMargins(
+      identity: Identity,
+      margins: { topMm: number; bottomMm: number; sideMm: number },
+    ): Promise<void> {
+      if (!(await hasOrgSheet(db))) throw new ConflictError("not_migrated");
+      const whole = (v: number, name: string, max: number) => {
+        if (!Number.isInteger(v) || v < 0 || v > max) {
+          throw new ValidationError(`${name} must be a whole number of millimetres between 0 and ${max}`,
+            { code: "sheet_margin_range", params: { field: name, max } });
+        }
+      };
+      whole(margins.topMm, "top_mm", 120);
+      whole(margins.bottomMm, "bottom_mm", 120);
+      whole(margins.sideMm, "side_mm", 60);
+      if (margins.topMm + margins.bottomMm > 200) {
+        throw new ValidationError("the header and footer cannot fill the page between them",
+          { code: "sheet_margins_fill_page" });
+      }
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `update echo.org
+              set sheet_top_mm = $2, sheet_bottom_mm = $3, sheet_side_mm = $4
+            where id = $1`,
+          [identity.orgId, margins.topMm, margins.bottomMm, margins.sideMm],
+        ));
+    },
+
     /** The caller's own org. Any active member — the shell shows its name. */
     async get(identity: Identity): Promise<OrgRecord> {
       const withGlossary = await hasOrgGlossary(db);
@@ -174,13 +287,15 @@ export function createOrgRepo(db: Db) {
       const withLogo = await hasOrgLogoBytes(db);
       const withCeiling = await hasAutonomyCeiling(db);
       const withDomains = await hasSignupPolicy(db);
+      const withSheet = await hasOrgSheet(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
             withProfile ? PROFILE_COLUMNS : ""}${
             withLogo ? LOGO_COLUMN : ""}${
             withCeiling ? CEILING_COLUMN : ""}${
-            withDomains ? DOMAINS_COLUMN : ""} from echo.org where id = $1`,
+            withDomains ? DOMAINS_COLUMN : ""}${
+            withSheet ? SHEET_COLUMNS : ""} from echo.org where id = $1`,
           [identity.orgId],
         ),
       );

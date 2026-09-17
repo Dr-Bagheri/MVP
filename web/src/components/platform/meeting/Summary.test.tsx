@@ -1,19 +1,38 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { meetingFixture } from "@/test/fixtures";
+import { forgetLetterhead } from "@/lib/minutesFile";
 
+/** the reader's language, movable: the exported document follows it, and the
+    version that hardcoded `dir="rtl" lang="fa"` passed every fa assertion */
+let LOCALE = "fa";
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
-  useLocale: () => "fa",
+  useLocale: () => LOCALE,
 }));
 
 const getSummaries = vi.fn();
 const meetingItems = vi.fn();
+const org = vi.fn();
+const me = vi.fn();
+const composeMinutesText = vi.fn();
+/*
+ * EVERY METHOD THE COMPONENT CALLS. A mock that omits one does not fake «this
+ * organisation has no letterhead» — it THROWS, inside a promise, and the
+ * failure arrives as whatever rendered last. That is how seven tests in this
+ * file went red at once for a reason none of them was about.
+ */
 vi.mock("@/api/client", () => ({
   api: {
     getSummaries: (...a: unknown[]) => getSummaries(...a),
     meetingItems: (...a: unknown[]) => meetingItems(...a),
+    org: (...a: unknown[]) => org(...a),
+    me: (...a: unknown[]) => me(...a),
+    composeMinutesText: (...a: unknown[]) => composeMinutesText(...a),
+    orgSheetUrl: () => "/api/org/sheet",
   },
+  BffError: class extends Error { constructor(readonly status: number) { super("bff"); } },
 }));
 
 const { SummaryTab } = await import("./Summary");
@@ -56,7 +75,14 @@ function renderTab(callId: string | null) {
   );
 }
 
-/** the document as `downloadWord` actually writes it */
+/**
+ * The document as `downloadWord` actually writes it.
+ *
+ * Word lives inside the ⋯ now (2026-09-17), so the errand is two presses. A
+ * Radix trigger opens on POINTERDOWN, which `fireEvent.click` does not send —
+ * `userEvent` is the only driver that reaches this menu, a fact this repo
+ * paid sixteen red tests to learn when the menus moved onto Radix.
+ */
 async function savedDocument(): Promise<string> {
   const parts: unknown[] = [];
   const RealBlob = globalThis.Blob;
@@ -64,7 +90,8 @@ async function savedDocument(): Promise<string> {
     constructor(bits: unknown[]) { parts.push(...bits); }
   });
   vi.stubGlobal("URL", { createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
-  screen.getByRole("button", { name: /Word/ }).click();
+  await userEvent.click(screen.getByRole("button", { name: "summaryExport" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: /Word/ }));
   vi.stubGlobal("Blob", RealBlob);
   return parts.filter((p) => typeof p === "string").join("");
 }
@@ -72,7 +99,10 @@ async function savedDocument(): Promise<string> {
 describe("the summary tab carries the summary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    LOCALE = "fa";
     meetingItems.mockResolvedValue([]);
+    org.mockResolvedValue({ id: "o1", name: "شرکت" });
+    me.mockResolvedValue({ id: "u1", role: "member" });
   });
 
   it("renders the summary's paragraphs on screen", async () => {
@@ -192,5 +222,276 @@ describe("the summary tab carries the summary", () => {
     expect(html).toContain("<li>Refresh the Harbor Bank demo data</li>");
     expect(html).not.toContain("**Next steps**");
     expect(html).not.toContain("<p>* Refresh");
+  });
+});
+
+/**
+ * THE DOCUMENT'S OWN ROW, AND THE FILE IT HANDS OVER (user directive,
+ * 2026-09-17).
+ *
+ * Two halves, and the second is the one no screen assertion can see: what
+ * the exported file IS. «if not uploaded just go as simple but still with
+ * structure related to regulations of companies and organizations back in
+ * iran» — so the file is a صورت‌جلسه: an identified document, the roster,
+ * the agenda, the account, numbered clauses, an assignment table naming who
+ * and by when, and a place to sign.
+ */
+describe("the document's row, and the shape it exports (2026-09-17)", () => {
+  const action = (over: Record<string, unknown> = {}) => ({
+    id: "i1", kind: "action", body: "دادهٔ نمونه را تازه کن", source: "ai",
+    done: false, owner: null, at_ms: null, owner_id: null, due_on: null,
+    supersedes_id: null, status: "open", ...over,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    LOCALE = "fa";
+    meetingItems.mockResolvedValue([]);
+    org.mockResolvedValue({ id: "o1", name: "شرکت" });
+    me.mockResolvedValue({ id: "u1", role: "member" });
+    getSummaries.mockResolvedValue([]);
+  });
+
+  it("puts the title and the date in the controls' row, and takes them out of the card", async () => {
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+
+    const title = screen.getByRole("heading", { name: "summaryDocTitle" });
+    /* ONE row: the title, the date under it, and the ⋯ at the other end.
+       `closest("div")` is the toolbar's own group — if the kebab were in a
+       row of its own this is the assertion that fails. */
+    const row = title.closest("div")!.parentElement!;
+    expect(within(row).getByRole("button", { name: "summaryExport" })).toBeTruthy();
+    expect(within(row).getByText(/minutesDate/)).toBeTruthy();
+
+    /* and the card does not name itself a second time — the centred header
+       that used to stand above «حاضران» is gone */
+    const card = screen.getByLabelText("tabSummary");
+    expect(within(card).queryByRole("heading", { name: "summaryDocTitle" })).toBeNull();
+    expect(screen.getAllByRole("heading", { name: "summaryDocTitle" })).toHaveLength(1);
+  });
+
+  it("holds the two exports in the ⋯ and leaves «تولید دوباره» outside it", async () => {
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+
+    /* outside, in the row, where the directive put it */
+    const rerun = screen.getByRole("button", { name: "rerun" });
+    expect(rerun).toBeTruthy();
+    /* and NOT as bare buttons beside it: the pair that stood here is the
+       thing that moved */
+    expect(screen.queryByRole("button", { name: /^Word$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^PDF$/ })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "summaryExport" }));
+    const menu = within(screen.getByRole("menu"));
+    expect(menu.getByRole("menuitem", { name: /Word/ })).toBeTruthy();
+    expect(menu.getByRole("menuitem", { name: /PDF/ })).toBeTruthy();
+    /* the regenerate did not come along — a menu holding it too would be two
+       doors to one act */
+    expect(menu.queryByRole("menuitem", { name: "rerun" })).toBeNull();
+  });
+
+  it("exports a صورت‌جلسه: an identity block, the agenda, and a place to sign", async () => {
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    const html = await savedDocument();
+
+    expect(html).toContain("minutesDocKind");
+    /* the document IDENTIFIES itself — number, date, hour, how it was held */
+    expect(html).toContain("minutesNumber");
+    expect(html).toContain(`MTG-${MEETING.id.slice(0, 8)}`);
+    expect(html).toContain("fieldTime");
+    expect(html).toContain("mode_online");
+    expect(html).toContain("fieldAgenda");
+    /* the roster signs it — and the names are the roster's, not invented */
+    expect(html).toContain("minutesSignatures");
+    expect(html).toContain("class=\"sign\"");
+    expect(html).toContain("@page");
+    /* AND IT CARRIES ITS OWN PAPER. `printPdf` writes into a window the reader
+       sees before the print dialog covers it; with the ground left to the
+       browser, a dark-mode reader met the whole document as near-black on
+       near-black — while the printed page would have been perfect. Caught in a
+       screenshot, pinned here. */
+    expect(html).toContain("background: #fff");
+    expect(html).toContain("color-scheme: light");
+  });
+
+  it("leaves out what the record does not hold, rather than printing it empty", async () => {
+    /* «محل برگزاری: —» claims the place was asked for and left blank, which
+       for an online meeting is simply untrue. The PAIR is the assertion: a
+       meeting WITH a location must still print the row, or "never prints it"
+       passes this too. */
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    expect(await savedDocument()).not.toContain("fieldLocation");
+
+    /* the SAME screen, re-rendered — two trees in one document would give the
+       helper two ⋯ buttons to choose between, and it would pick the first */
+    cleanup();
+    const withPlace = meetingFixture({ ...MEETING, location: "اتاق جلسات ۲" });
+    render(<SummaryTab meeting={withPlace} callId="c1" />);
+    await screen.findByText("رؤیا");
+    const html = await savedDocument();
+    expect(html).toContain("fieldLocation");
+    expect(html).toContain("اتاق جلسات ۲");
+  });
+
+  it("gives an action its owner and its deadline, in columns", async () => {
+    meetingItems.mockResolvedValue([
+      action({ owner: "سینا سپاسی", due_on: "2026-10-02" }),
+      action({ id: "i2", body: "پیش‌نویس قرارداد", owner: null, due_on: null }),
+    ]);
+    renderTab("c1");
+    await screen.findByText(/دادهٔ نمونه/);
+
+    const html = await savedDocument();
+    expect(html).toContain("minutesOwner");
+    expect(html).toContain("minutesDue");
+    expect(html).toContain("سینا سپاسی");
+    /* the DAY as the reader's calendar renders it — never the raw column,
+       and never the UTC-midnight reading that prints the day before */
+    expect(html).not.toContain("2026-10-02");
+    expect(html).toMatch(/۱۴۰۵|۱۰ مهر|مهر/);
+    /* an unowned action is a dash in the table, not a missing row */
+    expect(html).toContain("پیش‌نویس قرارداد");
+    expect(html).toContain("—");
+  });
+
+  it("numbers the clauses in the document's own digits", async () => {
+    meetingItems.mockResolvedValue([
+      { ...action({ id: "d1", body: "قرارداد تمدید شود" }), kind: "decision" },
+    ]);
+    renderTab("c1");
+    await screen.findByText("قرارداد تمدید شود");
+
+    const html = await savedDocument();
+    /* «1. قرارداد…» in a Persian document, beside Persian numerals on the
+       screen it was exported from (M9: digits follow the language) */
+    expect(html).toContain("۱. قرارداد تمدید شود");
+    expect(html).not.toContain("<p>1. قرارداد");
+  });
+
+  it("writes the document in the reader's own language and direction", async () => {
+    LOCALE = "en";
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    const html = await savedDocument();
+    expect(html).toContain('dir="ltr"');
+    expect(html).toContain('lang="en"');
+    expect(html).not.toContain('dir="rtl"');
+  });
+});
+
+/**
+ * THE COMPANY SHEET AND THE ASSISTANT'S DRAFT (user directive, 2026-09-17:
+ * "in kebab menu add a option to upload company sheet file … and when they do
+ * it and ask for pdf and word all the information in summarization must be
+ * fit inside it. use the agent to do it as well").
+ */
+describe("the letterhead, and the assistant's draft (2026-09-17)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    LOCALE = "fa";
+    meetingItems.mockResolvedValue([]);
+    getSummaries.mockResolvedValue([]);
+    org.mockResolvedValue({ id: "o1", name: "شرکت" });
+    me.mockResolvedValue({ id: "u1", role: "member" });
+    forgetLetterhead();
+  });
+
+  it("offers the letterhead to an ADMIN and not to a colleague", async () => {
+    /* the pair is the assertion. The upload is `org.settings` on the server
+       (db/0228 + the admin route), and a row drawn for a member is a promise
+       the product will not keep — pressing it would meet a refusal that
+       explains nothing. */
+    me.mockResolvedValue({ id: "u1", role: "member" });
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    await userEvent.click(screen.getByRole("button", { name: "summaryExport" }));
+    expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "sheetUpload" })).toBeNull();
+    await userEvent.keyboard("{Escape}");
+
+    cleanup();
+    me.mockResolvedValue({ id: "u1", role: "admin" });
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    await userEvent.click(screen.getByRole("button", { name: "summaryExport" }));
+    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "sheetUpload" })).toBeTruthy();
+  });
+
+  it("prints the minutes on the organisation's paper, with the clear area it measured", async () => {
+    org.mockResolvedValue({
+      id: "o1", name: "شرکت",
+      sheet: {
+        mime: "image/png", source_mime: "application/pdf",
+        top_mm: 52, bottom_mm: 30, side_mm: 22,
+      },
+    });
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes, {
+      headers: { "content-type": "image/png" },
+    })));
+
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    const html = await savedDocument();
+
+    /* the WORD button writes an MHTML ARCHIVE when there is a letterhead —
+       measured against Word 16, which renders an image on every page from a
+       named part and from nothing else (minutesDocument.ts carries the two
+       shapes that failed first) */
+    expect(html.startsWith("\ufeffMIME-Version: 1.0")).toBe(true);
+    expect(html).toContain("Content-Location: file:///C:/neurai/minutes/letterhead.png");
+    /* the image ITSELF travelled: a document that linked to /api/org/sheet
+       reaches Word with nothing to show */
+    expect(html).not.toContain("/api/org/sheet");
+    expect(html).toContain("Content-Type: image/png");
+  });
+
+  it("falls back to plain paper when the letterhead cannot be fetched", async () => {
+    /* a document on plain paper IS the document. Refusing to export because
+       a decoration did not load trades the feature for the sheet. */
+    org.mockResolvedValue({
+      id: "o1", name: "شرکت",
+      sheet: { mime: "image/png", source_mime: "image/png", top_mm: 52, bottom_mm: 30, side_mm: 22 },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    const html = await savedDocument();
+    expect(html).not.toContain('class="sheet"');
+    expect(html).toContain("minutesDocKind");
+  });
+
+  it("puts the assistant's draft in the EDITOR, never straight into the file", async () => {
+    composeMinutesText.mockResolvedValue({ body: "در این جلسه دربارهٔ بودجه گفت‌وگو شد.", words: 240 });
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+
+    await userEvent.click(screen.getByRole("button", { name: "summaryExport" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "minutesCompose" }));
+
+    /* a model's paragraph goes into a document people sign only after
+       somebody has read it and pressed save — so it lands in the textarea,
+       and `editSummary` is not called by this press */
+    await waitFor(() => expect(
+      (screen.getByRole("textbox", { name: "minutesSummary" }) as HTMLTextAreaElement).value,
+    ).toContain("بودجه"));
+    expect(screen.getByText("minutesComposed")).toBeTruthy();
+  });
+
+  it("names WHICH nothing when the draft cannot be written", async () => {
+    /* a provider that refused is not a meeting with nothing to say, and
+       neither is a meeting nobody has recorded yet — the route distinguishes
+       them and so does the line under the button */
+    composeMinutesText.mockResolvedValue({ body: null, words: 0, reason: "nothing_to_compose" });
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    await userEvent.click(screen.getByRole("button", { name: "summaryExport" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "minutesCompose" }));
+    await waitFor(() => expect(screen.getByText("minutesComposeEmpty")).toBeTruthy());
+    expect(screen.queryByText("minutesComposeFailed")).toBeNull();
   });
 });
