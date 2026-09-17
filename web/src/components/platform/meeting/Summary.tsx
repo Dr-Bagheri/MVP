@@ -8,7 +8,8 @@ import { parseSummary, SummaryBody } from "@/components/echo/SummaryBody";
 import { IconAsk, IconDownload, IconPencil, IconPrint, IconRetry } from "@/components/icons";
 import { SkeletonLines } from "@/components/scaffold";
 import { openAssistant } from "@/lib/assistantBus";
-import { digits, formatDate, personName } from "@/lib/format";
+import { digits, formatDate } from "@/lib/format";
+import { meetingPeople } from "@/lib/meetingPeople";
 import { notifyError } from "@/lib/notify";
 
 /**
@@ -95,41 +96,21 @@ export function SummaryTab({ meeting, callId }: {
   }, [meeting.id, reloads]);
 
   /*
-   * THE HOST IS AN ATTENDEE (user report, 2026-09-02: "the attendees still
-   * does not count me, i was present in the meeting").
+   * THE ROSTER IS READ, NOT RE-DERIVED (2026-09-16).
    *
-   * `invitees` is who was ASKED, and the person who created the meeting is
-   * not in it — they did not invite themselves. So a meeting somebody ran
-   * alone had an empty attendee list, and the document said "no attendees
-   * recorded" about a meeting that plainly had one.
+   * This list was composed here — host, then `attendees`, then `invitees`,
+   * deduped by name — and it had to be corrected twice for the same reason
+   * each time: the host is not in either column, because nobody invites
+   * themselves (user report, 2026-09-02, "the attendees still does not count
+   * me"), and then db/0202 moved colleagues out of `invitees` into accounts
+   * while this kept reading the old field (2026-09-07).
    *
-   * The name comes from the WIRE (`host_name`), not from the signed-in
-   * viewer. That distinction is the other half of the same bug: the plan card
-   * was drawing whoever was looking at it as the host, so a colleague opening
-   * someone else's meeting saw their own name in the host row.
+   * `meetingPeople` is that rule, and the live stage's people rail reads it
+   * too. A third hand-rolled copy is how the document and the rail would come
+   * to disagree about who was in a meeting — which is precisely the class of
+   * defect the two corrections above already were.
    */
-  const hostName = personName(
-    { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
-    locale,
-  );
-  /*
-   * THE ROSTER MOVED AND THIS DID NOT FOLLOW IT (user report, 2026-09-07:
-   * "for minutes for attendees it did not even include him there too").
-   *
-   * db/0202 made a colleague on a meeting an ACCOUNT — `meeting.attendees`,
-   * keyed by user id, with the attendance stamp — and left `invitees` for the
-   * one case it was written for: somebody with no account here. So from that
-   * day the document listed the host and whoever had no account, and every
-   * actual member of the meeting was missing.
-   */
-  const attendees = [
-    ...(meeting.host_name !== null ? [hostName] : []),
-    ...meeting.attendees
-      .map((a) => personName(a, locale))
-      .filter((n) => n !== hostName),
-    /* people with no account here — the only thing `invitees` still holds */
-    ...meeting.invitees.filter((n) => n !== hostName),
-  ];
+  const attendees = meetingPeople(meeting, locale).map((person) => person.name);
 
   /**
    * The CURRENT summary version, read here rather than passed down: this tab

@@ -1900,6 +1900,7 @@
     "openRecord": "Open the record",
     "pdfUnsupported": "This browser cannot display the PDF inline.",
     "peopleCount": "{n} participants",
+    "peopleInRoom": "{n} in the room",
     "peopleMore": "+{n}",
     "pickDate": "Pick a date",
     "pickTime": "Pick a time",

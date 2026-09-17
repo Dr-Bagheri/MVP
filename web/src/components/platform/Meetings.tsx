@@ -28,8 +28,9 @@ import { MeetingAttendeesField } from "./MeetingAttendeesField";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/scaffold";
 import {
-  dayKeyOf, digits, formatDate, formatDuration, formatTime, monthGridAt, personName,
+  dayKeyOf, digits, formatDate, formatDuration, formatTime, monthGridAt,
 } from "@/lib/format";
+import { meetingPeople } from "@/lib/meetingPeople";
 import { notifyError } from "@/lib/notify";
 
 /**
@@ -94,25 +95,10 @@ export function meetingStatus(m: MeetingRecord): MeetingStatus {
 /** the sort's rank for a status — the pipeline's own order, not the alphabet */
 const STATUS_RANK: Record<MeetingStatus, number> = { upcoming: 0, ongoing: 1, processing: 2, done: 3 };
 
-/**
- * WHO WAS THERE, as one list of people rather than two shapes.
- *
- * `attendees` are the members (db/0202) with names resolved from user
- * management; `invitees` are the people with no account, who are a string
- * and can never be more than one. The row draws them the same way because a
- * reader is asking "who is in this meeting", not "which table are they in".
- *
- * The ones who actually TURNED UP come first — that is the `attended` flag,
- * the nearest thing the list has to "the speakers were identified" — so a
- * held meeting's stack shows the people who were in the room.
- */
-export function meetingPeople(m: MeetingRecord, locale: string): Array<{ key: string; name: string; attended: boolean }> {
-  const members = m.attendees.map((a) => ({
-    key: a.user_id, name: personName(a, locale), attended: a.attended,
-  }));
-  const guests = m.invitees.map((name) => ({ key: `invitee:${name}`, name, attended: false }));
-  return [...members, ...guests].sort((a, b) => Number(b.attended) - Number(a.attended));
-}
+/* WHO WAS THERE is `lib/meetingPeople` — this screen, the summary document
+   and the live stage's people rail all read that one rule. It moved out of
+   this file so a panel on the meeting stage could ask the question without
+   importing the meetings screen to do it. */
 
 export function Meetings() {
   const t = useTranslations("meetings");

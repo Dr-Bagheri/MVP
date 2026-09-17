@@ -38,7 +38,7 @@ import { SPEAKER_TONES } from "./Review";
  * The interim fragment is drawn muted and unstamped, because it is not yet a
  * row: the provider can and does revise it.
  */
-export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded = false }: {
+export function LiveTranscript({ rows, interim, speakers, lane, locale }: {
   rows: readonly CaptionRow[];
   /** the fragment the provider has not finalised — may still change */
   interim: string;
@@ -63,13 +63,15 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded
    * over the oldest lines), the newest line is the last thing in the
    * scroller, and that is exactly what `useThreadFollow` pins to.
    */
-  /**
-   * INSIDE THE STAGE CARD.
-   * A tile nested in a tile is two frames around one thing, so the embedded
-   * form drops its own card and takes a rule under the clock instead — the
-   * scope, the clock and the words then read as one instrument.
+  /*
+   * IT IS ITS OWN TILE AGAIN (2026-09-16). There was an `embedded` form here
+   * — no card, a rule under the clock — for the stretch when the whole live
+   * stage was ONE card and a tile nested in a tile would have been two frames
+   * around one thing. The stage is three surfaces now (the control row, these
+   * words, the people beside them), so the transcript owns its own frame and
+   * the flag has no caller; a second shape kept for nobody is the next
+   * screen's chance to look different for no reason.
    */
-  embedded?: boolean;
 }) {
   const t = useTranslations("meetings");
   const follow = useThreadFollow();
@@ -143,11 +145,7 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale, embedded
   return (
     <section
       aria-label={t("liveTranscript")}
-      className={
-        embedded
-          ? "flex min-h-0 w-full max-w-3xl flex-1 flex-col border-t border-border pt-4 text-start"
-          : "tile flex min-h-0 flex-1 flex-col p-4"
-      }
+      className="tile flex min-h-0 flex-1 flex-col p-4"
     >
       <header className="mb-3 flex items-baseline justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">

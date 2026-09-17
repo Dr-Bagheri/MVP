@@ -17,6 +17,7 @@ import { SummaryTab } from "./meeting/Summary";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { WaveScope } from "@/components/echo/WaveScope";
 import { LiveTranscript } from "./meeting/LiveTranscript";
+import { AttendeesRail } from "./meeting/AttendeesRail";
 import { RecallCards } from "./meeting/RecallCards";
 import { useLiveRecall } from "@/lib/liveRecall";
 import { IconPause, IconPlay, IconPlus, IconTrash, IconUpload } from "@/components/icons";
@@ -134,6 +135,28 @@ export function MeetingPage({ id }: { id: string }) {
   }, [id]);
   useEffect(loadMeeting, [loadMeeting]);
   useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
+
+  /*
+   * THE FACES FOR THE PEOPLE RAIL, read once.
+   *
+   * Keyed by `user_id`, which is the key `meetingPeople` gives an account —
+   * the pattern the meetings list already uses, and for the reason written
+   * there: a meeting's attendee rows carry NAMES, not pictures, because an
+   * avatar is ~8 KB of `data:` URL and the wire would repeat the same face
+   * for every meeting it appears on.
+   *
+   * A failed read leaves the map EMPTY rather than the rail broken — a
+   * column of initials is what this screen would have shown anyway, so the
+   * degradation is the old, correct picture (M21).
+   */
+  const [photos, setPhotos] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    void api.orgPeople()
+      .then((people) => setPhotos(new Map(
+        people.filter((p) => p.avatar_url !== null).map((p) => [p.id, p.avatar_url as string]),
+      )))
+      .catch(() => setPhotos(new Map()));
+  }, []);
 
   /**
    * THE HOST IS THE MEETING'S AUTHOR — and the database says so too.
@@ -486,45 +509,25 @@ export function MeetingPage({ id }: { id: string }) {
 
         <div className="flex items-center gap-2">
           {/*
-            THE ON-AIR LIGHT. `role="status"` announces the change when the
-            take
-            begins, which is the one event on this page nobody can afford to
-            miss.
+            THE ON-AIR LIGHT AND THE TWO ACTS LEFT THIS BAR (user directive,
+            2026-09-16: "for the sound bar and the buttons use one row, with a
+            red alarming recording icon without text and digits on the left
+            side of the bar, and the pause and finish on the right side").
+            They are in `LiveTake`'s control row now — one row holding the
+            light, the clock, the scope and the two buttons.
+
+            This REVERSES the rule written at LiveTake's own head ("the button
+            is NOT here: ending a take is the page's one act and lives in its
+            top bar"), and the reversal is recorded rather than quietly made:
+            that rule was right while the stage was a card of its own, and it
+            is wrong now that the instrument and its controls are one strip —
+            a clock in this bar and a scope forty pixels below it were two
+            readings of the same take, six pixels of chrome apart.
+
+            What did NOT move is every act that is not part of a running take:
+            the orphaned finish, the failed retry and the upload lane all sit
+            here still, because none of them has a bar to live on.
           */}
-          {recordingLive || takeStarting ? (
-            /*
-              ONE LINE.
-              It wrapped because of `badge-num`, which is `display:
-              inline-grid` — a number in a CIRCLE, one item per row — and it
-              beat the `flex` written beside it, so the dot, the word and the
-              clock stacked into three rows. Two utilities on one property,
-              resolved by their order in the stylesheet and not in the class
-              string: the class list read as a row and rendered as a column.
-              `shrink-0` is the other half — this pill sits beside a button
-              that does not shrink, so without it the flex row takes the
-              width out of the words.
-            */
-            <span
-              role="status"
-              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-danger/10 px-3.5 py-2 text-xs font-bold tabular-nums text-danger"
-            >
-              <span
-                /* a PAUSED take is still a take, but it is not capturing —
-                   a pulsing light over a stopped recording is the one lie
-                   this pill must never tell */
-                className={`h-2 w-2 rounded-full bg-danger ${engine.phase === "paused" ? "" : "animate-pulse"}`}
-                aria-hidden
-              />
-              {takeStarting
-                ? t("recordingStarting")
-                : engine.phase === "paused" ? t("recordingPaused") : t("recordingNow")}
-              {recordingLive ? (
-                <span dir="ltr">
-                  {formatClock(Math.floor(engine.recordedMs / 1000), locale)}
-                </span>
-              ) : null}
-            </span>
-          ) : null}
           {/*
             EVERY START AND EVERY END IS THE HOST'S (user directive,
             2026-09-06). What a colleague gets instead is the SENTENCE, not a
@@ -544,35 +547,6 @@ export function MeetingPage({ id }: { id: string }) {
               className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {t("endAndProcess")}
             </button>
-          ) : isHost && recordingLive ? (
-            <>
-              {/*
-                PAUSE IS A SECOND ACT, and it is the host's like every other
-                . It sits BEFORE the end button
-                because it is the reversible one, and it is icon-only: the
-                page's one destructive-shaped act should stay the only thing
-                here wearing a word.
-
-                Not offered while the take is `starting` — `recordingLive`
-                is already false there — because pausing a recorder that has
-                not begun is a press that does nothing and looks broken.
-              */}
-              <button
-                type="button"
-                onClick={engine.phase === "paused" ? resume : pause}
-                title={engine.phase === "paused" ? t("resumeTake") : t("pauseTake")}
-                aria-label={engine.phase === "paused" ? t("resumeTake") : t("pauseTake")}
-                className="btn btn-icon-lg border border-border bg-surface text-fg-muted hover:bg-surface-2 hover:text-fg"
-              >
-                {engine.phase === "paused"
-                  ? <IconPlay width={18} height={18} />
-                  : <IconPause width={18} height={18} />}
-              </button>
-              <button type="button" onClick={end}
-                className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
-                {t("endAndProcess")}
-              </button>
-            </>
           ) : isHost && engineFailed ? (
             <button type="button" onClick={end}
               className="btn bg-danger font-semibold text-on-accent hover:opacity-90">
@@ -620,9 +594,16 @@ export function MeetingPage({ id }: { id: string }) {
              where the engine and the identity already are. A take component
              that reached for the recorder itself would be a second opinion
              about whether a take is running, and the gate below depends on
-             that answer being one answer. */
-          meetingId={meeting.id}
+             that answer being one answer. The RECORD itself now travels with
+             them: the people rail reads the roster off it, and `meeting.id`
+             is the same id the recall hook was handed separately before. */
+          meeting={meeting}
+          photos={photos}
           isHost={isHost}
+          /* ending the take is still the PAGE's act — the button moved into
+             the control row, the decision did not: `end` re-reads the record,
+             which is the only thing that moves this page on */
+          onEnd={end}
           /* the FINALS only: an interim caption is rewritten as the recogniser
              hears more, so a window built from it asks the same question again
              with different words on every revision */
@@ -656,30 +637,59 @@ export function MeetingPage({ id }: { id: string }) {
 /**
  * حین جلسه — THE WHOLE LIVE SCREEN.
  *
- * The button is NOT here: ending a take is the page's one act and lives in
- * its top bar with every other act, which is where somebody who has used any
- * other screen in this product will look for it. Putting a second «پایان»
- * inside the card would be two buttons for one thing.
+ * ── THREE SURFACES, NOT ONE (user directive, 2026-09-16) ─────────────────
+ *
+ * This was a single centred card: a thin scope at the top and, under it, a
+ * column of transcript that was empty for the first minute of every meeting
+ * — "it feels empty and not well designed and divided". It is three things
+ * now, each answering a different question a person has while a meeting is
+ * being recorded:
+ *
+ *   the CONTROL ROW  is it recording, for how long, and how do I stop it;
+ *   the TRANSCRIPT   what is being said;
+ *   the PEOPLE RAIL  who else is here.
+ *
+ * ── THE ROW ──────────────────────────────────────────────────────────────
+ *
+ * One strip holds the light, the clock, the scope and the two acts, in the
+ * order the directive names them: "a red alarming recording icon without
+ * text and digits on the left side of the bar, and the pause and finish on
+ * the right side". It is `dir="ltr"` for the reason the record page's player
+ * has it — time runs left to right in both locales, the newest sample is the
+ * right edge of the scope, and the clock belongs at the end the sound came
+ * from. That is also what makes "left" and "right" here mean the two ends of
+ * the instrument rather than the two ends of a Persian sentence.
+ *
+ * The light carries NO WORDS, which is the directive — and the words are
+ * still there for a screen reader, because `role="status"` with nothing in it
+ * announces nothing: this is the one event on the page nobody can afford to
+ * miss. A PAUSED take keeps the light and loses the pulse; a stopped recorder
+ * under a blinking red dot is the one lie this row must never tell.
  *
  * The scope is `WaveScope` — the recorder's own, extracted rather than
  * copied — and it is the honest instrument here: it moves with the sound in
  * the room, so a muted microphone reads as a flat line rather than as a
  * screen that looks like it is working.
  */
-function LiveTake({ engine, live, starting, locale, meetingId, isHost, liveText }: {
+function LiveTake({ engine, live, starting, locale, meeting, photos, isHost, liveText, onEnd }: {
   engine: ReturnType<typeof recorderSnapshot>;
   live: boolean;
   starting: boolean;
   locale: string;
-  /** which meeting is being recalled AGAINST — the organisation's ledger is
-      read for decisions relevant to this one */
-  meetingId: string;
+  /** the record itself: `id` is what recall is read against, and the rail
+      reads its roster — one object rather than a widening list of fields */
+  meeting: MeetingRecord;
+  /** user_id → photo, read once by the page from the org roster */
+  photos: Map<string, string>;
   /** db/0214's reader: recall is the HOST's, like every other act on this
       screen. A prop, not a read of the viewer, for the same reason the rest of
       this page's host gates are props. */
   isHost: boolean;
   /** what has been said so far — the FINALS, handed down by the page */
   liveText: string;
+  /** finish the take; the page owns what happens next, because what happens
+      next is a re-read of the record */
+  onEnd: () => void;
 }) {
   const t = useTranslations("meetings");
   /*
@@ -704,84 +714,127 @@ function LiveTake({ engine, live, starting, locale, meetingId, isHost, liveText 
    * disagree about who sees them: a card on ten screens is a broadcast, and a
    * card with no take under way is recall of a room that is not talking.
    */
-  const recall = useLiveRecall(meetingId, liveText, isHost && live);
+  const recall = useLiveRecall(meeting.id, liveText, isHost && live);
+  /* the same words the retired pill said, for the reader who cannot see a
+     red dot — the light is silent on screen and must not be silent here */
+  const status = starting
+    ? t("recordingStarting")
+    : engine.phase === "paused" ? t("recordingPaused") : t("recordingNow");
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <section className="tile flex min-h-0 flex-1 flex-col items-center gap-3 p-5" aria-label={t("stage_hold")}>
-        {/*
-          THE LIGHT IS SAID ONCE.
-          It was said twice — the top bar's on-air pill and a second line
-          directly above the scope, six pixels apart and always agreeing,
-          which is how a person learns to read past both. The pill stays
-          because it is where the CLOCK and the end button are; the scope
-          says the same thing better anyway, by moving.
+    <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label={t("stage_hold")}>
+      {/*
+        THE ROW: light · clock — scope — pause · finish.
 
-          What was NOT here before and had to be kept is «آماده ضبط»: the
-          pill renders only for a live or starting take, so with this line
-          gone the pre-take screen had nothing at all on it. It renders
-          exactly in that gap and never beside the pill.
-        */}
-        {!live && !starting ? (
-          <p className="text-sm font-medium text-fg-muted">{t("statusReady")}</p>
+        `justify` does the dividing rather than a grid: the scope is the only
+        thing here whose width is its content, so it takes the middle and the
+        two clusters hold their own ends. `shrink-0` on both of them is what
+        keeps a long clock from eating the instrument.
+      */}
+      <div className="card flex w-full items-center gap-3 px-3 py-2" dir="ltr">
+        {live || starting ? (
+          <span role="status" className="flex shrink-0 items-center gap-2">
+            <span
+              aria-hidden
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-danger/10"
+            >
+              <span
+                /* a PAUSED take is still a take, but it is not capturing —
+                   a pulsing light over a stopped recording is the one lie
+                   this row must never tell */
+                className={`h-2.5 w-2.5 rounded-full bg-danger ${engine.phase === "paused" ? "" : "animate-pulse"}`}
+              />
+            </span>
+            {/* the words the icon replaced, kept where they are still needed:
+                `role="status"` announces this when the take begins */}
+            <span className="sr-only">{status}</span>
+            {/* the take's own length, in the page's digits — NOT `badge-num`,
+                which is `display: inline-grid` and would stack the glyphs
+                into a column the moment it sits in a flex row (the pill this
+                replaced learned that the hard way) */}
+            <span className="text-xs font-semibold tabular-nums text-fg">
+              {formatClock(Math.floor(engine.recordedMs / 1000), locale)}
+            </span>
+          </span>
         ) : null}
         {/*
-          THE BAR, NOT THE HALL (user directive, 2026-09-15: "the recording
-          bar … make it smaller like the last image, something small and
-          clean"). The scope stood 112px tall over a 30px clock, and the
-          transcript got whatever was left — on a laptop, three lines. It
-          wears the record page's own player bar now (Review.tsx: play ·
-          label · strip · time, one `.card` row): a 32px strip with the clock
-          inline at its end, so the two instruments read as ONE thing across
-          the finish line, and the words get the height the scope was
-          spending on itself. `dir="ltr"` for the reason the player has it —
-          time runs left-to-right in both locales, and the newest bar is the
-          right edge.
-
           THE SCOPE GLOWS FOR `recording`, NOT FOR `live` — a paused take is
           still a take, and `live` says so, but nothing is reaching the
           microphone. A halo over a stopped recorder is the same lie the
-          pill's pulsing dot is forbidden to tell.
+          light's pulse is forbidden to tell.
         */}
-        <div className="card flex w-full max-w-3xl items-center gap-3 px-3 py-2" dir="ltr">
-          <WaveScope
-            wave={engine.wave}
-            level={engine.level}
-            live={engine.phase === "recording"}
-            className="wave-scope-strip h-8 min-w-0 flex-1"
-          />
-          {/* the clock is the take's own length, in the page's digits; ONE
-              LINE, the way the player's time is (`badge-num`) */}
-          <span className="badge-num shrink-0 text-xs font-medium tabular-nums text-fg">
-            {formatClock(Math.floor(engine.recordedMs / 1000), locale)}
+        <WaveScope
+          wave={engine.wave}
+          level={engine.level}
+          live={engine.phase === "recording"}
+          className="wave-scope-strip h-8 min-w-0 flex-1"
+        />
+        {/* EVERY START AND EVERY END IS THE HOST'S (2026-09-06). A colleague
+            gets the row's light and clock and no controls at all — the page's
+            top bar carries the sentence that says why. */}
+        {isHost && live ? (
+          <span className="flex shrink-0 items-center gap-2">
+            {/*
+              PAUSE IS A SECOND ACT and it sits BEFORE the end button,
+              because it is the reversible one — which leaves the page's one
+              destructive-shaped act at the far end of the row, the only
+              thing here wearing a word.
+
+              Not offered while the take is `starting` — `live` is already
+              false there — because pausing a recorder that has not begun is
+              a press that does nothing and looks broken.
+            */}
+            <button
+              type="button"
+              onClick={engine.phase === "paused" ? resume : pause}
+              title={engine.phase === "paused" ? t("resumeTake") : t("pauseTake")}
+              aria-label={engine.phase === "paused" ? t("resumeTake") : t("pauseTake")}
+              className="btn btn-icon border border-border bg-surface text-fg-muted hover:bg-surface-2 hover:text-fg"
+            >
+              {engine.phase === "paused"
+                ? <IconPlay width={16} height={16} />
+                : <IconPause width={16} height={16} />}
+            </button>
+            <button type="button" onClick={onEnd}
+              className="btn btn-sm bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
+              {t("endAndProcess")}
+            </button>
           </span>
-        </div>
-        {/* THE MIX, said only when it is WRONG. The engine knows when the
-            microphone has gone quiet or is clipping, and a red light over a
-            recording of nothing is the worst shape a fault can take here. */}
-        {live && (engine.quality === "quiet" || engine.quality === "micLost") ? (
-          <p className="well text-xs text-warning">
-            {engine.quality === "micLost" ? t("recordingMicLost") : t("recordingQuiet")}
-          </p>
         ) : null}
-        {/*
-          THE WORDS AS THEY ARRIVE, IN THIS CARD. It takes the rest of the
-          card
-          and scrolls inside itself — the scope and the clock hold still above
-          it, which is what makes the pair readable while somebody is talking,
-          and it is what fills the empty half the card used to show.
-        */}
+      </div>
+      {/*
+        «آماده ضبط» — the pre-take gap. The light renders only for a live or
+        starting take, so without this line the seconds before the microphone
+        opens would say nothing at all.
+      */}
+      {!live && !starting ? (
+        <p className="text-sm font-medium text-fg-muted">{t("statusReady")}</p>
+      ) : null}
+      {/* THE MIX, said only when it is WRONG. The engine knows when the
+          microphone has gone quiet or is clipping, and a red light over a
+          recording of nothing is the worst shape a fault can take here. */}
+      {live && (engine.quality === "quiet" || engine.quality === "micLost") ? (
+        <p className="well text-xs text-warning">
+          {engine.quality === "micLost" ? t("recordingMicLost") : t("recordingQuiet")}
+        </p>
+      ) : null}
+      {/*
+        THE WORDS, AND WHO IS SAYING THEM — the two columns the stage is for.
+        Below `lg` they stack, transcript first: the words are the reason the
+        screen is open, and a 240px column of names above them would push the
+        first line of the meeting under the fold on a laptop.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
         {/* `relative`: the recall cards float over the TRANSCRIPT's own top
             corner (2026-09-15, moved from the stage's foot — RecallCards.tsx
-            says why) and push nothing: not the bar above, not the words
+            says why) and push nothing: not the row above, not the words
             below. The transcript reserves no room for them any more. */}
-        <div className="relative flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <LiveTranscript
             rows={engine.captionRows}
             interim={engine.captions?.interim ?? ""}
             speakers={engine.liveSpeakers}
             lane={lane}
             locale={locale}
-            embedded
           />
 
           {/* ── the second brain (item 7) ─────────────────────────────────
@@ -791,8 +844,9 @@ function LiveTake({ engine, live, starting, locale, meetingId, isHost, liveText 
               gate above is the only thing that decides whether this is here. */}
           <RecallCards cards={recall.cards} onDismiss={recall.dismiss} />
         </div>
-      </section>
-    </div>
+        <AttendeesRail meeting={meeting} photos={photos} locale={locale} />
+      </div>
+    </section>
   );
 }
 

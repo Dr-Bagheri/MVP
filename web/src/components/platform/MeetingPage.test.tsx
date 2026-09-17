@@ -490,11 +490,12 @@ describe("the live screen (2026-09-08)", () => {
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
 
-    /* TWO announcements, and that is the rule rather than a duplicate: the
-       pill rides the top bar wherever the page is scrolled, and the live
-       screen says it again where the person is actually looking (user
-       directive, 2026-09-08). What must never happen is the two DISAGREEING,
-       so the assertion is over both. */
+    /* ONE announcement since 2026-09-16, when the light joined the scope and
+       the two acts in a single row and the top bar's pill retired — there
+       had been two, agreeing, six pixels apart. The assertion is still
+       written over ALL of them rather than over the first: what must never
+       happen is two lights DISAGREEING, and phrasing it this way is what
+       makes the day a second one returns a red instead of a pass. */
     const onAir = (word: string) =>
       screen.getAllByRole("status").filter((el) => (el.textContent ?? "").includes(word));
     act(() => { pushEngine?.(); });
@@ -953,5 +954,135 @@ describe("the recording bar, and the words under it (2026-09-15)", () => {
        relative box, so the cards cannot land on the bar above */
     expect(stack.parentElement).toBe(transcript.parentElement);
     expect(stack.parentElement!.className).toContain("relative");
+  });
+});
+
+describe("the take's one row, and the people beside it (2026-09-16)", () => {
+  /*
+   * User directive, on the third of five designs: "use the third design with
+   * a main column for live transcription and attendances, and for the sound
+   * bar and the buttons use one row with a red alarming recording icon
+   * without text and digits on the left side of the bar, and the pause and
+   * finish on the right side".
+   *
+   * Four of these assertions are about WHERE things are, which is unusual for
+   * this file and is the point: the light, the clock, the scope and the two
+   * acts were spread across a top bar and a card below it, and the directive
+   * is that they become one instrument. DOM order is the honest way to say
+   * "left" and "right" here, because the row is `dir="ltr"` — that attribute
+   * is what makes the first child the left end in both locales, so it is
+   * asserted beside the order rather than assumed.
+   */
+  const liveTake = () => {
+    MEETING = meeting({ call_id: "c-1", call_status: "recording", mode: "in_person" });
+    engineIsRecording("c-1");
+  };
+  /** the one row: the card the scope sits in */
+  const theRow = (container: HTMLElement) =>
+    (container.querySelector(".wave-scope") as HTMLElement).closest(".card") as HTMLElement;
+
+  it("holds the light, the clock, the scope and the two acts in ONE row", async () => {
+    liveTake();
+    const { container } = render(<MeetingPage id="m-1" />);
+    await screen.findByRole("status");
+
+    const row = theRow(container);
+    expect(row, "the scope sits in a card row").not.toBeNull();
+    expect(within(row).getByRole("status")).toBeInTheDocument();
+    expect(within(row).getByText("۰:۱۲")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "مکث" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "پایان و پردازش" })).toBeInTheDocument();
+  });
+
+  it("puts the light and the clock at one end and the two buttons at the other", async () => {
+    liveTake();
+    const { container } = render(<MeetingPage id="m-1" />);
+    await screen.findByRole("status");
+
+    const row = theRow(container);
+    /* the attribute that makes the order below mean left-to-right rather
+       than the reading direction of the page around it */
+    expect(row.getAttribute("dir")).toBe("ltr");
+    const kids = [...row.children];
+    const at = (test: (el: Element) => boolean) => kids.findIndex(test);
+    const light = at((el) => el.getAttribute("role") === "status");
+    const scope = at((el) => el.classList.contains("wave-scope") || el.querySelector(".wave-scope") !== null);
+    const acts = at((el) => el.querySelector("button") !== null);
+    expect(light).toBeGreaterThanOrEqual(0);
+    expect(light).toBeLessThan(scope);
+    expect(scope).toBeLessThan(acts);
+    /* and within the acts, the reversible one first — which leaves the
+       page's one destructive-shaped act at the far end of the row */
+    const buttons = [...kids[acts]!.querySelectorAll("button")];
+    expect(buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent))
+      .toEqual(["مکث", "پایان و پردازش"]);
+    /*
+     * DOM order is only the claim while nothing re-orders the row on screen,
+     * and jsdom lays nothing out — so the two utilities that would move the
+     * buttons to the left end while every assertion above still passed are
+     * named here. Without this the check is a proxy for the thing the
+     * directive is about rather than the thing itself.
+     */
+    expect(row.getAttribute("class")).not.toMatch(/flex-row-reverse/);
+    for (const kid of kids) {
+      expect(kid.getAttribute("class") ?? "").not.toMatch(/\border-(first|last|none|\d)/);
+    }
+  });
+
+  it("the light carries no words on screen, and still announces itself", async () => {
+    liveTake();
+    render(<MeetingPage id="m-1" />);
+    const light = await screen.findByRole("status");
+
+    /* the words are the directive's "without text" — present for a reader
+       who cannot see a red dot, hidden from the one who can. `role="status"`
+       with nothing in it announces nothing, which is why they stay. */
+    const word = within(light).getByText("در حال ضبط");
+    expect(word.className).toContain("sr-only");
+    /* what is left on screen beside the icon is the digits, and only those */
+    expect(light.textContent?.replace("در حال ضبط", "").trim()).toBe("۰:۱۲");
+  });
+
+  it("says it ONCE — the top bar's pill is gone rather than duplicated", async () => {
+    liveTake();
+    const { container } = render(<MeetingPage id="m-1" />);
+    await screen.findByRole("status");
+
+    /* the discriminating half: a page that ADDED the row and kept the old
+       pill would satisfy every assertion above and show two lights that must
+       never disagree */
+    const lights = screen.getAllByRole("status");
+    expect(lights).toHaveLength(1);
+    expect(theRow(container).contains(lights[0]!)).toBe(true);
+  });
+
+  it("a colleague gets the light and the clock and no controls at all", async () => {
+    MEETING = meeting({
+      call_id: "c-1", call_status: "recording", mode: "in_person", created_by: "u-host",
+    });
+    engineIsRecording("c-1");
+    const { container } = render(<MeetingPage id="m-1" />);
+    await screen.findByRole("status");
+
+    const row = theRow(container);
+    expect(within(row).getByText("۰:۱۲")).toBeInTheDocument();
+    expect(row.querySelector("button")).toBeNull();
+  });
+
+  it("stands the people beside the words, in one row of the stage", async () => {
+    liveTake();
+    render(<MeetingPage id="m-1" />);
+    const rail = await screen.findByRole("region", { name: "شرکت‌کنندگان" });
+    const transcript = screen.getByRole("region", { name: "رونویسی زنده" });
+
+    /* «beside»: the transcript's own box and the rail share a parent, and
+       that parent is the row — stacked at laptop widths, side by side above
+       `lg`, which is the one place this layout decision is written */
+    const columns = rail.parentElement!;
+    expect(columns).toBe(transcript.parentElement!.parentElement);
+    expect(columns.className).toContain("lg:flex-row");
+    /* the host is in the room by construction, and the colleague nobody
+       stamped is listed without any claim about where they were */
+    expect(within(rail).getByText("۱ در جلسه")).toBeInTheDocument();
   });
 });
