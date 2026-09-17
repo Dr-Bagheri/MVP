@@ -949,6 +949,101 @@ at 1.18 em bold above it. Eight headings on the tab, every one wearing a
 kit role, none spelling a size. NOT exercised live: nothing — this round
 is read-only on the org's data.
 
+## 7t. Deployment record — 2026-09-17, later (1cd8450 + 0729876: web only — the sub-menus take design «ج», and the kit's chip collides with the theme's badge)
+
+**1cd8450 — design «ج» applied in the kit.** The user chose «ج» from
+the three designs on the canvas; applied at the kit so every page follows,
+never per page. Row one is a SEGMENTED CONTROL for the views (`TAB_TRACK`:
+`rounded-md bg-surface-2 p-[3px]`, the chosen entry a `btn btn-xs` pill in
+the surface tone with the card shadow) beside the sorts and the filters as
+MENUS — `ToolbarMenu` on `btn-ghost btn-sm`, «مرتب‌سازی» reading its chosen
+value on the button, «فیلتر» carrying a count badge that is absent at zero;
+radio rows for a choice, check rows for on/off, a check keeping the menu
+OPEN — and the create button at the row's end in `btn-primary btn-sm`. Row
+two is a bare LINE of 24px chips with no rail behind it, which REVERSES
+the 2026-09-15 shape (two 40px rails cost 104px before the first card at
+the 16px root). `.btn-xs` (28, the 8px corner, the caption size) and the
+chip are the kit's two new shapes; `MENU_PANEL_CLASS` / `MENU_ENTRY_CLASS`
+are exported from rowActions.tsx so the toolbar's menus and the row menus
+are one panel. Tasks, projects and meetings rewritten onto it (the
+meetings strip's `end` slot removed — the search KEY sits in row one beside
+the view control). Guards: toolbar.guard's control asserts the segmented
+track, `btn btn-xs`, the card shadow and the chip pair, and refuses a
+ground on `FILTER_TRACK`; panelStyle.test pins `TAB_BAR` / `tabClass`;
+filterChips.test rewritten (8); buttonCoat.guard and units.guard learn
+`xs` and the chip. Verify-red by mutation on eleven behaviours, control
+green either side, each red on its own test. icons.guard fired on the
+first full run — the two «فیلتر» glyphs at 13px, off the scale — a true
+positive before green; 14 now, the row's own size. Verified: web tsc 0;
+1796 tests (the one red the recorded `selectMenuWidth` load flake, 5/5
+alone); the build gate alone; the sweep (1534 files).
+
+**0729876 — the kit's chip is `.filter-chip`.** Reading 1cd8450 on
+production rather than its source: the chips computed **0.71875rem** where
+their class says `text-caption` (0.6875rem), with a 0.25rem vertical
+padding from nowhere. globals.css had carried a `.chip` since 2026-09-03 —
+THE THEME'S BADGE, a borderless pill the calls page's share codes, the
+skills page's tool names, the Hub's agent names and the assistant
+settings' hotkey state all wear — and design «ج» had added a second
+`.chip` two hundred lines above it. Two valid rules for one name, each
+right on its own: the later one won the size and the padding on the kit's
+chip, and the kit's rule gave every badge in the product a hairline, a
+fixed 24px height, a pointer and a hover it never asked for. Typecheck,
+1796 tests and the build gate were green throughout — a duplicate class
+rule is valid CSS and only the computed value disagrees (the
+artifact-reads-as-satisfied class, one layer down from `text-on-accent`).
+Mine: a kit class added without grepping for the name. Renamed
+`.filter-chip` / `.filter-chip-on` (the badge and its seven consumers
+untouched); `cssRule.guard.test.ts` is the rule — a plain class selector
+is defined ONCE in globals.css at one at-rule context (a redefinition
+inside `@media` is the override it looks like), comments stripped first,
+the parser proven on five fixtures and red by mutation on a staged second
+`.btn-xs`. Its first tree run named one more: `.wave-scope`, whose
+`transition` sat in a one-line second rule beside the glow states —
+folded into the block. Verified: tsc 0; 1798 tests (the same flake, 5/5
+alone); the gate alone; the sweep.
+
+**Read on production (0729876)**, both Vercel projects `success` on the
+commit status, in the user's Chrome at 1280 / root 15.06, the deploy
+marker being `.filter-chip` (a class that exists only in this build — 4 on
+tasks, 1 on projects, 2 on meetings) with the invented-class control at 0.
+TASKS: the views on a **32.4px** segmented track (`rgb(237,234,227)`, 11px
+corner, 3px padding) with the chosen «کانبان» a **26.4px** `btn btn-xs`
+pill on an 8px corner, white, weight 600, the card shadow present — the
+THIRD entry in the computed string after the two transparent ring
+placeholders, which the first read had sliced away and reported as no
+shadow; «فیلتر» a `btn-ghost btn-sm` at **32** on the same line (71.7 vs
+71.5); the chips **22.6** (`h-6`) at the pill's own **10.35px**, fully
+round, the hairline `rgb(232,231,226)`, the lit «همه تسک‌ها ۱» on the
+accent edge `rgb(1,116,63)` over the soft tint `rgb(230,241,236)`; the line
+transparent, 26.4 tall (the dashed `+`); zero retired rails; the first
+column **81.3px** under the row's top, where the two rails had cost ~98 at
+this root. The «فیلتر» menu opened on a synthetic pointerdown: five
+`menuitemradio` rows with `data-key` all / critical / high / medium / low
+and two `menuitemcheckbox` rows; pressing «فقط تسک‌های من» left the menu
+OPEN, the trigger's badge read «۱» (`badge-num … bg-accent text-on-accent`),
+a second press cleared it — local state only, nothing written. PROJECTS:
+«مرتب‌سازی» reads «تازه‌ترین» on its button beside «فیلتر», both 32; the
+same track and pill; «همه پروژه‌ها ۱» lit; no `btn-primary` above the
+kanban (the columns' rows are the door); 81.3 to content. MEETINGS: two
+`tablist` tracks (the slices with «گذشته» lit; the icon-only list /
+calendar pair), «مرتب‌سازی» reading «تاریخ», the search key `btn-ghost
+btn-sm px-2` at 32 IN row one, «جلسه پیش‌رو» `btn-secondary btn-sm` and
+«جلسه جدید» `btn-primary btn-sm` at 32 at the row's end; «همه جلسات ۲» and
+«تیم فنی ۱» on the line; 81.3 to content. THE BADGE CONTROL: on the skills
+page five `.chip` spans read border 0, cursor auto, 18.3 tall, 10.82px —
+the theme's badge exactly as before the round. NOT the mock's number: «ج»
+drew 70px to content at the 16px root and production reads 86 (81.3 ×
+16 / 15.06) — the kit's two 12px row gaps (2026-09-05, "an equal gap under
+every toolbar") and the 28px dashed `+` were kept where the mock drew 8px
+gaps and a 24px `+`; tightening either is one token and the user's call.
+Probe notes: the MCP tab's window shrank to 523px and went hidden between
+two reads, so the root fell to its 14px floor and every px moved while
+every rem held, and screenshots timed out for the whole read — read
+`innerWidth` and the root before believing a px; `resize_window` to 1280
+restores the frame. NOT exercised live: nothing — this round writes
+nothing on the org's data.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

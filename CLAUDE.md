@@ -7999,3 +7999,64 @@ sessions) for the cross-session narrative.
   the section they sit in. Nothing exercised live that writes.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1795 tests + gate + sweep.
+- 2026-09-17 (last — THE SUB-MENUS TAKE DESIGN «ج», AND THE KIT'S CHIP
+  COLLIDED WITH THE THEME'S BADGE; commits 1cd8450, 0729876; web on
+  Vercel, nothing in core or db): the user chose «ج» from the three
+  designs on the canvas. Applied AT THE KIT so every page follows: row one
+  a segmented control for the views (`TAB_TRACK`, `rounded-md bg-surface-2
+  p-[3px]`, the chosen entry a `btn btn-xs` pill in the surface tone with
+  the card shadow) beside the sorts and the filters as MENUS (`ToolbarMenu`
+  on `btn-ghost btn-sm` — «مرتب‌سازی» reads its value on the button,
+  «فیلتر» carries a count badge absent at zero, radio rows for a choice,
+  check rows for on/off, a check keeps the menu open), the create button
+  at the row's end in `btn-primary btn-sm`; row two a bare LINE of 24px
+  chips with no rail — REVERSING the 2026-09-15 two-rails shape (104px to
+  the first card at the 16px root). `.btn-xs` (28, the 8px corner) and the
+  chip are the kit's two new shapes; the toolbar's menus and the row menus
+  share one panel (`MENU_PANEL_CLASS`). Tasks, projects and meetings
+  rewritten onto it; the meetings strip's `end` slot is gone and the search
+  KEY sits in row one. toolbar.guard, panelStyle.test, filterChips.test (8,
+  rewritten), buttonCoat.guard and units.guard follow. Verify-red by
+  mutation on eleven behaviours, each red on its own test; icons.guard
+  fired on the first full run (the «فیلتر» glyphs at 13px, off the scale)
+  — a true positive before green.
+  **The production read found my own defect.** The chips computed
+  0.71875rem where their class says `text-caption`: globals.css had
+  carried a `.chip` since 2026-09-03 — THE THEME'S BADGE (share codes,
+  tool names, the Hub's agent names) — and I had added a second `.chip`
+  two hundred lines above it without grepping for the name. Two valid
+  rules for one class: the later won the size and padding on the kit's
+  chip, the kit's rule gave every badge a hairline, a fixed height, a
+  pointer and a hover. Typecheck, 1796 tests and the gate green
+  throughout — a duplicate class rule is valid CSS and only the computed
+  value disagrees, the artifact-reads-as-satisfied class one layer down
+  from `text-on-accent`. The kit's chip is `.filter-chip` /
+  `.filter-chip-on` now (the badge and its seven consumers untouched), and
+  `cssRule.guard.test.ts` is the rule: one plain class, one rule per
+  at-rule context (a `@media` override is not a duplicate), comments
+  stripped, the parser proven on five fixtures and red by mutation on a
+  staged second `.btn-xs`; its first tree run also named `.wave-scope`,
+  whose transition sat in a one-line second rule — folded.
+  **Proven on production in the user's Chrome** (runbook 7t) at 1280 /
+  root 15.06 with `.filter-chip` as the marker (this build only) and an
+  invented-class control at 0: the segmented track 32.4 on an 11px corner
+  with the 26.4 `btn btn-xs` pill (8px corner, weight 600, the card shadow
+  — the THIRD entry of the computed string, which a sliced first read had
+  reported as none); «فیلتر» / «مرتب‌سازی» `btn-ghost btn-sm` at 32 on the
+  same line, the sort reading «تازه‌ترین» / «تاریخ» on its button; the
+  chips 22.6 at the pill's 10.35px on a hairline, the lit one accent-edged
+  on the soft tint, the line transparent; zero retired rails; 81.3px from
+  the row's top to the first column where the two rails had cost ~98; the
+  filter menu's five radio and two check rows, a check leaving it open,
+  the badge «۱» then cleared (local state, no write); meetings' search key
+  and its two end buttons in row one at 32; the skills page's five `.chip`
+  badges border 0, cursor auto, 18.3 tall — untouched. NOT the mock's
+  number: «ج» drew 70px to content and production reads 86 at the 16px
+  root, because the kit's 12px row gaps and the 28px dashed `+` were kept
+  — one token each, the user's call. Probe note: the MCP tab's window
+  shrank and went hidden mid-read, the root fell to its 14px floor and
+  every px moved while every rem held; read `innerWidth` and the root
+  before a px, `resize_window` restores 1280. Nothing exercised live that
+  writes.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1798 tests + gate + sweep.
