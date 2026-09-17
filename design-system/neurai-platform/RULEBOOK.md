@@ -131,10 +131,16 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
   both read it; a second «تعویض» button or a «حذف عکس» text link beside a
   picture is the second telling. The profile's «تصویر پروفایل» (2026-09-17)
   is that control, a vertical hairline, then EIGHT READY-MADE AVATARS
-  (`platform/avatarPresets`, five women then three men, inline SVG, each a
-  round 36px key named «آواتار ۱» …) — a preset takes the photo's own road:
-  rasterised to the same 256px JPEG, shown in the accept card, uploaded on
-  the accept and never before.
+  (`platform/avatarPresets`, five women then three men, each a round 36px
+  key named «آواتار ۱» …) — a preset takes the photo's own road: rasterised
+  to the same 256px JPEG, shown in the accept card, uploaded on the accept
+  and never before. The eight are GENERATED, never drawn or edited by hand
+  (2026-09-17, "use something better designed"): DiceBear's Avataaars
+  (Pablo Stanley, free for commercial use) through
+  `scripts/gen-avatar-presets.mjs`, every trait pinned by name, the module
+  checked against the script by `avatarPresets.test`. A key is an `<img>`
+  data URL and never the SVG inlined — the SVGs share DiceBear's element
+  ids, and eight in one document resolve them all to the first.
 - The two meeting create dialogs carry `platform/MeetingAttendeesField`
   (2026-09-16): it is the KIT'S DROPDOWN, the same control as the folder row
   above it — the host as a row that is visible and unselectable, the roster

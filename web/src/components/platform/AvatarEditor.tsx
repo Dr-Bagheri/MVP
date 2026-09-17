@@ -36,6 +36,20 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/**
+ * A PRESET IS AN IMAGE DOCUMENT OF ITS OWN, never inlined (2026-09-17): the
+ * generated SVGs carry DiceBear's element ids (`viewboxMask`), and eight of
+ * them inlined into one page share those ids — every `url(#viewboxMask)`
+ * resolves to the FIRST one in the document. Measured on the candidate
+ * sheet: a second style's faces clipped to a quarter of a circle by the
+ * first style's mask. A data URL is its own document, so nothing can
+ * collide, and the accept card's rasteriser loads the very same URL.
+ */
+function svgUrl(svg: string): string {
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+const PRESET_URLS = AVATAR_PRESETS.map((p) => ({ key: p.key, url: svgUrl(p.svg) }));
+
 export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => void }) {
   const t = useTranslations("profile");
   const locale = useLocale();
@@ -74,9 +88,9 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
      accept card, and is uploaded only on the accept — so a preset can never
      reach the profile by a path the photo does not take, and the server
      learns nothing new. */
-  async function pickPreset(svg: string) {
+  async function pickPreset(url: string) {
     try {
-      setPreview(rasterize(await loadImage("data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg))));
+      setPreview(rasterize(await loadImage(url)));
     } catch {
       notifyError(t("photoError"));
     }
@@ -129,18 +143,18 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
             inset would frame it. */}
         <span role="separator" aria-orientation="vertical" className="h-8 w-px shrink-0 bg-border" />
         <div role="group" aria-label={t("avatarPresets")} className="flex flex-wrap items-center gap-2">
-          {AVATAR_PRESETS.map((preset, i) => (
+          {PRESET_URLS.map((preset, i) => (
             <button
               key={preset.key}
               type="button"
               disabled={busy}
               aria-label={`${t("avatarPreset")} ${digits(i + 1, locale)}`}
               title={`${t("avatarPreset")} ${digits(i + 1, locale)}`}
-              onClick={() => void pickPreset(preset.svg)}
+              onClick={() => void pickPreset(preset.url)}
               className="tap h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-transparent transition-shadow hover:ring-accent focus-visible:outline-none focus-visible:ring-accent disabled:opacity-60"
             >
-              {/* our own static SVG, never a person's input */}
-              <span aria-hidden className="block h-full w-full [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: preset.svg }} />
+              {/* eslint-disable-next-line @next/next/no-img-element -- our own generated picture as a data URL (see svgUrl), never a person's input */}
+              <img src={preset.url} alt="" draggable={false} className="block h-full w-full" />
             </button>
           ))}
         </div>

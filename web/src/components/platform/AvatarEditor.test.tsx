@@ -84,8 +84,16 @@ describe("the ready-made avatars", () => {
     expect(presets.map((b) => b.getAttribute("aria-label"))).toEqual(
       ["۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸"].map((n) => `آواتار ${n}`),
     );
-    /* every one is a picture, not a word */
-    for (const b of presets) expect(b.querySelector("svg"), "a preset without its picture").not.toBeNull();
+    /* every one is a picture, not a word — and an IMAGE DOCUMENT of its own,
+       never the SVG inlined: the generated SVGs share DiceBear's element ids,
+       and eight inlined into one page would all resolve `#viewboxMask` to the
+       first (2026-09-17). The absence is the discriminating half. */
+    for (const b of presets) {
+      const img = b.querySelector("img");
+      expect(img, "a preset without its picture").not.toBeNull();
+      expect(img!.getAttribute("src"), "a preset whose picture is not a data URL").toMatch(/^data:image\/svg\+xml/);
+    }
+    expect(group.querySelector("svg"), "a preset inlined its SVG into the page").toBeNull();
     /* the divider stands BETWEEN the person's own picture and the presets */
     const divider = screen.getByRole("separator");
     expect(divider.nextElementSibling, "the divider is not directly before the avatars").toBe(group);
