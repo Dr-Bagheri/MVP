@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
-import { personName } from "@/lib/format";
+import { digits, personName } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { notifyError } from "@/lib/notify";
 import { PictureControl } from "./PictureControl";
+import { AVATAR_PRESETS } from "./avatarPresets";
 
 /**
  * The profile photo, edited in place (user directive, 2026-08-16): no
@@ -41,26 +42,43 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** the centred square of `img`, as the JPEG the accept card shows */
+  function rasterize(img: HTMLImageElement): string {
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const sx = (img.naturalWidth - side) / 2;
+    const sy = (img.naturalHeight - side) / 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = CROP_SIZE;
+    canvas.height = CROP_SIZE;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no canvas");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, CROP_SIZE, CROP_SIZE);
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, CROP_SIZE, CROP_SIZE);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
+
   async function crop(file: File) {
     const url = URL.createObjectURL(file);
     try {
-      const img = await loadImage(url);
-      const side = Math.min(img.naturalWidth, img.naturalHeight);
-      const sx = (img.naturalWidth - side) / 2;
-      const sy = (img.naturalHeight - side) / 2;
-      const canvas = document.createElement("canvas");
-      canvas.width = CROP_SIZE;
-      canvas.height = CROP_SIZE;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("no canvas");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, CROP_SIZE, CROP_SIZE);
-      ctx.drawImage(img, sx, sy, side, side, 0, 0, CROP_SIZE, CROP_SIZE);
-      setPreview(canvas.toDataURL("image/jpeg", 0.85));
+      setPreview(rasterize(await loadImage(url)));
     } catch {
       notifyError(t("photoError"));
     } finally {
       URL.revokeObjectURL(url);
+    }
+  }
+
+  /* A READY-MADE AVATAR takes the photo's own road (2026-09-17): the SVG is
+     rasterised to the same 256×256 JPEG a picked file becomes, lands in the
+     accept card, and is uploaded only on the accept — so a preset can never
+     reach the profile by a path the photo does not take, and the server
+     learns nothing new. */
+  async function pickPreset(svg: string) {
+    try {
+      setPreview(rasterize(await loadImage("data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg))));
+    } catch {
+      notifyError(t("photoError"));
     }
   }
 
@@ -89,16 +107,44 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
           buttons' names. The Avatar is `lg` (48), the page's one answer
           (2026-09-03), and the badge is the theme's icon button, so it
           covers the corner of a 48px circle rather than of a 64. */}
-      <PictureControl
-        accept="image/jpeg,image/png,image/webp"
-        busy={busy}
-        hasPicture={Boolean(me.avatar_url) && !preview}
-        changeLabel={t("photoChange")}
-        removeLabel={t("photoRemove")}
-        onPick={(file) => void crop(file)}
-        onRemove={() => void save(null)}
-        picture={<Avatar name={personName(me, locale)} src={me.avatar_url} size="lg" />}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <PictureControl
+          accept="image/jpeg,image/png,image/webp"
+          busy={busy}
+          hasPicture={Boolean(me.avatar_url) && !preview}
+          changeLabel={t("photoChange")}
+          removeLabel={t("photoRemove")}
+          onPick={(file) => void crop(file)}
+          onRemove={() => void save(null)}
+          picture={<Avatar name={personName(me, locale)} src={me.avatar_url} size="lg" />}
+        />
+
+        {/* THE DIVIDER, THEN EIGHT READY-MADE AVATARS (user, 2026-09-17: "in
+            front of it put a divider and add 8 avatar images, 5 girls and 3
+            boys, animated, for them to select as a profile image"). A
+            vertical hairline separates "your own picture" from "one of
+            ours"; each avatar is a round 36px key named by its number, and a
+            press opens the same accept card a picked photo opens. Not a
+            `btn`: the picture IS the control, and the family's corner and
+            inset would frame it. */}
+        <span role="separator" aria-orientation="vertical" className="h-8 w-px shrink-0 bg-border" />
+        <div role="group" aria-label={t("avatarPresets")} className="flex flex-wrap items-center gap-2">
+          {AVATAR_PRESETS.map((preset, i) => (
+            <button
+              key={preset.key}
+              type="button"
+              disabled={busy}
+              aria-label={`${t("avatarPreset")} ${digits(i + 1, locale)}`}
+              title={`${t("avatarPreset")} ${digits(i + 1, locale)}`}
+              onClick={() => void pickPreset(preset.svg)}
+              className="tap h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-transparent transition-shadow hover:ring-accent focus-visible:outline-none focus-visible:ring-accent disabled:opacity-60"
+            >
+              {/* our own static SVG, never a person's input */}
+              <span aria-hidden className="block h-full w-full [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: preset.svg }} />
+            </button>
+          ))}
+        </div>
+      </div>
 
       {preview ? (
         <div className="mt-3 flex items-center gap-4 rounded-lg border border-border bg-surface-2 p-3">

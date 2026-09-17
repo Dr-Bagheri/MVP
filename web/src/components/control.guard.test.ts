@@ -81,6 +81,13 @@ const REMAINING: Record<string, number> = {
   // lives in rowActions (`ENTRY_CLASS`); that the two panels do not yet spell it
   // identically is a real finding and a bigger change than a class swap.
   "components/Select.tsx": 1,
+  // the eight ready-made AVATARS on the profile (2026-09-17): a round 36px
+  // key whose whole face is the picture. A `btn` would frame it — the
+  // family's corner, inset and coat around a full-bleed portrait — and
+  // `.btn-icon`'s 28 makes eight faces unreadable; the picture IS the
+  // control, so it wears a ring on hover and nothing of the family. Not a
+  // defect; a picture-key, listed so it stays one.
+  "components/platform/AvatarEditor.tsx": 1,
   // the record transport: 40px round satellites around a 64px record button,
   // and two of the five wear that shape from rowActions (SelectMenu
   // variant="round"), so converting only the three here would leave four

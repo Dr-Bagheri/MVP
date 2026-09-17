@@ -110,9 +110,11 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
   day; design «ج» 2026-09-17): row one is the views as the segmented
   control, «مرتب‌سازی» reading its field on the row, «فیلتر» holding
   «پروژه‌های من» and «مهلت امروز» as check rows and counting the ones that
-  are on — the board's own row — and, on the views with no column (list,
-  calendar, archive), the `btn-primary btn-sm` create in `end`; the
-  kanban's columns keep their «افزودن پروژه» rows. Row two is the
+  are on — the board's own row — and the `btn-primary btn-sm` create in
+  `end` on EVERY view (2026-09-17: "add a new project and new tasks in the
+  sub-menu top for each page, the related one, at the end of the first
+  sub-menu top" — reversing 2026-09-05 for the kanban, whose columns keep
+  their «افزودن پروژه» rows as well). Row two is the
   `TopicStrip` read EXACTLY as the board reads it — folder for folder:
   «همه پروژه‌ها» with its count, a chip per PROJECT FOLDER (db/0226)
   carrying how many projects sit in it, the ⋯ that renames in the inline
@@ -127,7 +129,12 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
   picker, a trash beside it while there is something to remove, the words
   as the buttons' names only. The profile photo and the organisation's logo
   both read it; a second «تعویض» button or a «حذف عکس» text link beside a
-  picture is the second telling.
+  picture is the second telling. The profile's «تصویر پروفایل» (2026-09-17)
+  is that control, a vertical hairline, then EIGHT READY-MADE AVATARS
+  (`platform/avatarPresets`, five women then three men, inline SVG, each a
+  round 36px key named «آواتار ۱» …) — a preset takes the photo's own road:
+  rasterised to the same 256px JPEG, shown in the accept card, uploaded on
+  the accept and never before.
 - The two meeting create dialogs carry `platform/MeetingAttendeesField`
   (2026-09-16): it is the KIT'S DROPDOWN, the same control as the folder row
   above it — the host as a row that is visible and unselectable, the roster
@@ -162,9 +169,11 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
   the key's START side, toward the chips (closing it clears the query). A
   search is a key on a row, never a box beside it.
 - The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
-  create button (R3), or — on Profile — «خروج» as a pill in its own
-  `TAB_TRACK` (2026-09-16), the row's own shape rather than a button of
-  another family.
+  create button (R3) — «تسک جدید» on the board, «پروژهٔ جدید» on projects,
+  «جلسه جدید» on meetings, on every view (2026-09-17), beside whatever
+  in-column door the board also keeps — or, on Profile, «خروج» as a pill in
+  its own `TAB_TRACK` (2026-09-16), the row's own shape rather than a button
+  of another family.
 - An in-page SEARCH is a tool at the END of a toolbar row — never a row of
   its own and never first in the row: a KEY at the end of the folder line
   that opens into a field toward the chips (meetings, 2026-09-17), or the

@@ -644,18 +644,17 @@ describe("the kanban (2026-09-05)", () => {
   });
 });
 
-describe("the way in moved into the column (2026-09-05)", () => {
-  it("offers «افزودن پروژه» inside each kanban column, and no button on top", async () => {
+describe("the way in: the column's row AND the row's end (2026-09-05, 2026-09-17)", () => {
+  it("offers «افزودن پروژه» inside each kanban column AND «پروژهٔ جدید» at the row's end", async () => {
     /*
-     * User directive: "remove the add new project on top and add it like
-     * tasks in the column with the name add project, with the same style the
-     * add cards has."
-     *
-     * Both halves asserted, because the version that added the in-column row
-     * and left the top button is the likely half-done state and looks fine.
-     * (2026-09-16, for a few hours, the strip's `+` was «پروژهٔ جدید» on
-     * every view; the strip is the FOLDERS' now and its `+` says so, which
-     * is what the last line holds.)
+     * 2026-09-05: "remove the add new project on top and add it like tasks in
+     * the column with the name add project, with the same style the add cards
+     * has." 2026-09-17: "add a new project and new tasks in the sub-menu top
+     * for each page, the related one, at the end of the first sub-menu top" —
+     * the later ruling names every page, so the kanban carries BOTH doors:
+     * the in-column row where a project will sit, and the row's-end create
+     * every page keeps. Both halves asserted; the strip's `+` stays the
+     * FOLDERS' («پوشهٔ جدید»), which is what the last line holds.
      */
     COLUMNS = [
       { id: "c-1", name: "برای انجام", tone: "blue", position: 1 },
@@ -667,7 +666,11 @@ describe("the way in moved into the column (2026-09-05)", () => {
     /* one per column — a project is made where it will sit */
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: /افزودن پروژه/ })).toHaveLength(2));
-    expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
+    const top = screen.getByRole("button", { name: /پروژهٔ جدید/ });
+    expect(top.className, "the row's-end create is not in the page's one coat").toContain("btn-primary");
+    /* in row one's END slot: the same row the views' track stands in */
+    const track = screen.getByRole("button", { name: "کانبان" }).parentElement!;
+    expect(top.parentElement!.parentElement, "the create is not at the end of row one").toBe(track.parentElement!.parentElement);
     expect(screen.getByRole("button", { name: "پوشهٔ جدید" })).toBeInTheDocument();
   });
 

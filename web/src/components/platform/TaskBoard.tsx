@@ -24,7 +24,7 @@ import { TopicAddButton, TopicChip, TopicStrip } from "./TopicStrip";
 import {
   MenuCheck, MenuRadio, MenuSeparator, TAB_TRACK, TRACK_DIVIDER, Toolbar, ToolbarMenu, sectionTabClass,
 } from "./sectionTabs";
-import { IconFilter } from "@/components/icons";
+import { IconFilter, IconPlus } from "@/components/icons";
 import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
@@ -308,8 +308,26 @@ export function TaskBoard() {
              THE PROJECTS LINK LEFT THIS ROW (user, 2026-09-16: "take out the
              projects from tasks, put it in the main menu on top of the
              tasks"): projects is a rail entry again, and a door here beside
-             it would be the two-doors-to-one-room shape. ── */}
-      <Toolbar>
+             it would be the two-doors-to-one-room shape.
+             THE ROW ENDS WITH «تسک جدید» (user, 2026-09-17: "add a new
+             project and new tasks in the sub-menu top for each page, the
+             related one, at the end of the first sub-menu top"): the page's
+             create at the row's end, in the coat every page's create wears
+             (R3), beside the columns' own «افزودن تسک» rows — one door where
+             every page keeps it, one where the card will sit. It opens the
+             dialog on the FIRST column; the dialog's own chips move it. ── */}
+      <Toolbar
+        end={(
+          <button
+            type="button"
+            onClick={() => setCreating(board.columns[0]?.id ?? "")}
+            className="btn-primary btn-sm"
+          >
+            <IconPlus width={14} height={14} />
+            {t("newTask")}
+          </button>
+        )}
+      >
         <div className={TAB_TRACK}>
           {chip(view === "kanban", t("viewKanban"), () => setView("kanban"))}
           {chip(view === "list", t("viewList"), () => setView("list"))}

@@ -277,23 +277,22 @@ export function Projects({ reader }: { reader: ProjectReader }) {
              the way the board keeps its two toggles together. ── */}
       <Toolbar
         end={
-          /* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
-             the add new project on top and add it like tasks in the column").
-             The way in is the dashed row inside each kanban column — the
-             board's own shape, and a project is made where it will sit. It is
-             still admin-only (0186), and still ABSENT rather than disabled for
+          /* «پروژهٔ جدید» AT THE ROW'S END ON EVERY VIEW (user, 2026-09-17:
+             "add a new project and new tasks in the sub-menu top for each
+             page, the related one, at the end of the first sub-menu top").
+             That REVERSES 2026-09-05 for the kanban ("remove the add new
+             project on top and add it like tasks in the column"): the
+             columns keep their «افزودن پروژه» rows — a project is still made
+             where it will sit — and the row's end carries the page's create
+             as well, in R3's one coat, where every other page keeps it. Two
+             doors to one dialog on the kanban, which 2026-09-05 had declined;
+             the later ruling is the user's and it names every page. Still
+             admin-only (0186), and still ABSENT rather than disabled for
              everybody else: a greyed control is a promise the product has no
-             intention of keeping.
-
-             The LIST, CALENDAR and ARCHIVE views have no column to put it in,
-             so they carry the button — in R3's one coat (`.btn btn-primary`),
-             at the row's end, where every other page keeps its create. The
-             kanban does not. That is written down because it looks like an
-             inconsistency and is not one. (2026-09-16, for a few hours, the
-             strip's `+` stood in for it on every view — until the user said
-             the strip is for FOLDERS; a folder's `+` cannot be a project's
-             door, so the button is back where 2026-09-05 put it.) */
-          isAdmin && view !== "kanban" ? (
+             intention of keeping. (2026-09-16, for a few hours, the strip's
+             `+` stood in for it — until the user said the strip is for
+             FOLDERS; a folder's `+` cannot be a project's door.) */
+          isAdmin ? (
             <button
               type="button"
               onClick={() => setCreating(true)}

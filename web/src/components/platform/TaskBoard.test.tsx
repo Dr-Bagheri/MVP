@@ -781,3 +781,34 @@ describe("a card carries its own delete, and a column carries none (2026-09-15)"
     expect(lane.children).toHaveLength(addRows.length);
   });
 });
+
+/**
+ * ROW ONE ENDS WITH «تسک جدید» (user, 2026-09-17: "add a new project and new
+ * tasks in the sub-menu top for each page, the related one, at the end of
+ * the first sub-menu top"). The page's create at the row's END in the coat
+ * every page's create wears, beside the columns' own «افزودن تسک» rows; it
+ * opens the dialog on the FIRST column, and the dialog's chips move it.
+ * Asserted as structure (jsdom lays nothing out): the button shares the
+ * views' row and stands in its end slot, and the dialog it opens has the
+ * first column checked.
+ */
+describe("the row's-end create (2026-09-17)", () => {
+  it("ends row one with «تسک جدید» in the page's coat, which opens the new-task dialog on the first column", async () => {
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت" })];
+    render(<TaskBoard />);
+    await screen.findByText("اجرای اسکریپت");
+
+    const create = screen.getByRole("button", { name: /تسک جدید/ });
+    expect(create.className, "the create is not in the page's one coat").toMatch(/\bbtn-primary\b/);
+    /* the same row as the views' track, in its END slot */
+    const track = screen.getByRole("button", { name: "کانبان" }).parentElement!;
+    expect(create.parentElement!.parentElement, "the create is not at the end of row one").toBe(track.parentElement!.parentElement);
+    /* the columns keep their own door as well */
+    expect(screen.getAllByRole("button", { name: /افزودن تسک/ }).length).toBeGreaterThan(0);
+
+    await userEvent.click(create);
+    const dialog = await screen.findByRole("dialog", { name: "تسک جدید" });
+    expect(within(dialog).getByRole("radio", { name: "برای انجام" })).toHaveAttribute("aria-checked", "true");
+    expect(within(dialog).getByRole("radio", { name: "در حال انجام" })).toHaveAttribute("aria-checked", "false");
+  });
+});

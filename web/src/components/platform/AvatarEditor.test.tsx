@@ -50,3 +50,58 @@ describe("AvatarEditor", () => {
     expect(screen.queryByRole("button", { name: "حذف عکس" })).toBeNull();
   });
 });
+
+/**
+ * EIGHT READY-MADE AVATARS behind a divider (user, 2026-09-17: "in front of
+ * it put a divider and add 8 avatar images, 5 girls and 3 boys, animated,
+ * for them to select as a profile image"). jsdom draws nothing, so the
+ * canvas and the Image are stubbed to answer as a browser would — the
+ * thing under test is the ROAD: a preset goes through the same accept card
+ * a picked photo does, and what is uploaded on the accept is what the
+ * canvas produced.
+ */
+describe("the ready-made avatars", () => {
+  beforeEach(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      () => ({ fillStyle: "", fillRect: () => undefined, drawImage: () => undefined }) as unknown as CanvasRenderingContext2D,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(() => "data:image/jpeg;base64,QUJD");
+    class FakeImage {
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      naturalWidth = 256;
+      naturalHeight = 256;
+      set src(_v: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal("Image", FakeImage);
+  });
+
+  it("draws the divider and then eight avatars, five women first, each named by its number", () => {
+    render(<AvatarEditor me={ME} onSaved={() => undefined} />);
+    const group = screen.getByRole("group", { name: "آواتارهای آماده" });
+    const presets = Array.from(group.querySelectorAll("button"));
+    expect(presets, "eight avatars").toHaveLength(8);
+    expect(presets.map((b) => b.getAttribute("aria-label"))).toEqual(
+      ["۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸"].map((n) => `آواتار ${n}`),
+    );
+    /* every one is a picture, not a word */
+    for (const b of presets) expect(b.querySelector("svg"), "a preset without its picture").not.toBeNull();
+    /* the divider stands BETWEEN the person's own picture and the presets */
+    const divider = screen.getByRole("separator");
+    expect(divider.nextElementSibling, "the divider is not directly before the avatars").toBe(group);
+    expect(divider.previousElementSibling?.contains(screen.getByRole("button", { name: "تغییر عکس" })), "the divider is not directly after the picture control").toBe(true);
+  });
+
+  it("a press opens the accept card, and the accept uploads what the canvas drew — the photo's own road", async () => {
+    const onSaved = vi.fn();
+    render(<AvatarEditor me={{ ...ME, avatar_url: null }} onSaved={onSaved} />);
+    expect(screen.queryByText("از این عکس استفاده شود؟")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "آواتار ۳" }));
+    /* the accept card, exactly as after a picked file: nothing uploaded yet */
+    await screen.findByText("از این عکس استفاده شود؟");
+    expect(updateProfile).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "استفاده از عکس" }));
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ avatar_url: "data:image/jpeg;base64,QUJD" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  });
+});
