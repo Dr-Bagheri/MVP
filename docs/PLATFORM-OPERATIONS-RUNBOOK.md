@@ -1101,6 +1101,69 @@ RIGHT edge; the field 664.1–844.8 to the LEFT of the key at 844.8–871.2,
 inside its box, 334px to the chips. Nothing exercised live that writes:
 the key's press and release are local state.
 
+## 7v. Deployment record — 2026-09-17, later (9bd350e + c22b70e: web only — every page's create at the end of row one, and the profile picture with eight ready-made avatars)
+
+**9bd350e.** User: "add a new project and new tasks in the sub-menu top for
+each page, the related one, at the end of the first sub-menu top; in
+profile change «عکس نمایه» to «تصویر پروفایل», and in front of it put a
+divider and add 8 avatar images, 5 girls and 3 boys, animated, for them to
+select as a profile image." The task board's row one ends with «تسک جدید»
+(`btn-primary btn-sm`) beside the columns' own «افزودن تسک» rows, opening
+the dialog on the FIRST column; the projects page carries «پروژهٔ جدید» at
+the row's end on EVERY view — reversing 2026-09-05 for the kanban, whose
+columns keep their «افزودن پروژه» rows as well; meetings already ended its
+row with «جلسه جدید». `platform/avatarPresets.ts` draws eight faces as
+inline SVG (five women — long hair, a bob, curls, a bun, a headscarf —
+then three men — short hair, a beard, curls and glasses); the profile's
+picture row is the picture control, a vertical hairline, then the eight as
+round 36px keys named «آواتار ۱» … «۸»; a preset takes the photo's OWN
+road — rasterised to the same 256px JPEG a picked file becomes, shown in
+the accept card, uploaded only on the accept — so the server learns
+nothing new. The keys are not `btn`s (the picture IS the control; the
+family's corner and inset would frame a face); `control.guard` carries
+the entry with that reason. Tests: AvatarEditor (the divider directly
+between the control and the group, eight keys each a picture named by
+its number, a press → the accept card with nothing uploaded → the accept
+uploads what the canvas drew; canvas and Image stubbed), TaskBoard (the
+create in row one's end slot, opening on the first column), Projects
+(both doors on the kanban). Verify-red by mutation, six reds by name —
+after one vacuous mutation of mine: hiding the button with a Tailwind
+class is invisible to jsdom, so that red could never fire; re-anchored to
+remove the slot. Verified: tsc 0; 1801 tests (the recorded
+`selectMenuWidth` load flake, 5/5 alone); the gate alone; the sweep.
+
+**c22b70e — the avatars had wrapped.** Read on 9bd350e: the separator
+stood directly after the picture control and directly before the group,
+every key a round 33.9px picture — and the group's first key sat at
+x 961.8 while the separator sat at 900.6: the group had WRAPPED under the
+picture, so the divider ended a line with nothing beside it. `FormRow`
+caps its control column at 380px (2026-09-02, for a text field's sake)
+and a picture control, a divider and eight faces measure ~470. `FormRow`
+gained `wide` (the row's whole width, start-aligned — neither the cap nor
+`controlAtEnd`'s end slot); the photo row wears it; scaffold.test pins
+the three-way pair and is red by name when the wide branch is capped
+again. 1802 tests; gate; sweep.
+
+**Read on production**, both Vercel projects `success`, in the user's
+Chrome at 1280 / root 15.06. 9bd350e — `/fa/tasks`: «تسک جدید»
+`btn-primary btn-sm` **32px** in row one's END slot at the row's left
+edge (416.6), on the track's line, beside **4** «افزودن تسک» rows; pressed
+→ the dialog «تسک جدید» with the org's FIRST column «بک‌لاگ» checked and
+the other three not, closed on Escape. `/fa/projects` (kanban): «پروژهٔ
+جدید» `btn-primary btn-sm` 32px at the row's end beside **4** «افزودن
+پروژه» rows. `/fa/profile`: «تصویر پروفایل» in the rendered text and
+«عکس نمایه» absent (with the catalogue-only control present in the
+payload and absent from the text); the separator 1×30 directly after the
+picture control and directly before the group «آواتارهای آماده»; eight
+keys «آواتار ۱» … «۸», all **33.9px** and fully round, each carrying its
+SVG; «آواتار ۳» pressed → the accept card «از این عکس استفاده شود؟» with
+a **256×256 `data:image/jpeg`** preview and nothing uploaded; «انصراف» →
+the card gone. c22b70e — the same row on ONE line: the picture at
+912.9–995.7, the hairline at 900.6, the keys from 855.4 running left to
+565.6, every key's centre within 2px of the separator's, in a control
+column of 430.1 (was capped at 380). NOT exercised live: an accept (a
+write on the person's profile) and a create on either board.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

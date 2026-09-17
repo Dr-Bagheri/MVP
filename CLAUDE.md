@@ -8096,3 +8096,40 @@ sessions) for the cross-session narrative.
   writes.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1798 tests + gate + sweep.
+- 2026-09-17 (last — EVERY PAGE'S CREATE AT THE END OF ROW ONE, AND THE
+  PROFILE PICTURE WITH EIGHT READY-MADE AVATARS; commits 9bd350e, c22b70e;
+  web on Vercel, nothing in core or db): "add a new project and new tasks
+  in the sub-menu top for each page, the related one, at the end of the
+  first sub-menu top; in profile change «عکس نمایه» to «تصویر پروفایل»,
+  and in front of it put a divider and add 8 avatar images, 5 girls and 3
+  boys, animated, for them to select as a profile image." The task
+  board's row one ends with «تسک جدید» (opening the dialog on the FIRST
+  column) beside the columns' «افزودن تسک» rows; the projects page carries
+  «پروژهٔ جدید» at the row's end on EVERY view — reversing 2026-09-05 for
+  the kanban, whose columns keep their rows as well. `platform/
+  avatarPresets.ts` draws eight faces as inline SVG (five women, then
+  three men); the profile row is the picture control, a hairline, then
+  the eight as round 36px keys named «آواتار ۱» … «۸», and a preset takes
+  the photo's OWN road — rasterised to the same 256px JPEG, the accept
+  card, uploaded on the accept only — so the server learns nothing new.
+  The keys are not `btn`s (the picture IS the control); `control.guard`
+  carries the entry with its reason. Six mutations red by name, after one
+  of MINE was vacuous: hiding a button with a Tailwind class is invisible
+  to jsdom, so that red could never fire — re-anchored to remove the slot.
+  **The production read found the avatars WRAPPED under the picture**: the
+  form row caps its control column at 380px for a text field's sake, and
+  a picture control, a divider and eight faces are ~470. `FormRow` gained
+  `wide` (the whole row, start-aligned; neither the cap nor the end slot),
+  pinned as the three-way pair in scaffold.test and red when re-capped.
+  **Proven on production in the user's Chrome** (runbook 7v): «تسک جدید»
+  and «پروژهٔ جدید» `btn-primary btn-sm` at 32px in row one's end slot on
+  both boards beside four in-column rows each, the task dialog opening on
+  «بک‌لاگ» (the org's first column); the profile's «تصویر پروفایل», the
+  1×30 hairline directly between the picture control and the group of
+  eight 33.9px round SVG keys — on ONE line after c22b70e (keys 855→566
+  beside the separator at 901, every centre within 2px), a press on
+  «آواتار ۳» drawing the accept card with a 256×256 JPEG preview and
+  nothing uploaded, «انصراف» clearing it. Nothing exercised live that
+  writes.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1802 tests + gate + sweep.
