@@ -1,6 +1,6 @@
 "use client";
 
-import { SectionTabs, Toolbar } from "./sectionTabs";
+import { SectionTabs } from "./sectionTabs";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
@@ -932,18 +932,18 @@ function PostStage({ meeting, call, me, locale, onBackToMeetings }: {
       {/* THE KIT'S TRACK (2026-09-15): the same rail and pill every page's
           first sub-menu wears, read from sectionTabs rather than drawn here */}
       {/*
-        THE MEETING'S NAME RIDES IN FRONT OF THE TABS (user directive,
-        2026-09-17: "instead add it in front of overview … into the content").
-        It came out of a heading block at the top of the page — a second
-        rendering of what the trail already says — and sits here, at the row's
-        start, as the label of the four tabs that belong to it. Still an `h1`:
-        the page needs one, and this is the only place it now says which
-        meeting a reader is looking at.
+        NO NAME ON THIS ROW — and this REVERSES the same day's own change.
+        It was put in front of the tabs this morning («instead add it in front
+        of overview»), and on a real meeting it collided with the panel below:
+        a long title and a nine-pill track do not share one line, so the
+        heading wrapped and sat over «رونوشت جلسه» (user, with two
+        screenshots: "remove the name of the meeting that is hanging behind in
+        the sub menu on top, we don't need it there").
+        The name is not lost — the trail carries it above, and the summary's
+        own document names itself. A row of tabs is chrome; a title that has
+        to fight it for space is a title in the wrong place.
       */}
-      <Toolbar>
-        <h1 className="min-w-0 truncate text-sm font-bold text-fg">{meeting.title}</h1>
-        <SectionTabs label={t("stage_post")} tabs={tabs} active={tab} onSelect={setTab} />
-      </Toolbar>
+      <SectionTabs label={t("stage_post")} tabs={tabs} active={tab} onSelect={setTab} />
 
       {/*
         THE ITEMS PANEL IS NOT GATED ON A RECORDING (0160). Everything else in

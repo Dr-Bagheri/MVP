@@ -252,23 +252,68 @@ describe("the document's row, and the shape it exports (2026-09-17)", () => {
     getSummaries.mockResolvedValue([]);
   });
 
-  it("puts the title and the date in the controls' row, and takes them out of the card", async () => {
+  it("puts the name, the date and the controls in the DOCUMENT'S OWN box", async () => {
+    /*
+     * The second directive of the day, reversing the first: "add the items of
+     * name of the meeting with date and buttons to the place of the
+     * summarization, not separate like this — they have to be in the same
+     * box". A header floating above the thing it names is a second box for
+     * one document.
+     */
     renderTab("c1");
     await screen.findByText("رؤیا");
 
-    const title = screen.getByRole("heading", { name: "summaryDocTitle" });
-    /* ONE row: the title, the date under it, and the ⋯ at the other end.
-       `closest("div")` is the toolbar's own group — if the kebab were in a
-       row of its own this is the assertion that fails. */
-    const row = title.closest("div")!.parentElement!;
-    expect(within(row).getByRole("button", { name: "summaryExport" })).toBeTruthy();
-    expect(within(row).getByText(/minutesDate/)).toBeTruthy();
-
-    /* and the card does not name itself a second time — the centred header
-       that used to stand above «حاضران» is gone */
     const card = screen.getByLabelText("tabSummary");
-    expect(within(card).queryByRole("heading", { name: "summaryDocTitle" })).toBeNull();
+    const title = within(card).getByRole("heading", { name: "summaryDocTitle" });
+    /* ONE row INSIDE the card: the title, the date under it, the controls at
+       the other end. If any of the three were outside the article, this is
+       the assertion that fails. */
+    expect(within(card).getByRole("button", { name: "summaryExport" })).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "rerun" })).toBeTruthy();
+    expect(within(card).getByText(/minutesDate/)).toBeTruthy();
+    const row = title.closest("header")!;
+    expect(within(row).getByRole("button", { name: "summaryExport" })).toBeTruthy();
+    /* and said ONCE — the row above the card and this one would be two */
     expect(screen.getAllByRole("heading", { name: "summaryDocTitle" })).toHaveLength(1);
+  });
+
+  it("reads name-then-controls, so Persian puts the name at the start and the ⋯ at the far end", async () => {
+    /*
+     * "change their place with each other: the kebab menu left, then the
+     * generate button, and the name and date on the right in the fa version."
+     *
+     * Asserted as DOCUMENT ORDER, not as a class: this is plain logical
+     * order — no `rtl:flex-row-reverse` any more — so in Persian the first
+     * child sits at the right and the last lands at the far left, and English
+     * mirrors it into the header an English reader expects. A class assertion
+     * could not tell those two arrangements apart.
+     */
+    renderTab("c1");
+    await screen.findByText("رؤیا");
+    const row = screen.getByRole("heading", { name: "summaryDocTitle" }).closest("header")!;
+    const title = within(row).getByRole("heading", { name: "summaryDocTitle" });
+    const rerun = within(row).getByRole("button", { name: "rerun" });
+    const kebab = within(row).getByRole("button", { name: "summaryExport" });
+
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(title, rerun)).toBe(true);
+    expect(follows(rerun, kebab)).toBe(true);
+    /*
+     * AND NOTHING REORDERS IT VISUALLY. DOM order alone is not the claim: CSS
+     * can put the name last while the markup still reads name-first, and the
+     * verify-red said so — `order-last` on the title and `flex-row-reverse`
+     * on the controls both came back GREEN against the three lines above.
+     * This is the same hole the live take's row had this morning, found the
+     * same way: a mutation that changes what a reader sees and nothing else.
+     */
+    for (const el of [row, ...row.querySelectorAll("*")]) {
+      /* the ATTRIBUTE, not `.className`: on the icons' <svg> that property is
+         an SVGAnimatedString and `toMatch` throws on it — which is how this
+         loop announced itself the first time it ran */
+      expect(el.getAttribute("class") ?? "", `${el.tagName} reorders the row visually`)
+        .not.toMatch(/\b(flex-row-reverse|order-(first|last|none|\d+))\b/);
+    }
   });
 
   it("holds the two exports in the ⋯ and leaves «تولید دوباره» outside it", async () => {

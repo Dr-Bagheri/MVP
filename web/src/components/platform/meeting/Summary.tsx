@@ -325,24 +325,32 @@ export function SummaryTab({ meeting, callId }: {
 
   return (
     <div className="space-y-3">
+      <article className="tile p-6" aria-label={t("tabSummary")}>
       {/*
-        ── ONE ROW: what this document is, and what can be done with it ──
-        (user directive, 2026-09-17: "in summaries put the title and the date
-        of the meeting on one side, in fa version on left, and in the same row
-        put a three dot kebab menu with pdf and word download in it; keep the
-        generate again out as it is, near the three dot".)
+        ── THE DOCUMENT'S OWN HEADER, INSIDE THE DOCUMENT ──
+        (user directive, 2026-09-17, second pass: "add the items of name of the
+        meeting with date and buttons to the place of the summarization, not
+        separate like this — they have to be in the same box; and change their
+        place with each other: the kebab menu left, then the generate button,
+        and the name and date on the right in the fa version".)
 
-        The title and the date came OUT of the card, where they stood centred
-        above the first section, into the row that already held the controls.
+        TWO REVERSALS OF THE SAME MORNING, both recorded rather than quietly
+        made:
 
-        PINNED PHYSICALLY, not logically, and deliberately: the side was named
-        while looking at the PERSIAN screen, where left is the inline END — and
-        an English document header with its title on the right is simply wrong.
-        `rtl:flex-row-reverse` lays both locales out left-to-right (title left,
-        controls right) while leaving the text inside each to its own
-        direction, which a `dir` on the row would not.
+        · it was a row ABOVE the card, and a header floating over the thing it
+          names is a second box for one document. It is the card's own header
+          now, with the sections under a hairline.
+        · it was pinned PHYSICALLY (`rtl:flex-row-reverse`) on the reading that
+          «left» meant the same side in both languages. It does not: what was
+          asked for is the ORDINARY one — the name where a Persian reader
+          starts, the controls at the far end — so the row is plain logical
+          order, and English mirrors it into exactly the header an English
+          reader expects.
+
+        Inside the controls, «تولید دوباره» comes first and the ⋯ second, which
+        puts the ⋯ on the row's outer corner in either direction.
       */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rtl:flex-row-reverse">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-bold text-fg">
             {t("summaryDocTitle", { title: meeting.title })}
@@ -354,9 +362,7 @@ export function SummaryTab({ meeting, callId }: {
           </p>
         </div>
 
-        {/* the same left-to-right order inside the group, so the ⋯ lands on
-            the row's outer corner in both locales */}
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 rtl:flex-row-reverse">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         {rerunNote !== null ? (
           <span className="text-caption text-fg-muted">{rerunNote}</span>
         ) : null}
@@ -460,12 +466,8 @@ export function SummaryTab({ meeting, callId }: {
           ]}
         />
         </div>
-      </div>
+      </header>
 
-      {/* the card's own centred header is GONE — its title and date are the
-          row above, and a document that names itself twice on one screen is
-          the second place for the two to disagree */}
-      <article className="tile p-6" aria-label={t("tabSummary")}>
         <section>
           <h3 className="text-sm font-bold text-accent">{digits(1, locale)}. {t("minutesAttendees")}</h3>
           {attendees.length === 0 ? (

@@ -35,8 +35,14 @@ vi.mock("@/i18n/routing", () => ({
     <a href={typeof href === "string" ? href : "#"}>{children}</a>
   ),
 }));
+/* what the page told the TRAIL, recorded rather than swallowed: with the name
+   gone from the page itself (2026-09-17), the trail is where a reader learns
+   which meeting they are on — so a test that only asserts the absence would
+   pass against a page that had lost the title altogether. `vi.hoisted`
+   because `vi.mock`'s factory is lifted above every top-level const. */
+const { crumbTitles } = vi.hoisted(() => ({ crumbTitles: [] as Array<string | undefined> }));
 vi.mock("@/components/platform/CrumbTitle", () => ({
-  useCrumbTitle: () => undefined,
+  useCrumbTitle: (title?: string) => { crumbTitles.push(title); },
 }));
 
 const startSpy = vi.fn(async (_opts: unknown) => undefined);
@@ -281,9 +287,11 @@ describe("MeetingPage", () => {
     expect(screen.queryByRole("button", { name: /پیش از جلسه/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /حین جلسه/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /پس از جلسه/ })).toBeNull();
-    /* the meeting's own name replaced them — a page with neither would be a
-       screen that never says which meeting it is */
-    expect(screen.getByRole("heading", { name: MEETING.title })).toBeInTheDocument();
+    /* and the meeting's NAME is not on this row either (2026-09-17, second
+       pass): it was put in front of the tabs that morning and collided with
+       the panel below — a long title and a nine-pill track do not share a
+       line. The trail carries it, and the summary's document names itself. */
+    expect(screen.queryByRole("heading", { name: MEETING.title })).toBeNull();
   });
 
   it("maps the call-status ladder onto the four steps, per step", async () => {
@@ -1087,36 +1095,37 @@ describe("the take's one row, and the people beside it (2026-09-16)", () => {
   });
 });
 
-describe("the meeting's name rides with the tabs (2026-09-17)", () => {
+describe("the page says which meeting it is exactly once (2026-09-17)", () => {
   /*
-   * User directive: "remove the name of the meeting from the top inside the
-   * page, we don't need it there — instead add it in front of overview, into
-   * the content."
+   * TWO DIRECTIVES IN ONE DAY, and the second reverses the first — recorded
+   * here because the reversal is the finding:
    *
-   * It was a heading block above every stage, restating the trail one line
-   * higher. What makes this assertable rather than cosmetic is WHERE it
-   * landed: a title that merely still exists somewhere on the page satisfies
-   * the old layout too, so the claim here is the ROW — the name and the four
-   * tabs in one track, the name first.
+   *   morning  "remove the name of the meeting from the top inside the page —
+   *            instead add it in front of overview, into the content."
+   *   evening  "remove the name of the meeting that is hanging behind in the
+   *            sub menu on top, we don't need it there" — with screenshots of
+   *            a real meeting where it did exactly that: «جلسه بررسی پلتفرم»
+   *            wrapped off the tab row and sat over «رونوشت جلسه».
+   *
+   * A long title and a nine-pill track cannot share one line. So the page
+   * carries NO name of its own now, and the claim worth pinning is that
+   * absence — plus the two places the name still is, which is what makes the
+   * absence safe rather than a screen that never says which meeting it is.
    */
-  it("labels the tab row, in front of «نمای کلی»", async () => {
+  it("keeps the name off the tab row, where it collided with the panel", async () => {
     MEETING = meeting({ call_id: "c-1", title: "جلسهٔ فروش" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
 
     const tablist = await screen.findByRole("tablist", { name: "پس از جلسه" });
-    const heading = screen.getByRole("heading", { name: "جلسهٔ فروش" });
-    /* the toolbar's own group holds both — a name in a block of its own
-       above the row is the shape this replaced */
-    const row = heading.closest("div")!;
-    expect(within(row).getByRole("tablist", { name: "پس از جلسه" })).toBe(tablist);
-    /* IN FRONT OF the tabs, in document order — `Node.DOCUMENT_POSITION_
-       FOLLOWING` is the direction-free way to say it, since «front» on this
-       page is the right-hand end */
-    expect(heading.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    /* and said ONCE: the old block plus this one would be two */
-    expect(screen.getAllByRole("heading", { name: "جلسهٔ فروش" })).toHaveLength(1);
+    /* nothing but tabs on that row */
+    expect(within(tablist.parentElement!).queryByRole("heading")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "جلسهٔ فروش" })).toBeNull();
+    /* THE CONTROL, and the reason the absence is not a regression: the trail
+       is told the title (the shell renders it), and the summary tab's own
+       document names itself — asserted in Summary.test.tsx. A page that had
+       simply stopped knowing its meeting would fail here. */
+    expect(crumbTitles.at(-1)).toBe("جلسهٔ فروش");
   });
 
   it("gives a live take no title block at all — the trail is where the name is", async () => {
