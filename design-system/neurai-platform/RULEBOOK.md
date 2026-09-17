@@ -67,7 +67,7 @@ row one   TAB_TRACK     + sectionTabClass(active)   a SEGMENTED CONTROL: the rec
                                                      button with the label, the current value,
                                                      a COUNT of the filters that are on, a
                                                      chevron; the ⋯ menu's own panel
-row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.chip`s — 24 tall, outlined,
+row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s — 24 tall, outlined,
                                                      the accent's edge and tint when on; no
                                                      rail under them
 ```
@@ -90,7 +90,7 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.chip`s — 24 ta
 - An on/off filter that stays ON THE ROW (the call page's «مقایسه») is
   `toggleClass(on)` with `aria-pressed` — a segmented pill lifting on its
   own; a page toolbar's own on/off filters go in «فیلتر».
-- The pill (`.btn-xs`, 28) and the chip (`.chip`, 24) are kit shapes in
+- The pill (`.btn-xs`, 28) and the chip (`.filter-chip`, 24) are kit shapes in
   `globals.css`; `units.guard` cross-reads their size tokens, `toolbar.guard`
   refuses a tab drawn without the kit and holds the kit to the track, the
   pill and the chip, and `filterChips.test` records the reversal of the

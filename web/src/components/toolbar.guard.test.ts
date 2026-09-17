@@ -76,14 +76,14 @@ describe("toolbar.guard — every tab is the kit's", () => {
 
   it("the control: the kit still spells the segmented track, the pill and the chip", () => {
     /* design «ج» (2026-09-17): the recessed track around `.btn-xs` pills,
-       the chosen one lifted with the card shadow; row two a line of `.chip`s
+       the chosen one lifted with the card shadow; row two a line of `.filter-chip`s
        with no rail — a kit that quietly dropped any of them would not pass
        by making the tree empty of it */
     const kit = readFileSync(join(SRC, KIT), "utf8");
     expect(kit).toContain("rounded-md bg-surface-2 p-[3px]");
     expect(kit).toContain("btn btn-xs");
     expect(kit).toContain("shadow-card");
-    expect(kit).toContain('"chip chip-on"');
+    expect(kit).toContain('"filter-chip filter-chip-on"');
     expect(kit, "row two grew a rail again").not.toMatch(/FILTER_TRACK =[^;]*bg-/);
   });
 });

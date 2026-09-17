@@ -39,8 +39,8 @@ describe("the toolbar kit", () => {
     expect(FILTER_TRACK).not.toMatch(/(?<![\w-])p-/);
     expect(FILTER_TRACK).not.toMatch(/\brounded-/);
     /* the chip is one class in globals.css, with one coat for "on" */
-    expect(filterChipClass(false)).toBe("chip");
-    expect(filterChipClass(true)).toBe("chip chip-on");
+    expect(filterChipClass(false)).toBe("filter-chip");
+    expect(filterChipClass(true)).toBe("filter-chip filter-chip-on");
     /* and it is not a button of the family: a chip shows a state, a button
        does an act */
     expect(filterChipClass(true)).not.toMatch(/\bbtn\b/);

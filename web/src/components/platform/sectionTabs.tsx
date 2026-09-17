@@ -37,7 +37,7 @@ import {
  *             the track's height with a label, the current value where one
  *             is worth reading on the row, a COUNT of active filters, and a
  *             chevron; the panel is the ⋯ menu's own panel (rowActions.tsx).
- *   ROW TWO   `FILTER_TRACK` + `filterChipClass`: a line of `.chip`s — 24
+ *   ROW TWO   `FILTER_TRACK` + `filterChipClass`: a line of `.filter-chip`s — 24
  *             tall, outlined, the accent's edge and tint when on — with no
  *             rail under them; the row costs what a line of text does.
  *
@@ -95,7 +95,7 @@ export function sectionTabClass(active: boolean): string {
 
 /** the chip, row two: outlined; the accent's edge, tint and ink when chosen */
 export function filterChipClass(active: boolean): string {
-  return active ? "chip chip-on" : "chip";
+  return active ? "filter-chip filter-chip-on" : "filter-chip";
 }
 
 /**

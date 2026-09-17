@@ -606,7 +606,7 @@ describe("Meetings", () => {
        it, the chip outlined and the lit one in the accent's tint */
     expect(rail.className, "the strip grew a rail again").not.toMatch(/\bbg-/);
     expect(all.className).toMatch(/\bchip\b/);
-    expect(all.className).toMatch(/\bchip-on\b/);
+    expect(all.className).toMatch(/\bfilter-chip-on\b/);
     expect(rail.parentElement!.className.split(/\s+/), "the strip's line stands in no row").toContain("flex-wrap");
     const folder = await screen.findByRole("button", { name: /محصول/ });
     expect(folder).toHaveTextContent("۱");

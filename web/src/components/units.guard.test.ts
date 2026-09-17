@@ -129,7 +129,7 @@ describe("units say what a rule is about", () => {
 
     const unknown: string[] = [];
     for (const sel of [
-      ".btn", ".btn-xs", ".btn-sm", ".btn-icon", ".btn-icon-sm", ".btn-icon-lg", ".chip", ".input", ".input-sm",
+      ".btn", ".btn-xs", ".btn-sm", ".btn-icon", ".btn-icon-sm", ".btn-icon-lg", ".filter-chip", ".input", ".input-sm",
     ]) {
       const rule = body(sel);
       for (const m of rule.matchAll(/(?:^|\s)(w|h|min-h)-([\w[\]().%-]+)/g)) {

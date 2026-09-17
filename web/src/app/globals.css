@@ -949,7 +949,7 @@
   }
   /*
    * THE CHIP (the same choice): the folder line under the toolbar — 24 tall,
-   * outlined, a full corner, the caption size; `chip-on` is the accent's
+   * outlined, a full corner, the caption size; `filter-chip-on` is the accent's
    * edge on the accent's tint with accent ink. It is NOT a `btn`: a chip is
    * a filter you can see the state of, not an action, and the row of them is
    * a line rather than a rail — no ground, no padding, so the line is 28
@@ -957,12 +957,12 @@
    * line of text does. `filterChipClass` in sectionTabs.tsx is its only
    * spelling.
    */
-  .chip {
+  .filter-chip {
     @apply tap inline-flex h-6 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap
            rounded-full border border-border px-2.5 text-caption font-medium text-fg-muted
            transition-colors hover:border-border-strong hover:text-fg;
   }
-  .chip-on {
+  .filter-chip-on {
     @apply border-accent bg-accent-soft text-accent hover:border-accent hover:text-accent;
   }
   .btn-icon {
@@ -1892,6 +1892,7 @@
   position: relative;
   border-radius: 14px;
   overflow: hidden;
+  transition: filter 260ms ease-out;
   /* the ground and its two decorations are TOKENS, because the first
      version hard-coded a black vignette tuned on the dark theme and the
      light theme rendered it as a silver slab (user report, 2026-08-26:
@@ -1970,7 +1971,6 @@
   clip-path: inset(calc((1 - var(--v)) * 50%) 0 calc((1 - var(--v)) * 50%) 0 round 999px);
 }
 .wave-scope-strip .wave-idle { top: 50%; }
-.wave-scope { transition: filter 260ms ease-out; }
 .wave-scope[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .20)); }
 .wave-scope[data-glow="2"] {
   filter: drop-shadow(0 0 5px rgb(var(--accent) / .38)) drop-shadow(0 0 18px rgb(var(--accent) / .14));
