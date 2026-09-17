@@ -377,7 +377,9 @@ describe("TaskBoard", () => {
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("مال دیگری")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "فقط تسک‌های من" }));
+    /* the filter is a CHECK ROW in the «فیلتر» menu (design «ج», 2026-09-17) */
+    await userEvent.click(screen.getByRole("button", { name: /^فیلتر/ }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "فقط تسک‌های من" }));
 
     await waitFor(() => expect(screen.queryByText("مال دیگری")).toBeNull());
     expect(screen.getByText("سپرده به من")).toBeInTheDocument();
@@ -688,7 +690,11 @@ describe("«مهلت امروز» is the platform's today (2026-09-06)", () => {
     ];
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("امروزِ سکو")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /مهلت امروز/ }));
+    /* the filter is a check row in the «فیلتر» menu (design «ج»); the
+       pointer's own waits ride the fake clock */
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole("button", { name: /^فیلتر/ }));
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: /مهلت امروز/ }));
     /* the old code took browser midnight: on any machine west of the date
        line it kept the yesterday card and dropped today's */
     expect(screen.getByText("امروزِ سکو")).toBeInTheDocument();

@@ -3,34 +3,51 @@
 import type { ReactNode } from "react";
 import { useLocale } from "next-intl";
 import { digits } from "@/lib/format";
+import { IconChevronRight } from "@/components/icons";
+import { MENU_ENTRY_CLASS, MENU_PANEL_CLASS } from "@/components/rowActions";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /**
- * THE PAGE'S TWO SUB-MENUS — one module, two tracks, one pill.
+ * THE PAGE'S TWO SUB-MENUS — one module, design «ج».
  *
- * User ruling, 2026-09-15: "inside the page we have two sub menu on the top …
- * the first and second have different design but in all pages it must
- * follow the same design for each … I want them to look like meeting top
- * menu, so change them all in other pages, and for the second one use a
- * little different color but same design."
+ * User's choice, 2026-09-17, from three compact designs drawn side by side
+ * against the toolbar of the day (which cost 104px before the first content):
+ * «ج» — a SEGMENTED CONTROL for the views, the sort and the filters behind
+ * two MENU buttons («مرتب‌سازی», «فیلتر» with a count of the filters that are
+ * on), and the folders as one LINE of chips — 70px to the content, and the
+ * only things always in view are the ones a person switches between.
  *
- * So the design is the MEETINGS page's segmented track — a rounded rail on the
- * recessed ground with the chosen entry LIFTED out of it as a lit pill — and
- * it is written here exactly once:
+ * So the design is written here exactly once:
  *
- *   ROW ONE   `TAB_TRACK` + `sectionTabClass`: the grey rail, the chosen
- *             pill in the surface tone with the card shadow, ink `fg`.
- *   ROW TWO   `FILTER_TRACK` + `filterChipClass`: the SAME rail and the SAME
- *             pill, on the accent's soft tint, the chosen pill in accent ink.
- *             The "little different colour" is the ground and the ink; the
- *             geometry does not move by a pixel, so a reader who has learned
- *             one row has learned the other.
+ *   ROW ONE   `TAB_TRACK` + `sectionTabClass`: the segmented control — the
+ *             recessed track, 3px around 28px pills (`.btn-xs`), the chosen
+ *             pill lifted in the surface tone with the card shadow. The pill
+ *             plus its padding is `btn-sm`'s 34, so a `ToolbarMenu` and a
+ *             `btn-sm` create button stand level with it on one line.
+ *   MENUS     `ToolbarMenu` + `MenuRadio` / `MenuCheck`: a ghost button at
+ *             the track's height with a label, the current value where one
+ *             is worth reading on the row, a COUNT of active filters, and a
+ *             chevron; the panel is the ⋯ menu's own panel (rowActions.tsx).
+ *   ROW TWO   `FILTER_TRACK` + `filterChipClass`: a line of `.chip`s — 24
+ *             tall, outlined, the accent's edge and tint when on — with no
+ *             rail under them; the row costs what a line of text does.
  *
- * A page composes a row out of TRACKS. A track never wraps (a rail that folds
- * onto a second line stops reading as a rail — it scrolls instead, the meeting
- * items panel's own answer), and a row of tracks wraps as UNITS, so the task
- * board's three groups fold onto a second line on a laptop with the assistant
- * open rather than tearing one group across two. Dividers go INSIDE a track
- * (`TRACK_DIVIDER`), between runs of the same menu.
+ * (2026-09-15 to 2026-09-17 the two rows were ONE geometry in two colours —
+ * the meetings rail and a tinted copy of it. That is the toolbar «ج» was
+ * chosen over; `filterChips.test` records the reversal.)
+ *
+ * A track never wraps (a rail that folds onto a second line stops reading as
+ * a rail — it scrolls instead), and a row of tracks wraps as UNITS. Dividers
+ * go INSIDE a track (`TRACK_DIVIDER`), between runs of the same menu.
  *
  * Every consumer of a tab reads its class from here — `toolbar.guard.test.ts`
  * refuses a `role="tab"` whose file does not import this module, which is what
@@ -43,13 +60,13 @@ import { digits } from "@/lib/format";
  * reader they answer the same question about the same screen.
  */
 
-/** row one's rail: the recessed ground, the pills' 4px of padding, never wrapping */
+/** row one's segmented control: the recessed track, 3px around the pills, never wrapping */
 export const TAB_TRACK =
-  "track-scroll flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1";
+  "track-scroll flex max-w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-[3px]";
 
-/** row two's rail: the same rail on the accent's soft tint */
+/** row two's line of chips: no ground, no padding — the chips and their gaps */
 export const FILTER_TRACK =
-  "track-scroll flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl bg-accent-soft p-1";
+  "track-scroll flex max-w-full shrink-0 items-center gap-1.5 overflow-x-auto";
 
 /** a divider between two runs inside ONE track */
 export const TRACK_DIVIDER = "mx-0.5 h-5 w-px shrink-0 bg-border";
@@ -59,34 +76,42 @@ export const TRACK_DIVIDER = "mx-0.5 h-5 w-px shrink-0 bg-border";
  * actions (a create button, a view switch) at the end. Pages render this
  * through `Toolbar`; the strings are exported for the two files that compose
  * a row by hand around something that is not a track (a search field).
+ *
+ * A BUTTON ON THE ROW IS `btn-sm` — the segmented control's own height. A
+ * full `.btn` (42) beside a 34px control is the two-families-on-one-line
+ * fault the 2026-09-16 round fixed the other way round; the dialogs keep
+ * `.btn`, the toolbars wear `btn-sm`.
  */
 export const TOOLBAR_ROW = "flex flex-wrap items-center justify-between gap-2";
 export const TOOLBAR_GROUPS = "flex min-w-0 flex-wrap items-center gap-2";
 export const TOOLBAR_END = "flex shrink-0 flex-wrap items-center gap-1.5";
 
-/** the lifted pill, row one: surface tone, card shadow, `fg` ink */
+/** the segmented pill, row one: surface tone, card shadow, `fg` ink when chosen */
 export function sectionTabClass(active: boolean): string {
-  return `btn btn-sm shrink-0 gap-1.5 rounded-xl font-medium ${
-    active ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
+  return `btn btn-xs shrink-0 gap-1.5 ${
+    active ? "bg-surface font-semibold text-fg shadow-card" : "text-fg-muted hover:text-fg"
   }`;
 }
 
-/** the lifted pill, row two: the same pill, accent ink when chosen */
+/** the chip, row two: outlined; the accent's edge, tint and ink when chosen */
 export function filterChipClass(active: boolean): string {
-  return `btn btn-sm shrink-0 gap-1.5 rounded-xl font-medium ${
-    active ? "bg-surface font-semibold text-accent shadow-card" : "text-fg-muted hover:text-fg"
-  }`;
+  return active ? "chip chip-on" : "chip";
 }
 
 /**
- * An on/off filter («فقط من», «مهلت امروز») is a pill in a track that lifts
- * on its own: the same face as a tab, with `aria-pressed` rather than
- * `aria-selected`, because two of them can be on at once.
+ * An on/off filter that stays ON THE ROW («مقایسه» on the call page) is a
+ * segmented pill lifting on its own: the same face as a tab, with
+ * `aria-pressed` rather than `aria-selected`. The page toolbars' own
+ * on/off filters («فقط من», «مهلت امروز») live in the «فیلتر» menu instead —
+ * design «ج» keeps only the views in permanent view.
  */
 export const toggleClass = sectionTabClass;
 
-/** the count badge a pill carries */
-export const FILTER_COUNT = "badge-num rounded-md bg-surface-2 px-1 text-micro";
+/** the count a chip or a pill carries: a small number, no box of its own */
+export const FILTER_COUNT = "badge-num text-micro opacity-70";
+
+/** the count of ACTIVE filters on a menu button: a dot of the accent with the number in it */
+export const MENU_COUNT = "badge-num h-4 min-w-4 rounded-full bg-accent px-1 text-micro text-on-accent";
 
 /** THE GAP UNDER ROW TWO — the board's own `gap-3` (12px) between its second
     row and its cards. A page whose second row is not inside a `gap-3` column
@@ -111,6 +136,132 @@ export function Toolbar({
       <div className={TOOLBAR_GROUPS}>{children}</div>
       {end ? <div className={TOOLBAR_END}>{end}</div> : null}
     </div>
+  );
+}
+
+/**
+ * A MENU ON THE ROW. The trigger reads as one of the row's controls — the
+ * ghost coat at `btn-sm`, the control's own height — and opens the ⋯ menu's
+ * panel; its rows are `MenuRadio` (which one) and `MenuCheck` (on or off),
+ * the two questions a toolbar asks. `count` is how many of the choices
+ * inside are ON: a filter nobody can see is a list that lies, and the badge
+ * is where the hidden ones are counted. `value` is a reading of the current
+ * choice worth showing on the row itself («مرتب‌سازی: تاریخ»).
+ */
+export function ToolbarMenu({
+  label,
+  icon,
+  value,
+  count = 0,
+  children,
+}: {
+  label: string;
+  icon?: ReactNode;
+  /** the current answer, shown after the label */
+  value?: ReactNode;
+  /** how many filters inside are on — drawn as a badge when above zero */
+  count?: number;
+  children: ReactNode;
+}) {
+  const locale = useLocale();
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="btn-ghost btn-sm shrink-0 gap-1.5">
+          {icon}
+          <span>{label}</span>
+          {value !== undefined ? <span className="text-fg">{value}</span> : null}
+          {count > 0 ? <span className={MENU_COUNT}>{digits(count, locale)}</span> : null}
+          <IconChevronRight width={12} height={12} className="rotate-90 opacity-70" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={4} className={MENU_PANEL_CLASS}>
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/* the menu's rows wear the ⋯ menu's row (rowActions.tsx) with the space the
+   indicator needs at the start; the ink lifts when the row is the chosen one */
+const MENU_ROW =
+  `${MENU_ENTRY_CLASS} ps-8 text-fg-muted focus:bg-surface-2 focus:text-fg data-[state=checked]:text-fg`;
+
+/** a group heading inside a menu («اولویت») */
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return (
+    <DropdownMenuLabel className="px-3 pb-1 pt-2 text-micro font-semibold text-fg-subtle">
+      {children}
+    </DropdownMenuLabel>
+  );
+}
+
+export function MenuSeparator() {
+  return <DropdownMenuSeparator className="my-1 bg-border" />;
+}
+
+export interface MenuOption<K extends string> {
+  key: K;
+  label: ReactNode;
+  icon?: ReactNode;
+}
+
+/** WHICH ONE: a radio group; choosing closes the menu */
+export function MenuRadio<K extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label?: string;
+  value: K;
+  onChange: (key: K) => void;
+  options: readonly MenuOption<K>[];
+}) {
+  return (
+    <>
+      {label ? <MenuLabel>{label}</MenuLabel> : null}
+      <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as K)}>
+        {options.map((option) => (
+          <DropdownMenuRadioItem
+            key={option.key}
+            value={option.key}
+            /* the VALUE, for a test to name — a label is a fact about the
+               catalogue, and a test that clicks by label breaks on a rewording */
+            data-key={option.key}
+            className={MENU_ROW}
+          >
+            {option.icon}
+            {option.label}
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+    </>
+  );
+}
+
+/** ON OR OFF: a check row; toggling keeps the menu open, so two filters are one visit */
+export function MenuCheck({
+  checked,
+  onChange,
+  icon,
+  children,
+}: {
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  icon?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenuCheckboxItem
+      checked={checked}
+      onCheckedChange={(v) => onChange(v === true)}
+      onSelect={(e) => e.preventDefault()}
+      className={MENU_ROW}
+    >
+      {icon}
+      {children}
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -203,7 +354,7 @@ export function SectionTabs<K extends string>({
         >
           {tab.label}
           {tab.count !== undefined ? (
-            <span className="badge-num text-micro opacity-70">{digits(tab.count, locale)}</span>
+            <span className={FILTER_COUNT}>{digits(tab.count, locale)}</span>
           ) : null}
         </button>
       ))}

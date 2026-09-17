@@ -22,8 +22,9 @@ import {
 import { ProjectDialog } from "./ProjectDialog";
 import { TopicAddButton, TopicChip, TopicStrip } from "./TopicStrip";
 import {
-  TAB_TRACK, TRACK_DIVIDER, Toolbar, sectionTabClass, toggleClass,
+  MenuCheck, MenuRadio, MenuSeparator, TAB_TRACK, TRACK_DIVIDER, Toolbar, ToolbarMenu, sectionTabClass,
 } from "./sectionTabs";
+import { IconFilter } from "@/components/icons";
 import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
@@ -296,9 +297,18 @@ export function TaskBoard() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {/* ── ROW ONE: the kit's tracks (2026-09-15) — the views, the priorities,
-             and the toggles, each a rail the row wraps as a unit. The chip is
-             the meetings page's pill, read from sectionTabs. ── */}
+      {/* ── ROW ONE (design «ج», the user's choice of 2026-09-17): the views
+             as the kit's segmented control, and everything that NARROWS the
+             board — the priority, «فقط تسک‌های من», «مهلت امروز» — behind one
+             «فیلتر» menu whose badge counts what is on. Only the things a
+             person switches between stay in view; a filter behind the menu
+             is announced by the count, so a narrowed board cannot read as the
+             whole board. (2026-09-15 to 09-17 these were three rails on one
+             line: views, priorities, toggles.)
+             THE PROJECTS LINK LEFT THIS ROW (user, 2026-09-16: "take out the
+             projects from tasks, put it in the main menu on top of the
+             tasks"): projects is a rail entry again, and a door here beside
+             it would be the two-doors-to-one-room shape. ── */}
       <Toolbar>
         <div className={TAB_TRACK}>
           {chip(view === "kanban", t("viewKanban"), () => setView("kanban"))}
@@ -306,37 +316,29 @@ export function TaskBoard() {
           {chip(view === "calendar", t("viewCalendar"), () => setView("calendar"))}
           {chip(view === "archive", t("viewArchive"), () => setView("archive"))}
         </div>
-        <div className={TAB_TRACK}>
-          {chip(priority === "all", t("all"), () => setPriority("all"))}
-          {PRIORITY_ORDER.map((level) =>
-            chip(priority === level, t(`priority_${level}`), () => setPriority(level)))}
-        </div>
-        <div className={TAB_TRACK}>
-          {/* THE PROJECTS LINK LEFT THIS ROW (user, 2026-09-16: "take out the
-              projects from tasks, put it in the main menu on top of the
-              tasks"): projects is a rail entry again, and a door here beside
-              it would be the two-doors-to-one-room shape. */}
-          {/* the two on/off filters: the same pill, lifted on its own —
-              `aria-pressed` rather than `aria-selected`, since both can be on */}
-          <button
-            type="button"
-            aria-pressed={mineOnly}
-            onClick={() => setMineOnly((v) => !v)}
-            className={toggleClass(mineOnly)}
-          >
-            <IconUser width={12} height={12} />
+        <ToolbarMenu
+          label={t("filterMenu")}
+          icon={<IconFilter width={14} height={14} />}
+          count={(priority === "all" ? 0 : 1) + (mineOnly ? 1 : 0) + (dueToday ? 1 : 0)}
+        >
+          <MenuRadio
+            label={t("fieldPriority")}
+            value={priority}
+            onChange={setPriority}
+            options={[
+              { key: "all", label: t("all") },
+              ...PRIORITY_ORDER.map((level) => ({ key: level, label: t(`priority_${level}`) })),
+            ]}
+          />
+          <MenuSeparator />
+          {/* the two on/off filters: check rows, both can be on */}
+          <MenuCheck checked={mineOnly} onChange={setMineOnly} icon={<IconUser width={12} height={12} />}>
             {t("justMine")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={dueToday}
-            onClick={() => setDueToday((v) => !v)}
-            className={toggleClass(dueToday)}
-          >
-            <IconClock width={12} height={12} />
+          </MenuCheck>
+          <MenuCheck checked={dueToday} onChange={setDueToday} icon={<IconClock width={12} height={12} />}>
             {t("dueTodayFilter")}
-          </button>
-        </div>
+          </MenuCheck>
+        </ToolbarMenu>
       </Toolbar>
 
       {/* ── THE THIRD ROW: the folder strip (user, 2026-09-16: "unify") — the

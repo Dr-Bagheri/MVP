@@ -233,16 +233,17 @@ describe("Meetings", () => {
     expect(screen.getByText("جلسهٔ محصول")).toBeInTheDocument();
   });
 
-  it("the search is a KEY on the strip's end track, with the view switch and a divider (2026-09-16)", async () => {
+  it("the search is a KEY in row one beside the view switch: no field until pressed, the field beside its key, closing clears (2026-09-16; row one since «ج»)", async () => {
     /*
-     * "Add the list and calendar icon into the second sub menu top on the
-     * end and put the search there as well with just the icon; if pressed it
-     * will open up horizontally in the row and you can type in it, same style
-     * as calendar and list with a divider." Asserted as STRUCTURE: one tinted
-     * track holds the two view keys, a divider and the search key; no field
-     * exists until the key is pressed; the field appears in that same track;
-     * and closing the key CLEARS the query — the half that matters, since a
-     * filter nobody can see is a list that lies.
+     * "Put the search there as well with just the icon; if pressed it will
+     * open up horizontally in the row and you can type in it" (2026-09-16),
+     * and design «ج» (2026-09-17) moved the key and the view switch up into
+     * ROW ONE, leaving the strip a bare line of folders. Asserted as
+     * STRUCTURE: the view keys are a segmented control in the Toolbar the
+     * slice filter's track is in, the search key is one of that row's
+     * controls beside it; no field exists until the key is pressed; the field
+     * appears beside its key; and closing the key CLEARS the query — the half
+     * that matters, since a filter nobody can see is a list that lies.
      */
     LIST = [meeting({ id: "m-a", title: "جلسهٔ فروش" }), meeting({ id: "m-b", title: "جلسهٔ محصول" })];
     render(<Meetings />);
@@ -250,18 +251,21 @@ describe("Meetings", () => {
 
     expect(screen.queryByPlaceholderText("جست‌وجوی جلسه"), "a box before the key is pressed").toBeNull();
     const key = screen.getByRole("button", { name: "جست‌وجوی جلسه" });
-    const track = key.parentElement!;
-    expect(track.className, "the search key is not on the tinted rail").toContain("bg-accent-soft");
-    expect(track.contains(screen.getByRole("button", { name: "فهرست" }))).toBe(true);
-    expect(track.contains(screen.getByRole("button", { name: "تقویم" }))).toBe(true);
-    expect(track.querySelector("span[aria-hidden]"), "no divider between the views and the search").not.toBeNull();
-    /* and the track sits in the strip's row — the same row as «همه جلسات» */
+    const sliceRail = screen.getByRole("tab", { name: "گذشته" }).parentElement!;
+    expect(key.parentElement!.parentElement, "the search key is not in row one").toBe(sliceRail.parentElement);
+    expect(key.className, "the key is not one of the row's controls").toMatch(/\bbtn-ghost\b/);
+    const views = screen.getByRole("button", { name: "فهرست" }).parentElement!;
+    expect(views.className, "the view keys are not a segmented control").toContain("bg-surface-2");
+    expect(views.contains(screen.getByRole("button", { name: "تقویم" }))).toBe(true);
+    expect(views.parentElement, "the view switch is not in row one").toBe(sliceRail.parentElement);
+    /* and the strip below is a line of folders and nothing else */
     const strip = screen.getByRole("button", { name: /همه جلسات/ }).parentElement!;
-    expect(strip.parentElement).toBe(track.parentElement!.parentElement);
+    expect(strip.contains(key)).toBe(false);
+    expect(strip.contains(views)).toBe(false);
 
     await userEvent.click(key);
     const box = screen.getByPlaceholderText("جست‌وجوی جلسه");
-    expect(track.contains(box), "the field opened somewhere other than its track").toBe(true);
+    expect(key.parentElement!.contains(box), "the field opened somewhere other than beside its key").toBe(true);
     expect(key).toHaveAttribute("aria-pressed", "true");
     await userEvent.type(box, "فروش");
     await waitFor(() => expect(screen.queryByText("جلسهٔ محصول")).toBeNull());
@@ -285,7 +289,10 @@ describe("Meetings", () => {
     const titles = () => screen.getAllByText(/^(کهنه|تازه)$/).map((n) => n.textContent);
     expect(titles()).toEqual(["تازه", "کهنه"]);
 
-    await userEvent.click(screen.getByRole("button", { name: "تازه‌ترین اول" }));
+    /* the direction is a CHECK ROW in the «مرتب‌سازی» menu (design «ج»,
+       2026-09-17): unchecking «تازه‌ترین اول» reverses the list */
+    await userEvent.click(screen.getByRole("button", { name: /^مرتب‌سازی/ }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "تازه‌ترین اول" }));
     await waitFor(() => expect(titles()).toEqual(["کهنه", "تازه"]));
   });
 
@@ -300,7 +307,10 @@ describe("Meetings", () => {
    * the exact drift this move exists to end. The dropdown is asked for by its
    * own label, so the topic dropdown one control away cannot answer for it.
    */
-  it("sorts from a CHIP ROW, and the dropdown is gone", async () => {
+  it("sorts from a MENU on row one that reads its field, and the dropdown is gone", async () => {
+    /* design «ج» (the user's choice, 2026-09-17): «مرتب‌سازی» is a menu
+       button in row one, reading the current field on the row, its fields
+       as radio rows and the direction as a check row under them */
     LIST = [
       meeting({ id: "m-crowd", title: "پرجمعیت", invitees: ["الف", "ب", "ج"] }),
       meeting({ id: "m-alone", title: "تنها", invitees: [] }),
@@ -308,33 +318,31 @@ describe("Meetings", () => {
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("تنها")).toBeInTheDocument());
 
-    /* the row: three tabs, each naming its value for a test, «تاریخ» chosen */
-    const row = screen.getByRole("tablist", { name: "مرتب‌سازی" });
-    expect(within(row).getAllByRole("tab").map((c) => c.getAttribute("data-key")))
-      .toEqual(["date", "people", "status"]);
-    /* IN ROW ONE, IN ROW ONE'S PILL (user, 2026-09-16: "put the sort in the
-       first sub menu top with the same style of the first row items"): the
-       grey rail, standing in the same row as the slice filter — a tinted
-       rail on a row of its own is the 2026-09-15 shape this replaced */
-    expect(row.className, "the sort wears the tinted rail").toContain("bg-surface-2");
-    expect(row.className).not.toContain("bg-accent-soft");
+    /* IN ROW ONE: the button stands in the Toolbar the slice filter's track
+       is in, and reads «تاریخ» — the field in force — on the row */
+    const trigger = screen.getByRole("button", { name: /^مرتب‌سازی/ });
     const sliceRail = screen.getByRole("tab", { name: "گذشته" }).parentElement!;
-    expect(row.parentElement, "the sort is not in row one").toBe(sliceRail.parentElement);
-    expect(within(row).getByRole("tab", { name: /تاریخ/ })).toHaveAttribute("aria-selected", "true");
+    expect(trigger.parentElement, "the sort is not in row one").toBe(sliceRail.parentElement);
+    expect(trigger.textContent).toContain("تاریخ");
+
+    await userEvent.click(trigger);
+    /* three radio rows, each naming its value for a test, «تاریخ» chosen */
+    const rows = await screen.findAllByRole("menuitemradio");
+    expect(rows.map((r) => r.getAttribute("data-key"))).toEqual(["date", "people", "status"]);
+    expect(screen.getByRole("menuitemradio", { name: /تاریخ/ })).toHaveAttribute("aria-checked", "true");
+    /* and the direction came WITH the fields rather than staying behind */
+    expect(screen.getByRole("menuitemcheckbox", { name: "تازه‌ترین اول" })).toHaveAttribute("aria-checked", "true");
 
     /* it SORTS, rather than only lighting up: both meetings share a date, so
        the headcount is the only thing that can order them */
-    await userEvent.click(within(row).getByRole("tab", { name: /شرکت‌کنندگان/ }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /شرکت‌کنندگان/ }));
     const titles = () => screen.getAllByText(/^(پرجمعیت|تنها)$/).map((n) => n.textContent);
     await waitFor(() => expect(titles()).toEqual(["پرجمعیت", "تنها"]));
-    expect(within(row).getByRole("tab", { name: /شرکت‌کنندگان/ })).toHaveAttribute("aria-selected", "true");
-
-    /* and the direction key came WITH the chips rather than staying behind */
-    expect(within(row).getByRole("button", { name: "تازه‌ترین اول" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^مرتب‌سازی/ }).textContent).toContain("شرکت‌کنندگان");
 
     expect(
       screen.queryByRole("combobox", { name: "مرتب‌سازی" }),
-      "the sort dropdown is still on the page beside its chips",
+      "the sort dropdown is still on the page beside its menu",
     ).toBeNull();
   });
 
@@ -594,8 +602,12 @@ describe("Meetings", () => {
        Toolbar draws — a bare rail dropped into the page column takes the
        column's whole width, and that version passes every other line here. */
     const rail = all.parentElement!;
-    expect(rail.className).toContain("bg-accent-soft");
-    expect(rail.parentElement!.className.split(/\s+/), "the strip's rail stands in no row").toContain("flex-wrap");
+    /* design «ج» (2026-09-17): the strip is a LINE of chips — no ground under
+       it, the chip outlined and the lit one in the accent's tint */
+    expect(rail.className, "the strip grew a rail again").not.toMatch(/\bbg-/);
+    expect(all.className).toMatch(/\bchip\b/);
+    expect(all.className).toMatch(/\bchip-on\b/);
+    expect(rail.parentElement!.className.split(/\s+/), "the strip's line stands in no row").toContain("flex-wrap");
     const folder = await screen.findByRole("button", { name: /محصول/ });
     expect(folder).toHaveTextContent("۱");
     expect(screen.getAllByRole("button", { name: "گزینه‌های موضوع" })).toHaveLength(1);

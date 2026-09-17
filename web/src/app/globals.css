@@ -935,6 +935,36 @@
        `rounded-xl` — `sectionTabClass` no longer has to add it */
     @apply h-control-sm min-h-control-sm rounded-xl px-[13px] text-[0.78125rem];
   }
+  /*
+   * THE SEGMENTED PILL (user's choice, 2026-09-17 — design «ج» of the three
+   * compact sub-menu designs): a text button at the ICON height (28), the
+   * fourth size of the family. It exists for exactly one place — the entry
+   * inside a segmented control (`sectionTabClass`), whose track is the pill
+   * plus 3px of padding = `btn-sm`'s own 34, so the control stands level with
+   * the menu buttons and the create button beside it. The corner is the icon
+   * square's 8: a 28px box on the rail's 12 would be a lozenge.
+   */
+  .btn-xs {
+    @apply h-control-icon min-h-control-icon rounded-[8px] px-2.5 text-caption;
+  }
+  /*
+   * THE CHIP (the same choice): the folder line under the toolbar — 24 tall,
+   * outlined, a full corner, the caption size; `chip-on` is the accent's
+   * edge on the accent's tint with accent ink. It is NOT a `btn`: a chip is
+   * a filter you can see the state of, not an action, and the row of them is
+   * a line rather than a rail — no ground, no padding, so the line is 28
+   * (the dashed `+` beside them) and the toolbar's second row costs what a
+   * line of text does. `filterChipClass` in sectionTabs.tsx is its only
+   * spelling.
+   */
+  .chip {
+    @apply tap inline-flex h-6 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap
+           rounded-full border border-border px-2.5 text-caption font-medium text-fg-muted
+           transition-colors hover:border-border-strong hover:text-fg;
+  }
+  .chip-on {
+    @apply border-accent bg-accent-soft text-accent hover:border-accent hover:text-accent;
+  }
   .btn-icon {
     @apply h-control-icon min-h-control-icon w-control-icon rounded-[8px] px-0;
   }

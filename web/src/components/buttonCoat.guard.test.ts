@@ -43,7 +43,7 @@ const KIT_FILES: Readonly<Record<string, string>> = {
 const COAT_TOKEN =
   /^(?:hover:|active:|focus:|disabled:|disabled:hover:|group-hover:)?(?:bg-[\w\/.\[\]-]+|border|border-(?:border|border-strong|accent|dashed|danger|success)(?:\/\d+)?|shadow-(?:accent|sm|md|card|island)|text-(?:fg|fg-muted|fg-subtle|accent|on-accent|on-primary|danger|success|warn)|font-(?:normal|medium|semibold|bold)|opacity-\d+)$/;
 
-const BTN_TOKEN = /^btn(?:-(?:primary|secondary|ghost|danger|soft|dashed|ghost-danger|sm|icon|icon-sm|icon-lg))?$/;
+const BTN_TOKEN = /^btn(?:-(?:primary|secondary|ghost|danger|soft|dashed|ghost-danger|xs|sm|icon|icon-sm|icon-lg))?$/;
 
 function files(dir: string): string[] {
   const out: string[] = [];

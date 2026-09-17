@@ -31,9 +31,11 @@ import { TopicNameBox } from "./TopicNameBox";
  * rename, archive), plus whatever it wants to append after the `+`: the task
  * board hangs its projects section there, through the same `TopicChip`.
  *
- * The chip is `filterChipClass` — the kit's row-two pill — and the row is
- * `FILTER_TRACK` (RULEBOOK §2: a third row is row two's rail again).
- * `topicStrip.guard.test.ts` refuses a second drawing of a folder chip.
+ * The chip is `filterChipClass` — the kit's `.chip`, outlined, the accent's
+ * edge and tint when on — and the row is `FILTER_TRACK`, a bare LINE of
+ * chips with no rail under it (design «ج», 2026-09-17: "the folders as one
+ * line of chips"). `topicStrip.guard.test.ts` refuses a second drawing of a
+ * folder chip.
  */
 
 export interface TopicStripItem {

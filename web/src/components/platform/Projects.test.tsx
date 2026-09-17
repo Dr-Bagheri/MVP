@@ -203,30 +203,34 @@ describe("Projects", () => {
     expect(within(running).getByText("۲ از ۵")).toBeInTheDocument();
   });
 
-  it("offers the sort as a SUB-MENU of chips, never a dropdown", async () => {
+  it("offers the sort as a MENU on the row that reads its answer, never a dropdown", async () => {
     /*
      * User directive, 2026-09-04: "make the sort dropdown become the second
-     * sub menu top". Asserted on the RENDERED CONTROL rather than on the
-     * absence of an import, because the failure this guards is somebody
-     * reaching for `<Select>` again — which looks perfectly reasonable in a
-     * diff and puts a full-width panel back under a toolbar of chips.
+     * sub menu top" — and the user's choice of design «ج» (2026-09-17): the
+     * sort is a MENU BUTTON on row one that shows the current field. Asserted
+     * on the RENDERED CONTROL rather than on the absence of an import, because
+     * the failure this guards is somebody reaching for `<Select>` again —
+     * which looks perfectly reasonable in a diff and puts a full-width panel
+     * back under the toolbar.
      */
     LIST = [project({ id: "p-a", name: "پروژه" })];
     render(<Projects reader={ADMIN} />);
     await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
 
-    for (const label of ["تازه‌ترین", "بر اساس نام", "بر اساس پیشرفت"]) {
-      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
-    }
-    /* the current answer is VISIBLE, which is the whole reason a chip row
-       beats a select here */
-    expect(screen.getByRole("button", { name: "تازه‌ترین" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "بر اساس نام" })).toHaveAttribute("aria-pressed", "false");
+    /* the current answer is VISIBLE on the row, which is the whole reason a
+       menu that reads its value beats a select here */
+    const trigger = screen.getByRole("button", { name: /^مرتب‌سازی/ });
+    expect(trigger.textContent).toContain("تازه‌ترین");
     /* and the control: no combobox anywhere on the toolbar */
     expect(screen.queryByRole("combobox")).toBeNull();
 
-    await userEvent.click(screen.getByRole("button", { name: "بر اساس نام" }));
-    expect(screen.getByRole("button", { name: "بر اساس نام" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(trigger);
+    for (const label of ["تازه‌ترین", "بر اساس نام", "بر اساس پیشرفت"]) {
+      expect(await screen.findByRole("menuitemradio", { name: label })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("menuitemradio", { name: "تازه‌ترین" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "بر اساس نام" }));
+    expect(screen.getByRole("button", { name: /^مرتب‌سازی/ }).textContent).toContain("بر اساس نام");
   });
 
   it("offers the way in to an admin and to nobody else", async () => {
@@ -312,7 +316,9 @@ describe("Projects", () => {
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
     expect(screen.getByText("پروژهٔ دیگری")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    /* «پروژه‌های من» is a CHECK ROW in the «فیلتر» menu (design «ج», 2026-09-17) */
+    await userEvent.click(screen.getByRole("button", { name: /^فیلتر/ }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "پروژه‌های من" }));
     await waitFor(() => expect(screen.queryByText("پروژهٔ دیگری")).toBeNull());
     expect(screen.getByText("پروژهٔ من")).toBeInTheDocument();
     expect(screen.getByText("پروژهٔ سرپرستی")).toBeInTheDocument();
@@ -323,7 +329,9 @@ describe("Projects", () => {
     LIST = [project({ id: "p-b", name: "پروژهٔ دیگری", created_by: "u-9", member_ids: ["u-2"] })];
     render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ دیگری");
-    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    /* «پروژه‌های من» is a CHECK ROW in the «فیلتر» menu (design «ج», 2026-09-17) */
+    await userEvent.click(screen.getByRole("button", { name: /^فیلتر/ }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "پروژه‌های من" }));
     await userEvent.click(screen.getByRole("button", { name: "لیست" }));
     expect(await screen.findByText("پروژه‌ای که ساخته‌اید، سرپرست آن هستید یا در آن عضوید، نیست.")).toBeInTheDocument();
   });
@@ -343,7 +351,9 @@ describe("Projects", () => {
     render(<Projects reader={{ meId: null, isAdmin: true, isOwner: false }} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    /* «پروژه‌های من» is a CHECK ROW in the «فیلتر» menu (design «ج», 2026-09-17) */
+    await userEvent.click(screen.getByRole("button", { name: /^فیلتر/ }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "پروژه‌های من" }));
     /* THE SUBJECT: neither project renders. A filter that treated null as
        "no filter" would show both, which is the defect this test is for. */
     await waitFor(() => expect(screen.queryByText("پروژهٔ من")).toBeNull());
@@ -835,30 +845,39 @@ describe("a project card carries its own delete (2026-09-15)", () => {
  * the two toggles sat on row two's tinted rail and there was no strip.
  */
 describe("the projects page is the board's two rows (2026-09-16)", () => {
-  it("keeps «پروژه‌های من» and «مهلت امروز» in ROW ONE's grey rail, in the row the views are in", async () => {
+  it("keeps «پروژه‌های من» and «مهلت امروز» in ROW ONE, as check rows in the «فیلتر» menu whose badge counts them", async () => {
+    /* design «ج» (the user's choice, 2026-09-17): the two toggles left the
+       rail for the «فیلتر» menu beside the views. The BADGE is the
+       load-bearing half — a filter behind a closed menu is invisible, and
+       the count is what keeps a narrowed page from reading as the whole
+       page. Asserted as identity with the views' own ancestors: the menu
+       button stands in the Toolbar the views' segmented track is in. */
     LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
     render(<Projects reader={ADMIN} />);
     await screen.findByText("پروژهٔ الف");
 
-    const mine = screen.getByRole("button", { name: "پروژه‌های من" });
-    const today = screen.getByRole("button", { name: "مهلت امروز" });
+    const filters = screen.getByRole("button", { name: /^فیلتر/ });
     const kanban = screen.getByRole("button", { name: "کانبان" });
-    /* the SAME rail class as the views' — row one's grey TAB_TRACK, not row
-       two's tinted one — and the SAME row: the Toolbar the views sit in.
-       Asserted as identity with the views' own ancestors rather than as a
-       class name on its own, because the tinted rail carries the same
-       geometry and differs by one token. */
-    expect(mine.parentElement!.className).toBe(TAB_TRACK);
-    expect(today.parentElement).toBe(mine.parentElement);
     expect(kanban.parentElement!.className).toBe(TAB_TRACK);
-    expect(mine.parentElement!.parentElement).toBe(kanban.parentElement!.parentElement);
-    /* toggles, not tabs: on with a press, off with the next */
-    expect(mine).toHaveAttribute("aria-pressed", "false");
+    expect(filters.parentElement).toBe(kanban.parentElement!.parentElement);
+    /* nothing on: no count on the button */
+    expect(filters.textContent).not.toMatch(/[0-9۰-۹]/);
+
+    await userEvent.click(filters);
+    const mine = await screen.findByRole("menuitemcheckbox", { name: "پروژه‌های من" });
+    const today = screen.getByRole("menuitemcheckbox", { name: "مهلت امروز" });
+    expect(mine).toHaveAttribute("aria-checked", "false");
+    expect(today).toHaveAttribute("aria-checked", "false");
+    /* on with a press, and the menu STAYS OPEN so the second filter is the
+       same visit; the badge counts the one that is on */
     await userEvent.click(mine);
-    expect(mine).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(mine);
-    expect(mine).toHaveAttribute("aria-pressed", "false");
-    expect(today).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("menuitemcheckbox", { name: "پروژه‌های من" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: /^فیلتر/ }).textContent).toContain("۱");
+    await userEvent.click(screen.getByRole("menuitemcheckbox", { name: "مهلت امروز" }));
+    expect(screen.getByRole("button", { name: /^فیلتر/ }).textContent).toContain("۲");
+    /* off with the next press */
+    await userEvent.click(screen.getByRole("menuitemcheckbox", { name: "پروژه‌های من" }));
+    expect(screen.getByRole("button", { name: /^فیلتر/ }).textContent).toContain("۱");
   });
 
   it("draws ROW TWO as the FOLDERS: «همه» with the project count, a chip per folder with how many projects sit in it, a press filtering to it", async () => {

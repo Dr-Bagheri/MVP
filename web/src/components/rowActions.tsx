@@ -227,6 +227,17 @@ function EntryFace({ item }: { item: KebabItem }) {
 const ENTRY_CLASS =
   "flex w-full cursor-default items-center gap-2.5 rounded-none py-2 pe-3 ps-3 text-start text-xs transition-colors";
 
+/*
+ * THE PANEL AND THE ROW, EXPORTED (2026-09-17): the toolbar's two menus
+ * («مرتب‌سازی», «فیلتر» — `ToolbarMenu` in platform/sectionTabs.tsx) open the
+ * SAME panel as every ⋯ in the product and draw their rows in the same box,
+ * read from here rather than spelled again — two menus that could drift by
+ * a class are two menus that will.
+ */
+export const MENU_PANEL_CLASS =
+  "w-max min-w-[9rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border-border bg-surface p-0 py-1 shadow-xl";
+export const MENU_ENTRY_CLASS = ENTRY_CLASS;
+
 function toneClass(item: KebabItem): string {
   return item.danger
     ? "text-danger focus:bg-danger/10 focus:text-danger data-[state=open]:bg-danger/10"
@@ -247,7 +258,7 @@ function MenuEntry({ item }: { item: KebabItem }) {
               users get it too. */}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent
-          className="w-max min-w-[9rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+          className={MENU_PANEL_CLASS}
           sideOffset={-12}
         >
           <MenuBody items={item.sub} />
@@ -347,7 +358,7 @@ export function KebabMenu({
            read as a menu, and the ceiling keeps a long title from running off
            a phone. The flyout wears the same three, so a sub-menu cannot be a
            different width from the menu that opened it. */
-        className="w-max min-w-[9rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+        className={MENU_PANEL_CLASS}
       >
         <MenuBody items={items} />
       </DropdownMenuContent>

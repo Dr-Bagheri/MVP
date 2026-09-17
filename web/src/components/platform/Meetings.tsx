@@ -20,7 +20,7 @@ import {
   IconRows, IconSearch, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import {
-  FILTER_TRACK, TAB_TRACK, TRACK_DIVIDER, Toolbar, filterChipClass, sectionTabClass,
+  MenuCheck, MenuRadio, MenuSeparator, TAB_TRACK, Toolbar, ToolbarMenu, sectionTabClass,
 } from "./sectionTabs";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { TopicStrip } from "./TopicStrip";
@@ -237,8 +237,8 @@ export function Meetings() {
     });
   }, [rows, filter, topic, query, sort, descending, locale]);
 
-  /* THE VIEW SWITCH'S KEY: the theme's icon button, rounded into a circle
-     because the pair reads as a segmented switch (see the track below).
+  /* THE VIEW SWITCH'S KEY: an icon-only segmented pill — the pair IS a
+     segmented control in row one since design «ج» (2026-09-17).
      `aria-label` and `aria-pressed` are not optional here — an icon-only
      control has no accessible name unless it is given one, and this is
      exactly the kind that is easy to leave nameless because the glyph
@@ -250,7 +250,7 @@ export function Meetings() {
       title={label}
       aria-pressed={view === mode}
       onClick={() => setView(mode)}
-      className={`${filterChipClass(view === mode)} px-2`}
+      className={`${sectionTabClass(view === mode)} px-2`}
     >
       {icon}
     </button>
@@ -293,7 +293,7 @@ export function Meetings() {
             <button
               type="button"
               onClick={() => setScheduling(true)}
-              className="btn-secondary"
+              className="btn-secondary btn-sm"
             >
               <IconCalendar width={14} height={14} />
               {t("scheduleMeeting")}
@@ -301,7 +301,7 @@ export function Meetings() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="btn-primary"
+              className="btn-primary btn-sm"
               data-tour="meetings-new"
             >
               <IconPlus width={14} height={14} />
@@ -316,43 +316,80 @@ export function Meetings() {
           {chip(filter === "archived", t("filterArchived"), () => setFilter("archived"))}
         </div>
 
-        {/* ── THE SORT, IN ROW ONE (user, 2026-09-16: "put the sort in the
-               first sub menu top with the same style of the first row
-               items"): a second grey rail beside the slice filter — the field
-               as tabs, a divider, the direction key — in row one's own pill,
-               not the tinted chip it wore on the row below since 2026-09-15.
-               The direction stays its own key for the reason that note gave:
-               the field and the direction are two questions, and folding them
-               together is six tabs that grow by two per field. ── */}
-        <div role="tablist" aria-label={t("sortBy")} className={TAB_TRACK}>
-          {(["date", "people", "status"] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              /* the VALUE, for a test to name — a label is a fact about the
-                 catalogue, and a test that clicks by label breaks on a rewording */
-              data-key={key}
-              aria-selected={sort === key}
-              onClick={() => setSort(key)}
-              className={sectionTabClass(sort === key)}
-            >
-              {t(key === "date" ? "sortDate" : key === "people" ? "sortPeople" : "sortStatus")}
-            </button>
-          ))}
-          <span className={TRACK_DIVIDER} aria-hidden />
-          <button
-            type="button"
-            aria-label={descending ? t("sortDescending") : t("sortAscending")}
-            title={descending ? t("sortDescending") : t("sortAscending")}
-            aria-pressed={descending}
-            onClick={() => setDescending((v) => !v)}
-            className={`${sectionTabClass(false)} px-2`}
-          >
-            {descending
+        {/* ── THE SORT AS A MENU (design «ج», the user's choice of 2026-09-17):
+               «مرتب‌سازی» reads its current field on the row and holds the
+               three fields as radio rows with the direction as a check row
+               under them — the field and the direction are still two
+               questions (the 2026-09-16 note), and a menu holds two questions
+               without growing two tabs per field. (2026-09-16 to 09-17 this
+               was a second grey rail beside the slice filter.) ── */}
+        <ToolbarMenu
+          label={t("sortBy")}
+          value={t(sort === "date" ? "sortDate" : sort === "people" ? "sortPeople" : "sortStatus")}
+        >
+          <MenuRadio
+            value={sort}
+            onChange={setSort}
+            options={[
+              { key: "date", label: t("sortDate") },
+              { key: "people", label: t("sortPeople") },
+              { key: "status", label: t("sortStatus") },
+            ]}
+          />
+          <MenuSeparator />
+          <MenuCheck
+            checked={descending}
+            onChange={setDescending}
+            icon={descending
               ? <IconArrowDown width={14} height={14} />
               : <IconArrowUp width={14} height={14} />}
+          >
+            {t("sortDescending")}
+          </MenuCheck>
+        </ToolbarMenu>
+
+        {/* ── THE VIEW SWITCH AND THE SEARCH KEY, IN ROW ONE (design «ج»): the
+               list/calendar keys as a second segmented control, and the
+               search as a KEY beside it — a glyph until pressed, then a
+               field that grows into the row (2026-09-16); closing it clears
+               the query, since a filter nobody can see is a list that lies.
+               They lived at the strip's end until «ج» made the strip a bare
+               line of folders. ── */}
+        <div role="tablist" className={TAB_TRACK}>
+          {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
+          {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
+        </div>
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            aria-label={t("searchMeetings")}
+            title={t("searchMeetings")}
+            aria-pressed={searchOpen}
+            onClick={() => toggleSearch()}
+            className="btn-ghost btn-sm px-2"
+          >
+            <IconSearch width={14} height={14} />
           </button>
+          {/* the width animates on the WRAPPER, so the field slides open
+              along the row rather than appearing; the input inside is
+              mounted only while open, so Escape and a re-press tear it
+              down cleanly */}
+          <span
+            className="inline-block overflow-hidden transition-[width] duration-200"
+            style={{ width: searchOpen ? "12rem" : 0 }}
+          >
+            {searchOpen ? (
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
+                placeholder={t("searchMeetings")}
+                aria-label={t("searchMeetings")}
+                className="h-control-sm w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
+              />
+            ) : null}
+          </span>
         </div>
       </Toolbar>
 
@@ -367,52 +404,6 @@ export function Meetings() {
              went with the reason it existed: the inline box had replaced the
              picker, and there is no picker to replace now. ── */}
       <TopicStrip
-        end={(
-          /* ── THE VIEW SWITCH AND THE SEARCH, AT THE ROW'S END (user,
-                2026-09-16: "add the list and calendar icon into the second
-                sub menu top on the end and put the search there as well with
-                just the icon … same style as calendar and list with a
-                divider"). ONE tinted track — the strip's own rail — holding
-                the two view keys, a divider, and the search KEY: a glyph
-                until pressed, then a field that grows into the row beside
-                it. The field wears the rail, not `.input`: a box inside a
-                track is a second silhouette on one row. ── */
-          <div className={FILTER_TRACK}>
-            {viewKey("list", t("viewMeetingList"), <IconRows width={14} height={14} />)}
-            {viewKey("calendar", t("viewMeetingCalendar"), <IconCalendar width={14} height={14} />)}
-            <span className={TRACK_DIVIDER} aria-hidden />
-            <button
-              type="button"
-              aria-label={t("searchMeetings")}
-              title={t("searchMeetings")}
-              aria-pressed={searchOpen}
-              onClick={() => toggleSearch()}
-              className={`${filterChipClass(searchOpen)} px-2`}
-            >
-              <IconSearch width={14} height={14} />
-            </button>
-            {/* the width animates on the WRAPPER, so the field slides open
-                along the row rather than appearing; the input inside is
-                mounted only while open, so Escape and a re-press tear it
-                down cleanly */}
-            <span
-              className="inline-block overflow-hidden transition-[width] duration-200"
-              style={{ width: searchOpen ? "12rem" : 0 }}
-            >
-              {searchOpen ? (
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Escape") toggleSearch(false); }}
-                  placeholder={t("searchMeetings")}
-                  aria-label={t("searchMeetings")}
-                  className="h-control-sm w-48 border-0 bg-transparent px-2 text-detail text-fg outline-none placeholder:text-fg-subtle"
-                />
-              ) : null}
-            </span>
-          </div>
-        )}
         allLabel={t("allMeetings")}
         allCount={Array.isArray(rows) ? rows.length : 0}
         active={topic}

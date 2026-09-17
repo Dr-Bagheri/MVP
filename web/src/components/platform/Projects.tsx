@@ -1,8 +1,9 @@
 "use client";
 
 import {
-  TAB_TRACK, Toolbar, sectionTabClass, toggleClass,
+  MenuCheck, MenuRadio, TAB_TRACK, Toolbar, ToolbarMenu, sectionTabClass,
 } from "./sectionTabs";
+import { IconFilter } from "@/components/icons";
 import { TopicStrip } from "./TopicStrip";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -296,7 +297,7 @@ export function Projects({ reader }: { reader: ProjectReader }) {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="btn-primary"
+              className="btn-primary btn-sm"
             >
               <IconPlus width={14} height={14} />
               {t("newProject")}
@@ -310,38 +311,43 @@ export function Projects({ reader }: { reader: ProjectReader }) {
           {chip(view === "calendar", tTasks("viewCalendar"), () => setView("calendar"))}
           {chip(view === "archive", tTasks("viewArchive"), () => setView("archive"))}
         </div>
-        <div className={TAB_TRACK}>
-          {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
-          {chip(sort === "name", t("sortName"), () => setSort("name"))}
-          {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
-        </div>
-        {/* ── THE TWO TOGGLES, IN ROW ONE (user, 2026-09-16: "my projects and
-               today due must go up in the first sub menu like in the tasks,
-               with the same first row style"): the board's own third track —
-               `toggleClass` with `aria-pressed`, the same pill lifting on its
-               own, IconUser and IconClock as on the board. «همه پروژه‌ها»
-               did not come with them: it is the strip's «همه» below, where
-               every strip keeps its count. ── */}
-        <div className={TAB_TRACK}>
-          <button
-            type="button"
-            aria-pressed={scope === "mine"}
-            onClick={() => setScope((s) => (s === "mine" ? "all" : "mine"))}
-            className={toggleClass(scope === "mine")}
+        {/* ── THE SORT AND THE FILTERS AS TWO MENUS (design «ج», the user's
+               choice of 2026-09-17), the board's own row: «مرتب‌سازی» reads
+               its current answer on the row; «فیلتر» holds «پروژه‌های من» and
+               «مهلت امروز» as check rows and counts the ones that are on.
+               (2026-09-16 they were two more rails beside the views.)
+               «همه پروژه‌ها» is not among them: it is the strip's «همه»
+               below, where every strip keeps its count. ── */}
+        <ToolbarMenu
+          label={t("sortMenu")}
+          value={t(sort === "recent" ? "sortRecent" : sort === "name" ? "sortName" : "sortProgress")}
+        >
+          <MenuRadio
+            value={sort}
+            onChange={setSort}
+            options={[
+              { key: "recent", label: t("sortRecent") },
+              { key: "name", label: t("sortName") },
+              { key: "progress", label: t("sortProgress") },
+            ]}
+          />
+        </ToolbarMenu>
+        <ToolbarMenu
+          label={t("filterMenu")}
+          icon={<IconFilter width={14} height={14} />}
+          count={(scope === "mine" ? 1 : 0) + (dueToday ? 1 : 0)}
+        >
+          <MenuCheck
+            checked={scope === "mine"}
+            onChange={(on) => setScope(on ? "mine" : "all")}
+            icon={<IconUser width={12} height={12} />}
           >
-            <IconUser width={12} height={12} />
             {t("scopeMine")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={dueToday}
-            onClick={() => setDueToday((v) => !v)}
-            className={toggleClass(dueToday)}
-          >
-            <IconClock width={12} height={12} />
+          </MenuCheck>
+          <MenuCheck checked={dueToday} onChange={setDueToday} icon={<IconClock width={12} height={12} />}>
             {tTasks("dueTodayFilter")}
-          </button>
-        </div>
+          </MenuCheck>
+        </ToolbarMenu>
       </Toolbar>
 
       {/* ── ROW TWO: THE FOLDERS (user, 2026-09-16, correcting the morning's

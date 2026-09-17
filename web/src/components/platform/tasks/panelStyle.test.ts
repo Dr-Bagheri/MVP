@@ -110,11 +110,15 @@ describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
   });
 
   it("the compact ones are compact and the footer is regular", () => {
-    /* chips and tabs are the 34 size; the footer's two
-       buttons are the 38 — the same split the toolbar makes between its chips
-       and its primary action */
-    for (const name of ["chipOn", "chipOff", "tabOn", "tabOff"] as const) {
+    /* chips are the 34 size and tabs the segmented pill's 28 (`btn-xs`,
+       design «ج» — the pill plus its track's padding IS the 34); the footer's
+       two buttons are the full size — the same split the toolbar makes
+       between its segmented control and its primary action */
+    for (const name of ["chipOn", "chipOff"] as const) {
       expect(CONTROLS[name], `${name} is compact`).toMatch(/\bbtn-sm\b/);
+    }
+    for (const name of ["tabOn", "tabOff"] as const) {
+      expect(CONTROLS[name], `${name} is the segmented pill`).toMatch(/\bbtn-xs\b/);
     }
     expect(FOOTER_CANCEL).not.toMatch(/\bbtn-sm\b/);
     expect(FOOTER_PRIMARY).not.toMatch(/\bbtn-sm\b/);
@@ -139,14 +143,18 @@ describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
      * height to `.btn`'s minimum — filled it edge to edge. A bar with no
      * height of its own cannot disagree with what it holds.
      */
-    expect(TAB_BAR).toContain("p-1");
+    /* the kit's segmented track (design «ج», 2026-09-17): 3px of padding
+       around 28px pills on the recessed ground, the control's 11px corner,
+       no border — the same control every page's first sub-menu wears */
+    expect(TAB_BAR).toContain("p-[3px]");
     expect(TAB_BAR).not.toMatch(/(?<![\w-])h-/);
-    /* and its corner is the control token, not a hand-typed 11 */
-    /* the kit's rail (2026-09-15): rounded-xl on the recessed ground, no
-       border — the same strip every page's first sub-menu wears */
-    expect(TAB_BAR).toContain("rounded-xl");
+    expect(TAB_BAR).toContain("rounded-md");
     expect(TAB_BAR).toContain("bg-surface-2");
     expect(TAB_BAR).not.toMatch(/(?<![\w-])border(?![\w-])/);
     expect(TAB_BAR).not.toMatch(/rounded-\[/);
+    /* and the tab is the pill: the icon height as a text button, never a
+       height written beside `btn` */
+    expect(tabClass(true)).toMatch(/\bbtn-xs\b/);
+    expect(tabClass(true)).not.toMatch(/(?<![\w-])(?:min-)?h-/);
   });
 });

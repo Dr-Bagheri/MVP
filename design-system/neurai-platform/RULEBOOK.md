@@ -55,23 +55,46 @@ whole width between the menus. A `normal` surface (a list, a board) keeps a
 desktop gutter (24px) as the floor (`SCAFFOLD.page.gutterPct`). Nothing in a
 page names a max-width in pixels.
 
-**The two sub-menus** are `platform/sectionTabs.tsx`, and they are one design in
-two colours — the meetings page's track:
+**The two sub-menus** are `platform/sectionTabs.tsx`, and they are design «ج»
+(the user's choice, 2026-09-17, from three compact designs drawn against the
+toolbar of the day — 70px to the first content where it had been 104):
 
 ```
-row one   TAB_TRACK     + sectionTabClass(active)   recessed rail, lifted pill, fg ink
-row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent tint, accent ink
+row one   TAB_TRACK     + sectionTabClass(active)   a SEGMENTED CONTROL: the recessed track,
+                                                     3px around 28px pills (`.btn-xs`), the
+                                                     chosen pill lifted with the card shadow
+          ToolbarMenu   + MenuRadio / MenuCheck      «مرتب‌سازی», «فیلتر»: a ghost `btn-sm`
+                                                     button with the label, the current value,
+                                                     a COUNT of the filters that are on, a
+                                                     chevron; the ⋯ menu's own panel
+row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.chip`s — 24 tall, outlined,
+                                                     the accent's edge and tint when on; no
+                                                     rail under them
 ```
 
+- Only the things a person SWITCHES BETWEEN stay in view (the views, the
+  slices); the sort and the on/off filters live behind the two menus, and
+  the «فیلتر» button's badge counts what is on — a filter behind a closed
+  menu is invisible, and the count is what keeps a narrowed page from
+  reading as the whole page. `MenuRadio` answers "which one" and closes;
+  `MenuCheck` answers "on or off" and keeps the menu open, so two filters
+  are one visit.
 - `<SectionTabs tabs active onSelect />` renders row one; `<FilterChips chips
   active onSelect />` renders row two (each chip carries an icon, a label and
   optionally a count).
 - A track never wraps — it scrolls; a row (`<Toolbar end={…}>` or
   `TOOLBAR_ROW` + `TOOLBAR_GROUPS`) wraps its tracks as units. Dividers go
-  inside a track (`TRACK_DIVIDER`). The row's own actions (the create button,
-  a view switch) sit in `end`.
-- An on/off filter is `toggleClass(on)` with `aria-pressed` — the same pill,
-  lifting on its own.
+  inside a track (`TRACK_DIVIDER`). The row's own actions (the create button)
+  sit in `end` and wear `btn-sm` — the segmented control's own height; a
+  full `.btn` beside it is the two-families-on-one-line fault.
+- An on/off filter that stays ON THE ROW (the call page's «مقایسه») is
+  `toggleClass(on)` with `aria-pressed` — a segmented pill lifting on its
+  own; a page toolbar's own on/off filters go in «فیلتر».
+- The pill (`.btn-xs`, 28) and the chip (`.chip`, 24) are kit shapes in
+  `globals.css`; `units.guard` cross-reads their size tokens, `toolbar.guard`
+  refuses a tab drawn without the kit and holds the kit to the track, the
+  pill and the chip, and `filterChips.test` records the reversal of the
+  2026-09-15 "one geometry in two colours" toolbar.
 - A THIRD row (the folder strip) is ONE component: `platform/TopicStrip` —
   «همه» with its count, a chip per folder with its count and its ⋯ (rename,
   archive), the inline name box, the dashed `+` — on row two's rail
@@ -84,10 +107,11 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   track is block-level and spans the page column; inside the row it is as
   long as its chips, like every other rail.
 - The projects page is the board's two rows (2026-09-16, corrected the same
-  day): row one is the views, the sorts, a third grey track with
-  «پروژه‌های من» and «مهلت امروز» as `toggleClass` toggles — the board's own
-  toggles in the board's own place — and, on the views with no column
-  (list, calendar, archive), the `.btn btn-primary` create in `end`; the
+  day; design «ج» 2026-09-17): row one is the views as the segmented
+  control, «مرتب‌سازی» reading its field on the row, «فیلتر» holding
+  «پروژه‌های من» and «مهلت امروز» as check rows and counting the ones that
+  are on — the board's own row — and, on the views with no column (list,
+  calendar, archive), the `btn-primary btn-sm` create in `end`; the
   kanban's columns keep their «افزودن پروژه» rows. Row two is the
   `TopicStrip` read EXACTLY as the board reads it — folder for folder:
   «همه پروژه‌ها» with its count, a chip per PROJECT FOLDER (db/0226)
@@ -125,22 +149,24 @@ row two   FILTER_TRACK  + filterChipClass(active)   the same rail on the accent 
   the connectors shortcut is Home's sidebar row and Settings · اتصال‌ها.
 - The task board draws no add-column slot (2026-09-16): the lane is exactly
   its columns.
-- The meetings page is TWO rows (2026-09-16, later): row one carries the
-  slice filter AND the sort — a second grey `TAB_TRACK` with the field as
-  tabs, a divider and the direction key, in row one's own pill — with the
-  two create buttons in `end`; row two is the `TopicStrip`, whose `end` slot
-  holds one tinted track: the list/calendar keys, a `TRACK_DIVIDER`, and a
-  SEARCH KEY that is a glyph until pressed and then a field growing into the
-  row beside it (closing it clears the query). A search is a key on the
-  rail, never a box beside it.
+- The meetings page is TWO rows (2026-09-16, later; design «ج» 2026-09-17):
+  row one carries the slice filter as the segmented control, «مرتب‌سازی»
+  reading its field on the row (the three fields as radio rows, the
+  direction «تازه‌ترین اول» as a check row under them), the list/calendar
+  keys as a second segmented control, and the SEARCH KEY beside them — a
+  glyph (`btn-ghost btn-sm`) until pressed and then a field growing into the
+  row beside it (closing it clears the query) — with the two create buttons
+  in `end` at `btn-sm`; row two is the `TopicStrip` and nothing else, a bare
+  line of folder chips. A search is a key on the row, never a box beside it.
 - The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
   create button (R3), or — on Profile — «خروج» as a pill in its own
   `TAB_TRACK` (2026-09-16), the row's own shape rather than a button of
   another family.
-- An in-page SEARCH is a tool on its toolbar row, at the row's END edge, in
-  the compact field (`.input-sm`, 34px like the pills beside it) — never a
-  row of its own and never first in the row. Meetings is the shape; the
-  integrations and console searches wear it too.
+- An in-page SEARCH is a tool on its toolbar row — never a row of its own
+  and never first in the row: a KEY that opens into a field on the pages
+  that carry a segmented row (meetings, design «ج»), or the compact field
+  (`.input-sm`, 34px like the controls beside it) at the row's END edge on
+  the integrations and console pages.
 - A menu of ROUTES (Settings, Management, Profile, Help) is the same track:
   `TwoPane` renders its links with `sectionTabClass`.
 - A tab strip inside a dialog is the same track: `panelStyle.TAB_BAR` is
