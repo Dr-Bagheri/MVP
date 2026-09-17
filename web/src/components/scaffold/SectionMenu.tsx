@@ -129,7 +129,7 @@ export function SectionMenu({
       {/* `pt-page-menu` is the page title's own top minus the 12px that a
           17px pane title needs to sit on the same line as a 24px page title
           — the pair moves together or the alignment is a coincidence */}
-      <h1 className="px-3 pb-2 pt-page-menu text-pane-title font-semibold text-fg">{heading}</h1>
+      <h1 className="h-card px-3 pb-2 pt-page-menu">{heading}</h1>
       {groups.map((group, i) => (
         <div key={group.key}>
           {i > 0 ? <hr className="mx-3 my-3.5 border-0 border-t border-fg/[.07]" /> : null}
@@ -324,7 +324,7 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
                  `hidden … md:flex` still decides the display: utilities beat
                  @layer components, so `.btn`'s inline-flex never gets a say
                  below md, where this control is not rendered at all. */
-              className="btn btn-icon absolute end-2 top-2 z-10 hidden text-fg-muted hover:bg-surface-2 hover:text-fg md:flex"
+              className="btn-ghost btn-icon absolute end-2 top-2 z-10 hidden md:flex"
               aria-label={t("closeMenu")}
               title={t("closeMenu")}
               onClick={() => setAndStore(true)}

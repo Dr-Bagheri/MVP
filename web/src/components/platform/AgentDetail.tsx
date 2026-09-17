@@ -150,7 +150,7 @@ export function AgentDetail({ handle }: { handle: string }) {
               fact about the agent; talking to it is the thing you came for */}
           <button
             type="button"
-            className="btn bg-accent font-semibold text-on-accent"
+            className="btn-primary"
             onClick={() => router.push(`/assistant?ask=${encodeURIComponent(`@${agent.handle} `)}`)}
           >
             {t("ask")}
@@ -225,7 +225,7 @@ export function AgentDetail({ handle }: { handle: string }) {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {groups.map((group) => (
             <section key={group.key} className="well p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
+              <h3 className="h-card mb-3 flex items-center gap-2">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
                   <Icon name={group.icon} size="sm" />
                 </span>

@@ -135,7 +135,7 @@ export function LabelRow({ labels, selected, onToggle, onChanged }: {
               type="button"
               aria-label={t("editLabel")}
               onClick={() => setEditing(label)}
-              className="btn btn-sm w-7 rounded-s-none px-0 bg-surface-2/60 text-fg-subtle hover:text-fg"
+              className="btn-secondary btn-sm w-7 rounded-s-none px-0"
             >
               <IconPencil width={12} height={12} />
             </button>
@@ -145,7 +145,7 @@ export function LabelRow({ labels, selected, onToggle, onChanged }: {
       <button
         type="button"
         onClick={() => setCreating(true)}
-        className="btn btn-sm border border-dashed border-border text-fg-muted hover:text-fg"
+        className="btn-dashed btn-sm"
       >
         <IconPlus width={12} height={12} />
         {t("newLabel")}
@@ -186,13 +186,13 @@ function LabelEditor({ label, onClose, onSaved }: {
   return (
     <Overlay onClose={onClose} label={label === null ? t("newLabel") : t("editLabel")}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold text-fg">{label === null ? t("newLabel") : t("editLabel")}</h2>
+        <h2 className="h-dialog">{label === null ? t("newLabel") : t("editLabel")}</h2>
         {/* 2026-09-03: the theme's icon button. This one had no box at all
             while the new-task dialog's close next door had a 36px one — the
             same affordance in the same file in two shapes, and a bare icon
             also carries no `.tap`, so its hit area was the glyph. */}
         <button type="button" aria-label={t("close")} onClick={onClose}
-          className="btn btn-icon text-fg-subtle hover:bg-surface-2 hover:text-fg">
+          className="btn-ghost btn-icon">
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -246,7 +246,7 @@ function LabelEditor({ label, onClose, onSaved }: {
           <button
             type="button"
             onClick={() => setCondemned(true)}
-            className="btn font-medium text-danger hover:bg-danger/10"
+            className="btn-danger"
           >
             <IconTrash width={12} height={12} />
             {t("deleteLabel")}
@@ -259,11 +259,11 @@ function LabelEditor({ label, onClose, onSaved }: {
             geometry; the border is written out because `.btn` draws none. */}
         <span className="flex gap-2">
           <button type="button" onClick={onClose}
-            className="btn border border-border bg-surface text-fg hover:bg-border">
+            className="btn-secondary">
             {t("cancel")}
           </button>
           <button type="button" onClick={save} disabled={name.trim() === "" || busy}
-            className="btn bg-accent text-on-accent">
+            className="btn-primary">
             {t("save")}
           </button>
         </span>
@@ -357,7 +357,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
           title={copy === undefined
             ? t("removeAssignee", { name: personName(person, locale) })
             : copy.remove(personName(person, locale))}
-          className="btn btn-sm bg-accent-soft font-medium text-accent"
+          className="btn-soft btn-sm"
         >
           {/* NAME ONLY (user directive, 2026-09-04: "do not include the
               avatar, the name is enough in the tasks assignments"). A mark
@@ -370,7 +370,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
         </button>
       ))}
       {unnamed.map((id) => (
-        <span key={id} className="btn btn-sm bg-surface-2 text-fg-subtle">
+        <span key={id} className="btn-secondary btn-sm">
           {copy?.unnamed ?? t("assigneeUnnamed")}
         </span>
       ))}
@@ -382,7 +382,7 @@ export function AssigneePicker({ selected, onToggle, people, copy }: {
            exactly the height of the assignee chips it stands in a row with
            (those are `.btn btn-sm`). The dashed edge stays — that is what
            says "add another"; only the invented 32px circle went. */
-        className="btn btn-sm w-control-sm px-0 border border-dashed border-border text-fg-muted hover:text-fg"
+        className="btn-dashed btn-sm w-control-sm px-0"
       >
         <IconPlus width={12} height={12} />
       </button>
@@ -456,7 +456,7 @@ export function DueField({ value, onPick }: {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="btn w-full justify-between border border-border bg-surface text-fg hover:border-border-strong"
+        className="btn-secondary w-full justify-between"
       >
         <span className={value === null ? "text-fg-subtle" : ""}>
           {value === null ? t("pickDue") : formatDate(value, locale)}
@@ -564,13 +564,13 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
     <Overlay onClose={onClose} label={t("newTask")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-fg">{t("newTask")}</h2>
+          <h2 className="h-dialog">{t("newTask")}</h2>
         </div>
         {/* 2026-09-03: `.btn btn-icon`, the one icon-only shape in the theme
             — the same control the task screen's close and every kebab in the
             product already render. */}
         <button type="button" aria-label={t("close")} onClick={onClose}
-          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
+          className="btn-secondary btn-icon shrink-0">
           <IconClose width={14} height={14} />
         </button>
       </div>

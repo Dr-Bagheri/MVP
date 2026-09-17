@@ -69,7 +69,7 @@ export function AttendeesRail({ meeting, photos, locale }: {
       className="tile flex min-h-0 max-h-56 shrink-0 flex-col p-4 lg:max-h-none lg:w-60"
     >
       <header className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-fg">{t("fieldAttendees")}</h3>
+        <h3 className="h-card">{t("fieldAttendees")}</h3>
         {/* the COUNT is of the people we watched arrive, which is the number
             the heading's question is really asking; the rest of the list is
             the answer to "who else was meant to be here" */}

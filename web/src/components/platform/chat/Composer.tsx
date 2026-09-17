@@ -202,7 +202,7 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
             {t("replyingTo")}: {replyTo.body ?? t("removedMessage")}
           </span>
           <button type="button" onClick={onCancelReply}
-            className="btn btn-icon text-fg-subtle hover:text-fg" aria-label={t("cancelReply")}>
+            className="btn-ghost btn-icon" aria-label={t("cancelReply")}>
             <IconClose width={12} height={12} />
           </button>
         </div>
@@ -273,7 +273,7 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
                 <div className="grid grid-cols-8 gap-0.5">
                   {EMOJI.map((e) => (
                     <button key={e} type="button" onClick={() => insert(e)}
-                      className="btn btn-icon hover:bg-surface-2">
+                      className="btn-ghost btn-icon">
                       <span className="text-base">{e}</span>
                     </button>
                   ))}
@@ -290,7 +290,7 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
             type="button"
             onClick={submit}
             disabled={disabled || draft.trim() === ""}
-            className="btn btn-icon border border-border text-fg-muted hover:border-accent hover:text-accent disabled:opacity-40"
+            className="btn-secondary btn-icon"
             aria-label={t("send")}
             title={t("send")}
           >

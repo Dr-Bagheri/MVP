@@ -500,7 +500,7 @@ export function TaskBoard() {
                       aria-label={t("columnColor")}
                       title={t("columnColor")}
                       onClick={() => setToneMenu((cur) => (cur === col.id ? null : col.id))}
-                      className="btn btn-icon hover:bg-surface-2"
+                      className="btn-ghost btn-icon"
                     >
                       <span
                         className={`block h-2.5 w-2.5 rounded-full ${TONE_DOT[col.tone] ?? TONE_DOT.grey!}`}
@@ -523,7 +523,7 @@ export function TaskBoard() {
                                it is — what changed is the 28px box a person
                                presses, which is `.btn-icon` and was h-7/
                                rounded-lg spelled by hand. */
-                            className="btn btn-icon hover:bg-surface-2"
+                            className="btn-ghost btn-icon"
                           >
                             <span className={`h-4 w-4 rounded-md ${TONE_DOT[tone] ?? TONE_DOT.grey!}`} />
                           </button>

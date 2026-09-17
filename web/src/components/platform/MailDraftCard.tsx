@@ -155,7 +155,7 @@ export function MailDraftCard({
               {state.to_address}
             </span>
           </div>
-          <h4 className="mt-2 text-lg font-semibold leading-6 text-fg">{state.subject}</h4>
+          <h4 className="h-card mt-2">{state.subject}</h4>
         </div>
 
         <p className="whitespace-pre-wrap px-4 pb-4 pt-2 text-sm leading-7 text-fg-muted">{state.body}</p>
@@ -189,7 +189,7 @@ export function MailDraftCard({
             <span className="flex items-center gap-2">
               <button
                 type="button"
-                className="btn btn-sm text-fg-muted hover:text-danger"
+                className="btn-ghost-danger btn-sm"
                 disabled={busy !== null}
                 onClick={() => setConfirmDiscard(true)}
               >

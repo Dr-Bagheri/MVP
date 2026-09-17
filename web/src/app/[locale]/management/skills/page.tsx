@@ -444,7 +444,7 @@ function SkillsPageContent() {
             {active.map((s) => (
               <Card key={s.id}>
                 <div className="mb-1 flex items-start justify-between gap-2">
-                  <h3 className="font-medium text-fg">{skillName(s)}</h3>
+                  <h3 className="h-card">{skillName(s)}</h3>
                   <div className="flex gap-1.5">
                     {!s.enabled ? <Chip tone="warning">{t("disabled")}</Chip> : null}
                     <Chip tone={s.level === "user" ? "accent" : "info"}>{t(s.level)}</Chip>
@@ -498,7 +498,7 @@ function SkillsPageContent() {
             {archived.map((s) => (
               <Card key={s.id}>
                 <div className="mb-1 flex items-start justify-between gap-2">
-                  <h3 className="font-medium text-fg-muted">{skillName(s)}</h3>
+                  <h3 className="h-card">{skillName(s)}</h3>
                   <Chip tone="neutral">{t(s.level)}</Chip>
                 </div>
                 <p className="text-xs text-fg-muted ltr">/{s.slug}</p>
@@ -530,7 +530,7 @@ function SkillsPageContent() {
             {resolved.map((skill) => (
               <Card key={skill.id}>
                 <div className="mb-1 flex items-start justify-between gap-2">
-                  <h3 className="font-medium text-fg">{skillName(skill)}</h3>
+                  <h3 className="h-card">{skillName(skill)}</h3>
                   <Chip tone={skill.level === "user" ? "accent" : skill.level === "org" ? "info" : "neutral"}>
                     {t(skill.level)}
                   </Chip>

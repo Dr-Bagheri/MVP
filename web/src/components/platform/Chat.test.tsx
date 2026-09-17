@@ -374,12 +374,15 @@ describe("the composer", () => {
     // eslint-disable-next-line no-bitwise
     expect(mention.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    /* «an enter icon WITHOUT fill»: an outline glyph, not a filled pill. In a
-       room the send is pressed by Enter almost every time, so a solid accent
+    /* «an enter icon WITHOUT fill»: the QUIET coat, never the primary. In a
+       room the send is pressed by Enter almost every time, so the accent
        button would be the loudest thing on a screen whose subject is the
-       conversation. */
-    expect(send.className).toContain("border");
-    expect(send.className).not.toContain("bg-accent");
+       conversation. (It was asserted as `border` — an outline drawn by hand —
+       until 2026-09-17, when every button took one of the kit's coats: the
+       quiet one is `btn-secondary`, and the claim is that it is not
+       `btn-primary`.) */
+    expect(send.className.split(/\s+/)).toContain("btn-secondary");
+    expect(send.className.split(/\s+/)).not.toContain("btn-primary");
 
     /* the other two the directive named, on the left with the @ */
     expect(within(row).getByRole("button", { name: "گفتن با میکروفون" })).toBeInTheDocument();

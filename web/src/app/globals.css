@@ -874,6 +874,40 @@
   .btn-danger {
     @apply btn bg-danger text-on-danger hover:opacity-90 active:opacity-80;
   }
+  /*
+   * THREE MORE COATS, AND THEN NO MORE (2026-09-17, user: "i still feel it
+   * disconnected … make it unify for all of it"). A census that day found
+   * 278 button sites in 133 distinct spellings: 51 had drawn an OUTLINED
+   * secondary by hand (`border border-border text-fg-muted`) beside the 59
+   * wearing the filled `.btn-secondary`; 25 had drawn the green primary by
+   * hand with a shadow and a heavier weight; 21 were a ghost spelled out; and
+   * the dialog kit itself (`panelStyle.FOOTER_CANCEL`) said outlined where
+   * the page kit said filled. Two kits, two secondaries — the "ten
+   * developers" symptom at the level that produces it. So every button
+   * coat is written HERE and nowhere else; `buttonCoat.guard` refuses a
+   * ground, edge, shadow, ink or weight beside `btn` anywhere outside this
+   * file and the kit files that compose pills from it.
+   *
+   * The three that were missing, each a meaning the four above could not
+   * carry without lying:
+   */
+  /* a CHOSEN or soft-accent control — the filter pill's own tint at rest
+     (a consent card's yes, a chip that is the current state) */
+  .btn-soft {
+    @apply btn bg-accent-soft text-accent hover:bg-accent-soft/80 active:bg-accent-soft;
+  }
+  /* an ADD slot — the folder strip's «+», the board's add row: a dashed
+     outline says "nothing here yet" where a filled button would claim there
+     is something to press */
+  .btn-dashed {
+    @apply btn border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg;
+  }
+  /* a DESTRUCTIVE act that stays quiet until the pointer reaches it — the
+     card's trash, a row's remove: `.btn-danger` is for the button that IS
+     the question (a confirm dialog's yes), this is for the one that opens it */
+  .btn-ghost-danger {
+    @apply btn text-fg-muted hover:bg-danger/10 hover:text-danger active:bg-danger/10;
+  }
 
   /*
    * THE SIZES, because their absence is what produced the mess.
@@ -1136,6 +1170,32 @@
   }
   .h-page {
     @apply text-page-title font-bold text-fg;
+  }
+  /*
+   * TWO MORE HEADING ROLES, AND THEN NO MORE (2026-09-17). Forty-six distinct
+   * heading spellings were counted that day — `text-lg font-bold` on four
+   * dialogs beside `text-base font-semibold` on three, `text-sm font-semibold`
+   * on Home's cards beside `.h-section` on Settings', green bold on the
+   * summary tab — one role each, drawn forty-six ways. The scale's own
+   * comment already named the two roles that had no class: `paneTitle` is
+   * "menu heading, card title" and a dialog's name had none at all.
+   * `heading.guard` refuses a size or weight utility on a heading element
+   * anywhere outside the named exceptions.
+   */
+  /* the title of a CARD or a tile — the pane-title role, 14/600 */
+  .h-card {
+    @apply text-pane-title font-semibold text-fg;
+  }
+  /* the name of a DIALOG or a detail panel — the section size, bold, so it
+     stands above the panel's own 11.5/700 body headings */
+  .h-dialog {
+    @apply text-section-title font-bold text-fg;
+  }
+  /* a GROUP label — over a rail's rows, a list's section: the group-label
+     role, subtle ink, so it reads as a label and never as an item (the
+     2026-08-13 grouped-menu ruling, at the one altitude below a card) */
+  .h-label {
+    @apply text-group-label font-semibold text-fg-subtle;
   }
 
   /* Anything clickable says so. */
@@ -2214,6 +2274,25 @@
    track that is simply the page — a scrollbar is an instrument, not a
    column of chrome. Both engines: the `scrollbar-*` properties serve
    Firefox, the `::-webkit-` rules everything Chromium. */
+/*
+ * A TRACK SCROLLS WITHOUT A BAR (2026-09-17). The sub-menu rails wore
+ * `.scroll-quiet`, whose `scrollbar-width: thin` Chrome now honours natively
+ * (and then ignores the webkit sizing below it) — and a classic thin bar on
+ * a HORIZONTAL box takes ~10px of layout height. Measured on the meeting
+ * page at 1280 with the assistant open: the items panel's five tabs
+ * overflowed, and that one rail stood 50 tall beside every other rail's 40.
+ * A rail is a strip of pills; it scrolls by wheel, touch and drag, and a bar
+ * inside it is a second row drawn by the browser.
+ */
+.track-scroll {
+  scrollbar-width: none;
+}
+.track-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .scroll-quiet {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--fg-subtle) / .45) transparent;

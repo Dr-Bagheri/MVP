@@ -156,7 +156,7 @@ export function Onboarding() {
       <div className="flex justify-end">
         <button
           type="button"
-          className="btn btn-sm text-fg-muted hover:text-fg"
+          className="btn-ghost btn-sm"
           onClick={() => void skipAll()}
         >
           {t("skipAll")}

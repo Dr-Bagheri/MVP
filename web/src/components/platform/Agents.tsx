@@ -72,7 +72,7 @@ export function Agents() {
           nothing else: the sentence that stood beside it explained a page
           whose cards already say what they are (R21). */}
       <div className="flex items-center justify-end gap-3">
-        <button type="button" className="btn btn-primary"
+        <button type="button" className="btn-primary"
           onClick={() => setEditing("new")}>
           <Icon name="plus" size="sm" />
           {t("newAgent")}
@@ -305,10 +305,10 @@ function AgentEditor({ agent, onClose, onSaved }: {
 
 
       <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
-        <button type="button" className="btn btn-sm border border-border bg-surface text-fg" onClick={onClose}>
+        <button type="button" className="btn-secondary btn-sm" onClick={onClose}>
           {t("cancel")}
         </button>
-        <button type="button" className="btn btn-sm bg-accent text-on-accent"
+        <button type="button" className="btn-primary btn-sm"
           disabled={!canSave} onClick={save}>
           {t("save")}
         </button>

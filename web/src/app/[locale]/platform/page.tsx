@@ -742,7 +742,7 @@ export default function PlatformControlPage() {
          five it stands beside, and it is the first thing a new vendor sees. */
       <Centered>
         <Card className="w-full max-w-xl">
-          <h1 className="text-lg font-bold text-fg">{t("claimTitle")}</h1>
+          <h1 className="h-page">{t("claimTitle")}</h1>
           <p className="mt-3 text-sm leading-6 text-fg-muted">{t("claimBody")}</p>
           <button
             type="button"
@@ -998,7 +998,7 @@ export default function PlatformControlPage() {
                       />
                       <button
                         type="button"
-                        className="btn btn-sm bg-accent text-on-accent"
+                        className="btn-primary btn-sm"
                         /* the button is off until an organisation is chosen —
                            the whole point of the queue is that nobody is
                            placed without that decision being made */
@@ -1019,7 +1019,7 @@ export default function PlatformControlPage() {
                       </button>
                       <button
                         type="button"
-                        className="btn btn-sm border border-border text-fg-muted hover:text-danger"
+                        className="btn-ghost-danger btn-sm"
                         disabled={working === `reject-${u.id}`}
                         onClick={() => setPending({
                           key: `reject-${u.id}`,
@@ -1583,7 +1583,7 @@ function EditDialog({
         className="max-h-[90dvh] w-full max-w-md overflow-y-auto glass-solid rounded-2xl p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-fg">{edit.title}</h2>
+        <h2 className="h-section">{edit.title}</h2>
         <p className="mt-1 text-xs text-fg-muted">
           {labels.target}: <span className="font-medium text-fg">{edit.target}</span>
         </p>

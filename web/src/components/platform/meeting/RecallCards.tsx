@@ -83,7 +83,7 @@ export function RecallCards({ cards, onDismiss }: {
           </div>
           <button
             type="button"
-            className="btn btn-icon border border-border text-fg-subtle hover:text-fg"
+            className="btn-secondary btn-icon"
             aria-label={t("recallDismiss")}
             onClick={() => onDismiss(card.id)}
           >

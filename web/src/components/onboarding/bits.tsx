@@ -84,7 +84,7 @@ export function StepActions({
       {onContinue ? (
         <button
           type="button"
-          className="btn btn-primary w-full max-w-sm"
+          className="btn-primary w-full max-w-sm"
           disabled={!ready}
           onClick={onContinue}
         >
@@ -94,7 +94,7 @@ export function StepActions({
       {onBack ? (
         <button
           type="button"
-          className="btn btn-ghost w-fit gap-1"
+          className="btn-ghost w-fit gap-1"
           onClick={onBack}
         >
           <span className="inline-flex -scale-x-100" aria-hidden><IconChevronEnd width={14} height={14} /></span>

@@ -59,8 +59,8 @@ export function InvitePeople({ kind, targetId, meId, onClose, onFailed }: {
   return (
     <Overlay onClose={onClose} label={t("addPeople")} size="sm">
       <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg">{t("addPeople")}</h2>
-        <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
+        <h2 className="h-dialog">{t("addPeople")}</h2>
+        <button type="button" onClick={onClose} className="btn-ghost btn-icon" aria-label={t("close")}>
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -75,7 +75,7 @@ export function InvitePeople({ kind, targetId, meId, onClose, onFailed }: {
         type="button"
         disabled={others.length === 0}
         onClick={() => setPicked(all ? [] : others.map((p) => p.id))}
-        className="btn btn-sm mb-2 border border-border text-fg-muted hover:text-fg disabled:opacity-50"
+        className="btn-secondary btn-sm mb-2"
       >
         {all ? t("selectNone") : t("selectAll")}
       </button>
@@ -107,7 +107,7 @@ export function InvitePeople({ kind, targetId, meId, onClose, onFailed }: {
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
-        <button type="button" onClick={onClose} className="btn text-fg-muted hover:text-fg">
+        <button type="button" onClick={onClose} className="btn-ghost">
           {tCommon("cancel")}
         </button>
         <button
@@ -127,7 +127,7 @@ export function InvitePeople({ kind, targetId, meId, onClose, onFailed }: {
               })
               .catch(() => { setBusy(false); onFailed(); });
           }}
-          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50"
+          className="btn-primary"
         >
           {t("sendInvites")}
         </button>

@@ -52,7 +52,7 @@ export function PictureControl({
           /* the theme's icon button on the picture's edge: `absolute` is a
              utility and beats `.tap`'s `relative`, `.btn` draws no border,
              hence the explicit one (the avatar badge's line since 2026-09-03) */
-          className="btn btn-icon absolute -bottom-0.5 -end-0.5 border border-border bg-surface text-fg-muted shadow-sm hover:text-fg"
+          className="btn-secondary btn-icon absolute -bottom-0.5 -end-0.5"
         >
           <IconCamera width={14} height={14} />
         </button>
@@ -78,7 +78,7 @@ export function PictureControl({
           title={removeLabel}
           disabled={busy}
           onClick={onRemove}
-          className="btn btn-icon text-danger hover:bg-danger/10"
+          className="btn-danger btn-icon"
         >
           <IconTrash width={14} height={14} />
         </button>

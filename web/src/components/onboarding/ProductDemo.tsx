@@ -120,7 +120,7 @@ function DemoFilm({ lesson, theme, autoPlay, onEnded }: { lesson: ProductDemoId;
       {failed && (
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-sm text-fg-muted" role="status">
           <span>{t("unavailable")}</span>
-          <button className="btn btn-sm btn-ghost" type="button" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>{t("retry")}</button>
+          <button className="btn-ghost btn-sm" type="button" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>{t("retry")}</button>
         </div>
       )}
     </div>

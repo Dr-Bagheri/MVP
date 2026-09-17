@@ -164,7 +164,7 @@ export default function InvitationsPage() {
                   sits on is itself surface-2: a filled button on its own
                   ground has no edge to find. */}
               <button
-                className="btn btn-sm mt-2 border border-border font-medium text-fg"
+                className="btn-secondary btn-sm mt-2"
                 onClick={() => setMinted(null)}
               >
                 {tCommon("done")}
@@ -187,7 +187,7 @@ export default function InvitationsPage() {
               {/* audit finding, 2026-09-02: same shape as the emailed notice's
                   button above — one control, one size, on the same ground */}
               <button
-                className="btn btn-sm mt-3 border border-border font-medium text-fg"
+                className="btn-secondary btn-sm mt-3"
                 onClick={() => setMinted(null)}
               >
                 {t("inviteStored")}
@@ -230,7 +230,7 @@ export default function InvitationsPage() {
               ]}
             />
             <button
-              className="btn btn-primary"
+              className="btn-primary"
               data-tour="invite-people"
               disabled={busy || !inviteEmail.trim()}
               onClick={() => void issueInvitation()}

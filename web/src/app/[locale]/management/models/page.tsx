@@ -228,7 +228,7 @@ export default function ModelsPage() {
       actions={
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn-primary"
           disabled={busy || failed}
           onClick={() => { setSearch(""); setAdding(true); }}
         >

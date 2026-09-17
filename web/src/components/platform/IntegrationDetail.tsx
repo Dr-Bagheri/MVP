@@ -245,7 +245,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                       "remove the lines of explanation in all connectors") —
                       the sentence about what the integration reads lives in
                       the connect dialog, the one place a person decides */}
-                  <h1 className="text-pane-title font-semibold text-fg">{name}</h1>
+                  <h1 className="h-card">{name}</h1>
                 </div>
                 {state?.status === "connected" ? (
                   /* the SETTINGS menu (the reference's gear): refresh is a
@@ -368,7 +368,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                         reaches these too. */}
                     <Card>
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h2 className="text-lg font-semibold text-fg">{t("assetsTitle")}</h2>
+                        <h2 className="h-section">{t("assetsTitle")}</h2>
                         <label className="min-w-0 sm:w-64">
                           <span className="sr-only">{t("searchAssets")}</span>
                           <input
@@ -428,7 +428,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                         semantics are still the page's */}
                     <aside>
                       <Card>
-                        <h2 className="text-lg font-semibold text-fg">{t("detailsTitle")}</h2>
+                        <h2 className="h-section">{t("detailsTitle")}</h2>
                         <dl className="mt-4 space-y-4">
                           <Row label={t("connectedBy")}>
                             <span className="block">{personName(me, locale) || "—"}</span>

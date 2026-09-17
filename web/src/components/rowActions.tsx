@@ -952,7 +952,7 @@ export function ConfirmDialog({
               /* audit finding, 2026-09-02: the same 28px/11px-corner square as
                  IconAction, and the same fix — `.btn btn-icon` is the theme's
                  icon button. Only the pull-into-the-corner offsets stay. */
-              className="btn btn-icon -me-1 -mt-1 shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="btn-ghost btn-icon -me-1 -mt-1 shrink-0"
               onClick={onCancel}
             >
               <IconClose width={14} height={14} />

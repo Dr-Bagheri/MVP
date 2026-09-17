@@ -417,7 +417,7 @@ export function SummaryTab({ meeting, callId }: {
       */}
       <header className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-bold text-fg">
+          <h2 className="h-section truncate">
             {t("summaryDocTitle", { title: meeting.title })}
           </h2>
           <p className="mt-0.5 text-caption text-fg-subtle">
@@ -463,7 +463,7 @@ export function SummaryTab({ meeting, callId }: {
         {meeting.call_id !== null ? (
           <button
             type="button"
-            className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg"
+            className="btn-secondary btn-sm gap-1.5"
             disabled={rerunning}
             onClick={() => {
               const recording = meeting.call_id;
@@ -534,7 +534,7 @@ export function SummaryTab({ meeting, callId }: {
       </header>
 
         <section>
-          <h3 className="text-sm font-bold text-accent">{digits(1, locale)}. {t("minutesAttendees")}</h3>
+          <h3 className="h-card">{digits(1, locale)}. {t("minutesAttendees")}</h3>
           {attendees.length === 0 ? (
             <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoAttendees")}</p>
           ) : (
@@ -553,7 +553,7 @@ export function SummaryTab({ meeting, callId }: {
             the summary has. */}
         <section className="mt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-accent">{digits(2, locale)}. {t("minutesSummary")}</h3>
+            <h3 className="h-card">{digits(2, locale)}. {t("minutesSummary")}</h3>
             {/* the two edits, side by side and only while there is a record to
                 write against: by hand, and by asking */}
             {callId !== null && draft === null ? (
@@ -561,12 +561,12 @@ export function SummaryTab({ meeting, callId }: {
                 <button type="button"
                   onClick={() => setDraft(typeof summary === "string" ? summary : "")}
                   disabled={typeof summary !== "string"}
-                  className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg disabled:opacity-50">
+                  className="btn-secondary btn-sm gap-1.5">
                   <IconPencil width={12} height={12} />
                   {t("summaryEdit")}
                 </button>
                 <button type="button" onClick={editWithAgent}
-                  className="btn btn-sm gap-1.5 border border-accent font-medium text-accent hover:bg-accent-soft">
+                  className="btn-soft btn-sm gap-1.5">
                   <IconAsk width={12} height={12} />
                   {t("summaryEditWithAgent")}
                 </button>
@@ -585,11 +585,11 @@ export function SummaryTab({ meeting, callId }: {
               />
               <div className="mt-2 flex items-center justify-end gap-2">
                 <button type="button" onClick={() => setDraft(null)} disabled={saving}
-                  className="btn btn-sm border border-border font-medium text-fg-muted hover:text-fg disabled:opacity-50">
+                  className="btn-secondary btn-sm">
                   {t("summaryCancel")}
                 </button>
                 <button type="button" onClick={saveDraft} disabled={saving}
-                  className="btn btn-sm bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+                  className="btn-primary btn-sm">
                   {saving ? t("summarySaving") : t("summarySave")}
                 </button>
               </div>
@@ -615,7 +615,7 @@ export function SummaryTab({ meeting, callId }: {
         </section>
 
         <section className="mt-4">
-          <h3 className="text-sm font-bold text-accent">{digits(3, locale)}. {t("ext_decisions")}</h3>
+          <h3 className="h-card">{digits(3, locale)}. {t("ext_decisions")}</h3>
           {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
             : decisions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoDecisions")}</p>
               : (
@@ -633,7 +633,7 @@ export function SummaryTab({ meeting, callId }: {
         </section>
 
         <section className="mt-4">
-          <h3 className="text-sm font-bold text-accent">{digits(4, locale)}. {t("ext_actions")}</h3>
+          <h3 className="h-card">{digits(4, locale)}. {t("ext_actions")}</h3>
           {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
             : actionRows.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
               : (
@@ -663,7 +663,7 @@ export function SummaryTab({ meeting, callId }: {
         */}
         <section className="mt-4" aria-label={t("minutesSignatures")}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-accent">{digits(5, locale)}. {t("minutesSignatures")}</h3>
+            <h3 className="h-card">{digits(5, locale)}. {t("minutesSignatures")}</h3>
             {sigs !== null && sigs !== "failed" && sigs.can_sign ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 {signNote !== null ? (
@@ -671,12 +671,12 @@ export function SummaryTab({ meeting, callId }: {
                 ) : null}
                 {sigs.signed ? (
                   <button type="button" onClick={withdrawSignature} disabled={signing}
-                    className="btn btn-sm border border-border font-medium text-fg-muted hover:text-fg disabled:opacity-50">
+                    className="btn-secondary btn-sm">
                     {t("signatureWithdraw")}
                   </button>
                 ) : sigs.has_signature_on_file ? (
                   <button type="button" onClick={() => sign()} disabled={signing}
-                    className="btn btn-sm gap-1.5 bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+                    className="btn-primary btn-sm gap-1.5">
                     <IconPencil width={12} height={12} />
                     {signing ? t("signing") : t("signMinutes")}
                   </button>
@@ -697,7 +697,7 @@ export function SummaryTab({ meeting, callId }: {
                       }}
                     />
                     <button type="button" onClick={() => signatureInput.current?.click()} disabled={signing}
-                      className="btn btn-sm gap-1.5 bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+                      className="btn-primary btn-sm gap-1.5">
                       <IconUpload width={12} height={12} />
                       {signing ? t("signing") : t("signMinutesUpload")}
                     </button>

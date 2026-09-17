@@ -111,12 +111,12 @@ export function MicScreen({ answers, save, advance, back }: ScreenProps) {
           </div>
         ) : null}
         <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn btn-secondary" onClick={() => setPicking((p) => !p)}>
+          <button type="button" className="btn-secondary" onClick={() => setPicking((p) => !p)}>
             {t("micChange")}
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn-primary"
             onClick={() => { save({ micOk: true }); advance(); }}
           >
             {t("micYes")}
@@ -157,7 +157,7 @@ export function LanguagesScreen({ answers, save, advance, back }: ScreenProps) {
           ))}
           <button
             type="button"
-            className="btn btn-secondary px-3"
+            className="btn-secondary px-3"
             aria-label={t("languagesAdd")}
             aria-expanded={adding}
             onClick={() => setAdding((a) => !a)}
@@ -175,7 +175,7 @@ export function LanguagesScreen({ answers, save, advance, back }: ScreenProps) {
           </div>
         ) : null}
         <div className="mt-6 flex justify-end">
-          <button type="button" className="btn btn-primary" onClick={() => { if (answers.languages === undefined) save({ languages: chosen }); advance(); }}>
+          <button type="button" className="btn-primary" onClick={() => { if (answers.languages === undefined) save({ languages: chosen }); advance(); }}>
             {t("continue")}
           </button>
         </div>
@@ -248,17 +248,17 @@ export function HotkeyScreen({ save, advance, back }: ScreenProps) {
         <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn-secondary"
             onClick={() => { setRefused(false); setCapturing((c) => !c); }}
           >
             <IconPencil width={14} height={14} />
             {capturing ? t("hotkeyCancel") : label === null ? t("hotkeyChoose") : t("hotkeyChange")}
           </button>
           <div className="flex gap-2">
-            <button type="button" className="btn btn-secondary" onClick={() => { setRefused(false); setCapturing(true); }}>
+            <button type="button" className="btn-secondary" onClick={() => { setRefused(false); setCapturing(true); }}>
               {t("hotkeyNo")}
             </button>
-            <button type="button" className="btn btn-primary" disabled={key === null} onClick={() => { save({ hotkey: key }); advance(); }}>
+            <button type="button" className="btn-primary" disabled={key === null} onClick={() => { save({ hotkey: key }); advance(); }}>
               {t("hotkeyYes")}
             </button>
           </div>

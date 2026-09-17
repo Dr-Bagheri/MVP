@@ -301,7 +301,7 @@ export function Meetings() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="btn btn-primary"
+              className="btn-primary"
               data-tour="meetings-new"
             >
               <IconPlus width={14} height={14} />
@@ -765,16 +765,16 @@ function MeetingCalendar({ meetings, locale, onOpen }: {
               row. The control guard cannot see it (no flex/items-center), so
               it survived the dialog fix; `.btn-sm` is the toolbar's own size. */}
           <button type="button" onClick={() => setOffset(0)}
-            className="btn btn-sm border border-border text-fg hover:border-border-strong">
+            className="btn-secondary btn-sm">
             {t("today")}
           </button>
           <button type="button" aria-label={t("prev")} onClick={() => setOffset((v) => v - 1)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            className="btn-secondary btn-icon">
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
           <span className="px-1 text-sm font-semibold text-fg">{grid.title}</span>
           <button type="button" aria-label={t("next")} onClick={() => setOffset((v) => v + 1)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            className="btn-secondary btn-icon">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </div>
@@ -1006,7 +1006,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
     <Overlay onClose={onClose} label={t("newMeeting")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-fg">{t("newMeeting")}</h2>
+          <h2 className="h-dialog">{t("newMeeting")}</h2>
         </div>
         {/* audit finding, 2026-09-02: this × was a hand-rolled 36px box with the
             16px tile corner while InviteDialog's, one dialog over in the same
@@ -1014,7 +1014,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
             same corner of two dialogs, different sizes. This is InviteDialog's
             line, verbatim. */}
         <button type="button" aria-label={t("close")} onClick={onClose}
-          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
+          className="btn-secondary btn-icon shrink-0">
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -1080,7 +1080,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           entry for this file; the entry is gone with it. */}
       <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
         <button type="button" onClick={onClose}
-          className="btn border border-border text-fg">
+          className="btn-secondary">
           {t("cancel")}
         </button>
         {/*
@@ -1091,7 +1091,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           * secret about the more consequential of the two.
           */}
         <button type="button" onClick={submit} disabled={!ready}
-          className="btn bg-accent text-on-accent shadow-accent">
+          className="btn-primary">
           {mode === "upload"
             ? <>{MODE_ICON.upload}{busy ? t("uploading") : t("uploadAndProcess")}</>
             : <>{MODE_ICON.in_person}{t("recordNow")}</>}
@@ -1189,11 +1189,11 @@ function ScheduleMeetingDialog({ topics, onClose, onCreated, onRefused }: {
     <Overlay onClose={onClose} label={t("scheduleMeeting")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-fg">{t("scheduleMeeting")}</h2>
+          <h2 className="h-dialog">{t("scheduleMeeting")}</h2>
           <p className="mt-0.5 text-xs text-fg-muted">{t("scheduleMeetingSubtitle")}</p>
         </div>
         <button type="button" aria-label={t("close")} onClick={onClose}
-          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
+          className="btn-secondary btn-icon shrink-0">
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -1234,11 +1234,11 @@ function ScheduleMeetingDialog({ topics, onClose, onCreated, onRefused }: {
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
         <button type="button" onClick={onClose}
-          className="btn border border-border text-fg">
+          className="btn-secondary">
           {t("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={!ready}
-          className="btn bg-accent text-on-accent shadow-accent">
+          className="btn-primary">
           <IconCalendar width={14} height={14} />
           {t("scheduleIt")}
         </button>
@@ -1284,7 +1284,7 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
         <IconUpload width={14} height={14} />
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">{file.name}</span>
         <button type="button" aria-label={t("removeFile")} onClick={() => onFile(null)}
-          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
+          className="btn-secondary btn-icon shrink-0">
           <IconClose width={12} height={12} />
         </button>
       </div>

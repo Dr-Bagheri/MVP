@@ -853,7 +853,7 @@ export default function WorkflowDetailPage({
               <header className="flex flex-wrap items-start gap-6">
                 <WorkflowTile icon={subject.icon} color={subject.color} size="hero" />
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-2xl font-semibold text-fg">{subject.name}</h1>
+                  <h1 className="h-page">{subject.name}</h1>
                   {subject.description ? (
                     <p className="mt-2 max-w-[70ch] text-sm leading-7 text-fg-muted">
                       {subject.description}
@@ -989,7 +989,7 @@ export default function WorkflowDetailPage({
               <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
                 <section className="card">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-fg">{t("detailProcess")}</h2>
+                    <h2 className="h-section">{t("detailProcess")}</h2>
                     {/*
                       THE DOOR (user directive, 2026-08-28: "it must be
                       editable and part of the puzzled structure").
@@ -1083,7 +1083,7 @@ export default function WorkflowDetailPage({
                 </section>
 
                 <section className="card">
-                  <h2 className="text-lg font-semibold text-fg">{t("detailRunsTitle")}</h2>
+                  <h2 className="h-section">{t("detailRunsTitle")}</h2>
 
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailUpcoming")}</p>
                   <div className="well mt-2 flex items-center justify-between gap-3 px-4 py-3">

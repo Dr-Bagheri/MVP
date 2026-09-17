@@ -105,7 +105,7 @@ export function MeetingAttendeesField({ me, people, picked, onPicked, guests, on
           type="button"
           onClick={addGuest}
           disabled={draft.trim() === ""}
-          className="btn btn-sm border border-border text-fg-muted hover:text-fg"
+          className="btn-secondary btn-sm"
         >
           <IconPlus width={12} height={12} />
           {t("addGuest")}
@@ -118,7 +118,7 @@ export function MeetingAttendeesField({ me, people, picked, onPicked, guests, on
       {guests.length > 0 ? (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {guests.map((name) => (
-            <span key={name} data-guest className="btn btn-sm cursor-default bg-accent-soft font-medium text-accent">
+            <span key={name} data-guest className="btn-soft btn-sm cursor-default">
               {name}
               <button
                 type="button"

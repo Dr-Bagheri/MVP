@@ -1633,7 +1633,7 @@ export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
                   somewhere, and this one stays in the sentence. */}
               <button
                 type="button"
-                className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
+                className="btn-ghost btn-icon shrink-0"
                 aria-label={t("sourcesAttach")}
                 title={t("sourcesAttach")}
                 onClick={() => fileRef.current?.click()}
@@ -1646,7 +1646,7 @@ export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
                  composer; Esc does the same from the keyboard */
               <button
                 type="button"
-                className="btn btn-icon shrink-0 bg-surface-2 text-fg"
+                className="btn-secondary btn-icon shrink-0"
                 title={t("stop")}
                 aria-label={t("stop")}
                 onClick={stop}
@@ -1661,7 +1661,7 @@ export function Hub({ idleContent }: { idleContent?: ReactNode } = {}) {
                    action makes neither of them mean "this is the main thing" —
                    the same call the sidebar's send key took. `disabled:opacity`
                    is what says the box is empty. */
-                className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
+                className="btn-ghost btn-icon shrink-0"
                 title={t("send")}
                 aria-label={t("send")}
                 disabled={input.trim() === ""}

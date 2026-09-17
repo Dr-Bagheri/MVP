@@ -66,7 +66,10 @@ const LITERALS = [
   "scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2",
   "scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1",
   "card-row",
-  "border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg",
+  /* the add row's dashed outline is the kit's `btn-dashed` since 2026-09-17
+     (it was this literal, spelled out: `border-dashed border-border
+     font-medium text-fg-muted hover:border-border-strong hover:text-fg`) */
+  "btn-dashed",
 ];
 
 describe("R17: one board", () => {

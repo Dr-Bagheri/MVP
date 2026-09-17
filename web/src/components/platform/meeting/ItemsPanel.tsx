@@ -384,9 +384,9 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                       }}
                     />
                     <button type="button" onClick={() => void saveEdit()}
-                      className="btn btn-sm shrink-0 bg-accent text-on-accent">{t("save")}</button>
+                      className="btn-primary btn-sm shrink-0">{t("save")}</button>
                     <button type="button" onClick={() => setEditing(null)}
-                      className="btn btn-sm btn-icon shrink-0 border border-border text-fg-subtle"
+                      className="btn-secondary btn-sm btn-icon shrink-0"
                       aria-label={t("cancel")}><IconClose width={12} height={12} /></button>
                   </div>
                 ) : (
@@ -463,7 +463,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                     title={t("itemMakeTask")}
                     disabled={busy}
                     onClick={() => void makeOneTask(row)}
-                    className="btn btn-icon text-fg-subtle hover:text-accent disabled:opacity-50"
+                    className="btn-ghost btn-icon"
                   >
                     <IconPlus width={12} height={12} />
                   </button>
@@ -472,7 +472,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                   type="button"
                   aria-label={t("itemEdit")}
                   onClick={() => setEditing({ id: row.id, body: row.body })}
-                  className="btn btn-icon text-fg-subtle hover:text-fg"
+                  className="btn-ghost btn-icon"
                 >
                   <IconPencil width={12} height={12} />
                 </button>
@@ -480,7 +480,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                   type="button"
                   aria-label={t("itemRemove")}
                   onClick={() => setConfirming(row)}
-                  className="btn btn-icon text-fg-subtle hover:text-danger"
+                  className="btn-ghost-danger btn-icon"
                 >
                   <IconTrash width={12} height={12} />
                 </button>
@@ -522,14 +522,14 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
             <div className="mt-1.5 flex justify-end gap-1.5">
               <button
                 type="button"
-                className="btn btn-sm border border-border font-medium text-fg-muted hover:text-fg"
+                className="btn-secondary btn-sm"
                 onClick={() => { setComposing(false); setDraft(""); }}
               >
                 {t("cancel")}
               </button>
               <button
                 type="button"
-                className="btn btn-sm bg-accent font-medium text-on-accent"
+                className="btn-primary btn-sm"
                 disabled={draft.trim() === "" || busy}
                 onClick={() => void add()}
               >

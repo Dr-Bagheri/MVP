@@ -565,12 +565,12 @@ export function MeetingPage({ id }: { id: string }) {
             /* the same act and therefore the same words — what changed is
                only which side finishes it */
             <button type="button" onClick={finishOrphanedTake}
-              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
+              className="btn-primary">
               {t("endAndProcess")}
             </button>
           ) : isHost && engineFailed ? (
             <button type="button" onClick={end}
-              className="btn bg-danger font-semibold text-on-accent hover:opacity-90">
+              className="btn-danger">
               {t("retryFinish")}
             </button>
           ) : isHost && view === "awaitingFile" ? (
@@ -579,7 +579,7 @@ export function MeetingPage({ id }: { id: string }) {
                was refused by the network, or when the page was reloaded
                while it was in flight and the handle went with the realm */
             <button type="button" onClick={() => uploadInput.current?.click()}
-              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
+              className="btn-primary">
               {MODE_ICON.upload}
               {t("startUpload")}
             </button>
@@ -810,14 +810,14 @@ function LiveTake({ engine, live, starting, locale, meeting, photos, isHost, liv
               onClick={engine.phase === "paused" ? resume : pause}
               title={engine.phase === "paused" ? t("resumeTake") : t("pauseTake")}
               aria-label={engine.phase === "paused" ? t("resumeTake") : t("pauseTake")}
-              className="btn btn-icon border border-border bg-surface text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="btn-secondary btn-icon"
             >
               {engine.phase === "paused"
                 ? <IconPlay width={16} height={16} />
                 : <IconPause width={16} height={16} />}
             </button>
             <button type="button" onClick={onEnd}
-              className="btn btn-sm bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
+              className="btn-primary btn-sm">
               {t("endAndProcess")}
             </button>
           </span>
@@ -983,7 +983,7 @@ function PostStage({ meeting, call, me, locale, onBackToMeetings }: {
                 {/* `.btn-sm`, not a 36px button of its own (audit finding,
                     2026-09-02) */}
                 <button type="button" onClick={onBackToMeetings}
-                  className="btn btn-sm mt-3 bg-surface-2 font-medium text-fg hover:bg-border">
+                  className="btn-secondary btn-sm mt-3">
                   {t("backToMeetings")}
                 </button>
               </div>
@@ -1070,7 +1070,7 @@ function NotesTab({ callId, locale }: { callId: string; locale: string }) {
           className="input min-w-0 flex-1" />
         <button type="button" onClick={add} disabled={draft.trim() === ""}
           aria-label={t("addNote")}
-          className="btn shrink-0 bg-accent px-3 text-on-accent">
+          className="btn-primary shrink-0 px-3">
           <IconPlus width={14} height={14} />
         </button>
       </div>
@@ -1101,7 +1101,7 @@ function NotesTab({ callId, locale }: { callId: string; locale: string }) {
                   panel's (audit finding, 2026-09-02): this one had no `.tap`
                   either, so below md its hit area was the 12px glyph */}
               <button type="button" aria-label={t("deleteNote")} onClick={() => setCondemned(note)}
-                className="btn btn-icon shrink-0 text-fg-subtle hover:text-danger">
+                className="btn-ghost-danger btn-icon shrink-0">
                 <IconTrash width={12} height={12} />
               </button>
             </li>

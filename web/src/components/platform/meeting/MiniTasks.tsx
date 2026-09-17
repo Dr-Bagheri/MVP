@@ -62,11 +62,11 @@ export function MeetingTasksBoard({ callId }: {
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-fg">{t("meetingTasksTitle")}</h3>
+          <h3 className="h-card">{t("meetingTasksTitle")}</h3>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/tasks"
-            className="btn btn-sm border border-border bg-surface font-medium text-fg hover:bg-border">
+            className="btn-secondary btn-sm">
             {t("meetingTasksFullBoard")}
           </Link>
         </div>
@@ -88,7 +88,7 @@ export function MeetingTasksBoard({ callId }: {
           className="input min-w-0 flex-1"
         />
         <button type="button" onClick={add} disabled={draft.trim() === "" || firstColumn === undefined}
-          className="btn bg-accent font-semibold text-on-accent disabled:opacity-50">
+          className="btn-primary">
           <IconPlus width={12} height={12} />
           {tTasks("newTask")}
         </button>

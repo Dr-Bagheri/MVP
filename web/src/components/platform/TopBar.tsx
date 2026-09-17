@@ -354,7 +354,7 @@ export function TopBar({
             href="/chat"
             title={tPlatform("chat")}
             aria-label={tPlatform("chat")}
-            className="btn btn-icon-sm glass-raised hidden text-fg-muted hover:text-fg md:inline-flex"
+            className="btn-ghost btn-icon-sm glass-raised hidden md:inline-flex"
           >
             {/* the RAIL'S own glyph, imported rather than redrawn: the entry
                 left the rail and the picture follows it */}
@@ -366,7 +366,7 @@ export function TopBar({
             onClick={() => storeTheme(theme === "dark" ? "light" : "dark")}
             title={tPlatform("themeToggle")}
             aria-label={tPlatform("themeToggle")}
-            className="btn btn-icon-sm glass-raised hidden text-fg-muted hover:text-fg md:inline-flex"
+            className="btn-ghost btn-icon-sm glass-raised hidden md:inline-flex"
           >
             {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
           </button>

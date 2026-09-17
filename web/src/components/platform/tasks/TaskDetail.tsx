@@ -128,7 +128,7 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
               ]}
             />
             <button type="button" onClick={() => setEditing((v) => !v)}
-              className="btn btn-sm border border-border font-medium text-fg hover:bg-border">
+              className="btn-secondary btn-sm">
               <IconPencil width={12} height={12} />
               {editing ? t("done") : t("edit")}
             </button>
@@ -142,7 +142,7 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
                  `/meetings?call=`, a page that reads no such parameter, so the
                  chip opened the meetings list and dropped the call on the way) */
               <Link href={task.meeting_id !== null ? `/meetings/${task.meeting_id}` : `/calls/${task.call_id}`}
-                className="btn btn-sm bg-accent-soft font-medium text-accent">
+                className="btn-soft btn-sm">
                 <IconVideo width={12} height={12} />
                 <span className="max-w-[17.5rem] truncate">{task.meeting_title ?? task.call_title ?? t("recordGone")}</span>
               </Link>
@@ -334,7 +334,7 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
             </section>
 
             <section aria-label={t("checklist")}>
-              <h3 className="mb-1.5 text-xs text-fg-muted">
+              <h3 className="h-label mb-1.5">
                 {t("checklist")} ({digits(done, locale)}/{digits(task.checklist.length, locale)})
               </h3>
               {task.checklist.length === 0 ? (
@@ -422,7 +422,7 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
                      stands at the end of a field row. `.btn` owns the
                      disabled face, so the old `disabled:opacity-50` goes
                      with the geometry. */
-                  className="btn w-control px-0 bg-accent text-on-accent"
+                  className="btn-primary w-control px-0"
                 >
                   <IconPlus width={12} height={12} />
                 </button>
@@ -515,7 +515,7 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
                          the guard is blind to (a height and a corner, no
                          centring word) — converted anyway, because a shape
                          is not less invented for being unmeasurable. */
-                      className="btn btn-sm bg-accent text-on-accent"
+                      className="btn-primary btn-sm"
                     >
                       {t("postComment")}
                     </button>
@@ -661,7 +661,7 @@ function RoomRow({ task, onChanged, onFailed }: {
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="btn btn-sm btn-secondary"
+          className="btn-secondary btn-sm"
           disabled={busy}
           onClick={() => {
             setBusy(true);
@@ -674,7 +674,7 @@ function RoomRow({ task, onChanged, onFailed }: {
         {task.channel_id !== null ? (
           <Link
             href={`/chat?room=${encodeURIComponent(task.channel_id)}`}
-            className="btn btn-sm btn-ghost"
+            className="btn-ghost btn-sm"
           >
             {t("openRoom")}
           </Link>
@@ -709,7 +709,7 @@ function ScheduleRow({ task, onChanged, onFailed }: {
       <span className={RAIL_LABEL}>{t("scheduleField")}</span>
       {schedule === null ? (
         <button type="button" onClick={() => setOpen(true)}
-          className="btn btn-sm w-full justify-start border border-border text-fg-muted hover:text-fg">
+          className="btn-secondary btn-sm w-full justify-start">
           <IconRetry width={12} height={12} />
           {t("scheduleAdd")}
         </button>
@@ -732,11 +732,11 @@ function ScheduleRow({ task, onChanged, onFailed }: {
           ) : null}
           <div className="mt-2 flex items-center gap-1.5">
             <button type="button" onClick={() => setOpen(true)} disabled={busy}
-              className="btn btn-sm border border-border text-fg-muted hover:text-fg">
+              className="btn-secondary btn-sm">
               {t("edit")}
             </button>
             <button type="button" onClick={() => write(null)} disabled={busy}
-              className="btn btn-sm text-fg-subtle hover:text-danger">
+              className="btn-ghost-danger btn-sm">
               {t("scheduleStop")}
             </button>
           </div>
@@ -746,9 +746,9 @@ function ScheduleRow({ task, onChanged, onFailed }: {
       {open ? (
         <Overlay onClose={() => setOpen(false)} label={t("scheduleField")} size="sm">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-fg">{t("scheduleField")}</h2>
+            <h2 className="h-dialog">{t("scheduleField")}</h2>
             <button type="button" onClick={() => setOpen(false)}
-              className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
+              className="btn-ghost btn-icon" aria-label={t("close")}>
               <IconClose width={14} height={14} />
             </button>
           </div>
@@ -767,10 +767,10 @@ function ScheduleRow({ task, onChanged, onFailed }: {
           </div>
           <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-4">
             <button type="button" onClick={() => setOpen(false)}
-              className="btn text-fg-muted hover:text-fg">{t("cancel")}</button>
+              className="btn-ghost">{t("cancel")}</button>
             <button type="button" disabled={busy}
               onClick={() => write({ gap_days: Number(gapDays) || 0, until_date: until })}
-              className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+              className="btn-primary">
               {t("save")}
             </button>
           </div>

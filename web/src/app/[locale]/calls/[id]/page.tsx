@@ -1371,7 +1371,7 @@ export default function CallDetailPage({
                    place the record's name appears, since useCrumbTitle already
                    puts it in the breadcrumb. The card title role instead; the
                    rename pencil and the suggestion sparkle stay on the row. */
-                <h1 className="group flex items-center gap-2 text-pane-title font-semibold leading-tight text-fg">
+                <h1 className="h-card group flex items-center gap-2">
                   <span className="truncate">
                     {call.title.trim() === "" ? tCalls("untitled") : call.title}
                   </span>
@@ -1589,7 +1589,7 @@ export default function CallDetailPage({
         {section === "summary" ? (
         <section className="flex min-h-0 flex-1 flex-col border-t border-border px-5 py-4">
           <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
+            <h2 className="h-card">{t("summary")}</h2>
             <div className="flex flex-wrap items-center gap-1.5">
               {versions.length > 0 ? (
                 /* named by TEMPLATE alone (user directive, 2026-08-25: no
@@ -1799,7 +1799,7 @@ export default function CallDetailPage({
         <section className="flex min-h-0 flex-1 flex-col border-t border-border">
           <div className="no-print border-b border-border px-5 py-3">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-fg">{t("transcript")}</h2>
+              <h2 className="h-card">{t("transcript")}</h2>
               {/* #2: find in this record */}
               {rows.length > 0 ? (
                 <span className="flex items-center gap-1.5">
@@ -1940,7 +1940,7 @@ export default function CallDetailPage({
                        wanted — is stated explicitly beside it. */
                     <button
                       type="button"
-                      className="btn btn-sm border border-dashed border-border font-medium text-fg-muted hover:border-accent hover:text-accent"
+                      className="btn-dashed btn-sm"
                       onClick={openBulkLink}
                     >
                       {t("bulkLink")}
@@ -2344,7 +2344,7 @@ export default function CallDetailPage({
         {section === "actions" ? (
           <section className="flex min-h-0 flex-1 flex-col border-t border-border px-5 py-4">
             <div className="no-print mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-fg">{t("sectionActions")}</h2>
+              <h2 className="h-card">{t("sectionActions")}</h2>
               <KebabMenu label={t("actionsMenu")} items={actionsMenuItems} />
             </div>
             {/* same scroller as the summary and the transcript: long lanes
@@ -2355,7 +2355,7 @@ export default function CallDetailPage({
             ) : null}
             <div className="grid gap-6 md:grid-cols-2">
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-fg">{t("actionsHeading")}</h3>
+                <h3 className="h-card mb-3">{t("actionsHeading")}</h3>
                 {lanes.actions.length === 0 ? (
                   <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
                 ) : (
@@ -2393,7 +2393,7 @@ export default function CallDetailPage({
                 </div>
               </div>
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-fg">{t("decisionsHeading")}</h3>
+                <h3 className="h-card mb-3">{t("decisionsHeading")}</h3>
                 {lanes.decisions.length === 0 ? (
                   <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
                 ) : (
@@ -2451,7 +2451,7 @@ export default function CallDetailPage({
         {section === "notes" ? (
           <section className="flex min-h-0 flex-1 flex-col border-t border-border px-5 py-4">
             <div className="no-print mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-fg">{t("notesHeading")}</h2>
+              <h2 className="h-card">{t("notesHeading")}</h2>
               <KebabMenu label={t("notesMenu")} items={notesMenuItems} />
             </div>
             {/* the section's body — list, composer and the attachments note
@@ -2537,7 +2537,7 @@ export default function CallDetailPage({
         {/* ── #16 related records (shared tags) ────────────────────────── */}
         {section === "summary" && related.length > 0 ? (
           <section className="no-print border-t border-border px-5 py-4">
-            <h2 className="mb-2 text-sm font-semibold text-fg">{t("relatedHeading")}</h2>
+            <h2 className="h-card mb-2">{t("relatedHeading")}</h2>
             <ul className="flex flex-wrap items-center gap-2">
               {related.map((c) => (
                 <li key={c.id}>

@@ -347,7 +347,7 @@ export default function SignInPage() {
   if (needsOAuthPassword) {
     door = (
       <>
-        <h1 className="mb-5 text-xl font-bold text-fg">{t("signInTitle")}</h1>
+        <h1 className="h-page mb-5">{t("signInTitle")}</h1>
         <form className="space-y-4" onSubmit={enrollOAuthPassword}>
           <p className="text-sm leading-7 text-fg-muted">{t("finishPasswordOauth")}</p>
           <Field label={t("choosePassword")}>
@@ -373,7 +373,7 @@ export default function SignInPage() {
   } else if (mode === "code") {
     door = (
       <>
-        <h1 className="text-xl font-bold text-fg">{t("codeTitle")}</h1>
+        <h1 className="h-page">{t("codeTitle")}</h1>
         {/* ARRIVAL — the one sentence that says what the mail carries and
             what to do with it; without it this is a box with no story */}
         <p className="mt-2 text-sm leading-7 text-fg-muted">{t("codeLead", { email })}</p>
@@ -424,7 +424,7 @@ export default function SignInPage() {
     door = (
       <>
         {/* no logo on the gate (user ruling): the title carries the identity */}
-        <h1 className="mb-5 text-xl font-bold text-fg">{t("signInTitle")}</h1>
+        <h1 className="h-page mb-5">{t("signInTitle")}</h1>
         <form className="space-y-4" onSubmit={signIn}>
           {/*
             EMAIL, not «نام کاربری». The identity Supabase authenticates is an
@@ -472,7 +472,7 @@ export default function SignInPage() {
   } else if (mode === "sso") {
     door = (
       <>
-        <h1 className="text-xl font-bold text-fg">{t("ssoTitle")}</h1>
+        <h1 className="h-page">{t("ssoTitle")}</h1>
         <p className="mt-2 text-sm leading-7 text-fg-muted">{t("ssoLead")}</p>
         <form className="mt-4 space-y-4" onSubmit={startSso}>
           <Field label={t("ssoEmail")}>
@@ -501,7 +501,7 @@ export default function SignInPage() {
     door = (
       <>
         {/* no logo on the gate (user ruling): the title carries the identity */}
-        <h1 className="text-xl font-bold text-fg">{t("emailTitle")}</h1>
+        <h1 className="h-page">{t("emailTitle")}</h1>
         {/* ARRIVAL — a stranger's first screen says what the one press does */}
         <p className="mt-2 text-sm leading-7 text-fg-muted">{t("emailLead")}</p>
         {/* THE FOUR DOORS, then «یا», then the address — the reference's own

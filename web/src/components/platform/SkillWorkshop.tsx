@@ -74,12 +74,12 @@ export function SkillHistory({ skillId, onRestore }: {
               {v.created_by_name ?? t("versionByPlatform")}
             </span>
             <span className="ms-auto flex gap-1.5">
-              <button type="button" className="btn btn-sm btn-secondary"
+              <button type="button" className="btn-secondary btn-sm"
                 onClick={() => setOpen(open === v.id ? null : v.id)}>
                 {open === v.id ? t("versionHide") : t("versionShow")}
               </button>
               {index === 0 ? null : (
-                <button type="button" className="btn btn-sm btn-secondary"
+                <button type="button" className="btn-secondary btn-sm"
                   onClick={() => onRestore(v)}>
                   <IconRetry width={12} height={12} />
                   {t("versionRestore")}
@@ -142,7 +142,7 @@ export function SkillDryRun({ prompt, model }: { prompt: string; model: string }
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void tryIt(); }}
         />
-        <button type="button" className="btn btn-primary" disabled={!ready} onClick={() => void tryIt()}>
+        <button type="button" className="btn-primary" disabled={!ready} onClick={() => void tryIt()}>
           <IconSparkle width={14} height={14} />
           {busy ? t("dryRunBusy") : t("dryRun")}
         </button>

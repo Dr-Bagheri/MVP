@@ -64,7 +64,7 @@ export function DateField({ value, onChange, id }: {
          same four presets. Both are `.btn-sm` now, in the spelling
          EchoSectionMenu already used. `.btn` draws NO border, so the outline
          that made this read as a chip is asked for explicitly. */
-      className="btn btn-sm border border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
+      className="btn-secondary btn-sm"
     >
       {label}
     </button>
@@ -106,12 +106,12 @@ export function DateField({ value, onChange, id }: {
               away from the theme, invisible until something counted it. */}
           <div className="mb-1 flex items-center justify-between">
             <button type="button" aria-label={t("prevMonth")} onClick={() => setOffset((v) => v - 1)}
-              className="btn btn-icon text-fg-muted hover:text-fg">
+              className="btn-ghost btn-icon">
               <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
             </button>
             <span className="text-xs font-semibold text-fg">{grid.title}</span>
             <button type="button" aria-label={t("nextMonth")} onClick={() => setOffset((v) => v + 1)}
-              className="btn btn-icon text-fg-muted hover:text-fg">
+              className="btn-ghost btn-icon">
               <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
             </button>
           </div>

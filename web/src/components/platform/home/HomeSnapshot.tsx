@@ -136,7 +136,7 @@ export function HomeSnapshot() {
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden>
           {icon}
         </span>
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</h2>
+        <h2 className="h-card min-w-0 flex-1 truncate">{label}</h2>
         {/* THE DOOR, and it is a link rather than a pager (the directive's
             "actionable load more that will navigate me to the correct
             location in the platform"). It is in the HEADER rather than under
@@ -175,7 +175,7 @@ export function HomeSnapshot() {
           moment — the same door the dashboard's «شروع ضبط جلسه» used, so
           there is one create flow rather than a second one written here.
         */}
-        <Link href={{ pathname: "/meetings", query: { new: "1" } } as never} className="btn btn-primary shrink-0">
+        <Link href={{ pathname: "/meetings", query: { new: "1" } } as never} className="btn-primary shrink-0">
           <IconVideo width={14} height={14} />
           {t("startMeeting")}
         </Link>

@@ -633,7 +633,7 @@ export function HomeConversationsSheet() {
         aria-expanded={open}
         aria-label={t("sidebarLabel")}
         title={t("sidebarLabel")}
-        className="btn btn-icon-sm glass-raised text-fg-muted hover:text-fg lg:hidden"
+        className="btn-ghost btn-icon-sm glass-raised lg:hidden"
       >
         <IconMenu width={16} height={16} />
       </button>
@@ -694,7 +694,7 @@ export function HomeConversationsSheet() {
                 onClick={() => setOpen(false)}
                 aria-label={t("close")}
                 title={t("close")}
-                className="btn btn-icon-sm text-fg-muted hover:text-fg"
+                className="btn-ghost btn-icon-sm"
               >
                 <IconClose width={14} height={14} />
               </button>

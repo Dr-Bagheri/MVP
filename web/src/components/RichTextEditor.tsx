@@ -139,7 +139,7 @@ function Btn({ label, onClick, children }: {
          composes `.tap`; `min-w-8` went with them, because `.btn`'s px-15
          alone is wider than 32. Only the TONE is stated: a ghost toolbar
          button that fills on hover. */
-      className="btn text-fg-muted hover:bg-surface-2 hover:text-fg"
+      className="btn-ghost"
     >
       {children}
     </button>

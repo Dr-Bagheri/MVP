@@ -85,7 +85,7 @@ export default function ManagementSpeakersPage() {
       actions={canAdd ? (
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn-primary"
           onClick={() => setAddAt((n) => n + 1)}
         >
           <IconPlus width={14} height={14} />

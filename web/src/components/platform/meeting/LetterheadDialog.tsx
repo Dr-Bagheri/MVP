@@ -112,8 +112,8 @@ export function LetterheadDialog({ onClose, onSaved, current }: {
   return (
     <Overlay onClose={onClose} label={t("sheetTitle")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
-        <h2 className="text-lg font-bold text-fg">{t("sheetTitle")}</h2>
-        <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg"
+        <h2 className="h-dialog">{t("sheetTitle")}</h2>
+        <button type="button" onClick={onClose} className="btn-ghost btn-icon"
           aria-label={t("close")}>
           <IconClose width={14} height={14} />
         </button>
@@ -138,7 +138,7 @@ export function LetterheadDialog({ onClose, onSaved, current }: {
             }}
           />
           <button type="button" onClick={() => pick.current?.click()} disabled={reading}
-            className="btn btn-sm mt-2 gap-1.5 border border-border bg-surface font-medium text-fg hover:bg-border disabled:opacity-50">
+            className="btn-secondary btn-sm mt-2 gap-1.5">
             <IconUpload width={12} height={12} />
             {reading ? t("sheetReading") : t("sheetPick")}
           </button>
@@ -222,7 +222,7 @@ export function LetterheadDialog({ onClose, onSaved, current }: {
         <div className="flex items-center gap-2">
           {current?.mime != null ? (
             <button type="button" onClick={() => setConfirmRemove(true)} disabled={busy}
-              className="btn gap-1.5 border border-border text-danger hover:bg-danger/10 disabled:opacity-50">
+              className="btn-danger gap-1.5">
               <IconTrash width={14} height={14} />
               {t("sheetRemove")}
             </button>

@@ -102,7 +102,7 @@ export function FirstRunDoor() {
           in a test: jsdom lays nothing out) */}
       <div className={`${DIALOG_BODY} flex flex-col gap-6 md:flex-row md:divide-y-0 md:gap-8 [&>*]:py-0`}>
         <div className="flex flex-col md:w-2/5">
-          <h2 className="text-2xl font-bold text-fg">{t("firstRunTitle")}</h2>
+          <h2 className="h-page">{t("firstRunTitle")}</h2>
           <div className="mt-6 flex flex-col gap-2" role="radiogroup" aria-label={t("firstRunTitle")}>
             {LESSONS.map((lesson) => (
               <button
@@ -119,10 +119,10 @@ export function FirstRunDoor() {
             ))}
           </div>
           <div className="mt-auto flex flex-wrap gap-2 pt-8">
-            <button type="button" className="btn btn-primary" onClick={() => close(choice)}>
+            <button type="button" className="btn-primary" onClick={() => close(choice)}>
               {t("firstRunTry")}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => close(null)}>
+            <button type="button" className="btn-ghost" onClick={() => close(null)}>
               {t("firstRunLater")}
             </button>
           </div>

@@ -82,16 +82,16 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
               own, so `border border-border` stays; `.tap` goes because `.btn`
               composes it. */}
           <button type="button" onClick={() => setOffset(0)}
-            className="btn btn-sm border border-border text-fg hover:border-border-strong">
+            className="btn-secondary btn-sm">
             {t("today")}
           </button>
           <button type="button" aria-label={t("prev")} onClick={() => setOffset((v) => v - 1)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            className="btn-secondary btn-icon">
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
           <span className="px-1 text-sm font-semibold text-fg">{label}</span>
           <button type="button" aria-label={t("next")} onClick={() => setOffset((v) => v + 1)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            className="btn-secondary btn-icon">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </div>
@@ -336,7 +336,7 @@ export function TaskListView({ tasks, columns, labels, onOpen, onToggleDone }: {
     <div className="scroll-quiet min-h-0 flex-1 space-y-4 overflow-y-auto">
       {live.map((group) => (
         <section key={group.key} aria-label={t(`group_${group.key}` as "group_today")}>
-          <h3 className="mb-1.5 text-xs text-fg-muted">
+          <h3 className="h-label mb-1.5">
             {t(`group_${group.key}` as "group_today")} ({digits(group.rows.length, locale)})
           </h3>
           <ul className="space-y-2">

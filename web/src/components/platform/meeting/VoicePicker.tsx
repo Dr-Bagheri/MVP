@@ -212,7 +212,7 @@ export function VoicePicker({
             />
             <button
               type="button"
-              className="btn btn-sm shrink-0 border border-border text-fg-muted hover:border-accent hover:text-fg"
+              className="btn-secondary btn-sm shrink-0"
               disabled={busy || guest.trim() === ""}
               onClick={() => void addGuest()}
             >

@@ -122,7 +122,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
           <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden>
             <IconVideo width={24} height={24} />
           </span>
-          <h1 className="mt-4 text-page-title font-bold text-fg">{t("joinTitle")}</h1>
+          <h1 className="h-page mt-4">{t("joinTitle")}</h1>
           <p className="mt-1 text-xs leading-6 text-fg-muted">{t("joinHint")}</p>
 
           <label className="mt-4 block">

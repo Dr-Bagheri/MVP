@@ -1482,7 +1482,7 @@ export function AssistantSidebar() {
                       carries it, and `disabled:opacity-40` is what says the
                       box is empty.
                     */
-                    className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
+                    className="btn-ghost btn-icon"
                     disabled={streaming || input.trim() === ""}
                     aria-label={t("send")}
                     title={t("send")}

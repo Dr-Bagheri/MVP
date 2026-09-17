@@ -113,7 +113,7 @@ export function Dialog({
         className="max-h-[85vh] w-[min(34rem,100%)] overflow-y-auto rounded-lg border border-border bg-surface p-5 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="mb-3 text-base font-bold text-fg">{title}</h2>
+        <h2 className="h-dialog mb-3">{title}</h2>
         {children}
       </div>
     </div>

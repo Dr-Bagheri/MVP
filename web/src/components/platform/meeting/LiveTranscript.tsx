@@ -148,7 +148,7 @@ export function LiveTranscript({ rows, interim, speakers, lane, locale }: {
       className="tile flex min-h-0 flex-1 flex-col p-4"
     >
       <header className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
+        <h3 className="h-card flex items-center gap-2">
           {lane === "on" ? (
             <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger" />
           ) : null}

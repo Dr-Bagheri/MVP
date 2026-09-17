@@ -52,7 +52,7 @@ export function EntryTopBar({ step }: { step?: StepId }) {
         ) : <span className="order-2 hidden text-xs text-fg-muted lg:block">{t("welcome")}</span>}
 
         <div className="order-2 flex h-topbar shrink-0 items-center gap-2 justify-self-end lg:order-3">
-          <button type="button" className="btn btn-icon-sm glass-raised text-fg-muted hover:text-fg"
+          <button type="button" className="btn-ghost btn-icon-sm glass-raised"
             onClick={() => storeTheme(nextTheme)} aria-label={t(`switchTo_${nextTheme}`)} title={t(`switchTo_${nextTheme}`)}>
             {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
           </button>

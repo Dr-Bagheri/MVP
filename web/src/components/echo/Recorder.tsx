@@ -1141,7 +1141,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
                      `.btn-icon` makes — written out by hand, so the only thing
                      that actually changes is that the corner now matches every
                      other icon button in the platform. `.btn` composes `.tap`. */
-                  className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  className="btn-ghost btn-icon"
                   onClick={() => { addChapterMark(s.recordedMs); notify(t("marked")); }}
                 >
                   <IconClock width={16} height={16} />

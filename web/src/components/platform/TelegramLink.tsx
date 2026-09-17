@@ -102,7 +102,7 @@ export function TelegramLink() {
       <FormPanel>
         <div className="space-y-3 px-5 py-4">
           <p className="text-detail leading-[1.9] text-fg-muted">{t("telegramUnreadable")}</p>
-          <button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => void load()}>
             {t("telegramRetry")}
           </button>
         </div>
@@ -144,12 +144,12 @@ export function TelegramLink() {
 
         <PanelFooter>
           {link.linked ? (
-            <button type="button" className="btn btn-danger" disabled={busy}
+            <button type="button" className="btn-danger" disabled={busy}
               onClick={() => setConfirming(true)}>
               {t("telegramUnlink")}
             </button>
           ) : (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void mint()}>
+            <button type="button" className="btn-primary" disabled={busy} onClick={() => void mint()}>
               {code === null ? t("telegramMint") : t("telegramMintAgain")}
             </button>
           )}

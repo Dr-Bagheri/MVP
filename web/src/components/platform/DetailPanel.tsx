@@ -62,7 +62,7 @@ export function DetailPanel({ label, closeLabel, onClose, start, end, rail, chil
               type="button"
               aria-label={closeLabel}
               onClick={onClose}
-              className="btn btn-icon text-fg-subtle hover:bg-surface-2 hover:text-fg"
+              className="btn-ghost btn-icon"
             >
               <IconClose width={14} height={14} />
             </button>

@@ -191,7 +191,10 @@ describe("the bar's own doors (2026-09-05)", () => {
     expect(door).toHaveAttribute("href", expect.stringContaining("/chat"));
 
     const toggle = screen.getByRole("button", { name: "themeToggle" });
-    for (const shape of ["btn", "btn-icon-sm"]) {
+    /* the same SIZE and the same COAT: `btn-ghost` applies `btn` itself (a
+       coat, not a bare `btn` token, since 2026-09-17), and `btn-icon-sm` is
+       the compact square both stand in */
+    for (const shape of ["btn-ghost", "btn-icon-sm"]) {
       expect(door.className.split(/\s+/)).toContain(shape);
       expect(toggle.className.split(/\s+/)).toContain(shape);
     }

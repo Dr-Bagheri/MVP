@@ -363,7 +363,7 @@ function PushToTalk() {
         <span className="flex items-center gap-2">
           <button
             type="button"
-            className="btn btn-sm border border-border bg-surface text-fg"
+            className="btn-secondary btn-sm"
             onClick={() => setCapturing((on) => !on)}
           >
             {capturing ? t("hotkeyCancel") : label === null ? t("hotkeyChoose") : t("hotkeyChange")}
@@ -371,7 +371,7 @@ function PushToTalk() {
           {label !== null && !capturing ? (
             <button
               type="button"
-              className="btn btn-sm text-fg-muted hover:text-fg"
+              className="btn-ghost btn-sm"
               onClick={() => { setPushToTalkKey(null); notify(t("hotkeyCleared")); }}
             >
               {t("hotkeyClear")}

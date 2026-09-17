@@ -46,7 +46,7 @@ export function TopicNameBox({ initial, placeholder, cancelLabel, onCancel, onSu
       <button
         type="button"
         onClick={onCancel}
-        className="btn btn-icon text-fg-muted hover:text-fg"
+        className="btn-ghost btn-icon"
         aria-label={cancelLabel}
       >
         <IconClose width={12} height={12} />

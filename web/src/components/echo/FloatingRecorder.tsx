@@ -121,7 +121,7 @@ export function FloatingRecorder() {
           {s.phase === "recording" ? (
             <button
               type="button"
-              className="btn btn-sm shrink-0 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="btn-ghost btn-sm shrink-0"
               onClick={pause}
             >
               {t("pause")}
@@ -129,7 +129,7 @@ export function FloatingRecorder() {
           ) : (
             <button
               type="button"
-              className="btn btn-sm shrink-0 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="btn-ghost btn-sm shrink-0"
               onClick={resume}
             >
               {t("resume")}
@@ -137,7 +137,7 @@ export function FloatingRecorder() {
           )}
           <button
             type="button"
-            className="btn btn-sm shrink-0 bg-accent text-on-accent"
+            className="btn-primary btn-sm shrink-0"
             onClick={() => void finish()}
             /* the full sentence stays reachable as the tooltip — a floating
                pill has room for a verb, not for a description of the job */

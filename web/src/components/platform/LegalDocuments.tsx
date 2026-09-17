@@ -21,11 +21,11 @@ export function LegalDocuments() {
     <div className="space-y-6">
       <p className="text-detail text-fg-muted">{t("version")}</p>
       <div>
-        <h3 className="mb-2 text-base font-semibold text-fg">{t("termsTitle")}</h3>
+        <h3 className="h-section mb-2">{t("termsTitle")}</h3>
         <div className="space-y-4 rounded-lg border border-border bg-surface p-5">
           {sections.map((s) => (
             <div key={s}>
-              <h4 className="mb-1 text-sm font-semibold text-fg">{t(`${s}Title`)}</h4>
+              <h4 className="h-card mb-1">{t(`${s}Title`)}</h4>
               <p className="text-sm leading-7 text-fg-muted">{t(`${s}Body`)}</p>
             </div>
           ))}

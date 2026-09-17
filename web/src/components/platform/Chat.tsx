@@ -353,13 +353,13 @@ export function Chat({ meId, isAdmin, people }: {
               product will not keep for this person. */}
           {isAdmin && channel !== null ? (
             <button type="button" onClick={() => setInviting(true)}
-              className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+              className="btn-secondary btn-sm gap-1.5">
               <IconPeople3 width={12} height={12} />
               {t("addPeople")}
             </button>
           ) : null}
           <button type="button" onClick={() => setCreating(true)}
-            className="btn btn-primary gap-1.5">
+            className="btn-primary gap-1.5">
             <IconPlus width={12} height={12} />
             {t("newChannel")}
           </button>
@@ -467,8 +467,8 @@ function NewChannelDialog({ onClose, onCreated }: {
   return (
     <Overlay onClose={onClose} label={t("newChannel")} size="sm">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg">{t("newChannel")}</h2>
-        <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
+        <h2 className="h-dialog">{t("newChannel")}</h2>
+        <button type="button" onClick={onClose} className="btn-ghost btn-icon" aria-label={t("close")}>
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -489,7 +489,7 @@ function NewChannelDialog({ onClose, onCreated }: {
         </label>
       </div>
       <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
-        <button type="button" onClick={onClose} className="btn text-fg-muted hover:text-fg">
+        <button type="button" onClick={onClose} className="btn-ghost">
           {tCommon("cancel")}
         </button>
         <button
@@ -507,7 +507,7 @@ function NewChannelDialog({ onClose, onCreated }: {
                 else notifyError(t("writeFailed"));
               });
           }}
-          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50"
+          className="btn-primary"
         >
           {t("create")}
         </button>

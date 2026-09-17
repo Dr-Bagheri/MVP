@@ -13,7 +13,7 @@ export default function PendingPage() {
       <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-warning/15 text-warning">
         ⏳
       </div>
-      <h1 className="text-lg font-bold text-fg">{t("pendingTitle")}</h1>
+      <h1 className="h-page">{t("pendingTitle")}</h1>
       <p className="mt-2 text-sm leading-7 text-fg-muted">{t("pendingBody")}</p>
       <p className="mt-3 rounded-md bg-surface-2 p-3 text-xs text-fg-muted">
         {t("pendingHint")}

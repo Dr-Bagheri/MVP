@@ -192,7 +192,7 @@ export function Workflows() {
               ]}
             />
             {isAdmin ? (
-              <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
+              <button type="button" className="btn-primary" onClick={() => setEditing(null)}>
                 {t("createWorkflow")}
               </button>
             ) : null}
@@ -225,7 +225,7 @@ export function Workflows() {
                       page. These two rendered the wire's English straight,
                       so the product's flagship workflows introduced
                       themselves in English on a Persian screen. */}
-                  <h2 className="mt-7 text-xl font-semibold text-fg group-hover:text-accent">
+                  <h2 className="h-card mt-7 group-hover:text-accent">
                     {templateCopy(workflow).name}
                   </h2>
                   <p className="mt-2 max-w-md text-sm leading-6 text-fg-muted">

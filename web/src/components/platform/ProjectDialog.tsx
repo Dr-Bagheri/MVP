@@ -126,8 +126,8 @@ export function ProjectDialog({ people, meId, folders = [], defaultFolderId = nu
   return (
     <Overlay onClose={onClose} label={title} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
-        <h2 className="text-lg font-bold text-fg">{title}</h2>
-        <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
+        <h2 className="h-dialog">{title}</h2>
+        <button type="button" onClick={onClose} className="btn-ghost btn-icon" aria-label={t("close")}>
           <IconClose width={14} height={14} />
         </button>
       </div>

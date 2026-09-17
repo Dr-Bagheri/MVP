@@ -61,7 +61,7 @@ export function ProcessingCard({ call, title, locale }: {
           <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-accent" />
           <IconMic width={24} height={24} className="text-accent" />
         </span>
-        <h2 className="mt-3 text-base font-bold text-fg">{t("processingTitle")}</h2>
+        <h2 className="h-section mt-3">{t("processingTitle")}</h2>
         <p className="mt-1 text-xs text-fg-muted">
           {title} — {call === null ? t("uploading") : t("processingSubtitle")}
           {!known && call !== null ? ` (${call.status})` : ""}
@@ -394,7 +394,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null, title = ""
         type="button"
         aria-label={playing ? t("audioPause") : t("audioPlay")}
         onClick={toggle}
-        className="btn btn-sm w-control-sm shrink-0 px-0 bg-accent text-on-accent"
+        className="btn-primary btn-sm w-control-sm shrink-0 px-0"
       >
         {playing ? <IconPause width={14} height={14} /> : <IconPlay width={14} height={14} />}
       </button>
@@ -452,7 +452,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null, title = ""
         disabled={saving}
         aria-label={t("audioDownload")}
         title={t("audioDownload")}
-        className="btn btn-sm w-control-sm shrink-0 border border-border px-0 text-fg"
+        className="btn-secondary btn-sm w-control-sm shrink-0 px-0"
       >
         <IconDownload width={14} height={14} />
       </button>
@@ -469,7 +469,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null, title = ""
         type="button"
         onClick={nextSpeed}
         aria-label={t("audioSpeed")}
-        className="btn btn-sm badge-num w-[3.25rem] shrink-0 border border-border px-0 font-semibold text-fg"
+        className="btn-secondary btn-sm badge-num w-[3.25rem] shrink-0 px-0"
       >
         ×{digits(speed, locale)}
       </button>
@@ -570,7 +570,7 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
         <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent" aria-hidden>
           <IconMicOff width={24} height={24} />
         </span>
-        <h3 className="mt-3 text-sm font-bold text-fg">{t("noSpeechTitle")}</h3>
+        <h3 className="h-card mt-3">{t("noSpeechTitle")}</h3>
         <p className="mt-1 max-w-md text-xs leading-6 text-fg-muted">{t("noSpeechBody")}</p>
       </div>
     );
@@ -593,7 +593,7 @@ export function TranscriptPanel({ callId, meeting, isHost, onSeek, locale }: {
   return (
     <section aria-label={t("transcriptTitle")} className="tile flex min-h-0 flex-col p-4">
       <header className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-fg">{t("transcriptTitle")}</h3>
+        <h3 className="h-card">{t("transcriptTitle")}</h3>
         <span className="text-caption text-fg-subtle">
           {t("transcriptCount", { n: digits(segments.length, locale) })}
         </span>

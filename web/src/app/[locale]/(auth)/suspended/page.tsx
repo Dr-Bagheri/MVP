@@ -43,7 +43,7 @@ export default function SuspendedPage() {
       >
         <IconWarn width={16} height={16} />
       </span>
-      <h1 className="text-lg font-bold text-fg">{t("suspendedTitle")}</h1>
+      <h1 className="h-page">{t("suspendedTitle")}</h1>
       <p className="mt-2 text-sm leading-7 text-fg-muted">{t("suspendedBody")}</p>
       <a href="mailto:support@neurai.example" className="btn-primary mt-5 w-full">
         {t("suspendedContact")}

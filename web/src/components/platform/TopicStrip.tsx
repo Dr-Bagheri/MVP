@@ -107,7 +107,7 @@ export function TopicAddButton({ label, onClick }: { label: string; onClick: () 
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
+      className="btn-dashed btn-icon"
     >
       <IconPlus width={12} height={12} />
     </button>

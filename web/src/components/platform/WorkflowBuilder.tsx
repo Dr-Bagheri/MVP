@@ -721,7 +721,7 @@ export function WorkflowBuilder({
            is still unmistakably a `+` on a connector line at an 8px corner.
            `.btn` draws no border of its own, so the outline this control is
            made of is stated explicitly. */
-        className="btn btn-icon border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
+        className="btn-secondary btn-icon"
         onClick={() => insertStep(at)}
       >
         <IconPlus width={12} height={12} />
@@ -746,7 +746,7 @@ export function WorkflowBuilder({
       */}
       <div className="flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden glass-solid rounded-2xl shadow-2xl">
         <header className="flex items-center gap-2 border-b border-border px-5 py-4">
-          <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
+          <h2 className="h-dialog min-w-0 flex-1 truncate">
             {workflow ? t("titleEdit", { name: savedName.current }) : t("title")}
           </h2>
           <button
@@ -754,7 +754,7 @@ export function WorkflowBuilder({
             aria-label={t("close")}
             title={t("close")}
             /* 2026-09-03: `.btn btn-icon` — the same ✕ the run dialog wears */
-            className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
+            className="btn-ghost btn-icon shrink-0"
             onClick={onClose}
           >
             <IconClose width={14} height={14} />
@@ -788,7 +788,7 @@ export function WorkflowBuilder({
 
           {/* ── trigger ─────────────────────────────────────────────── */}
           {/* group-label role: no tracking on Persian (2026-09-03) */}
-          <h3 className="mt-6 text-group-label font-semibold text-fg-subtle">
+          <h3 className="h-label mt-6">
             {t("triggerTitle")}
           </h3>
           {picking ? (
@@ -839,7 +839,7 @@ export function WorkflowBuilder({
                 <button
                   type="button"
                   /* 2026-09-03: `.btn btn-sm`, the theme's compact control */
-                  className="btn btn-sm ms-auto border border-border font-medium text-fg-muted hover:text-fg"
+                  className="btn-secondary btn-sm ms-auto"
                   onClick={() => setPicking(true)}
                 >
                   {t("triggerChange")}
@@ -889,7 +889,7 @@ export function WorkflowBuilder({
 
           {/* ── steps ───────────────────────────────────────────────── */}
           <div className="mt-6 flex items-center gap-3">
-            <h3 className="text-group-label font-semibold text-fg-subtle">
+            <h3 className="h-label">
               {t("stepsTitle")}
             </h3>
             {steps.length === 0 ? (
@@ -969,7 +969,7 @@ export function WorkflowBuilder({
                           type="button"
                           aria-label={`${t("moveUp")} — ${step.id}`}
                           disabled={index === 0}
-                          className="btn btn-icon text-fg-muted hover:bg-surface hover:text-fg"
+                          className="btn-ghost btn-icon"
                           onClick={() => moveStep(index, -1)}
                         >
                           <IconArrowUp width={14} height={14} />
@@ -978,7 +978,7 @@ export function WorkflowBuilder({
                           type="button"
                           aria-label={`${t("moveDown")} — ${step.id}`}
                           disabled={index === steps.length - 1}
-                          className="btn btn-icon text-fg-muted hover:bg-surface hover:text-fg"
+                          className="btn-ghost btn-icon"
                           onClick={() => moveStep(index, 1)}
                         >
                           <IconArrowDown width={14} height={14} />
@@ -986,7 +986,7 @@ export function WorkflowBuilder({
                         <button
                           type="button"
                           aria-label={`${t("removeStep")} — ${step.id}`}
-                          className="btn btn-icon text-fg-muted hover:bg-danger/10 hover:text-danger"
+                          className="btn-ghost-danger btn-icon"
                           onClick={() => removeStep(index)}
                         >
                           <IconTrash width={14} height={14} />

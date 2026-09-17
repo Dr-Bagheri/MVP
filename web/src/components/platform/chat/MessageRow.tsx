@@ -117,7 +117,7 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
             /* the THEME's icon control, not a fourth invented square: the
                emoji strip is a row of small buttons, which is exactly what
                `.btn btn-icon` was measured for */
-            className="btn btn-icon hover:bg-surface-2"
+            className="btn-ghost btn-icon"
             aria-label={emoji}
           >
             <span className="text-base">{emoji}</span>

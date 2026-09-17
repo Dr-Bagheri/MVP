@@ -80,7 +80,12 @@ export const BODY_TEXT = "text-detail leading-[1.9] text-fg-muted";
 
 /** the 45px field. `.input` carries the ground, the border and the corner;
     only the height and the type size are the reference's own. */
-export const PANEL_INPUT = "input h-[2.8125rem] w-full text-menu-item";
+/* THE FIELD'S OWN HEIGHT (2026-09-17). This pinned 45 — the reference PANEL's
+   field, measured 2026-09-05 — while `.input` is 40, the reference PAGE's
+   field measured 2026-09-02: two measurements of one product, and the
+   new-task dialog rendered its title field at 42 beside its folder dropdown
+   at 38. One field, one height; the panel keeps only its type size. */
+export const PANEL_INPUT = "input w-full text-menu-item";
 
 /** the same field grown for prose */
 export const PANEL_TEXTAREA = "input min-h-[4.5625rem] w-full resize-y py-[0.6875rem] text-menu-item";
@@ -120,8 +125,16 @@ export const chipClass = (on: boolean): string =>
   }`;
 
 /** the dialog's two footer controls — the regular size, like every footer */
-export const FOOTER_CANCEL = "btn border border-border-strong text-fg-muted hover:text-fg";
+/* THE PAGE KIT'S SECONDARY, not an outline of its own (2026-09-17). This
+   constant said `border border-border-strong` while `.btn-secondary` on every
+   page said filled grey — the dialog kit and the page kit disagreeing about
+   what a secondary button is, which is the disconnect the user could feel
+   without being able to name. One coat, written in globals.css. */
+export const FOOTER_CANCEL = "btn-secondary";
 export const FOOTER_PRIMARY = "btn-primary";
+/* a dialog's NAME — the one spelling (globals.css `.h-dialog`), read by every
+   Overlay and by the detail panel's top bar, so the two cannot drift */
+export const DIALOG_TITLE = "h-dialog";
 
 /** the two-tab strip under the body. The bar has NO height of its own: it is
     the compact control plus 4px of padding on each side (34 + 8 = 42, the

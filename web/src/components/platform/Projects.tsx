@@ -296,7 +296,7 @@ export function Projects({ reader }: { reader: ProjectReader }) {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="btn btn-primary"
+              className="btn-primary"
             >
               <IconPlus width={14} height={14} />
               {t("newProject")}
@@ -738,15 +738,15 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setOffset(0)} className="btn btn-sm border border-border text-fg-muted hover:text-fg">
+          <button type="button" onClick={() => setOffset(0)} className="btn-secondary btn-sm">
             {tTasks("today")}
           </button>
           <button type="button" aria-label={tTasks("prev")} onClick={() => setOffset((n) => n - 1)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            className="btn-secondary btn-icon">
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
           <button type="button" aria-label={tTasks("next")} onClick={() => setOffset((n) => n + 1)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            className="btn-secondary btn-icon">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </div>
@@ -859,7 +859,7 @@ function ProjectCard({ project, people, locale, compact = false, drag, carried =
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-            <h3 className="truncate text-sm font-semibold text-fg">{project.name}</h3>
+            <h3 className="h-card truncate">{project.name}</h3>
             {project.archived_at !== null ? (
               <span className="badge-num shrink-0 rounded-md bg-surface-2 px-1.5 text-micro text-fg-muted">
                 {t("archived")}

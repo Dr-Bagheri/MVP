@@ -98,7 +98,7 @@ export function BoardAddRow({ label, onClick }: { label: string; onClick: () => 
       type="button"
       onClick={onClick}
       data-tour="board-add"
-      className="btn btn-sm w-full justify-center gap-1.5 border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
+      className="btn-dashed btn-sm w-full justify-center gap-1.5"
     >
       <IconPlus width={12} height={12} />
       {label}
@@ -137,7 +137,7 @@ export function BoardCardDelete({ label, onClick }: { label: string; onClick: ()
       aria-label={label}
       title={label}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
-      className="btn btn-icon -my-1 shrink-0 text-fg-subtle hover:text-danger"
+      className="btn-ghost-danger btn-icon -my-1 shrink-0"
     >
       <IconTrash width={12} height={12} />
     </button>

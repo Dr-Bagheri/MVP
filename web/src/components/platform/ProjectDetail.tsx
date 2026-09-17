@@ -220,7 +220,7 @@ export function ProjectDetail({ id, reader, onClose }: {
       <button
         type="button"
         onClick={() => setEditing((v) => !v)}
-        className="btn btn-sm border border-border font-medium text-fg hover:bg-border"
+        className="btn-secondary btn-sm"
       >
         <IconPencil width={12} height={12} />
         {editing ? tCommon("done") : t("edit")}
@@ -246,7 +246,7 @@ export function ProjectDetail({ id, reader, onClose }: {
     <button
       type="button"
       onClick={() => setOrdering(true)}
-      className="btn btn-sm bg-accent text-on-accent hover:opacity-90"
+      className="btn-primary btn-sm"
     >
       <IconPlus width={12} height={12} />
       {tCommon("addTask")}

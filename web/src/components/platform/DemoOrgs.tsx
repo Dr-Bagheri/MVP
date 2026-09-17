@@ -261,7 +261,7 @@ export function DemoOrgs() {
 
         <div className="mt-4 flex items-center gap-2">
           <button
-            className="btn btn-primary"
+            className="btn-primary"
             disabled={formInert}
             onClick={() => void seed()}
           >
@@ -369,7 +369,7 @@ export function DemoOrgs() {
                   <p key={warning} className="mt-1 text-xs leading-5 text-warning">{warning}</p>
                 ))}
                 <div className="mt-4 flex justify-end">
-                  <button type="button" className="btn btn-primary" onClick={close}>
+                  <button type="button" className="btn-primary" onClick={close}>
                     {t("demoSeedClose")}
                   </button>
                 </div>
@@ -446,7 +446,7 @@ function Credentials({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <a className="btn btn-sm btn-secondary" href={`/${locale}/sign-in`} target="_blank" rel="noreferrer">
+        <a className="btn-secondary btn-sm" href={`/${locale}/sign-in`} target="_blank" rel="noreferrer">
           {t("demoSignIn")}
         </a>
       </div>
@@ -467,7 +467,7 @@ function Credentials({
         ))}
       </div>
 
-      <button className="btn btn-primary mt-4" onClick={onDone}>
+      <button className="btn-primary mt-4" onClick={onDone}>
         {t("demoCredentialsSaved")}
       </button>
     </div>
@@ -498,7 +498,7 @@ function CopyRow({
         <code className="ltr min-w-0 flex-1 select-all break-all rounded-md border border-border bg-surface-2 p-3 font-mono text-xs text-fg">
           {value}
         </code>
-        <button className="btn btn-sm btn-secondary" onClick={() => void copy()}>
+        <button className="btn-secondary btn-sm" onClick={() => void copy()}>
           {copied === "ok" ? tGateway("copied") : tGateway("copy")}
         </button>
       </div>

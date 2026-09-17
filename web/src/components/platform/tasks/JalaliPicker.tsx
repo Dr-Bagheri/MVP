@@ -51,7 +51,7 @@ export function JalaliPicker({ value, onPick, onClose }: {
          presets in the same shaped panel and were written twice — 32px/12px
          corner/11.5px solid here, 32px/12px/11px muted there. Both are
          `.btn-sm` now; `.btn` draws no border, so the outline is explicit. */
-      className="btn btn-sm border border-border bg-surface font-medium text-fg hover:border-border-strong"
+      className="btn-secondary btn-sm"
     >
       {label}
     </button>
@@ -72,12 +72,12 @@ export function JalaliPicker({ value, onPick, onClose }: {
           line, which is the point of having a named size at all. */}
       <div className="mb-1.5 flex items-center justify-between">
         <button type="button" aria-label={t("prevMonth")} onClick={() => setOffset((v) => v - 1)}
-          className="btn btn-icon text-fg-muted hover:text-fg">
+          className="btn-ghost btn-icon">
           <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
         </button>
         <span className="text-sm font-semibold text-fg">{grid.title}</span>
         <button type="button" aria-label={t("nextMonth")} onClick={() => setOffset((v) => v + 1)}
-          className="btn btn-icon text-fg-muted hover:text-fg">
+          className="btn-ghost btn-icon">
           <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
         </button>
       </div>

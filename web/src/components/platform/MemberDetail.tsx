@@ -140,7 +140,7 @@ export function MemberDetail({
       aria-label={t("detailTitle")}
     >
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-base font-semibold text-fg">{t("detailTitle")}</h2>
+        <h2 className="h-dialog">{t("detailTitle")}</h2>
         {/* audit finding, 2026-09-02: this close was a 36px, 12px-cornered
             square drawn by hand around a text glyph. `grid place-items-center`
             is the spelling of `flex items-center` the control guard does not
@@ -149,7 +149,7 @@ export function MemberDetail({
             with IconClose it read as a different product's button. */}
         <button
           type="button"
-          className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
+          className="btn-ghost btn-icon"
           aria-label={t("detailClose")}
           onClick={onClose}
         >

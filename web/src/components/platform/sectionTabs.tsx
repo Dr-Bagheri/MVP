@@ -45,11 +45,11 @@ import { digits } from "@/lib/format";
 
 /** row one's rail: the recessed ground, the pills' 4px of padding, never wrapping */
 export const TAB_TRACK =
-  "scroll-quiet flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1";
+  "track-scroll flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1";
 
 /** row two's rail: the same rail on the accent's soft tint */
 export const FILTER_TRACK =
-  "scroll-quiet flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl bg-accent-soft p-1";
+  "track-scroll flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl bg-accent-soft p-1";
 
 /** a divider between two runs inside ONE track */
 export const TRACK_DIVIDER = "mx-0.5 h-5 w-px shrink-0 bg-border";

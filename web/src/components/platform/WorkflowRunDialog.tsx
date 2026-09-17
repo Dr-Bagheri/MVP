@@ -107,7 +107,7 @@ export function WorkflowRunDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start gap-3">
-          <h2 className="flex-1 text-base font-semibold text-fg">{title}</h2>
+          <h2 className="h-dialog flex-1">{title}</h2>
           <button
             type="button"
             aria-label={t("runClose")}
@@ -117,7 +117,7 @@ export function WorkflowRunDialog({
                where `.btn-icon` is 8, so this ✕ sat rounder than the one in
                the builder next door. `.btn` composes `.tap`, the transition
                and the disabled face — only the colours stay behind. */
-            className="btn btn-icon -me-1 -mt-1 shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
+            className="btn-ghost btn-icon -me-1 -mt-1 shrink-0"
             onClick={onClose}
           >
             <IconClose width={14} height={14} />
