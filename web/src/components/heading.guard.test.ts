@@ -15,7 +15,7 @@ import { join, relative } from "node:path";
  *
  * The five are `globals.css`: `.h-page`, `.h-dialog`, `.h-section`, `.h-card`,
  * `.h-label`. This file refuses a SIZE, WEIGHT, INK or LEADING utility on any
- * `<h1..h4 className="…">` outside four named files — and refuses a heading
+ * `<h1..h4 className="…">` outside three named files — and refuses a heading
  * that wears none of the five, because a bare `<h3>` inherits the body and is
  * a heading you can only find by reading.
  *
@@ -26,10 +26,12 @@ import { join, relative } from "node:path";
 const SRC = join(process.cwd(), "src");
 
 const EXCEPTIONS: Readonly<Record<string, string>> = {
-  "components/echo/SummaryBody.tsx":
-    "the summary's own parsed headings («**Next steps**» from the models) — prose that scales with the paragraph it sits in, the same reason as markdown.tsx",
-  "components/ui/markdown.tsx":
-    "rendered markdown CONTENT — the models' own headings scale with the prose they sit in, not with the product's chrome",
+  /* SummaryBody.tsx and markdown.tsx were entries here for one afternoon:
+     "the models' own headings scale with the prose they sit in". Read on
+     production, that gave the summary card a prose sub-heading at 17.8/700
+     ABOVE the card's own numbered sections at 13.2/600 — a ladder that
+     climbs as it descends. Rendered content is chrome the moment it sits
+     inside a card with headings of its own; both wear `.h-card` now. */
   "components/onboarding/bits.tsx":
     "the first-time flow's own frame (RULEBOOK 1a): its title is the reveal's, drawn once, outside the shell",
   "app/[locale]/(auth)/DemoPanel.tsx":

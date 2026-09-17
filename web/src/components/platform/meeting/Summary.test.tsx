@@ -237,6 +237,33 @@ describe("the summary tab carries the summary", () => {
     expect(html).not.toContain("**Next steps**");
     expect(html).not.toContain("<p>* Refresh");
   });
+
+  it("steps its headings DOWN: the name, then the numbered sections, then the prose's own", async () => {
+    /* Read on production on 2026-09-17, after the kit's roles had landed: the
+       summary card's title at h-section, its numbered sections at h-card
+       (13.2/600), and INSIDE section 2 the models' own «**Next steps**» at
+       17.8/700 — the prose renderer had been excepted from the heading guard
+       as "content that scales with its paragraph", and content inside a card
+       with headings of its own is chrome. A ladder that climbs as it descends
+       is the disconnect the round exists to end, and no guard can see it: each
+       heading wore a legal role. This pins the ORDER of roles, which is what
+       the reader's eye measures. */
+    getSummaries.mockResolvedValue([version(1, ["**Next steps**", "* Send the pricing proposal"].join("\n"))]);
+    renderTab("c1");
+    await waitFor(() => expect(screen.getByText("Next steps")).toBeTruthy());
+
+    const roleOf = (el: Element | null) =>
+      (el?.className ?? "").split(/\s+/).find((c) => /^h-(?:page|dialog|section|card|label)$/.test(c));
+    // the document's name is the one level-2 heading on the tab
+    const [name, ...otherNames] = screen.getAllByRole("heading", { level: 2 });
+    expect(otherNames).toEqual([]);
+    expect(roleOf(name ?? null)).toBe("h-page");
+    // a numbered section is a step under it
+    expect(roleOf(screen.getByRole("heading", { name: /minutesAttendees/ }))).toBe("h-section");
+    expect(roleOf(screen.getByRole("heading", { name: /minutesSummary/ }))).toBe("h-section");
+    // and the prose's own heading, inside that section, a step under THAT
+    expect(roleOf(screen.getByText("Next steps").closest("h1,h2,h3,h4"))).toBe("h-card");
+  });
 });
 
 /**

@@ -102,7 +102,7 @@ export function SummaryBody({ text }: { text: string }) {
         switch (block.kind) {
           case "heading":
             return (
-              <h3 key={i} className="mt-[1.1em] text-[1.18em] font-bold leading-snug text-fg first:mt-0">
+              <h3 key={i} className="h-card mt-[1.1em] first:mt-0">
                 {inline(block.text)}
               </h3>
             );

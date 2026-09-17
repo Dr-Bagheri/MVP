@@ -81,20 +81,20 @@ export const Markdown = memo(function Markdown({
  */
 export const MARKDOWN_ELEMENTS: Components = {
   /*
-   * HEADINGS START AT `text-base` AND STOP. An answer is a message inside a
+   * HEADINGS START AT `.h-card` AND STOP. An answer is a message inside a
    * thread, not a document with a title, so `#` may not outrank the page — and
    * the element is stepped down with it (`h1` renders `<h2>`) because a
    * screen-reader's outline of the platform should not gain a new top-level
    * heading every time a model writes a hash.
    */
   h1: ({ children }) => (
-    <h2 className="mb-1.5 mt-4 text-base font-semibold text-fg first:mt-0">{children}</h2>
+    <h2 className="h-card mb-1.5 mt-4 first:mt-0">{children}</h2>
   ),
   h2: ({ children }) => (
-    <h3 className="mb-1.5 mt-4 text-sm font-semibold text-fg first:mt-0">{children}</h3>
+    <h3 className="h-label mb-1.5 mt-4 first:mt-0">{children}</h3>
   ),
   h3: ({ children }) => (
-    <h4 className="mb-1 mt-3 text-sm font-semibold text-fg first:mt-0">{children}</h4>
+    <h4 className="h-label mb-1 mt-3 first:mt-0">{children}</h4>
   ),
   /* h4–h6 are already at body size, so weight is the only signal left; three
      more sizes below `text-sm` would make a heading smaller than the answer it

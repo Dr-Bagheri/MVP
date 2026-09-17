@@ -417,7 +417,7 @@ export function SummaryTab({ meeting, callId }: {
       */}
       <header className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
         <div className="min-w-0">
-          <h2 className="h-section truncate">
+          <h2 className="h-page truncate">
             {t("summaryDocTitle", { title: meeting.title })}
           </h2>
           <p className="mt-0.5 text-caption text-fg-subtle">
@@ -534,7 +534,7 @@ export function SummaryTab({ meeting, callId }: {
       </header>
 
         <section>
-          <h3 className="h-card">{digits(1, locale)}. {t("minutesAttendees")}</h3>
+          <h3 className="h-section">{digits(1, locale)}. {t("minutesAttendees")}</h3>
           {attendees.length === 0 ? (
             <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoAttendees")}</p>
           ) : (
@@ -553,7 +553,7 @@ export function SummaryTab({ meeting, callId }: {
             the summary has. */}
         <section className="mt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="h-card">{digits(2, locale)}. {t("minutesSummary")}</h3>
+            <h3 className="h-section">{digits(2, locale)}. {t("minutesSummary")}</h3>
             {/* the two edits, side by side and only while there is a record to
                 write against: by hand, and by asking */}
             {callId !== null && draft === null ? (
@@ -615,7 +615,7 @@ export function SummaryTab({ meeting, callId }: {
         </section>
 
         <section className="mt-4">
-          <h3 className="h-card">{digits(3, locale)}. {t("ext_decisions")}</h3>
+          <h3 className="h-section">{digits(3, locale)}. {t("ext_decisions")}</h3>
           {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
             : decisions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoDecisions")}</p>
               : (
@@ -633,7 +633,7 @@ export function SummaryTab({ meeting, callId }: {
         </section>
 
         <section className="mt-4">
-          <h3 className="h-card">{digits(4, locale)}. {t("ext_actions")}</h3>
+          <h3 className="h-section">{digits(4, locale)}. {t("ext_actions")}</h3>
           {items === null ? <SkeletonLines lines={2} className="mt-1.5" />
             : actionRows.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
               : (
@@ -663,7 +663,7 @@ export function SummaryTab({ meeting, callId }: {
         */}
         <section className="mt-4" aria-label={t("minutesSignatures")}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="h-card">{digits(5, locale)}. {t("minutesSignatures")}</h3>
+            <h3 className="h-section">{digits(5, locale)}. {t("minutesSignatures")}</h3>
             {sigs !== null && sigs !== "failed" && sigs.can_sign ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 {signNote !== null ? (
