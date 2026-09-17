@@ -7755,3 +7755,73 @@ sessions) for the cross-session narrative.
   admin (one project, not the owner's — pinned by the unit matrix and 130).
   db 227 migrations · core 1896 tests (1 pre-existing red, history ZWNJ) ·
   web 1723 tests + gate + sweep.
+- 2026-09-17 (THE MINUTES GET A NAME, A ROW, AND THE ORGANISATION'S OWN
+  PAPER; commit 7c9f5ee; db/0228; core + web deployed): five items from one
+  directive. The meeting's NAME left the top of the page — it restated the
+  trail one line higher — and labels the post tab row now, in front of «نمای
+  کلی»; the page's own bar renders only when it holds an act. The SUMMARY IS
+  ONE ROW: title and date at the left, «تولید دوباره» and a ⋯ at the right,
+  Word and PDF inside it — pinned PHYSICALLY (`rtl:flex-row-reverse`), because
+  the side was named while looking at the Persian screen, where left is the
+  inline END, and an English document header with its title on the right is
+  simply wrong. The DOCUMENT is a صورت‌جلسه: an identity table (a row with
+  nothing behind it left out rather than printed empty), the roster, the
+  agenda, the account, numbered مصوبات, the actions as a table naming مسئول
+  and مهلت, and a place to sign — which does NOT reopen the lifecycle
+  2026-09-09 retired (no state, no button, no column, nothing reads a
+  signature back). It follows the reader's language; the old one was hardcoded
+  `dir="rtl" lang="fa"`, and numbered its clauses 1, 2, 3 in Persian.
+  **THE COMPANY SHEET (0228).** Asked what the file would be, the user said
+  "it might be a word template or a pdf letterhead", so all three shapes
+  become ONE page image at upload — pdf.js renders a PDF's first page, a
+  .docx is unzipped and the picture its HEADER names is taken (two pictures
+  in a header is refused BY NAME with the one step that fixes it, because a
+  wrong letterhead is worse than none), an image is the page. One derivation,
+  because the two exports have exactly one thing in common — both are HTML —
+  and a letterhead that reaches one and not the other is the half-feature the
+  directive exists to close. The admin drags three numbers until the
+  clear-area box on an A4 preview sits inside their header; image and margins
+  go up in ONE request, since a new page under the old margins is a state that
+  preview never showed. Bytes on the org row (0103's reasoning), read by any
+  active member because the export runs in the browser of whoever pressed the
+  button.
+  **WHAT THE CODE COULD NOT HAVE TOLD ME**, each measured against a real
+  renderer after a plausible version shipped and failed: an `<img>` in a Word
+  header is INLINE — the header grows to a page and a three-page record came
+  out as FIFTY-EIGHT; VML with a data URI is floating, correctly sized and
+  BLANK (Word loads a data URI in a body image perfectly well, which is how
+  the two halves were told apart); MHTML with the image as a real PART
+  renders, on every page. And in print, a fixed box is anchored to the page
+  AREA, not the paper — measured at 52.2mm under a 52mm margin — while the
+  same box at `top:-52mm` lands at 221.3mm and stops repeating, so the printed
+  page's margin is zero and the clear area repeats through a table's own head
+  and foot. Verified in Word 16 through COM (3 pages, 52/24/20mm, the sheet on
+  pages one and three) and in headless Chrome (bands at 0.0mm and 296.6mm —
+  the paper's edges — first line at 57.7mm).
+  **THE AGENT GOT BOTH HALVES**: `export_meeting_minutes` downloads the same
+  file through the same builder (a hand producing a different-looking document
+  from the button beside it would be the two-spellings defect wearing a file
+  extension), and «آماده‌سازی متن با دستیار» composes the proceedings paragraph
+  to a word budget derived from the organisation's own clear area — landing in
+  the EDITOR, never straight into the file, with NO tools (M44's blast radius)
+  and composing only the prose, because everything around it is rows the
+  document already prints.
+  Minted, and the sentence to keep: **a document has readers, and each one
+  refuses something different — the only way to know which is to open the file
+  in the thing that will open it.** Two of my own instruments were wrong before
+  the code was: a Vercel probe whose "control" key belonged to the round being
+  deployed (control and subject read 0 together and said nothing), and a route
+  probe that asked GET of a POST-only route and called the 404 a defect.
+  Verified: db/131 (14 checks) locally and on production, two flips red by
+  name; core 1910 tests; web 1767; both typechecks, the build gate, the
+  encoding sweep (1521 files), the token verifier; verify-red on 11 behaviours
+  with the control green either side. Proven on production in the user's
+  Chrome: the name in the tab row before the tabs; the row spanning 409..1187
+  at 1280 with the title at its start edge (0px) and the ⋯ at its end (0px);
+  the menu holding Word · PDF · «آماده‌سازی متن با دستیار» · «بارگذاری سربرگ
+  شرکت»; the dialog's A4 preview at ratio 0.707 with the clear-area box and
+  the three margin fields (45/25/18). NOT exercised live: uploading a sheet
+  (an org-wide write on real data) and the assistant's draft (a provider run).
+  Pre-existing and untouched: core's `history.test.ts` ZWNJ red from the
+  September merge.
+  db 228 migrations · core 1910 tests · web 1767 tests + gate + sweep.

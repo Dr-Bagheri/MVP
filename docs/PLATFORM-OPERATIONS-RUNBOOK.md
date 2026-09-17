@@ -785,6 +785,49 @@ seating (a write on the org's data, the 2026-09-06 lesson); the positive
 half of «mine» for an admin (the org has one project and the owner did not
 make it — pinned by projectReach's unit matrix and db/test/130 instead).
 
+## 7q. Deployment record — 2026-09-17 (7c9f5ee: db/0228 the letterhead, core + web — the صورت‌جلسه, the company sheet, the agent's two halves)
+
+Migration first (schema leads code), then core on Hetzner, web on Vercel.
+0228 applied on production and the fixture suite re-run there — «the wall
+holds», with **131_letterhead (14 checks)** among them; locally the same file
+was flipped twice and went red by name. Core: archive hashes equal end to end
+(`b708e64fe9a03c2a`), both entrypoints parse under strip-types, both units
+active, health `{"ok":true}`, **zero** level≥40 journal lines after. Web built
+from the push and read with a cache-buster **100s** later.
+
+**The route probe needed correcting mid-flight, which is the point of having
+one.** `GET /v1/admin/org/sheet` answered **404** where I had predicted 401 —
+that route is POST/PATCH/DELETE only, so Fastify was right and the probe was
+asking the wrong question. Asked properly: `POST`, `PATCH` and `DELETE` on
+`/v1/admin/org/sheet` and `POST /v1/meetings/:id/minutes-text` all **401**,
+`GET /v1/org/sheet` **401**, against `POST /v1/nonsense/sheet` **404**.
+
+**And the Vercel probe was vacuous on its first run, for a new reason.** The
+key I used as its control (`minutesSignatures`) belonged to the round being
+deployed, so control and subject read 0 together and the reading said
+nothing about either. Re-run with a key that went live this morning
+(`peopleInRoom` → 1) and an invented one (→ 0), it discriminates: before the
+build landed the subject read 0 with the control at 1, and after it, 1.
+
+**What was verified against real renderers rather than asserted.** The Word
+file was opened in **Word 16 through COM** and exported to PDF: 3 pages,
+page setup 52/24/20mm, one **floating** header shape 595×842pt, and the
+letterhead drawn on pages one and three. Two earlier shapes were measured
+the same way and failed — an `<img>` in the header (inline; header a page
+tall; **58 pages**) and `v:imagedata` with a data URI (floating, correctly
+sized, **blank**). The printed PDF came from **headless Chrome**: the
+sheet's bands at **0.0mm and 296.6mm** — the paper's own edges — with the
+first line at **57.7mm** under a 52mm header, on pages one and three. The
+anchor that forced the design was measured too: a fixed box under a 52mm
+page margin lands at **52.2mm** (the page AREA, not the paper) and repeats,
+while the same box at `top:-52mm` lands at **221.3mm** and does not repeat
+at all.
+
+NOT exercised live, and why: no letterhead has been uploaded to production —
+that is an org-wide write on real data, and the whole path is proven against
+fixtures, Word and a real print instead. The assistant's draft spends a
+provider run, so it waits for a real press.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
