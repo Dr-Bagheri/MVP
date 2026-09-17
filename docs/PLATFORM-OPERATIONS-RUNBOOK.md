@@ -870,6 +870,85 @@ green) and by 132 on the fixture, and the first real signing is the screen's
 own proof. Word's rendering of a body data-URI image was measured on the
 letterhead round (7q) and is relied on here rather than re-measured.
 
+## 7s. Deployment record — 2026-09-17, later (c5517f6 + 1131d07: web only — the front end unified at the CLASS, and the summary's ladder)
+
+Nothing in core or db. Two pushes, Vercel only; each read back on
+production in the user's Chrome (tab 842554675, app.neurai.pt) rather than
+assumed from the push.
+
+**c5517f6 — every button wears a kit coat, every heading a kit role.** The
+disconnect the user reported was MEASURED first: a same-origin iframe walk
+over 22 signed-in pages at 1280 (computed styles per control, grouped into
+signatures — fire-and-forget into `window.__audit` and polled, because CDP's
+`Runtime.evaluate` times out at 45 s and the walk took ~5 min) plus a source
+census. It sat one property below the kit: cards, rails and fields were
+already one recipe each; BUTTONS had two secondaries (51 outlined by hand
+against 59 filled `.btn-secondary`, and the dialog kit's own `FOOTER_CANCEL`
+outlined), 25 hand-drawn green primaries with a shadow and a heavier weight,
+44 icon buttons with private hover grounds — 278 sites in 133 spellings;
+HEADINGS in 46 spellings across 107; the new-task dialog carried TWO field
+heights (42 vs 38); and the meeting page's tab rail measured 50 px against
+40 everywhere else — `scroll-quiet`'s `scrollbar-width: thin`, which Chrome
+honours natively on an overflowing horizontal box and which takes ~10 px of
+layout. Fixed at the class: seven coats in `globals.css` (`btn-primary`,
+`btn-secondary`, `btn-ghost`, `btn-danger`, and the three the screens had
+been drawing by hand — `btn-soft`, `btn-dashed`, `btn-ghost-danger`), five
+heading roles (`h-page` 16/700, `h-dialog` 15/700, `h-section` 15/600,
+`h-card` 14/600, `h-label` 11/600 subtle), `PANEL_INPUT` on `.input`'s one
+height, `.track-scroll` (no scrollbar at all) on both rails, and
+`PanelHeader` deleted. 178 button sites in 63 files and 68 headings in 37
+files moved by codemod; two guards refuse the hand-drawn spellings tree-wide
+(`buttonCoat.guard`, `heading.guard`), each with a control proving it can
+answer NO and verify-red by mutation.
+
+Deploy check for c5517f6 was cache-busted through a class that exists ONLY
+in the new build (`track-scroll`), with a both-builds control (`scroll-quiet`,
+found in each) and an invented-class control (found in neither) — a marker
+from the previous commit reports "deployed" on the first attempt, and one
+with no subject reports nothing. **Read on production**: the meeting page's
+two rails **40 / 40** (the tab rail had been 50); the summary tab's title on
+`h-section` and its sections on `h-card`, its buttons `btn-secondary` /
+`btn-soft`; the new-task dialog's title `h-dialog` at **14.1 / 700**, its
+fields **38 / 38** on an 11 px corner, its footer «انصراف» `btn-secondary`
+(40 px, `rgb(237,234,227)`, no border, weight 500) beside «ساختن تسک»
+`btn-primary` (40 px, `rgb(1,116,63)`), its column chips 32 px on a
+0.67 px edge.
+
+**1131d07 — the summary's headings step DOWN.** The reading above found
+the next one: inside section 2 the models' own «**Next steps**» rendered
+at **17.8 / 700** ABOVE the card's numbered sections at 13.2 / 600 —
+`SummaryBody.tsx` and `markdown.tsx` had been EXCEPTED from the heading
+guard that afternoon as "content that scales with its prose", and content
+inside a card with headings of its own is chrome. Every rung wore a legal
+role, so no guard could see a ladder that climbs as it descends. The ladder
+now: name `h-page` → numbered sections `h-section` → the prose's own
+headings `h-card` (SummaryBody's, and markdown's top level) → markdown's
+lower levels `h-label`; both renderers left the exception list (three files
+remain), and the guard's first run on the tightened corpus named markdown's
+`<h3>` at `text-sm font-semibold` before any green. `Summary.test` pins the
+ORDER of roles on the rendered tab — three flattenings each red on its own
+line — because a flattened ladder is spelled legally and only a rendered
+test refuses it. The build gate's stricter typecheck caught a destructured
+`HTMLElement | undefined` that `tsc` had passed (`?? null`).
+
+Verified before the push: web tsc 0; 1795 web tests in 247 files (the one
+red is the recorded `selectMenuWidth` load flake — 3.05 s under the full
+suite, 5/5 alone); the build gate alone; the encoding sweep (1534 files);
+verify-red by mutation on the guard (four reds by name) and on the ladder
+test (three). Vercel: `neurai-site` completed at once, `mvp` building at the
+time of writing; the production reading of 1131d07 follows below.
+
+**Read on production (1131d07)**, both Vercel projects `success` on the
+commit status, `/fa/meetings/c68e7943-…` → «خلاصه», at 1280 / root
+15.06: the document's name `<h2>` on **`h-page` 15.1 / 700** (that class
+on that element exists only in this build — the deploy marker), the five
+numbered sections on **`h-section` 14.1 / 600**, and inside section 2 the
+prose's own «تصمیم‌ها» and «اقدامات بعدی» on **`h-card` 13.2 / 600** —
+one step UNDER the section they sit in, where the previous build had them
+at 1.18 em bold above it. Eight headings on the tab, every one wearing a
+kit role, none spelling a size. NOT exercised live: nothing — this round
+is read-only on the org's data.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

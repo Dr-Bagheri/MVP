@@ -7911,3 +7911,91 @@ sessions) for the cross-session narrative.
   the screen's own proof.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1786 tests + gate + sweep.
+- 2026-09-17 (last — THE FRONT END UNIFIED AT THE CLASS, AND THE SUMMARY'S
+  HEADINGS STEP DOWN; commits c5517f6, 1131d07; web on Vercel, nothing in
+  core or db): user directive, "it has to be unified, check the platform
+  design, I still feel it disconnected — maybe because of the change in
+  model — fix it and make it unify for all of it; for the top sub-menu give
+  me three more compact designs but do not apply them, let me choose."
+  **The disconnect was MEASURED and it sat one property below the kit.** A
+  same-origin iframe walk over 22 signed-in pages at 1280 (computed styles
+  per control, grouped into signatures — fire-and-forget into `window.
+  __audit` and polled, because CDP's `Runtime.evaluate` times out at 45 s)
+  plus a source census: cards, rails and fields were already one recipe
+  each. BUTTONS were 278 sites in 133 spellings — two secondaries (51
+  outlined by hand on tasks / projects / meetings against 59 filled
+  `.btn-secondary` everywhere else, and the dialog kit's own
+  `FOOTER_CANCEL` said outlined where the page kit said filled), 25 green
+  primaries drawn with a shadow and a heavier weight than `.btn-primary`,
+  44 icon buttons with private hover grounds. HEADINGS were 46 spellings
+  across 107. The new-task dialog carried two field heights (42 vs 38).
+  And the meeting page's tab rail measured 50 px against 40 everywhere:
+  `scroll-quiet`'s `scrollbar-width: thin`, which Chrome honours natively
+  on an overflowing horizontal box and which takes ~10 px of layout.
+  Nobody was careless — **the kit had four coats and the screens needed
+  seven, so every screen drew the other three**, the exact mechanism
+  `control.guard` records for SIZES, one property over.
+  **Fixed at the class, where one edit reaches every screen.** Seven coats
+  in `globals.css` — the four, plus `btn-soft`, `btn-dashed` and
+  `btn-ghost-danger`, the three the screens had been drawing by hand; five
+  heading roles (`h-page` 16/700, `h-dialog` 15/700, `h-section` 15/600,
+  `h-card` 14/600, `h-label` 11/600 subtle); `PANEL_INPUT` on `.input`'s
+  one height; `.track-scroll` (no scrollbar at all) on both rails;
+  `PanelHeader` deleted. 178 button sites in 63 files and 68 headings in
+  37 files moved by codemod. Two guards are the rule now: `buttonCoat.
+  guard` refuses any ground / edge / shadow / ink / weight token beside
+  `btn` outside the two kit files; `heading.guard` refuses a size, weight,
+  ink or leading utility on any `<h1..h4>` and a heading with no role,
+  with template literals and comments stripped by a small state machine
+  (the call page builds an exported document in a nested literal; the
+  rich-text editor hands `formatBlock` the string "<h3>"). Each carries a
+  control proving it can answer NO, and was verified red by mutation with
+  the control green either side.
+  **Then the production reading found the next one.** With the roles
+  landed, the summary card's own numbered sections read 13.2/600 — and
+  INSIDE section 2 the models' «**Next steps**» read **17.8/700**, the
+  largest heading in the card two levels below its top. `SummaryBody.tsx`
+  and `markdown.tsx` had been EXCEPTED from the guard that afternoon as
+  "content that scales with its prose", and content inside a card with
+  headings of its own is chrome. **A ladder that climbs as it descends is
+  exactly the disconnect, and every rung wore a legal role, so no guard
+  could see it.** The ladder now: name `h-page` → sections `h-section` →
+  the prose's own headings `h-card` → markdown's lower levels `h-label`;
+  both renderers left the exception list (three files remain), and the
+  guard's first run on the tightened corpus named markdown's `<h3>` at
+  `text-sm font-semibold` before any green. `Summary.test` pins the ORDER
+  of roles on the rendered tab, because a flattened ladder is spelled
+  legally and only a rendered test refuses it — three flattenings, each
+  red on its own line.
+  **Instruments, mine.** A `node -e` script ate its own backslashes again
+  (the recorded trap): `join("\n")` landed as a real newline and `/\s+/` as
+  `/s+/` — the transform error said so on the first run; rewritten through
+  the file tools. The build gate's stricter typecheck refused a destructured
+  `HTMLElement | undefined` that `pnpm exec tsc` had passed — the gate
+  earning its keep on its author once more. The deploy check for c5517f6
+  was cache-busted through a class that exists ONLY in the new build
+  (`track-scroll`) with a both-builds control and an invented-class
+  control; for 1131d07 the marker is `h-page` on the summary's `<h2>`.
+  **The three compact sub-menu designs are on a design canvas and NOT
+  applied**, per the directive — https://claude.ai/artifact/
+  EdZRaN4FjaZTwii1J2FRTp: the current toolbar (104 px to the first
+  content) beside A (one line of underline tabs + a sort menu + 26 px chips,
+  76 px), B (the two rails slimmer, 30 px rail / 24 px pill, side by side on
+  one line, 42 px) and C (a segmented control + «مرتب‌سازی» / «فیلتر» menus
+  with an active-count badge + a 24 px folder line, 70 px), each drawn for
+  the tasks and the meetings pages from `globals.css`'s own tokens. The
+  user's choice is the next step.
+  Verified: web tsc 0; 1795 web tests in 247 files (the one red is the
+  recorded `selectMenuWidth` load flake, 5/5 alone); the build gate alone;
+  the encoding sweep (1534 files). Deployed: web on Vercel twice, both
+  projects `success` on the commit status. **Proven on production in the
+  user's Chrome** (runbook 7s): c5517f6 — the meeting page's rails 40 / 40
+  (the tab rail had been 50); the new-task dialog's title `h-dialog`
+  14.1/700, fields 38 / 38 on an 11 px corner, footer `btn-secondary` /
+  `btn-primary` at 40 px weight 500, chips 32 px on a 0.67 px edge.
+  1131d07 — the summary tab at 1280 / root 15.06: the name `h-page`
+  15.1/700, the sections `h-section` 14.1/600, and «تصمیم‌ها» /
+  «اقدامات بعدی» inside section 2 on `h-card` 13.2/600, one step UNDER
+  the section they sit in. Nothing exercised live that writes.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1795 tests + gate + sweep.
