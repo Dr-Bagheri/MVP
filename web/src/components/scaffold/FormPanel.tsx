@@ -51,6 +51,7 @@ export function FormRow({
   description,
   htmlFor,
   controlAtEnd = false,
+  wide = false,
   children,
 }: {
   label: string;
@@ -64,6 +65,16 @@ export function FormRow({
    * halfway between its label and the edge a person looks at for it.
    */
   controlAtEnd?: boolean;
+  /**
+   * The control takes the row's whole width, START-aligned — for a row that
+   * is wider than a text field by its nature (the profile's picture row,
+   * 2026-09-17: the picture control, a divider and eight ready-made avatars
+   * measure ~470px, and under the 380px cap the avatars WRAPPED under the
+   * picture, so the divider ended a line with nothing beside it). The cap
+   * exists to keep a text field readable; it has nothing to say about a row
+   * of faces.
+   */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const descId = htmlFor && description ? `${htmlFor}-desc` : undefined;
@@ -111,7 +122,7 @@ export function FormRow({
       </div>
       <div
         className={`flex w-full min-w-0 items-center gap-2 ${
-          controlAtEnd ? "md:flex-1 md:justify-end" : "md:max-w-[23.75rem]"
+          controlAtEnd ? "md:flex-1 md:justify-end" : wide ? "md:flex-1" : "md:max-w-[23.75rem]"
         }`}
       >
         {control}

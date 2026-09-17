@@ -339,7 +339,12 @@ export default function ProfilePage({
 
         <Section>
           <FormPanel>
-            <FormRow label={t("photo")}>
+            {/* `wide`: the picture control, a divider and eight avatars
+                (2026-09-17) are wider than a text field, and under the
+                row's 380px cap the avatars wrapped under the picture on
+                production — the divider ended a line with nothing beside
+                it. The cap keeps a text field readable; this row has none. */}
+            <FormRow label={t("photo")} wide>
               <AvatarEditor me={me} onSaved={adopt} />
             </FormRow>
 

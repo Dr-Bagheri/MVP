@@ -428,3 +428,33 @@ describe("Page anatomy", () => {
     expect(heading.nextElementSibling?.textContent).toBe("محتوا");
   });
 });
+
+/**
+ * A WIDE ROW LIFTS THE CAP (2026-09-17): the profile's picture row — the
+ * picture control, a divider and eight ready-made avatars — is wider than
+ * a text field, and under the 380px cap the avatars WRAPPED under the
+ * picture on production, so the divider ended a line with nothing beside
+ * it. `wide` gives the control the row's whole width, start-aligned; the
+ * default keeps the cap, and `controlAtEnd` keeps its own shape — asserted
+ * as the three-way pair so a `wide` that quietly became the end slot, or a
+ * default that lost its cap, fails here.
+ */
+describe("FormRow wide", () => {
+  it("takes the row's whole width without the cap, start-aligned — and the default keeps the cap", () => {
+    render(
+      <FormPanel>
+        <FormRow label="تصویر" wide><span>پهن</span></FormRow>
+        <FormRow label="نام"><span>معمولی</span></FormRow>
+        <FormRow label="کلید" controlAtEnd><span>انتها</span></FormRow>
+      </FormPanel>,
+    );
+    const wide = screen.getByText("پهن").parentElement!.className;
+    const plain = screen.getByText("معمولی").parentElement!.className;
+    const end = screen.getByText("انتها").parentElement!.className;
+    expect(wide, "the wide row is still capped").not.toContain("md:max-w-[23.75rem]");
+    expect(wide, "the wide row does not fill the row").toContain("md:flex-1");
+    expect(wide, "the wide row drifted to the end slot").not.toContain("md:justify-end");
+    expect(plain, "the default lost its cap").toContain("md:max-w-[23.75rem]");
+    expect(end).toContain("md:justify-end");
+  });
+});
