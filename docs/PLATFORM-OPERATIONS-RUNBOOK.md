@@ -1044,6 +1044,63 @@ every rem held, and screenshots timed out for the whole read — read
 restores the frame. NOT exercised live: nothing — this round writes
 nothing on the org's data.
 
+## 7u. Deployment record — 2026-09-17, later (6a68d04 + 24e598c: web only — the meetings row's view keys join the slices' track, and the search key stands at the end of the folder line)
+
+**6a68d04 — the row.** User, on the row design «ج» had shipped that
+morning: "add the list and calendar to the first set of items in the first
+sub-menu like the tasks and other, and bring the search icon to the second
+row at the end of it and open it to the right in the fa version, so the
+search icon will be the left side of the second sub-menu." Row one is ONE
+segmented control now — گذشته / پیش‌رو / آرشیو, a `TRACK_DIVIDER`, then
+«فهرست» and «تقویم» with their words on the pills (the task board's shape:
+one rail across a divider, two questions; the view keys are `aria-pressed`
+toggles, not tabs of a second tablist). Row two keeps the search: the key
+in the strip's `end` slot at the row's END (the LEFT edge of a Persian
+screen), `btn-ghost btn-icon` — the folder line's own 28, the dashed `+`'s
+square — with its field as the key's PRECEDING sibling, so it opens on the
+key's start side, toward the chips. Meetings.test pins the structure
+(jsdom lays nothing out): both view keys children of the slices' track and
+exactly one tablist in row one; the key in the strip's row, not in the chip
+line, not in row one; the field before the key in DOM order; closing
+clears. Verify-red by mutation, five reds by name — and the second
+mutation's first anchor missed the blank line before the toolbar's close
+and made the key VANISH, a red naming a different defect; corrected before
+it counted. Verified: tsc 0; 1798 tests; the gate alone; the sweep.
+
+**24e598c — the field APPEARS rather than slides, and the reason is a
+production measurement.** Read on 6a68d04 at 1280 / root 15.06: pressed,
+the key went `aria-pressed`, the input mounted, took focus and measured
+180.7px — and its wrapper's USED width was **0**, its box **26.4** (the key
+alone), so the field was open, focused and clipped to nothing, its rect
+146px past the row's edge. Three experiments on the live page, restored
+after each: with the width transition on, wrapper 0 / box 26.4, and a
+forced relayout of the box took them to 180.7 / 207.1; with the transition
+class removed and the same inline width, 180.7 / 207.1 from the first
+frame; `flex-basis: 12rem` likewise. So a `shrink-0` flex container's
+intrinsic width is taken at the child's FIRST frame of a `width`
+transition (0) and Chrome does not re-run it as the animated width grows;
+with `overflow: hidden` the child's min-width is 0 and it shrinks to the
+box that was sized around its starting value. The 2026-09-16 wrapper had
+measured 12rem because it stood in a track with other content sizing the
+box. The wrapper is gone; the input mounts at `w-48` before the key. Same
+five mutations red by name on the re-anchored script; 1798 tests; gate;
+sweep.
+
+**Read on production (24e598c)**, both Vercel projects `success`, in the
+user's Chrome at 1280 / root 15.06. `/fa/meetings`: ONE tablist in row one
+whose children read گذشته · پیش‌رو · آرشیو · SPAN · فهرست · تقویم — the
+divider a 1×18.8 span, every pill 26.4 in a **32.4** track spanning the
+row's start; the search key **26.4** square at the row's LEFT edge (its
+left 408.8 = the row's 408.8), on the chip line's own row (top 115.2 on
+both), the line and the dashed `+` at the same 26.4; pressed → the field
+**435.2–615.9, to the RIGHT of the key at 408.8–435.2**, inside its box
+(now 207.1, was 26.4 closed), 180.7 wide, focused, with 338px to the first
+chip; closed → no field, the box back to 26.4. `/en/meetings`: the mirror
+— Past · Upcoming · Archive · SPAN · List · Calendar; the key at the row's
+RIGHT edge; the field 664.1–844.8 to the LEFT of the key at 844.8–871.2,
+inside its box, 334px to the chips. Nothing exercised live that writes:
+the key's press and release are local state.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

@@ -8060,3 +8060,39 @@ sessions) for the cross-session narrative.
   writes.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1798 tests + gate + sweep.
+- 2026-09-17 (last — THE MEETINGS ROW: THE VIEW KEYS JOIN THE SLICES'
+  TRACK, THE SEARCH KEY STANDS AT THE END OF THE FOLDER LINE, AND THE FIELD
+  THAT OPENED INTO NOTHING; commits 6a68d04, 24e598c; web on Vercel,
+  nothing in core or db): "add the list and calendar to the first set of
+  items in the first sub-menu like the tasks and other, and bring the search
+  icon to the second row at the end of it and open it to the right in the fa
+  version." Row one is ONE segmented control — the slices, a
+  `TRACK_DIVIDER`, then «فهرست» / «تقویم» with their words on the pills (the
+  task board's shape; the view keys `aria-pressed` toggles, not a second
+  tablist). Row two keeps the search: the key in the strip's `end` slot at
+  the row's END (the left edge of a Persian screen), `btn-ghost btn-icon` at
+  the folder line's own 28, its field the key's PRECEDING sibling so it
+  opens toward the chips. Meetings.test pins the structure; five mutations
+  red by name — the second's first anchor made the key VANISH (a red naming
+  a different defect), corrected before it counted.
+  **The production read found the field open, focused, 180px wide, and
+  clipped to nothing.** Its wrapper's used width was 0 and its box 26.4:
+  a `shrink-0` flex container's intrinsic width is taken at the child's
+  FIRST frame of a `width` transition and Chrome does not re-run it as the
+  animated width grows — with `overflow: hidden` the child's min-width is 0
+  and it shrinks to the box sized around its starting value. Proven by three
+  experiments on the live page (a forced relayout → 180.7 / 207.1; the
+  transition removed → the same from the first frame; a flex-basis →
+  likewise); the wrapper is gone and the field appears at its width. Minted:
+  **an animated width inside an intrinsically sized flex parent is measured
+  once, at its first frame** — read the used width of the thing that opened,
+  not the input inside it.
+  **Proven on production in the user's Chrome** (runbook 7u): fa — one
+  tablist reading گذشته · پیش‌رو · آرشیو · divider · فهرست · تقویم, pills
+  26.4 in a 32.4 track; the key 26.4 at the row's left edge on the chip
+  line's row; pressed → the field 435–616 to the RIGHT of the key at
+  409–435, inside its box, focused; closed → none. en — the mirror, the key
+  at the right edge and the field to its left. Nothing exercised live that
+  writes.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1798 tests + gate + sweep.
