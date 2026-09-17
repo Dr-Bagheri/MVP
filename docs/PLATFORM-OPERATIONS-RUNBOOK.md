@@ -1164,6 +1164,59 @@ the card gone. c22b70e — the same row on ONE line: the picture at
 column of 430.1 (was capped at 380). NOT exercised live: an accept (a
 write on the person's profile) and a create on either board.
 
+## 7w. Deployment record — 2026-09-17, later (17bd0de: web only — the profile's eight avatars are generated from DiceBear's Avataaars, never drawn by hand)
+
+**17bd0de.** User: "change the avatars image, use something better
+designed, use skills and plugins to do it." The eight hand-drawn faces of
+9bd350e are replaced by DiceBear's Avataaars (Pablo Stanley,
+https://avataaars.com/ — free for personal and commercial use, no
+attribution owed), rendered once by `web/scripts/gen-avatar-presets.mjs`
+into the same `platform/avatarPresets.ts`; `@dicebear/core` 9.4.3 and
+`@dicebear/avataaars` 9.4.2 are devDependencies and the app never loads
+them. **The choice was measured**: the four attribution-free styles
+(Avataaars; Lorelei, Notionists and Open Peeps, all CC0 — the CC BY ones
+would owe a visible credit) were rendered on one sheet, each as a curated
+set of five women and three men with every trait pinned by name, at 96px
+and at the profile key's 36px. At 36 Notionists is a grey scribble and
+Lorelei's white line-art faces lose their features; Avataaars keeps a
+silhouette, a hair colour and a shirt, is the smallest (37KB for eight
+against 98KB) and carries a hijab. The sheet is a canvas for the user
+(https://claude.ai/artifact/YZsJuRGzMaPPzwjDyKyao7); another style is one
+table in the script. **The generator is the source**: `--check [path]`
+exits 1 when the module on disk disagrees with a fresh render, and
+`avatarPresets.test.ts` runs it WITH the control — the same check against
+a copy with one character changed must exit 1. **A key is an `<img>` data
+URL, never the SVG inlined**: every DiceBear SVG carries
+`id="viewboxMask"`, and eight inlined into one document resolve every
+`url(#viewboxMask)` to the first — measured on the candidate sheet, where
+a second style's faces were clipped to a quarter of a circle by the first
+style's mask. The road is unchanged (rasterised to the crop's 256px JPEG,
+the accept card, uploaded on the accept only); RULEBOOK's picture bullet
+rewritten. Verify-red by mutation, control green either side, each red on
+exactly its own test: the module edited by hand; a man listed first and
+the module regenerated; the keys inlining their SVG again; a preset
+landing its SVG URL straight in the accept card. Verified: tsc 0; 1804
+web tests in 249 files; the gate alone from PowerShell; the encoding sweep
+(1538 tracked text files, staged); the token verifier.
+
+**Read on production**, both Vercel projects `success` at 23:49:46, in
+the user's Chrome at 1280 / root 15.06 on `/fa/profile`: the group
+«آواتارهای آماده» holds **8** keys «آواتار ۱» … «۸», every one a round
+(9999px) **33.9px** button whose `<img>` fills it (ratio 1.00), `src` a
+`data:image/svg+xml` URL carrying `id="viewboxMask"` (this build only —
+the previous build inlined `<svg>` elements), `complete` with
+`naturalWidth` **256**; **0** inline `<svg>` in the group; all eight on
+ONE line (top 136) running left from 855 to 566, the 1×30.1 separator at
+901 directly after the picture control (the camera badge in its previous
+sibling) and directly before the group; «تصویر پروفایل» in the rendered
+text with the accept card's sentence absent from it and present in the
+payload (the catalogue-only control). «آواتار ۵» (the headscarf) pressed →
+the accept card «از این عکس استفاده شود؟» rendered with a **256×256
+`data:image/jpeg`** preview (~16.8KB) and the accept/cancel pair;
+«انصراف» → the card gone, the two JPEGs left on the page being the
+owner's own saved photo (the control and the rail). NOT exercised live:
+an accept (a write on the person's profile).
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

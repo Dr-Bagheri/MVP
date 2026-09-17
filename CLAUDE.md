@@ -8133,3 +8133,46 @@ sessions) for the cross-session narrative.
   writes.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1802 tests + gate + sweep.
+- 2026-09-17 (last — THE EIGHT AVATARS ARE GENERATED, NOT DRAWN, AND A
+  PRESET IS AN IMAGE DOCUMENT OF ITS OWN; commit 17bd0de; web on Vercel,
+  nothing in core or db): "change the avatars image, use something better
+  designed, use skills and plugins to do it." The hand-drawn faces of the
+  morning are replaced by DiceBear's Avataaars (Pablo Stanley, free for
+  commercial use, no credit owed), rendered ONCE by
+  `web/scripts/gen-avatar-presets.mjs` into the same module — the two
+  packages are devDependencies and the app never loads them. **The style
+  was chosen by measurement, not taste**: the four attribution-free styles
+  (Avataaars, and CC0's Lorelei, Notionists, Open Peeps) rendered on one
+  sheet as curated sets, at 96px AND at the key's 36px — where the ink
+  styles dissolve into scribble and line-art faces lose their features,
+  while Avataaars keeps a silhouette, a hair colour and a shirt, is the
+  smallest of the four and carries a hijab. The sheet is a canvas for the
+  user; another style is one table in the script. **The generator is the
+  source**: `--check` exits 1 when the module on disk disagrees with a
+  fresh render, and its test carries THE CONTROL — the same check against
+  a copy with one character changed must exit 1, or the green line proves
+  only that the script exits. A DiceBear bump that changes a drawing is a
+  red here rather than a different face on somebody's profile.
+  **The finding, before it reached the product**: every DiceBear SVG
+  carries `id="viewboxMask"`, so eight inlined into one page resolve every
+  `url(#viewboxMask)` to the FIRST — on the candidate sheet a second
+  style's faces were clipped to a quarter of a circle by the first style's
+  mask. A key is an `<img>` data URL now (its own document; the accept
+  card's rasteriser loads the very same URL), and the test asserts the
+  ABSENCE of an inline `<svg>` in the group, which is the discriminating
+  half. Verify-red by mutation on four behaviours, each red on its own
+  test with the control green either side. Tooling kept in memory: the
+  built-in pane's screenshots time out while it is hidden and scale a wide
+  sheet unreadably — `playwright-core` with `channel: "chrome"` in the
+  scratchpad renders a served sheet to a PNG the Read tool can look at;
+  Git Bash converts a leading-slash argument into a Windows path
+  (`MSYS_NO_PATHCONV=1`); the standalone `@dicebear/<style>` packages
+  export `create`/`meta`/`schema`, not a namespace.
+  **Proven on production in the user's Chrome** (runbook 7w): eight round
+  33.9px keys on one line, each an `<img>` data URL carrying `viewboxMask`
+  at natural 256 with zero inline SVGs in the group, the hairline directly
+  between the picture control and the group; «آواتار ۵» → the accept card
+  with a 256×256 JPEG preview, «انصراف» → gone. NOT exercised live: an
+  accept (a write on the profile).
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1804 tests + gate + sweep.
