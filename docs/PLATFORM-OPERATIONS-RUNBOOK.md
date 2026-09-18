@@ -1666,6 +1666,155 @@ on production, the exact query returns true.
 NOT exercised live: a real directory link (a write on the org's own rows — the
 2026-09-06 lesson). It is proven by the rolled-back acceptance on those same rows.
 
+## 7ad. Three models — and two things the production read changed — 2026-09-18 (1491c64, 9700299: core + web)
+
+User: "for model but the three best models available and remove others", then
+the three from a measured shortlist: **DeepSeek V4 Flash 0731 · GLM 5.2 ·
+Gemini 3.6 Flash**.
+
+### What was measured before anything was chosen
+
+Live on OpenRouter, not from the bundled snapshot — per million in/out, and
+every one tool-capable:
+
+| | in | out | context |
+|---|---|---|---|
+| `deepseek/deepseek-v4-flash-0731` | 0.06 | 0.12 | 1.31M |
+| `z-ai/glm-5.2` | 0.554 | 1.742 | 1.05M |
+| `google/gemini-3.6-flash` | 0.75 | 3.75 | 1.05M |
+
+`z-ai/glm-5.3` is live, better on paper, and NOT offerable: it is absent from
+the bundled catalogue that `assertAskable` and `list()` both read, so an id it
+does not carry cannot be served however good it is. The dated DeepSeek id is
+deliberate (27 tok/s on the plain alias against 58 on the GA cut — OpenRouter's
+default route optimises for price).
+
+### The shape: an allow-list, through one funnel
+
+`OFFERED_MODELS` replaces a five-model lineup and a twenty-four-model shelf
+with one list, because two lists describing one set start disagreeing about it.
+`isServable = !isExcluded && isOffered` is asked at all six gates rather than
+each gate asking two questions — the failure this file records five times over
+is a second copy of a rule that forgets half of it.
+
+**The no-Claude exclusion stays its own predicate, and the honest reason is in
+the code**: with no Anthropic id in the offer list, deleting
+`EXCLUDED_PROVIDERS` would change no behaviour at all. What keeps it real is
+that it is now asked DIRECTLY — `model-wall` puts the id production served to
+it, `model-ranking` puts every offered id to it. Gutting `isExcluded` turns
+exactly one test red, which is the one that exists for it.
+
+### THE PRODUCTION READ CHANGED THE DESIGN
+
+At owner altitude, before shipping (`db/scripts/probe-model-curation.mjs`, the
+read-only instrument this came from):
+
+- **THREE orgs allowed exactly `google/gemini-2.5-flash`** — the demo seed's
+  own default, written by the seeder rather than chosen by anybody.
+- **`WORKER_SUMMARY_MODEL` is not set on the server at all.** The runbook's
+  row claimed it had been set in August; it is not there, and that row now
+  says so.
+- Three members store that same id as their preference.
+
+Read literally, each of those orgs loses every rung of M5's ladder at once —
+no preference, no permitted model, no env fallback — so every agent in the
+organisation answers nothing, with no symptom but the silence.
+
+So **an allow-list with nothing servable left in it is read as NO CURATION**,
+which is the ladder's own sentence one level up, applied in all three readers
+at once (`list`, `curation`, `forRun`). A picker serving three models while
+the admin screen says none are allowed is one control meaning two things, and
+whichever half I had fixed alone would have looked right on its own.
+
+The cost is stated rather than discovered: an admin who deliberately allowed
+one model gets the whole offer list back the day it stops being offered. That
+is the cheaper side of the trade against an org whose assistant goes quiet —
+and it needs no write to anybody's data, where the alternative was reconciling
+four orgs by hand and leaving the same landmine for the next narrowing.
+
+### THE SECOND FINDING CAME FROM READING THE DEPLOYED SCREEN
+
+The admin table said `google/gemini-3.6-flash` costs **$1.5 / $7.5** per
+million. The provider says **$0.75 / $3.75** — exactly double. `z-ai/glm-5.2`
+was out by a quarter. Both came from the bundled pi-ai snapshot, and nothing
+had ever compared the two, because a plausible price is indistinguishable from
+a correct one.
+
+It mattered little while the table listed hundreds and the number was context.
+With three rows **the price IS the comparison**, and a cost lever quoting
+double is worse than one quoting nothing.
+
+The true figure was already being fetched: `model-capability.ts` reads
+OpenRouter's `/models` for `supported_parameters`, and `pricing` and
+`context_length` sit three fields over in the same response — it kept one and
+discarded the others. It carries all three now, on the same map, same cache,
+same `stale` label. A second fetch would be a second thing to fail, and two
+readers of one provider answer are how they come to disagree.
+
+### Verified
+
+Seventeen mutations across the two commits, control green either side, each
+red on its own test. Two of my own were vacuous first and are the keepers:
+
+- **"the live fact replaces rather than prefers the snapshot" stayed GREEN** —
+  my control asserted a model kept "no price", and the mocked catalogue gave it
+  none, so the fallback working and the fallback deleted produced the same
+  `undefined`. The fixture now carries a snapshot price (the wrong one the real
+  bundle holds) and the control fails for its own reason.
+- **`curation()` had no test at all**, which is how it kept a family-collapse
+  filter and two flags the narrowing made meaningless. It has one now, with the
+  assertion that distinguishes it from the picker (the allow-list is rendered
+  there, never applied).
+
+The provider fixture is transcribed from a live GET rather than written to
+match the parser — prices arrive as decimal STRINGS per token, which is the one
+detail a hand-written fixture gets wrong by supplying a number per million and
+agreeing with itself.
+
+core 1959 · web 1813 · both typechecks · build gate · encoding sweep 1548 files.
+(The one core red is the pre-existing `history.test.ts` ZWNJ contradiction from
+the September merge.)
+
+### Deployed and proven on production
+
+Core twice on Hetzner (archive hashes matched, both entrypoints parse under
+`--experimental-strip-types`, both units active, health 200, zero level>=40
+journal lines); web on Vercel.
+
+**The four-way discriminating probe through the product's own route**, signed
+in as the owner — this is the wall, live:
+
+| typed | answer |
+|---|---|
+| `~anthropic/claude-opus-latest` | 400 "model is not available on this product" |
+| `openai/gpt-5.6-luna` (in the catalogue, not offered) | 400 "model is not available on this product" |
+| `made/up-model` | 400 **"unknown model"** — a different sentence, so the two nothings stay apart |
+| `z-ai/glm-5.2` | 200, and it stuck — the control that had to succeed |
+
+The owner's preference was put back to what it was before the probe.
+
+And the rendered screen at `/fa/management/models`: three rows, the provider's
+own prices (`$۰.۰۶ / $۰.۱۲`, `$۰.۵۵۴ / $۱.۷۴۲`, `$۰.۷۵ / $۳.۷۵` — where it had
+shown `$۰.۰۹`, `$۰.۶۹`, `$۱.۵`), no «پیشنهادی» column, and the add dialog
+opening with **no input field at all** and the new sentence «همهٔ مدل‌های این
+پلتفرم در فهرست هستند.» in place of one telling an admin to go searching for
+models that do not exist.
+
+### One thing left open, and it is the user's
+
+The `neurai` org's `allowed_models` was an eight-entry accreted list of which
+only DeepSeek survived the narrowing — so the owner's own picker offered ONE
+model after a directive asking for three. I cleared it (empty = uncurated =
+whatever the product offers = the three) through the product's own admin route.
+
+**Two further writes to that column then arrived that I did not make**, at
+19:16:46 and 19:16:50 UTC, from the same account (`drbagheri` — the identity
+is shared with the browser session, so the audit cannot tell us apart), setting
+it back to `[deepseek]`. A discriminating probe ruled out the page: a full load
+with the list empty leaves it empty. So it was a real interaction in that
+browser. It is currently EMPTY and all three show; if the intention was DeepSeek
+only, one press on the models screen sets it back.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

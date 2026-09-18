@@ -8401,3 +8401,82 @@ sessions) for the cross-session narrative.
   node-merge door.
   db 230 migrations · core 1944 tests (1 pre-existing red, history ZWNJ) ·
   web 1814 tests + gate + sweep.
+- 2026-09-18 (THREE MODELS, AND AN ALLOW-LIST NAMING NONE OF THEM IS NOT A
+  CURATION; commits 1491c64, 9700299; core deployed twice, web on Vercel):
+  user directive, "for model but the three best models available and remove
+  others", then the three — DeepSeek V4 Flash 0731 · GLM 5.2 · Gemini 3.6
+  Flash. `OFFERED_MODELS` is an ALLOW-LIST, not a ranking: it replaces a
+  five-model lineup and a twenty-four-model shelf with ONE list ("the moment
+  two lists describe the same set they start disagreeing about it"), and
+  everything the catalogue holds and it does not name is refused at every door
+  a model id enters through. Measured live rather than from the bundled
+  snapshot — 0.06/0.12 at 1.31M, 0.554/1.742 and 0.75/3.75 at 1.05M, all
+  tool-capable; `z-ai/glm-5.3` is live, better on paper and NOT offerable,
+  because it is absent from the bundle that `assertAskable` and `list()` both
+  read. **One funnel, two predicates**: `isServable = !isExcluded && isOffered`
+  at all six gates, because the failure recorded five times over is a second
+  copy of a rule that forgets half of it — and the no-Claude exclusion stays
+  its own predicate with the honest reason written down, that deleting
+  `EXCLUDED_PROVIDERS` today would change no behaviour at all, so what keeps
+  it real is being ASKED directly (gutting it turns exactly one test red, the
+  one that exists for it).
+  **THE PRODUCTION READ CHANGED THE DESIGN.** At owner altitude before
+  shipping: THREE orgs allowed exactly `google/gemini-2.5-flash` — the demo
+  seed's own default, written by the seeder rather than chosen by anybody —
+  and `WORKER_SUMMARY_MODEL` is **not set on the server at all** (the runbook
+  claimed it had been since August; that row now says otherwise). Read
+  literally, each of those orgs loses every rung of M5's ladder at once and
+  every agent in it answers nothing, with no symptom but the silence. So **an
+  allow-list with nothing servable left in it is read as NO CURATION** — the
+  ladder's own sentence one level up — applied in all three readers at once,
+  because a picker serving three models while the admin screen says none are
+  allowed is one control meaning two things. Cost stated rather than
+  discovered: an admin who deliberately allowed one model gets the whole offer
+  list back the day it stops being offered; the alternative was reconciling
+  four orgs by hand and leaving the same landmine for the next narrowing.
+  **THE SECOND FINDING CAME FROM READING THE DEPLOYED SCREEN**: the admin
+  table said Gemini 3.6 Flash costs $1.5/$7.5 per million and the provider
+  says $0.75/$3.75 — exactly double, from the bundled snapshot, with GLM out
+  by a quarter. Nothing had ever compared the two, "because a plausible price
+  is indistinguishable from a correct one", and it mattered little while the
+  table listed hundreds — **with three rows the price IS the comparison**, and
+  a cost lever quoting double is worse than one quoting nothing. The true
+  figure was ALREADY BEING FETCHED: `model-capability.ts` reads OpenRouter's
+  `/models` for `supported_parameters` and `pricing`/`context_length` sit
+  three fields over in the same response; it kept one and discarded the
+  others. All three ride the same map, cache and `stale` label now — a second
+  fetch would be a second thing to fail, and two readers of one provider
+  answer are how they come to disagree.
+  **Seventeen mutations, control green either side, each red on its own
+  test** — and two of my own instruments were vacuous first: "the live fact
+  replaces rather than prefers the snapshot" STAYED GREEN because my control
+  asserted a model kept "no price" and the mocked catalogue gave it none, so
+  the fallback working and the fallback deleted produced the same `undefined`
+  (the fixture now carries the wrong price the real bundle holds); and
+  **`curation()` had no test at all**, which is how it kept a family-collapse
+  filter and two flags the narrowing made meaningless. The provider fixture is
+  transcribed from a live GET, because prices arrive as decimal STRINGS per
+  token and a hand-written one supplies a number per million and agrees with
+  itself. The web followed only where the narrowing made something untrue: the
+  add dialog's search box filtered three rows under a placeholder promising
+  "the whole catalogue", and its empty state told an admin to go searching for
+  models that do not exist — a true claim about the org turning into a false
+  one about the product.
+  **Proven on production**: the four-way discriminating probe through the
+  product's own route — barred → "not available", un-offered → "not
+  available", invented → **"unknown model"** (a different sentence, so the two
+  nothings stay apart), and a real offered id → 200 and it stuck (the control
+  that had to succeed); the rendered screen showing three rows at the
+  PROVIDER's prices where it had shown the snapshot's, no «پیشنهادی» column,
+  and the add dialog opening with no input field at all and the new sentence.
+  **Open, and it is the user's**: the `neurai` org's allow-list was an
+  eight-entry accreted list of which only DeepSeek survived, so the owner's
+  own picker offered ONE model after a directive asking for three — cleared to
+  empty (= uncurated = all three). Two further writes to that column then
+  arrived that I did not make, seconds apart, from the same account; a
+  discriminating probe ruled out the page (a full load with the list empty
+  leaves it empty), so it was a real interaction in that browser. It is empty
+  now and all three show; if DeepSeek-only was the intention, one press on the
+  models screen sets it back.
+  db 230 migrations · core 1959 tests (1 pre-existing red, history ZWNJ) ·
+  web 1813 tests + gate + sweep.
