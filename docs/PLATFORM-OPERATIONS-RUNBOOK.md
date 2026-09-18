@@ -1217,6 +1217,67 @@ the accept card «از این عکس استفاده شود؟» rendered with a *
 owner's own saved photo (the control and the rail). NOT exercised live:
 an accept (a write on the person's profile).
 
+## 7x. Deployment record — 2026-09-18 (50e3fa5: web only — the button family is the tactile design in ink)
+
+**50e3fa5.** The user chose from a nine-way canvas (three button designs
+in three colourways each, dark and light, the product's own coats, sizes,
+states and labels; https://claude.ai/artifact/VDRGQZHJmHM5SjfpAQXxiw):
+"Ink · monochrome — dark #E6E9EC on #101316 · light #1C1A16 on #FFFFFF —
+Tactile". Applied at the button classes in `globals.css`; no call site
+changed. The corner is the panel's `rounded-lg` (12) on `.btn` and
+`.btn-sm` (the 16 was "the rail's own box" of 2026-09-16, and the rail
+became design «ج» on 2026-09-17); the 8px squares and pills are untouched.
+Every FILLED coat wears a lighter top fading into the fill, an edge one step
+darker, a lip of light (`inset 0 1px 0`) and a small drop, and presses IN
+(`active:` swaps the shadow for an inset and drops the box a pixel); the
+ghost coats stay flat. The primary's fill is `--btn`, the page's own ink,
+with `--on-btn` on it; the secondary is a raised neutral in the same
+recipe; the soft coat a chosen state on `--btn-soft`, flatter than the
+secondary; the danger the recipe in red. The tokens are their own pair in
+both theme blocks (with `--btn-lip`, `--btn-hover` 1.06 / 1.45 and
+`--btn-hover-2` 1.08 / .96 — a near-black fill needs a bigger brightness
+step than a near-white one before a pointer can see it) and are registered
+in tailwind as `btn` / `on-btn` / `btn-soft`; `--accent` and `--primary`
+stay green, so chips, links, toggles, the focus ring and the brand keep the
+platform's colour. verify-pairs gained three floors (ink on the fill 15.29
+/ 17.37, fg on the soft ground 11.94 / 13.8, the fill against the panel
+13.46 / 17.37 as a control edge). `buttonTactile.test.ts` reads the rule
+bodies: the corner, the primary on the ink tokens and not the accent, the
+lip and the press on every filled coat and their ABSENCE on the ghost
+coats, the tokens in both themes at the chosen values, the accent still
+green, the three colours in tailwind. Verify-red by mutation, control green
+either side, each red on exactly its own test: the primary back on the
+green, its lip removed, the 16 corner back, a lip on the ghost, the light
+theme losing `--btn`, the accent turned to ink, the secondary losing its
+press. Verified: tsc 0; 1809 web tests (the two reds under full-suite load
+are the recorded `selectMenuWidth` and `SpeakersDirectory.account` flakes,
+green alone); the build gate alone; the token verifier; the encoding sweep
+(1539). Rendered on the dev server before the deploy (the sign-in gate).
+
+**Read on production**, both Vercel projects `success`, at 1280 / root
+15.06. In the user's Chrome (their theme is LIGHT), `/fa/tasks`: «تسک جدید»
+(`btn-primary btn-sm`) **32px**, corner **12px**, `background-image:
+linear-gradient(#403E3B-ish 0%, rgb(28,26,22) 100%)`, ink **white**, a
+0.67px edge one step darker than the fill, `box-shadow` = the lip
+`rgba(255,255,255,.28) 0 1px 0 inset` + `0 1px 2px` + `0 3px 8px`;
+«فیلتر» (`btn-ghost btn-sm`) 32 / 12px / no image / no shadow / no edge
+— flat; the six «افزودن تسک» rows `btn-dashed` on a 0.67px border-strong
+dashed edge. The new-task dialog: «ساختن تسک» **39.5** (= the 42 token)
+with the same recipe, «انصراف» (`btn-secondary`) 39.5 / 12px /
+`linear-gradient(rgb(237,234,227) 0%, rgb(255,255,255) 100%)` / ink
+rgb(28,26,22) / a 0.67px `rgba(143,139,128,.55)` edge / the lip at .6 +
+`0 1px 2px`; the dialog itself still 18px. In the built-in pane on the
+signed-out gate with `neurai-theme` set to **dark** and a full reload
+(the user's own preference untouched): body rgb(15,17,19), «ادامه»
+(`btn-primary`) 39.5 / 12px / `linear-gradient(#EAECEF 0%,
+rgb(230,233,236) 100%)` / ink **rgb(16,19,22)** / a 0.67px #A6A8AA edge /
+the lip at .28; «ادامه با گوگل» (`btn-secondary`) `linear-gradient(
+rgb(36,42,48) 0%, rgb(27,32,37) 100%)` / ink rgb(242,244,246) / a
+`rgba(114,121,130,.55)` edge / the lip at .14. NOT read live: a press
+(the inset and the 1px drop are pinned by the rule-body test), the soft
+coat and the danger coat (no consent card or delete was raised on real
+data), and hover.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

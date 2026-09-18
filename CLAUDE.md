@@ -8176,3 +8176,39 @@ sessions) for the cross-session narrative.
   accept (a write on the profile).
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1804 tests + gate + sweep.
+- 2026-09-18 (THE BUTTON FAMILY IS THE TACTILE DESIGN IN INK; commit
+  50e3fa5; web on Vercel, nothing in core or db): "for the different sets
+  of buttons give me 3 different design with 3 different color for each
+  and show me so i can choose" → a nine-way canvas (Flat / Tactile / Glass
+  × three colourways each, the platform's green first in every row, dark
+  and light, the seven coats, the three sizes, the five states, the
+  product's own labels; https://claude.ai/artifact/VDRGQZHJmHM5SjfpAQXxiw),
+  built from the theme's tokens with the design plugin's frame and the
+  21st.dev plugin's three reference families, rendered through headless
+  Chrome and read at 2x before it was shown. The user chose **Ink ·
+  monochrome — Tactile**. Applied at the button classes in `globals.css`
+  and nowhere else: the corner is the panel's `rounded-lg` (12 — the 16 was
+  "the rail's own box", and the rail became «ج» the day before), every
+  FILLED coat wears a lit top edge, an inner gradient and a small drop and
+  presses IN, the ghost coats stay flat, and the primary's fill is `--btn`,
+  the page's own ink (near-white on dark, near-black on light). **The scope
+  is the finding worth keeping**: the choice was made on a BUTTON canvas,
+  so `--accent` and `--primary` stay green for chips, links, toggles, the
+  focus ring and the brand — a version that quietly turned the platform
+  monochrome would have passed every other check, so `buttonTactile.test`
+  asserts the accent's value beside the ink's. The tokens are their own
+  pair rather than a re-pointing of `--primary` (the shadcn bridge and one
+  page read it), with two hover steps that differ per theme by mechanism
+  (a near-white fill clips at 1.06; a near-black one needs 1.45 to move).
+  Cost said out loud: the consent card's yes and no are two neutrals now,
+  told apart by relief rather than hue. Verify-red by mutation on seven
+  behaviours, each red on its own test with the control green either side;
+  verify-pairs carries three new floors. **Proven on production** (runbook
+  7x): light, in the user's Chrome — «تسک جدید» 32px / 12px / the ink
+  gradient to rgb(28,26,22) / white ink / the lip; «انصراف» the raised
+  neutral gradient with the .55 edge; «فیلتر» flat; dark, in the built-in
+  pane with the stored theme set to dark and a full reload — «ادامه» the
+  gradient to rgb(230,233,236) with rgb(16,19,22) ink. NOT read live: a
+  press, the soft and danger coats.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1809 tests + gate + sweep.
