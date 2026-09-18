@@ -43,11 +43,15 @@ const AGENTS: Record<string, unknown> = {
     id: "a-1", handle: "roya", name: "رؤیا", description: "کارها را انجام می‌دهد.",
     level: "system", icon: "sparkles", color: "violet", model: null,
     tools: [], web: true, instructions: "تو رؤیا هستی.", sourceScope: {},
+    /* the OPERATOR (0233): the one that acts */
+    canAct: true,
   },
   ava: {
     id: "a-2", handle: "ava", name: "آوا", description: "می‌خواند و گزارش می‌دهد.",
     level: "system", icon: "chart", color: "blue", model: null,
     tools: [], web: false, instructions: "تو آوا هستی.", sourceScope: {},
+    /* the ANALYST (0233): reads everything, changes nothing */
+    canAct: false,
   },
 };
 
@@ -173,6 +177,40 @@ describe("Echo's colleagues, as tools", () => {
       expect(royaSet.has(name), name).toBe(true);
       expect(avaSet.has(name), name).toBe(true);
     }
+  });
+
+  it("AND THEY DIFFER IN WHAT THEY MAY DO (db/0233): the operator is handed the hands, the analyst is not", async () => {
+    /*
+     * The user's report, 2026-09-18: "we have 2 agents ava and roya but i
+     * dont know why and they do the same".
+     *
+     * They did. Their instructions have always described two jobs — Ava reads
+     * the record and reports, Roya gets work done — and between 2026-09-06
+     * and 2026-09-18 NOTHING ENFORCED IT: the split above was deleted for a
+     * good reason (the «دسترسی ندارم» refusals) and took the only structural
+     * difference with it. A paragraph is not a wall, and two weeks was how
+     * long it took somebody to notice.
+     *
+     * So the axis moved to the one worth a wall. Reads stay whole for both —
+     * the test above is the other half of this one and they must both hold —
+     * and what differs is whether the colleague is offered the session's
+     * WRITE hands at all.
+     *
+     * Asserted as the PAIR on one fixture, because either alone passes
+     * against a version that hands nobody anything (which would be Roya
+     * unable to do the work she exists for) or hands everybody everything
+     * (which is the state being fixed).
+     */
+    const hand = { name: "create_project", label: "x", description: "x", parameters: {}, run: async () => ({}) };
+    const { tools, nested } = await build({ clientTools: [hand] });
+    await run(tools.find((t) => t.name === "ask_roya")!, { question: "؟" });
+    await run(tools.find((t) => t.name === "ask_ava")!, { question: "؟" });
+    expect(nested[0]!.clientTools.map((t) => t.name), "the operator lost her hands").toEqual(["create_project"]);
+    expect(nested[1]!.clientTools, "the analyst was handed a write").toEqual([]);
+    /* and the analyst did NOT lose her reads with them — the whole point of
+       moving the axis, and the assertion that fails if somebody "fixes" this
+       by narrowing Ava again */
+    expect(nested[1]!.tools.map((t) => t.name)).toContain("list_tasks");
   });
 
   it("web access is BOTH switches — either off is off", async () => {

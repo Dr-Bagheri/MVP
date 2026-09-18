@@ -305,7 +305,27 @@ export async function createDelegationTools(
             ? `${question}\n\n[Context from the conversation, provided by Echo]\n${args.context}`
             : question,
           tools,
-          clientTools: options.clientTools ?? [],
+          /*
+           * GUARD 2, NARROWED (db/0233). A colleague is offered the session's
+           * write hands only if it is one that ACTS.
+           *
+           * This is the whole difference between the two shipped agents, and
+           * it lives here rather than in their prompts because a paragraph is
+           * not a wall: between 2026-09-06 and 2026-09-18 Roya and Ava had
+           * identical reads and identical hands, their instructions described
+           * two different jobs, and they behaved the same — which is exactly
+           * what the user reported.
+           *
+           * READS are not narrowed and must not be. Narrowing an analyst's
+           * reads is what produced «دسترسی ندارم» on records the person could
+           * see, and it is the wrong axis anyway: `tools` above is the whole
+           * platform read set for every colleague.
+           *
+           * The person's own authority is still the outer wall — these hands
+           * run in their browser behind a consent card, and nothing here
+           * widens what they may do.
+           */
+          clientTools: agent.canAct ? options.clientTools ?? [] : [],
         });
 
         await options.onTurn({

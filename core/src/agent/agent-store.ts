@@ -25,6 +25,18 @@ export interface AgentCard {
   color: string;
   model: string | null;
   tools: string[];
+  /**
+   * 0233: whether Echo offers this colleague the session's WRITE hands.
+   *
+   * The one thing that tells the two shipped agents apart, and it is a fact
+   * rather than a paragraph: their instructions have always described two
+   * jobs, and between 2026-09-06 and 2026-09-18 nothing enforced the
+   * difference, so they behaved identically and a user noticed. Reads are NOT
+   * narrowed by this — narrowing reads is what produced «دسترسی ندارم» and it
+   * is the wrong axis; an analyst that cannot look things up is not a
+   * specialist, it is a broken assistant.
+   */
+  canAct: boolean;
   /** M47: this agent's asks may search the web (:online, same model) */
   web: boolean;
   /**
@@ -88,7 +100,7 @@ interface AgentRow {
 
 const COLUMNS = `
   id, handle, name, description, level, instructions, model,
-  tools, source_scope, icon, color, web
+  tools, source_scope, icon, color, web, can_act
 `;
 
 function strings(value: unknown): string[] {
@@ -111,6 +123,11 @@ function rowToAgent(row: AgentRow): ResolvedAssistantAgent {
     instructions: row.instructions,
     model: row.model,
     tools: strings(row.tools),
+    /* `=== true` rather than a cast's truthiness, and it matters: a core
+       running against a schema that predates 0233 reads `undefined` here and
+       must land on FALSE. An agent that could write because a column was
+       missing is the wrong direction to fail in. */
+    canAct: (row as unknown as { can_act?: boolean }).can_act === true,
     web: (row as unknown as { web?: boolean }).web === true,
     sourceScope: scope(row.source_scope),
     icon: row.icon,
