@@ -37,9 +37,36 @@ const REFRESH_MS = 60 * 60 * 1000;
 /** A model picker must not hang on someone else's outage. */
 const FETCH_TIMEOUT_MS = 4_000;
 
+/**
+ * What the provider says a model COSTS and how much it holds, today.
+ *
+ * The bundled catalogue carries both, and both go stale: measured
+ * 2026-09-18, the snapshot billed `google/gemini-3.6-flash` at 1.5/7.5 per
+ * million against a live 0.75/3.75, and `z-ai/glm-5.2` at 0.69/2.169 against
+ * 0.554/1.742. That was tolerable while the admin screen listed hundreds and
+ * the price was context; with three rows the price IS the comparison, and a
+ * cost lever whose numbers are double is worse than one with no numbers.
+ *
+ * It rides on this lookup rather than getting a fetch of its own because the
+ * response it comes from is already being fetched, three fields over. A
+ * second call would be a second thing to fail, cache and reason about — and
+ * two readers of one provider answer are how they come to disagree.
+ */
+export interface ModelFacts {
+  cost?: { input: number; output: number };
+  contextWindow?: number;
+}
+
 export interface CapabilityMap {
   /** Model ids known to accept `tools`. Empty when the lookup failed. */
   toolCapable: ReadonlySet<string>;
+  /**
+   * Price and context window per id, from the SAME successful fetch. Empty
+   * when the lookup failed, and a missing entry means "the provider did not
+   * state it" — the caller falls back to the bundled snapshot rather than
+   * rendering a model as free.
+   */
+  facts: ReadonlyMap<string, ModelFacts>;
   /** False when the catalogue could not be read — NOT "nothing qualified". */
   known: boolean;
   /**
@@ -50,7 +77,7 @@ export interface CapabilityMap {
   stale?: boolean;
 }
 
-const UNKNOWN: CapabilityMap = { toolCapable: new Set(), known: false };
+const UNKNOWN: CapabilityMap = { toolCapable: new Set(), facts: new Map(), known: false };
 
 interface Cache { value: CapabilityMap; fetchedAt: number }
 let cache: Cache | undefined;
@@ -89,7 +116,13 @@ export async function toolCapability(options: CapabilityOptions = {}): Promise<C
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => { controller.abort(); }, FETCH_TIMEOUT_MS);
-    let payload: { data?: { id?: unknown; supported_parameters?: unknown }[] };
+    let payload: {
+      data?: {
+        id?: unknown; supported_parameters?: unknown;
+        pricing?: { prompt?: unknown; completion?: unknown };
+        context_length?: unknown;
+      }[];
+    };
     try {
       const response = await doFetch(OPENROUTER_MODELS_URL, { signal: controller.signal });
       if (!response.ok) return failed(now);
@@ -99,10 +132,13 @@ export async function toolCapability(options: CapabilityOptions = {}): Promise<C
     }
 
     const toolCapable = new Set<string>();
+    const facts = new Map<string, ModelFacts>();
     for (const model of payload.data ?? []) {
       if (typeof model?.id !== "string") continue;
       const params = model.supported_parameters;
       if (Array.isArray(params) && params.includes("tools")) toolCapable.add(model.id);
+      const fact = factsOf(model);
+      if (fact) facts.set(model.id, fact);
     }
     // An empty set from a SUCCESSFUL fetch would mean the shape changed —
     // `supported_parameters` renamed, say. Treating that as "no model can
@@ -110,13 +146,45 @@ export async function toolCapability(options: CapabilityOptions = {}): Promise<C
     // so it is treated as not-known instead.
     if (toolCapable.size === 0) return failed(now);
 
-    const value: CapabilityMap = { toolCapable, known: true };
+    const value: CapabilityMap = { toolCapable, facts, known: true };
     cache = { value, fetchedAt: now };
     lastGood = value;
     return value;
   } catch {
     return failed(now);
   }
+}
+
+/**
+ * OpenRouter states prices PER TOKEN, as decimal strings ("0.00000075"), and
+ * every screen in this product talks in dollars per million. The conversion
+ * lives here, once, beside the parse — a caller doing it would be a second
+ * place for a factor of a million to be wrong, and this file already records
+ * what a factor-of-1000 mistake looks like on a screen (a 30-minute part
+ * rendering as 1.8 seconds: "a number that looks like data, not an error").
+ *
+ * A price of 0 is REAL — some models are free — so it is passed through; what
+ * is dropped is a field the provider did not state or stated unparseably,
+ * because "we do not know what this costs" and "this costs nothing" are
+ * different facts and on a price the second is the expensive way to be wrong.
+ */
+function factsOf(model: {
+  pricing?: { prompt?: unknown; completion?: unknown };
+  context_length?: unknown;
+}): ModelFacts | null {
+  const perMillion = (raw: unknown): number | null => {
+    const n = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : NaN;
+    return Number.isFinite(n) && n >= 0 ? n * 1_000_000 : null;
+  };
+  const input = perMillion(model.pricing?.prompt);
+  const output = perMillion(model.pricing?.completion);
+  const facts: ModelFacts = {
+    ...(input !== null && output !== null ? { cost: { input, output } } : {}),
+    ...(typeof model.context_length === "number" && model.context_length > 0
+      ? { contextWindow: model.context_length }
+      : {}),
+  };
+  return facts.cost || facts.contextWindow !== undefined ? facts : null;
 }
 
 function failed(now: number): CapabilityMap {

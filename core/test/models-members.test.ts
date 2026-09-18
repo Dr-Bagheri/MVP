@@ -41,7 +41,14 @@ vi.mock("../src/agent/pi.ts", async () => ({
     { id: "anthropic/claude-opus-5", name: "Claude Opus 5", reasoning: false },
     { id: "~anthropic/claude-opus-latest", name: "Anthropic: Claude Opus Latest", reasoning: false },
     { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", reasoning: false },
-    { id: "deepseek/deepseek-v4-flash-0731", name: "DeepSeek V4 Flash", reasoning: false },
+    /* the only entry carrying a SNAPSHOT price, and it is what makes the
+       live-over-snapshot rule testable in both directions: without a bundled
+       figure to fall back to, "the fallback works" and "the fallback was
+       deleted" produce the same undefined. */
+    {
+      id: "deepseek/deepseek-v4-flash-0731", name: "DeepSeek V4 Flash", reasoning: false,
+      cost: { input: 0.09, output: 0.18 }, contextWindow: 1_310_720,
+    },
     { id: "openai/gpt-5", name: "GPT-5", reasoning: false },
   ],
 }));
@@ -54,8 +61,15 @@ import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
 /** Injected so no unit test reaches OpenRouter. */
-const capable = (ids: string[]) => async () => ({ toolCapable: new Set(ids), known: true });
-const unknown = async () => ({ toolCapable: new Set<string>(), known: false });
+/*
+ * `facts` — the provider's live price and context window — rides on the same
+ * lookup, so a stub that omits it would be faking an outage while claiming
+ * `known: true`. Empty by default (the provider stated nothing, so the
+ * bundled snapshot stands); `priced` takes the live figures when they are here.
+ */
+const capable = (ids: string[], facts: Map<string, { cost?: { input: number; output: number }; contextWindow?: number }> = new Map()) =>
+  async () => ({ toolCapable: new Set(ids), facts, known: true });
+const unknown = async () => ({ toolCapable: new Set<string>(), facts: new Map(), known: false });
 
 const ADMIN = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
@@ -472,6 +486,41 @@ describe("model catalogue (M5)", () => {
       expect(admin.models.map((m) => m.allowed)).toEqual([true, true]);
 
       expect(await repo().forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
+    });
+
+    it("quotes the PROVIDER's price, not the bundled snapshot's", async () => {
+      /*
+       * Found by reading the deployed screen after the narrowing shipped: the
+       * admin table said `google/gemini-3.6-flash` costs $1.5/$7.5 per million
+       * and the provider says $0.75/$3.75 — the bundled catalogue's figure,
+       * exactly double, on the one screen whose job is deciding what an org
+       * can afford to run. Nothing had ever compared the two, because a
+       * plausible price is indistinguishable from a correct one.
+       *
+       * The fixture's numbers are the REAL pair for that model, measured the
+       * same day: the stale one is what the mocked catalogue carries (it has
+       * none, so the snapshot is absent) and the live one is what the
+       * capability lookup now brings back from the same fetch.
+       */
+      const facts = new Map([
+        ["google/gemini-3.6-flash", { cost: { input: 0.75, output: 3.75 }, contextWindow: 1_048_576 }],
+      ]);
+      const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
+      const result = await createModelsRepo(db, {
+        capability: capable(["deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"], facts),
+      }).curation(ADMIN_ID);
+
+      const gemini = result.models.find((m) => m.id === "google/gemini-3.6-flash");
+      expect(gemini?.cost).toEqual({ input: 0.75, output: 3.75 });
+      expect(gemini?.contextWindow).toBe(1_048_576);
+      // THE CONTROL, and it is the half that stops this passing for the wrong
+      // reason: a model the provider said nothing about must keep whatever
+      // the catalogue knows rather than losing its price entirely — an absent
+      // price and a wrong one are different failures and this fix must not
+      // trade one for the other.
+      const deepseek = result.models.find((m) => m.id === "deepseek/deepseek-v4-flash-0731");
+      expect(deepseek?.cost).toEqual({ input: 0.09, output: 0.18 });
+      expect(deepseek?.contextWindow).toBe(1_310_720);
     });
 
     it("still honours a curation with ONE servable model left in it — the control", async () => {

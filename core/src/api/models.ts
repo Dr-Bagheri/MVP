@@ -437,6 +437,34 @@ export function firstServable(...candidates: (string | null | undefined)[]): str
   return null;
 }
 
+/**
+ * THE PRICE AND THE CONTEXT WINDOW, today's if we have them.
+ *
+ * The bundled catalogue carries both and both go stale: measured against the
+ * provider on 2026-09-18, the snapshot billed `google/gemini-3.6-flash` at
+ * 1.5/7.5 per million against a live 0.75/3.75, and `z-ai/glm-5.2` at
+ * 0.69/2.169 against 0.554/1.742. Nothing had ever compared the two, because
+ * a plausible price on a screen is indistinguishable from a correct one.
+ *
+ * It mattered little while the admin table listed hundreds and the number was
+ * context. With three rows the price IS the comparison — it is most of what
+ * an admin is choosing on — so the live figure wins and the snapshot is the
+ * fallback for a model the provider said nothing about. During an outage the
+ * capability map is the last CHECKED one, so the price ages exactly as the
+ * tool flags do, and says so through the same `stale` label.
+ */
+function priced<T extends { id: string; cost?: { input: number; output: number }; contextWindow?: number }>(
+  model: T, capability: CapabilityMap,
+): { cost?: { input: number; output: number }; contextWindow?: number } {
+  const live = capability.facts.get(model.id);
+  const cost = live?.cost ?? model.cost;
+  const contextWindow = live?.contextWindow ?? model.contextWindow;
+  return {
+    ...(cost ? { cost } : {}),
+    ...(contextWindow !== undefined ? { contextWindow } : {}),
+  };
+}
+
 /** The offer list's own order first, then everything else unchanged. */
 function bySuggestion<T extends { id: string }>(models: T[]): T[] {
   const rank = (id: string): number => {
@@ -512,6 +540,10 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
         : permitted,
       ).map((m) => ({
         ...m,
+        // the same live-over-snapshot rule as the admin table: the member
+        // picker carries these too, and two screens quoting different prices
+        // for one model is the defect this is fixing, not half of it
+        ...priced(m, capability),
         selected: m.id === servablePreference(row.preferred_model),
         ...(capability.known ? { tools: capability.toolCapable.has(m.id) } : {}),
       }));
@@ -587,8 +619,7 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
           /* the two facts that make a row answerable. Passed through rather
              than formatted: "$1.75 / $14 per M" is a decision about language
              and locale, and this is the wire. */
-          ...(m.cost ? { cost: m.cost } : {}),
-          ...(m.contextWindow !== undefined ? { contextWindow: m.contextWindow } : {}),
+          ...priced(m, capability),
           allowed: !curated || allowed.includes(m.id),
           ...(capability.known ? { tools: capability.toolCapable.has(m.id) } : {}),
         })),
