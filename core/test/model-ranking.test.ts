@@ -1,18 +1,22 @@
 /**
- * THE RANKING AGAINST THE REAL CATALOGUE.
+ * THE OFFER LIST AGAINST THE REAL CATALOGUE.
  *
- * `models-members.test.ts` mocks `catalogue()` down to five entries — the
- * right call for what it asserts, and the reason it cannot see this class of
- * bug at all: a suggestion list naming a model the catalogue does not have
- * passes every test in that file and then serves an admin a row that cannot
- * be chosen, or a members' picker whose first entry 400s.
+ * `models-members.test.ts` mocks `catalogue()` down to a handful of entries —
+ * the right call for what it asserts, and the reason it cannot see this class
+ * of bug at all: a list naming a model the catalogue does not have passes
+ * every test in that file and then serves an admin a row that cannot be
+ * chosen, or a members' picker whose first entry 400s.
  *
  * That is not hypothetical. `models.ts` records `ai21/jamba-large-1.7` — a
  * RETIRED provider — leading the picker because the api served catalogue
- * order, and a live loop run died on it. The ranking is hand-written and
- * gets re-picked as models come and go (2026-08-16, then 2026-09-09), so the
- * one thing worth pinning is that every id in it is a model this product can
- * actually serve.
+ * order, and a live loop run died on it.
+ *
+ * It matters MORE since 2026-09-18 than it did when this file was written
+ * against a ranking. `OFFERED_MODELS` is now an allow-list rather than an
+ * order: an id the bundled catalogue does not carry is not a row out of
+ * place, it is a model the product cannot serve at all, and three ids is a
+ * short enough list that losing one to a pi-ai bump takes a third of the
+ * picker with it and nothing else goes red.
  *
  * So: NO MOCK here, deliberately. The assertions read the same
  * `builtinModels()` catalogue production reads.
@@ -20,52 +24,55 @@
 import { describe, expect, it } from "vitest";
 import { catalogue } from "../src/agent/pi.ts";
 import {
-  EXCLUDED_PROVIDERS,
+  isExcluded,
+  isNotAModel,
   latestOfEachFamily,
-  RECOMMENDED_MODELS,
-  SUGGESTED_MODELS,
+  OFFERED_MODELS,
 } from "../src/api/models.ts";
 
 const ids = new Set(catalogue().map((m) => m.id));
 
-describe("the model ranking", () => {
+describe("the models this product offers", () => {
+  it("offers something at all", () => {
+    // The control for every assertion below: `[].filter(...)` satisfies all
+    // of them, and an empty offer list is a product that serves no model to
+    // anyone. Cheap to write, and the one failure the others cannot express.
+    expect(OFFERED_MODELS.length).toBeGreaterThan(0);
+  });
+
   it("names only models the catalogue actually has", () => {
-    // The whole point: a typo or a retired id is invisible everywhere else
-    // until someone picks it.
-    expect(RECOMMENDED_MODELS.filter((id) => !ids.has(id))).toEqual([]);
+    // A typo or an id dropped by a catalogue bump is invisible everywhere
+    // else until someone picks it — and now, until a third of the product's
+    // models quietly stops existing.
+    expect(OFFERED_MODELS.filter((id) => !ids.has(id))).toEqual([]);
   });
 
-  it("names no excluded provider", () => {
-    // The same negative-space assertion models-members.test.ts makes about
-    // SUGGESTED_MODELS, widened to the shelf: the shelf is what the ADD
-    // dialog opens on, so a barred model reaching it is the picker offering
-    // what `choose()` will refuse.
-    const barred = RECOMMENDED_MODELS.filter((id) => {
-      const vendor = id.toLowerCase().replace(/^[^a-z0-9]+/, "").split("/")[0] ?? "";
-      return EXCLUDED_PROVIDERS.includes(vendor) || id.toLowerCase().includes("claude");
-    });
-    expect(barred).toEqual([]);
+  it("names no excluded provider, asked with the product's OWN predicate", () => {
+    // Not a hand-written copy of the rule: a re-implementation here agrees
+    // with whatever I believed while writing it, which is exactly how the
+    // no-Claude rule passed its tests and served 28 anthropic models.
+    //
+    // This is also what keeps the exclusion load-bearing now that the offer
+    // list subsumes it. Enforcement runs through `isServable`, where a
+    // barred id is refused twice over; this assertion is the one place the
+    // FAMILY rule can still fail on its own, so a widening that pastes in a
+    // Claude id goes red here rather than shipping.
+    expect(OFFERED_MODELS.filter((id) => isExcluded(id))).toEqual([]);
   });
 
-  it("opens with the org's lineup, in the lineup's own order", () => {
-    // `bySuggestion` ranks by RECOMMENDED_MODELS alone, so the five are the
-    // top five ONLY because the shelf starts with them. Split the two lists
-    // and the picker silently stops leading with the lineup — nothing else
-    // would fail.
-    expect(RECOMMENDED_MODELS.slice(0, SUGGESTED_MODELS.length)).toEqual([...SUGGESTED_MODELS]);
+  it("names no routing plan, moving alias or meta-router", () => {
+    // `:batch` and `:free` are the same shape as the `:online` suffix that
+    // killed every ask on 2026-09-04 — a transport feature wearing a model
+    // id's clothes — and `~vendor/model-latest` resolves to whatever ships
+    // next, which is not a decision anyone here can be said to have made.
+    // With a hand-written list this is the only door those can come through.
+    expect(OFFERED_MODELS.filter((id) => isNotAModel(id))).toEqual([]);
   });
 
   it("lists each model once", () => {
     // A duplicate does not break `indexOf`, it just makes the second entry a
     // dead line that reads like a decision.
-    expect(new Set(RECOMMENDED_MODELS).size).toBe(RECOMMENDED_MODELS.length);
-  });
-
-  it("names no id carrying the catalogue's transport decorations", () => {
-    // `:batch` and `:free` are the same shape as the `:online` suffix that
-    // killed every ask on 2026-09-04 — a routing plan wearing a model id's
-    // clothes. The picker offers MODELS.
-    expect(RECOMMENDED_MODELS.filter((id) => id.includes(":"))).toEqual([]);
+    expect(new Set(OFFERED_MODELS).size).toBe(OFFERED_MODELS.length);
   });
 });
 
@@ -158,10 +165,25 @@ describe("latest of each family", () => {
       .toEqual(["z-ai/glm-5.2", "openai/gpt-5.6-terra", "deepseek/deepseek-v4-pro"]);
   });
 
-  it("leaves the whole shelf standing when run over the real catalogue", () => {
-    // The shelf is what the dialog OPENS on, so a shelf entry the filter
-    // removes is a ranking and a list disagreeing about one org.
-    const survivors = new Set(run([...ids], (id) => RECOMMENDED_MODELS.includes(id)));
-    expect(RECOMMENDED_MODELS.filter((id) => !survivors.has(id))).toEqual([]);
+  it("would need its `keep` to leave the offer list standing — and here is the one that proves it", () => {
+    /*
+     * This filter is off the live path since 2026-09-18 (see the function's
+     * own header), so what is worth pinning is the condition under which it
+     * could be put back safely: with `keep` naming the offer list, every
+     * offered model survives a run over the REAL catalogue.
+     *
+     * And the half that would have bitten whoever restored it: without
+     * `keep`, `deepseek/deepseek-v4-flash-0731` does NOT survive, because a
+     * plain id outranks a dated cut of itself and `deepseek/deepseek-v4-flash`
+     * is in the same catalogue. The product offers the dated one on purpose
+     * — it routes to a server twice as fast — so a restored call site
+     * without its `keep` would quietly drop a third of the picker.
+     */
+    const kept = new Set(run([...ids], (id) => OFFERED_MODELS.includes(id)));
+    expect(OFFERED_MODELS.filter((id) => !kept.has(id))).toEqual([]);
+
+    const bare = new Set(run([...ids]));
+    expect(OFFERED_MODELS.filter((id) => !bare.has(id)))
+      .toEqual(["deepseek/deepseek-v4-flash-0731"]);
   });
 });

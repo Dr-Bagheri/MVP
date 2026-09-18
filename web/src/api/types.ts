@@ -689,14 +689,13 @@ export interface ModelInfo {
   selected: boolean;
 }
 
-/**
- * NOT a wire type — the admin allow-list row, a Phase-A view-model.
- *
- * core/ publishes no admin model-management endpoint yet (`/v1/admin/models`
- * doesn't exist), so the admin screen's allow-list section is mock-fed and
- * known-stale. It is kept separate from `ModelInfo` so the wire type stays
- * honest: `tool_capable`, `allowed`, `suggested` and `provider` are OUR
- * fields here, not core/'s, and none of them should migrate into `ModelInfo`.
+/*
+ * A stale block stood here until 2026-09-18 saying this was "NOT a wire
+ * type", a Phase-A view-model, because "core/ publishes no admin
+ * model-management endpoint yet". The endpoint has existed for weeks and the
+ * block directly below it says so — two comments about one type, one of them
+ * apologising for a state that had been fixed. It named `suggested` as one of
+ * "OUR fields", which is how it was found while removing that field.
  */
 /**
  * The curation row — the WIRE's shape now (`GET /v1/admin/models`), not a
@@ -708,15 +707,14 @@ export interface AdminModelRow {
   id: string;
   name: string;
   allowed: boolean;
-  suggested: boolean;
-  /**
-   * On core/'s ranked shelf (RECOMMENDED_MODELS). The picker opens on these
-   * — the catalogue is 335 models and an alphabetical list of the rest led
-   * with a retired provider. OPTIONAL because a core deployed before this
-   * field existed does not send it, and "absent" must not read as "not
-   * recommended" and empty the dialog.
+  /*
+   * `suggested` and `recommended` left this wire on 2026-09-18 with the two
+   * lists in core/ that fed them. The product offers three models now, so
+   * both would be true of every row — and a flag true of every row is a flag
+   * that says nothing. What went with them: the chip in the table, and the
+   * shelf-versus-search split the ADD dialog needed when an admin was
+   * choosing out of three hundred candidates.
    */
-  recommended?: boolean;
   tools?: boolean;
   /**
    * USD per million tokens, as the upstream catalogue states it. OPTIONAL and

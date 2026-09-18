@@ -118,6 +118,23 @@ rule names a MODEL FAMILY, not a routing prefix. The live picker was offering
 the vendor segment is `anthropic` after punctuation is stripped, OR the id
 names `claude` at all, whoever routes it.)
 
+**The product offers THREE models** [user directive, 2026-09-18: "the three
+best models available and remove others"]: a cheap rung for work that runs
+unattended, an agentic rung for long-horizon tool use, and one proprietary
+flagship. The list lives in `core/src/api/models.ts` (`OFFERED_MODELS`) with
+the measurement and the reasoning behind each pick; it is an ALLOW-LIST, so a
+model it does not name is not listed, not choosable by name, and not a rung of
+M5's ladder — the same treatment a barred provider gets, through the same
+funnel. The two rules stay separate predicates: the offer list is edited, the
+family exclusion is not. Recorded here rather than only in the decision log
+for the reason the paragraph above exists.
+
+An org allow-list naming NONE of the offered models is read as no curation at
+all, rather than as permission for nothing. Measured on production the day the
+narrowing shipped: three organisations allowed only the demo seed's old
+default, and read literally each of them would have lost every rung of M5's
+ladder at once — every agent silently unable to answer, org-wide.
+
 ### Skills
 Three levels: **system** skills shipped with the product (the summarizer is
 one), **organization** skills an admin sets, **user** skills an individual

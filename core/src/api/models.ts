@@ -76,107 +76,58 @@ export interface ModelsOptions {
 }
 
 /**
- * Suggested models, best first. Everything else follows in catalogue order.
+ * ── THE MODELS THIS PRODUCT OFFERS ─────────────────────────────────────────
  *
- * The steward asked me to "order by the existing suggestion ranking, never
- * alphabetically". **There was no existing ranking** — `builtinModels()`
- * gives id, name and reasoning, and the api had been serving them in
- * catalogue order, which is alphabetical, which is why the first thing every
- * new user saw was `ai21/jamba-large-1.7` from a provider that has been
- * RETIRED. A live loop run died on it.
+ * User directive, 2026-09-18: "for model but the three best models available
+ * and remove others". So this is an ALLOW-LIST rather than a ranking:
+ * everything the catalogue holds and this list does not name is refused at
+ * every door a model id can come through, exactly as a barred provider is.
  *
- * So this list is new, and it is a judgement rather than a measurement: these
- * are the models this product actually runs on and that have been observed
- * answering with tools. Saying that plainly matters — a ranking presented as
- * derived when it is curated is the same lie as a filter presented as
- * enforcement when it is a guess.
+ * It replaces two lists that were ordering-only — a five-model lineup and a
+ * twenty-four-model shelf — with ONE, because the moment two lists describe
+ * the same set they start disagreeing about it. The order here is the
+ * picker's order.
  *
- * The real fix is liveness, and the steward has named the seam: our own
- * `agent_run` error classes per model are a reputation source, so a later
- * pass can demote recently-hard-failing models. Until then this is
- * presentation only, and it does not pretend otherwise — nothing is removed,
- * only ordered.
+ * WHAT WAS MEASURED, live on OpenRouter on the day it was set, price per
+ * million in/out and the context window, all three tool-capable:
+ *
+ *   deepseek/deepseek-v4-flash-0731   0.06 / 0.12    1.31M
+ *   z-ai/glm-5.2                      0.55 / 1.74    1.05M
+ *   google/gemini-3.6-flash           0.75 / 3.75    1.05M
+ *
+ * A recorded observation with its conditions attached, not a number left to
+ * rot: the BUNDLED catalogue's prices are a snapshot and are already wrong
+ * elsewhere (`openai/gpt-5.6-terra` reads 1/6 in the bundle and bills 2/12
+ * live), which is why these were read from the provider rather than from the
+ * file this module already imports.
+ *
+ * WHY THESE THREE — a judgement on top of that measurement, said plainly
+ * because a curated pick presented as derived is the same lie as a filter
+ * presented as enforcement: one cheap rung the product can afford to run
+ * unattended on every mail poll, one agentic rung at the top of OpenRouter's
+ * tool-calling list for long-horizon work, and one proprietary flagship, so
+ * that an org is not betting its whole assistant on a single vendor's
+ * weights. `z-ai/glm-5.3` is live and is NOT here for a structural reason
+ * rather than a preference — it is absent from the bundled catalogue, and
+ * `assertAskable` and `list()` both read that catalogue, so an id it does
+ * not carry cannot be offered however good it is.
+ *
+ * THE DATED ID IS DELIBERATE. `deepseek/deepseek-v4-flash` (the plain alias)
+ * and `-0731` (the GA cut) are the same weights and 2.2x apart in tokens per
+ * second, because OpenRouter's default route optimises for PRICE and the
+ * alias's cheapest server is its slowest: 27 tok/s on the alias against 58
+ * on the dated id, measured from the box on the same prompt. A model id is
+ * not a performance decision and a routing alias is.
  */
-export const SUGGESTED_MODELS: readonly string[] = [
-  /*
-   * Re-picked 2026-09-09.
-   *
-   * The previous five were set on 2026-08-16 and never revisited. By now
-   * `openai/gpt-5.2` (1.75/14 per M) sat at rank 2 while `openai/gpt-5.6-terra`
-   * — a later model, pi-verified, 1.05M context — costs 1/6, and the head of
-   * the list was a PREVIEW id at 2/12. `meta-llama/llama-4-scout` has no
-   * reasoning and is not on any current tool-calling ranking; it was the
-   * cheap rung and it is the wrong one.
-   *
-   * What the picks are grounded in, so a later reader can re-check rather
-   * than re-guess:
-   *  - OpenRouter's tool-calling collection ranking (weekly real usage),
-   *  - Pi's own release notes: the gpt-5.6 family carries verified metadata
-   *    and thinking levels; Pi's tiny system prompt makes it model-agnostic,
-   *    so raw tool-calling reliability is what matters, not harness tuning,
-   *  - price and context from the bundled catalogue itself.
-   *
-   * Anthropic is barred by product rule, so the models most rankings put at
-   * the very top are simply not candidates here — see EXCLUDED_PROVIDERS.
-   *
-   * Still a JUDGEMENT, not a measurement: nothing here was benchmarked by us.
-   * The liveness seam named below (per-model `agent_run` errors as reputation)
-   * is still the real fix.
-   */
-  // flagship agentic: 1M context, verified thinking levels, half gpt-5.2's price
-  "openai/gpt-5.6-terra",
-  // top of OpenRouter's tool-calling list for long-horizon agents; 1M context
+export const OFFERED_MODELS: readonly string[] = [
+  // the cheap rung: what an unattended run costs is what it is allowed to
+  // cost, and this is a fortieth of the preview id it replaced as default
+  "deepseek/deepseek-v4-flash-0731",
+  // the agentic rung: the one to reach for when a workflow chains many steps
   "z-ai/glm-5.2",
-  // 1M context, lowest observed hallucination, a fifth of the flagship's cost
-  "deepseek/deepseek-v4-pro",
-  // the Google rung, now the current one rather than a preview id
+  // the flagship, and the only proprietary one: the rung that answers "is it
+  // the model or is it us" when a run goes wrong
   "google/gemini-3.6-flash",
-  // the cheap/fast rung: 0.1/0.6 per M, and #2 on the tool-calling ranking
-  "openai/gpt-5.6-luna",
-];
-
-/**
- * THE PICKER'S ORDER, and the shortlist the "add a model" dialog opens on.
- *
- * `SUGGESTED_MODELS` is the org's lineup — five, chipped as such. This is the
- * wider ranked shelf, and it exists because the ADD dialog was ordering the
- * rest of the catalogue alphabetically: an admin opening it saw
- * `ai21/jamba-large-1.7` (retired provider), three `aion-labs` and four
- * `amazon/nova` before anything they would plausibly choose. That is the same
- * failure the comment above records for the members' picker, still live one
- * dialog over — fixing one instance does not fix its siblings.
- *
- * Ordering only. Nothing is removed from the catalogue, and the dialog's
- * search still reaches every model — this decides what shows FIRST, and what
- * an empty search box shows at all.
- */
-export const RECOMMENDED_MODELS: readonly string[] = [
-  ...SUGGESTED_MODELS,
-  "openai/gpt-5.6-sol",
-  "x-ai/grok-4.5",
-  "moonshotai/kimi-k2.6",
-  "deepseek/deepseek-v4-flash",
-  "google/gemini-3.5-flash",
-  "qwen/qwen3.7-max",
-  "minimax/minimax-m3",
-  "z-ai/glm-5.1",
-  "openai/gpt-5.4",
-  "moonshotai/kimi-k3",
-  "qwen/qwen3.7-plus",
-  "nvidia/nemotron-3-ultra-550b-a55b",
-  "tencent/hy3",
-  "mistralai/mistral-large-2512",
-  "minimax/minimax-m2.7",
-  "x-ai/grok-4.3",
-  "qwen/qwen3.6-plus",
-  "openai/gpt-5.4-mini",
-  "z-ai/glm-4.7",
-  // the previous lineup, kept on the shelf: an org already running one of
-  // these must still find it without typing the id from memory.
-  "google/gemini-3.1-pro-preview",
-  "openai/gpt-5.2",
-  "google/gemini-3.1-flash-lite",
-  "deepseek/deepseek-v3.2",
 ];
 
 /**
@@ -222,11 +173,84 @@ export const EXCLUDED_PROVIDERS: readonly string[] = ["anthropic"];
  * whoever routes it. A model reselling Claude under another vendor is still
  * Claude.
  */
-const isExcluded = (id: string): boolean => {
+export const isExcluded = (id: string): boolean => {
   const normalized = id.toLowerCase().replace(/^[^a-z0-9]+/, "");
   const vendor = normalized.split("/")[0] ?? "";
   return EXCLUDED_PROVIDERS.includes(vendor) || normalized.includes("claude");
 };
+
+/**
+ * ── THE SECOND HALF OF THE SAME QUESTION ───────────────────────────────────
+ *
+ * `isExcluded` says which model FAMILY this product refuses whoever routes
+ * it. This says which ids it offers at all.
+ *
+ * They are deliberately kept apart although the offer list subsumes the
+ * exclusion today, and the honest version of why is worth writing down
+ * rather than overclaiming: with no Anthropic id in `OFFERED_MODELS`,
+ * deleting `EXCLUDED_PROVIDERS` would change no BEHAVIOUR at all. What
+ * keeps the rule real is that it stays a predicate with assertions of its
+ * own — `model-wall.test.ts` asks it directly with the id production served,
+ * and `model-ranking.test.ts` asks it of every id on the offer list — so the
+ * day that list widens, the family rule is a thing that already exists and
+ * already decides, rather than a paragraph somebody has to remember. The
+ * first three failures of this rule all began with it being described
+ * somewhere and asked nowhere.
+ *
+ * EXACT match, on purpose. An allow-list that normalises is an allow-list a
+ * near-miss spelling gets through, and the catalogue's own `~vendor/model`
+ * routing alias is exactly such a near miss.
+ */
+const isOffered = (id: string): boolean => OFFERED_MODELS.includes(id);
+
+/**
+ * THE ONE QUESTION EVERY GATE ASKS: will this product serve this id?
+ *
+ * One predicate rather than two checks at each door, because the failure
+ * this file records five times over is a SECOND copy of a rule that forgets
+ * half of it. Exclusion runs first, so a widened offer list can never
+ * re-admit a barred family.
+ *
+ * WHERE it is asked decides what a refusal looks like, and that distinction
+ * is the one every door here turns on: a model somebody TYPED is refused by
+ * name (`assertAskable`, `choose`), and a model nobody typed — a stored
+ * preference, a skill's pin, an env fallback — is simply not a rung, so the
+ * ladder walks past it rather than ending a run the person never configured.
+ */
+const isServable = (id: string): boolean => !isExcluded(id) && isOffered(id);
+
+/**
+ * THE ORG'S CURATION, AFTER THE PRODUCT'S OWN RULES — and an allow-list that
+ * survives none of them is NOT A CURATION.
+ *
+ * Measured on production before the 2026-09-18 narrowing shipped, at owner
+ * altitude: three organisations allowed exactly `google/gemini-2.5-flash`
+ * (the demo seed's own default, written by the seeder rather than chosen by
+ * anybody), the server sets no `WORKER_SUMMARY_MODEL`, and three members
+ * still store that id as their preference. Read the allow-list literally and
+ * every one of those orgs loses every rung of M5's ladder at once: no
+ * preference, no permitted model, no env fallback, so every agent answers
+ * "no model selected" for the whole organisation, with no symptom anybody
+ * could act on except the silence.
+ *
+ * So the empty intersection is treated as the ladder already treats a stored
+ * preference the product will not serve: the rung is missing, take the next
+ * one. It is the same sentence, one level up — a list naming only models we
+ * refuse is a dangling pointer, not an instruction — and it is applied in
+ * ALL THREE readers, because a picker and an admin screen disagreeing about
+ * whether an org is curated is how a control comes to mean two things.
+ *
+ * WHAT IT COSTS, stated rather than discovered: an admin who deliberately
+ * allowed one model, and only that model, gets the whole offer list back on
+ * the day it stops being offered — including models they may have left out
+ * on price. That is the cheaper side of the trade against an organisation
+ * whose assistant silently stops answering, and it is visible on their own
+ * screen the moment they look, where a stranded org looks like nothing at
+ * all.
+ */
+function inForce(allowed: string[]): string[] {
+  return allowed.filter((id) => isServable(id));
+}
 
 /**
  * ── WHAT IS NOT A MODEL ────────────────────────────────────────────────────
@@ -257,7 +281,7 @@ const NOT_A_MODEL: readonly RegExp[] = [
   /-customtools$/, // a tool-schema variant of a model already listed
 ];
 
-const isNotAModel = (id: string): boolean =>
+export const isNotAModel = (id: string): boolean =>
   !id.includes("/") || NOT_A_MODEL.some((pattern) => pattern.test(id));
 
 /**
@@ -345,6 +369,18 @@ function newerVersion(a: number[], b: number[]): boolean {
 /**
  * Keep the latest of each family, plus everything `keep` names.
  *
+ * ── NOT ON A LIVE PATH SINCE 2026-09-18, and said rather than implied ──────
+ * `curation()` was its only caller, and the product now offers three
+ * hand-written ids: there is nothing left for a family collapse to choose
+ * between, and a hand-written list cannot contain two cuts of one model
+ * unless somebody put them both there on purpose. It is kept, with tests
+ * that assert it DIRECTLY rather than through a screen, because the day the
+ * offer list widens past a handful this is the reasoning that stops the
+ * admin dialog filling with four dated cuts of one model — and re-deriving
+ * it from git is a worse deal than a paragraph saying plainly that it is
+ * idle. `isNotAModel` below is in the same position, with one live
+ * consumer: the guard that asserts no offered id is a routing plan.
+ *
  * `keep` is not a convenience — it is what stops this filter from breaking
  * the screen it serves. The curation view is ALSO the table an admin removes
  * a model from, so a filter that hides an allowed model takes away the only
@@ -370,7 +406,7 @@ export function latestOfEachFamily<T extends { id: string }>(
 
 /** A stored preference the product will not serve is not a preference. */
 function servablePreference(id: string | null): string | null {
-  return id !== null && isExcluded(id) ? null : id;
+  return id !== null && !isServable(id) ? null : id;
 }
 
 /**
@@ -387,26 +423,27 @@ function servablePreference(id: string | null): string | null {
  * A rung naming a barred model is a rung that is not there. That includes
  * the env fallback — a misconfigured WORKER_SUMMARY_MODEL is exactly the
  * kind of thing that would otherwise serve one silently forever.
+ *
+ * Since 2026-09-18 a rung naming a model the product no longer OFFERS is
+ * equally absent, for the same reason. `inForce` above says what happens
+ * when a whole org's allow-list lands in that state.
  */
 export function firstServable(...candidates: (string | null | undefined)[]): string | null {
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate !== "" && !isExcluded(candidate)) {
+    if (typeof candidate === "string" && candidate !== "" && isServable(candidate)) {
       return candidate;
     }
   }
   return null;
 }
 
-/** Recommended first (in the order above), then everything else unchanged. */
+/** The offer list's own order first, then everything else unchanged. */
 function bySuggestion<T extends { id: string }>(models: T[]): T[] {
   const rank = (id: string): number => {
-    // RECOMMENDED_MODELS opens with SUGGESTED_MODELS, so the lineup still
-    // leads — the wider list only decides what comes after it, instead of
-    // letting the alphabet decide.
-    const at = RECOMMENDED_MODELS.indexOf(id);
-    return at === -1 ? RECOMMENDED_MODELS.length : at;
+    const at = OFFERED_MODELS.indexOf(id);
+    return at === -1 ? OFFERED_MODELS.length : at;
   };
-  // A STABLE sort: models outside the suggested list keep catalogue order
+  // A STABLE sort: models outside the offer list keep catalogue order
   // relative to each other rather than being shuffled by an arbitrary tie
   // break. Array.prototype.sort is stable in every runtime we target.
   return [...models].sort((a, b) => rank(a.id) - rank(b.id));
@@ -420,15 +457,19 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
      * route took `body.model` as free text, so a barred or invented model was
      * selectable by anyone who typed its id — the exact hole the no-Claude
      * finding closed on `preferred`, reopened one route over. Catalogue and
-     * exclusion only, deliberately no capability probe: this runs on every
-     * ask, and refusing a legitimate model during a capability-check outage
-     * would take conversations down for someone else's downtime.
+     * the offer list only, deliberately no capability probe: this runs on
+     * every ask, and refusing a legitimate model during a capability-check
+     * outage would take conversations down for someone else's downtime.
+     *
+     * The two refusals stay distinct because they are different facts about
+     * the caller's id: "we have never heard of this" and "we have heard of
+     * it and do not serve it" send a person to different places.
      */
     assertAskable(modelId: string): void {
       if (!catalogue().some((m) => m.id === modelId)) {
         throw new ValidationError(`unknown model: ${modelId}`);
       }
-      if (isExcluded(modelId)) {
+      if (!isServable(modelId)) {
         throw new ValidationError(`model is not available on this product: ${modelId}`);
       }
     },
@@ -449,17 +490,17 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
       const row = rows[0];
       if (!row) throw new NotFoundError("member not found");
 
-      const allowed = row.allowed_models ?? [];
+      const allowed = inForce(row.allowed_models ?? []);
       const curated = allowed.length > 0;
       const all = catalogue();
-      // Empty allow-list = admin has not curated = the shipped catalogue
-      // (db/0002's comment). NOT "nothing is allowed" — that reading would
-      // leave every new org unable to pick a model at all.
-      // M5's provider exclusion applies FIRST and unconditionally: an admin's
-      // allow-list cannot re-admit a barred provider, and neither can the
-      // capability filter passing it through. A rule that any later filter
-      // could undo is not a rule.
-      const offered = all.filter((m) => !isExcluded(m.id));
+      // Empty allow-list = admin has not curated = everything the product
+      // offers (db/0002's comment). NOT "nothing is allowed" — that reading
+      // would leave every new org unable to pick a model at all.
+      // The product's own rules apply FIRST and unconditionally: an admin's
+      // allow-list cannot re-admit a barred provider or a model this product
+      // does not offer, and neither can the capability filter passing one
+      // through. A rule that any later filter could undo is not a rule.
+      const offered = all.filter((m) => isServable(m.id));
       const permitted = curated ? offered.filter((m) => allowed.includes(m.id)) : offered;
 
       // SPEC: models that cannot call tools are not selectable. Enforced from
@@ -490,13 +531,20 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
     },
 
     /**
-     * The CURATION view (Part 3): the whole offered catalogue with a flag
+     * The CURATION view (Part 3): everything the product offers with a flag
      * per model, for the admin allow-list screen. Distinct from `list()` on
      * purpose — the picker serves what a member may USE (allow-list applied),
      * the curation serves what an admin may PERMIT (allow-list rendered, not
-     * applied). The M5 provider exclusion still applies FIRST: a barred
-     * provider is not offered even as a checkbox, because a rule any later
-     * filter can undo is not a rule.
+     * applied). The product's rules still apply FIRST: a barred provider and
+     * an unoffered model are not offered even as a checkbox, because a rule
+     * any later filter can undo is not a rule.
+     *
+     * The `suggested` and `recommended` flags left this wire on 2026-09-18
+     * with the two lists that fed them. Both would now be true of every row
+     * — the offer list IS the catalogue here — and a flag true of every row
+     * is a flag that says nothing, so the admin table lost the chip and the
+     * add dialog lost the shelf-versus-search split it needed when there
+     * were three hundred candidates to sort through.
      *
      * Tool capability is a MARKER here, never a filter: an admin allowing a
      * tool-incapable model should see why members won't be offered it,
@@ -504,8 +552,7 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
      */
     async curation(identity: Identity): Promise<{
       models: {
-        id: string; name: string; allowed: boolean; suggested: boolean;
-        recommended: boolean; tools?: boolean;
+        id: string; name: string; allowed: boolean; tools?: boolean;
         cost?: { input: number; output: number }; contextWindow?: number;
       }[];
       curated: boolean;
@@ -520,23 +567,18 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
       );
       const row = rows[0];
       if (!row) throw new NotFoundError("member not found");
-      const allowed = row.allowed_models ?? [];
+      const allowed = inForce(row.allowed_models ?? []);
       const curated = allowed.length > 0;
       /*
-       * The exclusion FIRST and unconditionally, then the catalogue's own
-       * noise. `latestOfEachFamily` is presentation — it decides which of
-       * four cuts of one model an admin is shown — so it must never be the
-       * thing that keeps a barred provider out; that is `isExcluded`'s job
-       * and it runs before this line, as it does everywhere else.
-       *
-       * Already-allowed and shelf models survive the filter (see the
-       * function's own note): an org running an old snapshot must still find
-       * the row that removes it.
+       * An org whose allow-list still names a model the product no longer
+       * offers does NOT get a row for it here, and that is deliberate: the
+       * page writes the WHOLE array from the rows it can see, so the first
+       * toggle an admin makes drops the stale ids rather than carrying them
+       * forward invisibly. Until then those ids are already inert — `list()`
+       * and `forRun` both refuse them — so the row would be a control for
+       * removing something that is not doing anything.
        */
-      const offered = latestOfEachFamily(
-        catalogue().filter((m) => !isExcluded(m.id)),
-        (id) => allowed.includes(id) || RECOMMENDED_MODELS.includes(id),
-      );
+      const offered = catalogue().filter((m) => isServable(m.id));
       const capability = await capabilityOf();
       return {
         models: bySuggestion(offered).map((m) => ({
@@ -548,12 +590,6 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
           ...(m.cost ? { cost: m.cost } : {}),
           ...(m.contextWindow !== undefined ? { contextWindow: m.contextWindow } : {}),
           allowed: !curated || allowed.includes(m.id),
-          suggested: SUGGESTED_MODELS.includes(m.id),
-          /* the shelf flag, distinct from the chip: `suggested` is the org's
-             five, `recommended` is "worth showing before the admin has typed
-             anything". Served rather than re-derived in the UI so one list
-             decides both the ORDER and the shortlist. */
-          recommended: RECOMMENDED_MODELS.includes(m.id),
           ...(capability.known ? { tools: capability.toolCapable.has(m.id) } : {}),
         })),
         curated,
@@ -627,8 +663,8 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
       );
       const row = rows[0];
       if (!row) return null;
-      const allowed = row.allowed_models ?? [];
-      const offered = catalogue().filter((m) => !isExcluded(m.id));
+      const allowed = inForce(row.allowed_models ?? []);
+      const offered = catalogue().filter((m) => isServable(m.id));
       const permitted = allowed.length > 0 ? offered.filter((m) => allowed.includes(m.id)) : offered;
       const capability = await capabilityOf();
       const usable = capability.known ? permitted.filter((m) => capability.toolCapable.has(m.id)) : permitted;
@@ -654,7 +690,7 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
         // Both directions, or the filter is decorative: a barred model that
         // is merely hidden can still be chosen by anyone who names it, and
         // `preferred_model` is read by the assistant on every turn.
-        if (isExcluded(modelId)) {
+        if (!isServable(modelId)) {
           throw new ValidationError(`model is not available on this product: ${modelId}`);
         }
         // Fail closed on a KNOWN-incapable model (steward ruling): choosing

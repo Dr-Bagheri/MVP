@@ -81,7 +81,6 @@ export default function ModelsPage() {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [search, setSearch] = useState("");
   /** the model awaiting the platform's are-you-sure (dialog at the foot) */
   const [confirmRemove, setConfirmRemove] = useState<AdminModelRow | null>(null);
 
@@ -108,37 +107,26 @@ export default function ModelsPage() {
 
   const active = useMemo(() => models.filter((m) => m.allowed), [models]);
   /**
-   * What the ADD dialog offers.
+   * What the ADD dialog offers: everything the product serves that this org
+   * has not allowed.
    *
-   * The list used to be "every model the org has not allowed, first forty",
-   * and core served the catalogue in ITS order — which, past the five
-   * suggested, is alphabetical. So the dialog opened on
-   * `ai21/jamba-large-1.7` (a provider that has been RETIRED), three
-   * `aion-labs` and four `amazon/nova`: three hundred rows deep, sorted by
-   * nothing an admin cares about, with the models they would actually pick
-   * nowhere in sight. The same alphabet-as-ranking bug the members' picker
-   * had, still live one dialog over.
+   * ── what this used to be, and why it stopped being needed ────────────────
+   * The list was "every model the org has not allowed, first forty", and core
+   * served the catalogue in ITS order — which is alphabetical. So the dialog
+   * opened on `ai21/jamba-large-1.7` (a provider that has been RETIRED),
+   * three `aion-labs` and four `amazon/nova`: three hundred rows deep, sorted
+   * by nothing an admin cares about, with the models they would actually pick
+   * nowhere in sight. The fix was a SHELF — an untyped box showed core/'s
+   * ranked shortlist, and typing searched the whole catalogue.
    *
-   * Now: an UNTYPED box shows core/'s ranked shelf only (`recommended`),
-   * which is a shortlist a person can read. TYPING searches the WHOLE
-   * catalogue — the shelf is a starting point, never a wall, and an admin
-   * who wants a specific model still gets it by naming it.
-   *
-   * `recommended !== false` rather than `=== true`: a core deployed before
-   * the field existed sends nothing, and reading that as "none are" would
-   * empty the dialog for every such deployment.
+   * On 2026-09-18 the product narrowed to three models, and the shelf went
+   * with the problem it solved: a search field over three rows is furniture,
+   * and its own placeholder said "search the whole catalogue" about a
+   * catalogue the reader could already see all of. What is left is the list.
+   * No `slice` either — a cap that can never bite is a number somebody will
+   * later read as a rule.
    */
-  const inactive = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const notAllowed = models.filter((m) => !m.allowed);
-    if (term === "") return notAllowed.filter((m) => m.recommended !== false).slice(0, 40);
-    return notAllowed
-      /* the NAME and the ID both: a person types "gemini" as often as they
-         paste an id, and the name is the only one of the two on screen */
-      .filter((m) => nameOf(m).toLowerCase().includes(term)
-        || m.id.toLowerCase().includes(term))
-      .slice(0, 40);
-  }, [models, search]);
+  const inactive = useMemo(() => models.filter((m) => !m.allowed), [models]);
 
   /**
    * Write the WHOLE array, re-reading after. The lost-update hazard stays
@@ -203,12 +191,10 @@ export default function ModelsPage() {
          somebody back to the provider's own pricing page. */
       cell: (model) => (model.cost ? modelPrice(model.cost, locale) : null),
     },
-    {
-      key: "suggested",
-      header: t("modelColSuggested"),
-      headClassName: "text-start",
-      cell: (model) => (model.suggested ? <Chip tone="accent">{t("modelSuggested")}</Chip> : null),
-    },
+    /* A «پیشنهادی» column stood here until 2026-09-18. With three models on
+       offer it would have carried its chip on every row, and a chip true of
+       every row is a chip that says nothing — the reader learns to skip the
+       column, which is worse than not having it. */
     {
       key: "notes",
       header: t("modelColNotes"),
@@ -230,7 +216,7 @@ export default function ModelsPage() {
           type="button"
           className="btn-primary"
           disabled={busy || failed}
-          onClick={() => { setSearch(""); setAdding(true); }}
+          onClick={() => setAdding(true)}
         >
           <IconPlus width={14} height={14} />
           {t("modelsAdd")}
@@ -291,23 +277,9 @@ export default function ModelsPage() {
           wide
           body={
             <div className="space-y-3">
-              {/* audit finding, 2026-09-02: this field wore `.input` and then
-                  re-answered its height and type size by hand (h-9 min-h-0
-                  py-0 text-sm) — the "four overrides of .input" pattern, a
-                  36px box inside the 40px-field system. `.input` owns both. */}
-              <input
-                className="input"
-                placeholder={t("modelsSearch")}
-                value={search}
-                autoFocus
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              {/* THE SHORTLIST SAYS SO IN THE PLACEHOLDER, not in a sentence
-                  under the title. A line of prose here is exactly what R21
-                  forbids (copy.guard.test.ts caught it), and the rule is
-                  right: `modelsSearch` — "search the whole catalogue" — is
-                  the control's own hint slot, and it already tells an admin
-                  the box reaches past the list below it. */}
+              {/* The search field stood here until 2026-09-18 and went with
+                  the shelf it filtered: three rows do not need one, and its
+                  placeholder claimed a catalogue that no longer exists. */}
               <ul className="max-h-72 divide-y divide-border overflow-y-auto">
                 {/* audit finding's sibling, 2026-09-03 (rule 9: fixing one
                     instance does not fix its siblings): the table's []-means-
@@ -348,14 +320,16 @@ export default function ModelsPage() {
                     </IconAction>
                   </li>
                 ))}
-                {/* rule 12, name WHICH nothing: an empty SHELF is not a
-                    failed search. Before this the untyped dialog could say
-                    "no model matches that" about a search nobody ran — the
-                    same sentence-for-the-wrong-nothing the load window had. */}
+                {/* rule 12, name WHICH nothing — and the claim changed owner
+                    on 2026-09-18. It used to be about the SHELF ("every
+                    recommended model is already on the list, search the
+                    catalogue for others"), which after the narrowing would
+                    have sent an admin looking for models that do not exist:
+                    a sentence about the org turning into a false claim about
+                    the PRODUCT. It now says what is true — there are no more
+                    to add. The load window still speaks for itself above. */}
                 {loaded && inactive.length === 0 ? (
-                  <li className="py-3 text-sm text-fg-muted">
-                    {search.trim() === "" ? t("modelsShelfEmpty") : t("modelsNoMatch")}
-                  </li>
+                  <li className="py-3 text-sm text-fg-muted">{t("modelsShelfEmpty")}</li>
                 ) : null}
               </ul>
             </div>

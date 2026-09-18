@@ -11,8 +11,7 @@ export async function GET() {
     return Response.json(
       await coreFetch<{
         models: {
-          id: string; name: string; allowed: boolean; suggested: boolean;
-          recommended?: boolean; tools?: boolean;
+          id: string; name: string; allowed: boolean; tools?: boolean;
           cost?: { input: number; output: number }; contextWindow?: number;
         }[];
         curated: boolean;

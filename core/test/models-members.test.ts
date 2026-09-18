@@ -32,16 +32,21 @@ vi.mock("../src/agent/pi.ts", async () => ({
   // (2026-08-27): the picker was serving it because the filter tested
   // `startsWith("anthropic/")` and every fixture here was spelled the way the
   // code believed. This is the id that spells it the other way.
+  // `openai/gpt-5` is here for the OTHER rule, added 2026-09-18: a model the
+  // catalogue carries and this product does not offer. Without it every
+  // fixture in this file would be either offered or barred, and the narrowing
+  // to three would have nothing in the suite it could ever fail against.
   catalogue: () => [
     { id: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash", reasoning: true },
     { id: "anthropic/claude-opus-5", name: "Claude Opus 5", reasoning: false },
     { id: "~anthropic/claude-opus-latest", name: "Anthropic: Claude Opus Latest", reasoning: false },
     { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", reasoning: false },
+    { id: "deepseek/deepseek-v4-flash-0731", name: "DeepSeek V4 Flash", reasoning: false },
     { id: "openai/gpt-5", name: "GPT-5", reasoning: false },
   ],
 }));
 
-const { createModelsRepo, SUGGESTED_MODELS, firstServable } = await import("../src/api/models.ts");
+const { createModelsRepo, firstServable } = await import("../src/api/models.ts");
 const { toolCapability, resetCapabilityCache } = await import("../src/api/model-capability.ts");
 const { createMembersRepo } = await import("../src/api/members.ts");
 import { ConflictError, NotFoundError, ValidationError } from "../src/api/errors.ts";
@@ -78,10 +83,13 @@ describe("model catalogue (M5)", () => {
     // is permitted" would leave every new org unable to pick any model.
     const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
     const result = await createModelsRepo(db).list(ADMIN_ID);
-    // 2, not 4: the mocked catalogue holds two excluded providers, and M5's
-    // exclusion applies before anything else. "Whole catalogue" means the
-    // whole OFFERED catalogue.
-    expect(result.models).toHaveLength(2);
+    // The IDS rather than a count: a count is a fact about the fixture
+    // wearing the costume of a fact about the wall, and this fixture holds
+    // six entries failing two DIFFERENT product rules — three barred
+    // providers and one model the product does not offer. "Whole catalogue"
+    // means the whole SERVABLE catalogue, and the order is the offer list's.
+    expect(result.models.map((m) => m.id))
+      .toEqual(["deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]);
     expect(result.curated).toBe(false);
   });
 
@@ -89,17 +97,17 @@ describe("model catalogue (M5)", () => {
     // A permitted provider: an admin's allow-list narrows what is offered,
     // and cannot widen it past M5's exclusion (asserted separately).
     const { db } = fakeDb(() => [{
-      allowed_models: ["openai/gpt-5"], preferred_model: null,
+      allowed_models: ["deepseek/deepseek-v4-flash-0731"], preferred_model: null,
     }]);
     const result = await createModelsRepo(db).list(ADMIN_ID);
-    expect(result.models.map((m) => m.id)).toEqual(["openai/gpt-5"]);
+    expect(result.models.map((m) => m.id)).toEqual(["deepseek/deepseek-v4-flash-0731"]);
     expect(result.curated).toBe(true);
   });
 
   it("marks the caller's own choice and imposes no default", async () => {
-    const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: "openai/gpt-5" }]);
+    const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: "deepseek/deepseek-v4-flash-0731" }]);
     const result = await createModelsRepo(db).list(ADMIN_ID);
-    expect(result.models.filter((m) => m.selected).map((m) => m.id)).toEqual(["openai/gpt-5"]);
+    expect(result.models.filter((m) => m.selected).map((m) => m.id)).toEqual(["deepseek/deepseek-v4-flash-0731"]);
 
     const { db: none } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
     const unset = await createModelsRepo(none).list(ADMIN_ID);
@@ -121,30 +129,31 @@ describe("model catalogue (M5)", () => {
      */
     const { db: nobody } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
     expect(await createModelsRepo(nobody).preferred(ADMIN_ID)).toBeNull();
-    // no preference, no curation → the first the catalogue OFFERS (M5's
-    // exclusion applied first: the mocked catalogue's excluded rows never win)
-    expect(await createModelsRepo(nobody).forRun(ADMIN_ID)).toBe("google/gemini-3.6-flash");
+    // no preference, no curation → the first model the product OFFERS, in
+    // the offer list's own order (the mocked catalogue's barred rows and its
+    // un-offered one never win, whatever order it lists them in)
+    expect(await createModelsRepo(nobody).forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
 
     // no preference, a curated org → the org's first permitted model
-    const { db: curated } = fakeDb(() => [{ allowed_models: ["openai/gpt-5"], preferred_model: null }]);
-    expect(await createModelsRepo(curated).forRun(ADMIN_ID)).toBe("openai/gpt-5");
+    const { db: curated } = fakeDb(() => [{ allowed_models: ["deepseek/deepseek-v4-flash-0731"], preferred_model: null }]);
+    expect(await createModelsRepo(curated).forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
 
     // a BARRED preference is a rung that is not there, not a refusal
-    const { db: stale } = fakeDb(() => [{ allowed_models: ["openai/gpt-5"], preferred_model: "anthropic/claude-opus-5" }]);
-    expect(await createModelsRepo(stale).forRun(ADMIN_ID)).toBe("openai/gpt-5");
+    const { db: stale } = fakeDb(() => [{ allowed_models: ["deepseek/deepseek-v4-flash-0731"], preferred_model: "anthropic/claude-opus-5" }]);
+    expect(await createModelsRepo(stale).forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
 
     // a servable preference wins over everything below it
-    const { db: chosen } = fakeDb(() => [{ allowed_models: [], preferred_model: "openai/gpt-5" }]);
-    expect(await createModelsRepo(chosen).forRun(ADMIN_ID)).toBe("openai/gpt-5");
+    const { db: chosen } = fakeDb(() => [{ allowed_models: [], preferred_model: "deepseek/deepseek-v4-flash-0731" }]);
+    expect(await createModelsRepo(chosen).forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
   });
 
   it("filters out models that cannot call tools, and says it filtered", async () => {
     // SPEC: models that cannot call tools are not selectable. Enforced from
     // OpenRouter's supported_parameters, never from a name heuristic.
     const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
-    const result = await createModelsRepo(db, { capability: capable(["openai/gpt-5"]) })
+    const result = await createModelsRepo(db, { capability: capable(["deepseek/deepseek-v4-flash-0731"]) })
       .list(ADMIN_ID);
-    expect(result.models.map((m) => m.id)).toEqual(["openai/gpt-5"]);
+    expect(result.models.map((m) => m.id)).toEqual(["deepseek/deepseek-v4-flash-0731"]);
     expect(result.tool_capability_filtered).toBe(true);
     expect(result.models[0]!.tools).toBe(true);
   });
@@ -160,7 +169,8 @@ describe("model catalogue (M5)", () => {
     // "nothing" means no CAPABILITY filtering — M5's exclusion still applies,
     // because it is a product rule rather than a fact about a provider we
     // failed to look up.
-    expect(result.models).toHaveLength(2);
+    expect(result.models.map((m) => m.id))
+      .toEqual(["deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]);
     expect(result.tool_capability_filtered).toBe(false);
     // and no per-model claim is made either — absent, not false
     expect(result.models[0]).not.toHaveProperty("tools");
@@ -174,7 +184,7 @@ describe("model catalogue (M5)", () => {
     resetCapabilityCache();
     let fail = false;
     const flaky = async () => new Response(JSON.stringify(
-      fail ? {} : { data: [{ id: "openai/gpt-5", supported_parameters: ["tools"] }] },
+      fail ? {} : { data: [{ id: "deepseek/deepseek-v4-flash-0731", supported_parameters: ["tools"] }] },
     ), { status: fail ? 500 : 200 });
 
     const first = await toolCapability({ fetchImpl: flaky as unknown as typeof fetch, now: 0 });
@@ -186,7 +196,7 @@ describe("model catalogue (M5)", () => {
     const second = await toolCapability({ fetchImpl: flaky as unknown as typeof fetch, now: 9_000_000 });
     expect(second.known).toBe(true);          // still checked data…
     expect(second.stale).toBe(true);          // …and honest that it is old
-    expect([...second.toolCapable]).toEqual(["openai/gpt-5"]);
+    expect([...second.toolCapable]).toEqual(["deepseek/deepseek-v4-flash-0731"]);
     resetCapabilityCache();
   });
 
@@ -200,11 +210,11 @@ describe("model catalogue (M5)", () => {
   });
 
   it("refuses a KNOWN-incapable model, and allows one it could not check", async () => {
-    const { db } = fakeDb(() => [{ preferred_model: "openai/gpt-5" }]);
+    const { db } = fakeDb(() => [{ preferred_model: "deepseek/deepseek-v4-flash-0731" }]);
     // A PERMITTED model that simply cannot call tools — using an excluded one
     // here would pass on the wrong rule and prove nothing about capability.
     await expect(
-      createModelsRepo(db, { capability: capable(["openai/gpt-5"]) })
+      createModelsRepo(db, { capability: capable(["deepseek/deepseek-v4-flash-0731"]) })
         .choose(ADMIN_ID, "google/gemini-3.6-flash"),
     ).rejects.toThrow(/cannot call tools/);
 
@@ -242,7 +252,7 @@ describe("model catalogue (M5)", () => {
       { id: "anthropic/claude-opus-5", name: "C", reasoning: false },
       { id: "~anthropic/claude-opus-latest", name: "Anthropic: Claude Opus Latest", reasoning: false },
       { id: "anthropic/claude-3-haiku", name: "H", reasoning: false },
-      { id: "openai/gpt-5", name: "O", reasoning: false },
+      { id: "deepseek/deepseek-v4-flash-0731", name: "O", reasoning: false },
     ];
 
     /** Barred whoever routes it: the rule names a model family, not a prefix. */
@@ -279,13 +289,13 @@ describe("model catalogue (M5)", () => {
       expect(forRun).toBeNull();
 
       /* the control: a servable preference survives both readers untouched */
-      const good = () => [{ allowed_models: [], preferred_model: "openai/gpt-5" }];
+      const good = () => [{ allowed_models: [], preferred_model: "deepseek/deepseek-v4-flash-0731" }];
       expect(await createModelsRepo(fakeDb(good).db, {
         capability: capable(withClaude().map((m) => m.id)),
-      }).preferred(ADMIN_ID)).toBe("openai/gpt-5");
+      }).preferred(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
       expect((await createModelsRepo(fakeDb(good).db, {
         capability: capable(withClaude().map((m) => m.id)),
-      }).list(ADMIN_ID)).preferred_model).toBe("openai/gpt-5");
+      }).list(ADMIN_ID)).preferred_model).toBe("deepseek/deepseek-v4-flash-0731");
     });
 
     it("the LADDER refuses a barred rung at every level, including the env fallback", async () => {
@@ -301,13 +311,13 @@ describe("model catalogue (M5)", () => {
        * WORKER_SUMMARY_MODEL is exactly the kind of thing that serves one
        * silently forever, because nobody reads it after the day it is set.
        */
-      expect(firstServable("~anthropic/claude-opus-latest", "openai/gpt-5")).toBe("openai/gpt-5");
+      expect(firstServable("~anthropic/claude-opus-latest", "deepseek/deepseek-v4-flash-0731")).toBe("deepseek/deepseek-v4-flash-0731");
       expect(firstServable("anthropic/claude-opus-5", null, "google/gemini-3.6-flash"))
         .toBe("google/gemini-3.6-flash");
       expect(firstServable(null, undefined, "anthropic/claude-3-haiku")).toBeNull();
       /* the control: a ladder that returns null always would satisfy the
          three above and serve nobody */
-      expect(firstServable("openai/gpt-5", "anthropic/claude-opus-5")).toBe("openai/gpt-5");
+      expect(firstServable("deepseek/deepseek-v4-flash-0731", "anthropic/claude-opus-5")).toBe("deepseek/deepseek-v4-flash-0731");
       expect(firstServable(null, "google/gemini-3.6-flash")).toBe("google/gemini-3.6-flash");
     });
 
@@ -315,13 +325,13 @@ describe("model catalogue (M5)", () => {
       // A rule any later filter could undo is not a rule. An admin naming a
       // barred model explicitly must not get it back.
       const { db } = fakeDb(() => [{
-        allowed_models: ["~anthropic/claude-opus-latest", "anthropic/claude-opus-5", "openai/gpt-5"],
+        allowed_models: ["~anthropic/claude-opus-latest", "anthropic/claude-opus-5", "deepseek/deepseek-v4-flash-0731"],
         preferred_model: null,
       }]);
       const result = await createModelsRepo(db, {
         capability: capable(withClaude().map((m) => m.id)),
       }).list(ADMIN_ID);
-      expect(result.models.map((m) => m.id)).toEqual(["openai/gpt-5"]);
+      expect(result.models.map((m) => m.id)).toEqual(["deepseek/deepseek-v4-flash-0731"]);
     });
 
     it("cannot be CHOSEN by name either", async () => {
@@ -334,10 +344,150 @@ describe("model catalogue (M5)", () => {
       ).rejects.toThrow(/not available on this product/);
     });
 
-    it("is not named by the suggestion ranking", async () => {
-      // The ranking recommended two of them. A suggestion list must never
-      // name what the catalogue excludes.
-      expect(SUGGESTED_MODELS.filter((id) => id.startsWith("anthropic/"))).toEqual([]);
+    // "is not named by the offer list" moved to model-ranking.test.ts on
+    // 2026-09-18, where it is asked with the product's OWN `isExcluded`
+    // against the REAL catalogue. The copy that lived here re-implemented
+    // the rule as `startsWith("anthropic/")` — the exact spelling that let a
+    // barred model into the live picker — and it read the mocked list.
+  });
+
+  describe("a model the catalogue has and the product does not offer", () => {
+    /**
+     * User directive, 2026-09-18: "the three best models available and
+     * remove others". The offer list is enforced through the same funnel as
+     * the provider exclusion, and the two are kept apart deliberately — so
+     * these are the SAME questions asked of a model that is refused for the
+     * other reason, one door at a time.
+     *
+     * `openai/gpt-5` is in the mocked catalogue precisely so this block has
+     * a subject. The distinction every case turns on is the one the file
+     * already makes for barred ids: TYPED is refused by name, and STORED is
+     * an absent rung, because a person who never chose it must not have
+     * their runs end on "no model selected".
+     */
+    it("is not listed, and an admin's allow-list cannot re-admit it", async () => {
+      const { db } = fakeDb(() => [{
+        allowed_models: ["openai/gpt-5", "deepseek/deepseek-v4-flash-0731"],
+        preferred_model: null,
+      }]);
+      const result = await createModelsRepo(db, {
+        capability: capable(["openai/gpt-5", "deepseek/deepseek-v4-flash-0731"]),
+      }).list(ADMIN_ID);
+      expect(result.models.map((m) => m.id)).toEqual(["deepseek/deepseek-v4-flash-0731"]);
+    });
+
+    it("is refused BY NAME when somebody types it", async () => {
+      const { db } = fakeDb(() => [{ preferred_model: null }]);
+      await expect(
+        createModelsRepo(db, { capability: capable(["openai/gpt-5"]) })
+          .choose(ADMIN_ID, "openai/gpt-5"),
+      ).rejects.toThrow(/not available on this product/);
+      expect(() => createModelsRepo(db).assertAskable("openai/gpt-5"))
+        .toThrow(/not available on this product/);
+    });
+
+    it("is an ABSENT RUNG when nobody typed it — the ladder walks past", async () => {
+      // The live shape this protects: a member whose row still names a model
+      // from before the narrowing. Refusing by name here would end every run
+      // they make on a choice they did not make today.
+      const stored = () => [{
+        allowed_models: [], preferred_model: "openai/gpt-5",
+      }];
+      const repo = () => createModelsRepo(fakeDb(stored).db, {
+        capability: capable(["openai/gpt-5", "deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]),
+      });
+      expect(await repo().preferred(ADMIN_ID)).toBeNull();
+      expect((await repo().list(ADMIN_ID)).preferred_model).toBeNull();
+      // and the run still gets a model rather than nothing
+      expect(await repo().forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
+    });
+
+    it("the ADMIN's curation screen offers the same set — and nothing else", async () => {
+      /*
+       * `curation()` had NO test before 2026-09-18, which is how it kept a
+       * family-collapse filter, a shelf flag and a chip flag that the
+       * narrowing made meaningless: three behaviours nothing could contradict.
+       * It is the org's cost lever, so it gets the same assertions as the
+       * picker plus the one that distinguishes the two screens.
+       */
+      const { db } = fakeDb(() => [{ allowed_models: ["deepseek/deepseek-v4-flash-0731"] }]);
+      const result = await createModelsRepo(db, {
+        capability: capable(["deepseek/deepseek-v4-flash-0731"]),
+      }).curation(ADMIN_ID);
+
+      // barred AND un-offered are both absent, as checkboxes too: a rule any
+      // later filter can undo is not a rule
+      expect(result.models.map((m) => m.id))
+        .toEqual(["deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]);
+      // THE DISTINCTION from list(): the allow-list is RENDERED here, never
+      // applied — an admin removing a model needs to see the row they are
+      // removing, and gemini is offered and not allowed
+      expect(result.models.map((m) => m.allowed)).toEqual([true, false]);
+      expect(result.curated).toBe(true);
+      // tool capability is a MARKER here, never a filter: gemini is not in
+      // the capable set and still has its row, or an admin would watch a
+      // model vanish instead of learning why members are not offered it
+      expect(result.models.find((m) => m.id === "google/gemini-3.6-flash")?.tools).toBe(false);
+      // the two flags that left the wire with the two lists that fed them
+      expect(result.models[0]).not.toHaveProperty("suggested");
+      expect(result.models[0]).not.toHaveProperty("recommended");
+    });
+
+    it("an UNCURATED org sees every offered model already ticked", async () => {
+      // db/0002 again, on the other screen: [] is "has not curated", so every
+      // row reads allowed — an admin opening a fresh org must not be told
+      // their members have no models.
+      const { db } = fakeDb(() => [{ allowed_models: [] }]);
+      const result = await createModelsRepo(db, { capability: unknown }).curation(ADMIN_ID);
+      expect(result.curated).toBe(false);
+      expect(result.models.map((m) => m.allowed)).toEqual([true, true]);
+    });
+
+    it("treats an allow-list naming NOTHING we serve as no curation at all — in all three readers", async () => {
+      /*
+       * Measured on production before this shipped, at owner altitude: THREE
+       * organisations allowed exactly `google/gemini-2.5-flash` — the demo
+       * seed's own default, written by the seeder rather than chosen by
+       * anybody — and the server sets no env rung. Read literally, every one
+       * of them loses every rung of M5's ladder at once and its agents stop
+       * answering, with no symptom but the silence.
+       *
+       * The three readers are asserted TOGETHER on one fixture because they
+       * are the failure: a picker that serves three models while the admin
+       * screen says none are allowed is one control meaning two things, and
+       * whichever of them I fixed alone would have looked right on its own.
+       */
+      const stranded = () => [{ allowed_models: ["openai/gpt-5"], preferred_model: null }];
+      const repo = () => createModelsRepo(fakeDb(stranded).db, {
+        capability: capable(["openai/gpt-5", "deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]),
+      });
+
+      const listed = await repo().list(ADMIN_ID);
+      expect(listed.models.map((m) => m.id))
+        .toEqual(["deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]);
+      expect(listed.curated).toBe(false);
+
+      const admin = await repo().curation(ADMIN_ID);
+      expect(admin.curated).toBe(false);
+      expect(admin.models.map((m) => m.allowed)).toEqual([true, true]);
+
+      expect(await repo().forRun(ADMIN_ID)).toBe("deepseek/deepseek-v4-flash-0731");
+    });
+
+    it("still honours a curation with ONE servable model left in it — the control", async () => {
+      // Without this, "ignore the allow-list when it is inconvenient" passes
+      // every line above. A list that still names something we serve is an
+      // instruction and is obeyed, however much of it has gone stale.
+      const partly = () => [{
+        allowed_models: ["openai/gpt-5", "google/gemini-3.6-flash"], preferred_model: null,
+      }];
+      const repo = () => createModelsRepo(fakeDb(partly).db, {
+        capability: capable(["openai/gpt-5", "deepseek/deepseek-v4-flash-0731", "google/gemini-3.6-flash"]),
+      });
+      const listed = await repo().list(ADMIN_ID);
+      expect(listed.models.map((m) => m.id)).toEqual(["google/gemini-3.6-flash"]);
+      expect(listed.curated).toBe(true);
+      expect(await repo().forRun(ADMIN_ID)).toBe("google/gemini-3.6-flash");
     });
   });
 
@@ -356,8 +506,8 @@ describe("model catalogue (M5)", () => {
   });
 
   it("writes only the CALLER's row — the pick is the person's own (M5)", async () => {
-    const { db, log } = fakeDb(() => [{ preferred_model: "openai/gpt-5" }]);
-    await createModelsRepo(db).choose(ADMIN_ID, "openai/gpt-5");
+    const { db, log } = fakeDb(() => [{ preferred_model: "deepseek/deepseek-v4-flash-0731" }]);
+    await createModelsRepo(db).choose(ADMIN_ID, "deepseek/deepseek-v4-flash-0731");
     expect(log.find((l) => l.sql.includes("update"))!.params?.[0]).toBe(ADMIN);
   });
 });

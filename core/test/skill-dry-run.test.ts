@@ -29,7 +29,7 @@ const IDENTITY: Identity = {
   role: "admin", isActive: true,
 };
 
-function fakeDb(row: Record<string, unknown> = { preferred_model: "openai/gpt-5-mini", allowed_models: null }) {
+function fakeDb(row: Record<string, unknown> = { preferred_model: "deepseek/deepseek-v4-flash-0731", allowed_models: null }) {
   const calls: { sql: string; params?: unknown[] | undefined }[] = [];
   const tx = {
     async unsafe(sql: string, params?: unknown[]) {
@@ -67,12 +67,12 @@ describe("trying a draft skill", () => {
        rung (2026-08-29): the ladder falls through to the org's own list */
     const { db } = fakeDb({
       preferred_model: "anthropic/claude-opus-latest",
-      allowed_models: ["openai/gpt-5-mini"],
+      allowed_models: ["deepseek/deepseek-v4-flash-0731"],
     });
     await createSkillDryRun(db, { apiKey: "k", runModel }).dryRun(IDENTITY, {
       prompt: "p", question: "q",
     });
-    expect(runModel.mock.calls[0]![0].model).toBe("openai/gpt-5-mini");
+    expect(runModel.mock.calls[0]![0].model).toBe("deepseek/deepseek-v4-flash-0731");
   });
 
   it("refuses an empty draft and an empty question, by name", async () => {

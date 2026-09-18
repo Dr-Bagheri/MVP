@@ -82,7 +82,7 @@ import { foldName } from "../../agent/router.ts";
  * naming a fake one would put a string on screen that no deployment can
  * explain.
  */
-export const DEMO_SUMMARY_MODEL = "google/gemini-3.1-pro-preview";
+export const DEMO_SUMMARY_MODEL = "google/gemini-3.6-flash";
 
 /**
  * The model a seeded organisation is LEFT RUNNING ON, when the deployment
@@ -100,7 +100,7 @@ export const DEMO_SUMMARY_MODEL = "google/gemini-3.1-pro-preview";
  * reads the env agree. It is still checked against the catalogue and the
  * product exclusion at seed time — a constant is not exempt from the wall.
  */
-export const DEMO_DEFAULT_MODEL = "google/gemini-2.5-flash";
+export const DEMO_DEFAULT_MODEL = "deepseek/deepseek-v4-flash-0731";
 
 export interface DemoRepos {
   tasks: TasksRepo;

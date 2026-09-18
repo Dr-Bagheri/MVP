@@ -548,10 +548,12 @@ describe("seeding a demo organisation's content", () => {
       const { db } = fakeDb([]);
       const { repos } = fakeRepos([]);
       const warn = vi.fn();
-      /* a real catalogue id that is NOT the default — so "the env rung was
-         used" is distinguishable from "the default was used" */
-      const env = "openai/gpt-5.6-luna";
+      /* a real catalogue id the product OFFERS and that is NOT the default —
+         so "the env rung was used" is distinguishable from "the default was
+         used", and the rung itself survives the wall it is passed through */
+      const env = "z-ai/glm-5.2";
       expect(catalogue().some((m) => m.id === env)).toBe(true);
+      expect(() => repos.models.assertAskable(env)).not.toThrow();
       const report = await seedDemoContent({
         db, repos, identity: OWNER, pack, timeline: timelineFor(pack),
         userIds: { ...USER_IDS }, defaultModel: env, storage: storageThat(true), warn,

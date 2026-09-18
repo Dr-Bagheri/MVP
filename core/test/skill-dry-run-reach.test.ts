@@ -22,7 +22,7 @@ import type { Identity } from "../src/agent/types.ts";
    assertion about what the runtime was asked for is a type error nothing
    reports — vitest transpiles, it does not typecheck (core's tsc, 2026-09-08). */
 const run = vi.fn(async (_request: Record<string, unknown>) => ({
-  runId: "r-1", text: "ok", model: "openai/gpt-5-mini", steps: [], failed: false,
+  runId: "r-1", text: "ok", model: "deepseek/deepseek-v4-flash-0731", steps: [], failed: false,
 }));
 
 vi.mock("../src/agent/runtime.ts", () => ({
@@ -43,7 +43,7 @@ const IDENTITY: Identity = {
 function fakeDb() {
   const tx = {
     async unsafe() {
-      return [{ preferred_model: "openai/gpt-5-mini", allowed_models: null }];
+      return [{ preferred_model: "deepseek/deepseek-v4-flash-0731", allowed_models: null }];
     },
   } as unknown as SqlTx;
   return {

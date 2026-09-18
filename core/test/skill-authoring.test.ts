@@ -170,7 +170,7 @@ describe("a pinned model must be one the product will serve", () => {
     const { db } = fakeDb();
     await expect(
       createSkillAuthoring(db).create(ADMIN, {
-        level: "org", slug: "x", name: "x", prompt: "x", model: "google/gemini-3.1-flash",
+        level: "org", slug: "x", name: "x", prompt: "x", model: "google/gemini-3.6-flash",
       }),
     ).resolves.toBeTruthy();
     await expect(createSkillAuthoring(db).update(ADMIN, ROW.id, { model: null }))

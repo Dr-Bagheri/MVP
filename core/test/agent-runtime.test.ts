@@ -219,8 +219,13 @@ describe("skills-as-data resolution (system < org < user)", () => {
   });
 
   it("model: skill pin wins, else caller's choice, else refuse (M5)", () => {
-    expect(modelForRun(skill({ model: "pinned" }), "chosen")).toBe("pinned");
-    expect(modelForRun(skill({ model: null }), "chosen")).toBe("chosen");
+    /* REAL ids since 2026-09-18: the rungs are filtered against the offer
+       list now, so an invented "pinned" is not a pin any more — it is an
+       absent rung, and this test would have passed on the wrong mechanism. */
+    expect(modelForRun(skill({ model: "z-ai/glm-5.2" }), "google/gemini-3.6-flash"))
+      .toBe("z-ai/glm-5.2");
+    expect(modelForRun(skill({ model: null }), "google/gemini-3.6-flash"))
+      .toBe("google/gemini-3.6-flash");
     expect(() => modelForRun(skill({ model: null }), undefined)).toThrow(/no model selected/);
   });
 });

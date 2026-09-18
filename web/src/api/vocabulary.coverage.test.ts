@@ -153,6 +153,22 @@ const EXCLUDED: Record<string, string> = {
     "SummaryTemplate type straight from this module, and its label map is " +
     "typed Record<SummaryTemplate, …> — a new ruled template breaks the web " +
     "BUILD until it gets a label, which is a stronger guard than a mirror.",
+  /*
+   * The entity spine (db/0230, core/src/api/entities.ts), landed 2026-09-18.
+   * This guard caught all three the moment core published them, which is the
+   * check working: the round that added them changed no web file at all, so
+   * nothing but a list derived from the PRODUCER could have noticed.
+   *
+   * No web surface reads the spine yet — resolution happens inside core's own
+   * transactions and reaches the browser only as the directory link it already
+   * had. There is no local union to drift, so a mirror line would compare
+   * nothing with nothing. These move to GUARDED the day a screen renders an
+   * entity, and that day this entry is what says they were left out on
+   * purpose rather than forgotten.
+   */
+  ENTITY_KINDS: "not mirrored: no web surface reads the entity spine yet (2026-09-18).",
+  ALIAS_SOURCES: "not mirrored: no web surface reads the entity spine yet (2026-09-18).",
+  ALIAS_KINDS: "not mirrored: no web surface reads the entity spine yet (2026-09-18).",
 };
 
 /** A published vocabulary is a frozen array of strings. */

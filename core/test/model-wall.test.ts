@@ -56,14 +56,25 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { firstServable } from "../src/api/models.ts";
+import { firstServable, isExcluded } from "../src/api/models.ts";
 import { modelForRun } from "../src/agent/skills.ts";
 import type { Skill } from "../src/agent/types.ts";
 
 /** The id production served, not one written to match the implementation. */
 const BARRED = "~anthropic/claude-opus-latest";
 const PLAIN_BARRED = "anthropic/claude-sonnet-4";
-const FINE = "google/gemini-3.1-flash";
+const FINE = "google/gemini-3.6-flash";
+/**
+ * THE SECOND WAY A RUNG CAN BE ABSENT, added 2026-09-18.
+ *
+ * `google/gemini-3.1-flash` is not invented either: it was this file's own
+ * `FINE` until the product narrowed to three models, so it is a real id, in
+ * the catalogue, that nothing here will serve any more — which is exactly
+ * the state every stored preference and every pinned skill in production is
+ * now in. A wall tested only against a barred VENDOR cannot see whether the
+ * offer list is enforced at all.
+ */
+const NOT_OFFERED = "google/gemini-3.1-flash";
 
 const skill = (over: Partial<Skill> = {}): Skill =>
   ({
@@ -73,6 +84,33 @@ const skill = (over: Partial<Skill> = {}): Skill =>
   }) as Skill;
 
 describe("the model wall — every door a model id enters through", () => {
+  describe("the FAMILY rule, asked on its own", () => {
+    /**
+     * Added 2026-09-18, when the product narrowed to three models and the
+     * offer list came to subsume this rule: every gate now refuses a Claude
+     * id for TWO reasons, so no behavioural test can tell whether the family
+     * rule is still there. Delete `EXCLUDED_PROVIDERS` today and nothing
+     * anywhere else in this suite changes colour.
+     *
+     * These ask the predicate itself, so it cannot be gutted quietly. It is
+     * not decoration: the offer list is three hand-written ids and will be
+     * edited, and on the day one of them is a reseller the family rule is
+     * what decides — the same rule that failed five times by being described
+     * somewhere and asked nowhere.
+     */
+    it("bars the family whoever routes it, and passes everything else", () => {
+      expect(isExcluded(BARRED)).toBe(true);
+      expect(isExcluded(PLAIN_BARRED)).toBe(true);
+      expect(isExcluded("~ANTHROPIC/Claude-Opus")).toBe(true);
+      // a model RESELLING Claude under another vendor is still Claude
+      expect(isExcluded("someone-else/claude-3-sonnet")).toBe(true);
+      // and the control, without which a predicate returning true forever
+      // satisfies every line above
+      expect(isExcluded(FINE)).toBe(false);
+      expect(isExcluded(NOT_OFFERED)).toBe(false);
+    });
+  });
+
   describe("firstServable, the ladder itself", () => {
     it("skips a barred rung and keeps descending", () => {
       expect(firstServable(BARRED, FINE)).toBe(FINE);
@@ -99,6 +137,19 @@ describe("the model wall — every door a model id enters through", () => {
       // everything satisfies every assertion above and is completely wrong
       expect(firstServable(null, undefined, "", FINE)).toBe(FINE);
     });
+
+    it("skips a rung naming a model the product no longer OFFERS", () => {
+      // The other half of the same rule, and the one with live rows behind
+      // it: the narrowing to three models turned every stored preference
+      // and every pinned skill naming something else into an absent rung.
+      // Refusing them by name instead would end a run on a choice the
+      // person did not make today (rule 12: a vaguer nothing).
+      expect(firstServable(NOT_OFFERED, FINE)).toBe(FINE);
+      expect(firstServable(NOT_OFFERED)).toBeNull();
+      // and the two reasons compose without either one covering for the
+      // other: barred, then merely un-offered, then a model to serve
+      expect(firstServable(BARRED, NOT_OFFERED, FINE)).toBe(FINE);
+    });
   });
 
   describe("modelForRun — a skill's pin is a rung, not an override", () => {
@@ -114,8 +165,17 @@ describe("the model wall — every door a model id enters through", () => {
 
     it("still prefers a legitimate pin over the caller — M5 unchanged", () => {
       // the control: the fix must not have inverted the precedence it guards
-      expect(modelForRun(skill({ model: FINE }), "openai/gpt-5-mini")).toBe(FINE);
+      expect(modelForRun(skill({ model: FINE }), FINE)).toBe(FINE);
       expect(modelForRun(skill({ model: null }), FINE)).toBe(FINE);
+    });
+
+    it("treats a pin naming an un-offered model as no pin at all", () => {
+      // The door no `assertAskable` can ever cover, because nobody types a
+      // skill's `model` at run time — and the one the 2026-09-18 narrowing
+      // reaches through every skill row written before it.
+      expect(modelForRun(skill({ model: NOT_OFFERED }), FINE)).toBe(FINE);
+      expect(() => modelForRun(skill({ model: NOT_OFFERED }), undefined))
+        .toThrow(/no model selected/);
     });
   });
 });

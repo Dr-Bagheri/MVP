@@ -205,10 +205,10 @@ describe("agent runtime — recording and failure surfacing", () => {
   it("passes the skill's prompt, model pin and tool list into the run", async () => {
     const { store, begun } = fakeStore();
     runPiMock.mockReset();
-    runPiMock.mockResolvedValue({ text: "x", model: "pinned-model", tokensIn: null, tokensOut: null });
+    runPiMock.mockResolvedValue({ text: "x", model: "z-ai/glm-5.2", tokensIn: null, tokensOut: null });
     const skill: Skill = {
       id: "s1", level: "org", slug: "summarize", name: "Summarize", description: "",
-      prompt: "PINNED PROMPT", model: "pinned-model", tools: ["read_call"], enabled: true,
+      prompt: "PINNED PROMPT", model: "z-ai/glm-5.2", tools: ["read_call"], enabled: true,
     };
 
     await createAgentRuntime({ runs: store }).run({
@@ -217,8 +217,8 @@ describe("agent runtime — recording and failure surfacing", () => {
 
     const passed = runPiMock.mock.calls[0]![0] as { systemPrompt: string; model: { id: string } };
     expect(passed.systemPrompt).toBe("PINNED PROMPT");
-    expect(passed.model.id).toBe("pinned-model");
-    expect(begun[0]).toMatchObject({ skillId: "s1", model: "pinned-model" });
+    expect(passed.model.id).toBe("z-ai/glm-5.2");
+    expect(begun[0]).toMatchObject({ skillId: "s1", model: "z-ai/glm-5.2" });
   });
 
   it("assistant and summarizer are the same runtime, different toolsets (M4)", async () => {
