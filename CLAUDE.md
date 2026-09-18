@@ -8626,3 +8626,100 @@ sessions) for the cross-session narrative.
   Settings menu has one «زنگ‌ها», and both details put close alone at x=606
   with ویرایش/بیشتر/the act at the far end, `closeGroupSize: 1`.
   db 233 migrations · core 1977 tests · web 1832 tests + gate + sweep.
+- 2026-09-19 (later — THE ACTS GO INTO THE MENU, AND THE ASSISTANT LEARNS WHAT
+  "IT" MEANS; commit 2599a42; core deployed, nothing in db or web routes): two
+  user items, and the second one's answer came from measuring rather than from
+  the obvious move.
+  **THE ACTS.** "Put edit and sign it as complete inside the three dots as well
+  for both tasks and projects." Read as MOVE rather than COPY — two doors to
+  one act side by side on one bar is how a person wonders which is real, and
+  the task panel's bar had grown to three controls plus a close. The buttons
+  are GONE rather than hidden, because a control commented out is a control
+  somebody re-enables without the argument.
+  **The two ABSENCE assertions had to change shape with it rather than keep
+  passing**: `queryByRole("button", {name: /ویرایش/})` is null for a member AND
+  null for an admin whose edit sits in a closed menu, so after the move it
+  could not fail for its reason — the vacuous-in-a-new-way trap, third
+  instance. They ask about the MENU now, and the mutation proves they fire
+  where before they would not have. And nothing at all covered the two items
+  the directive is actually about, so the task panel gained three cases
+  including the half that makes it a test of the DIRECTIVE rather than of the
+  menu: **a version that added the items and left the buttons on the bar
+  satisfies every "is it in the menu" line and is exactly what was asked to
+  stop.**
+  **THE ASSISTANT, and the diagnosis is the finding.** "When I continue to tell
+  it to move it, the next sentence is probably about the same thing, but this
+  logic does not come and it will get lost — and it does not even ask if I
+  meant this … maybe RAG?" Measured on production before building: **the
+  conversation was never missing.** The whole recent thread is in the prompt,
+  verbatim, up to 12k characters — and it is 1% of the input. A turn measured
+  at **44,939 input tokens**, of which ~15,000 is the JSON schemas of 101
+  client tools (`CLIENT_TOOLS` serialises to 54,985 chars); a one-word answer
+  with 29 tools still costs 7,557–7,969. Headers arrive in 726–921 ms
+  consistently while the first token varies 2,752 / 4,521 / 17,920 ms — the
+  provider's own time to first token behind that wall. **So RAG over the
+  conversation would solve a problem that does not exist, and adding MORE
+  context is the obvious move and the wrong one.** What was missing is a short,
+  sharp statement of the SUBJECT, placed where a model reads last.
+  `agent/subjects.ts` is DERIVED from `agent_run.steps` — every tool call's
+  arguments are already recorded with the subject's title beside its id, since
+  the consent card was made to name its object rather than its verb — so there
+  is no table, no migration and nothing that can go stale (rule 6). It goes
+  LAST in `sessionContext`: the carried conversations are background and come
+  first, the subject of THIS conversation is foreground and must not lose to
+  recency. The second rule is the one the user asked for by name: **when two
+  candidates fit, the answer is a QUESTION, not a guess** — a wrong guess here
+  is not a wrong answer, it is an act on the wrong object, and this product has
+  already paid for one of those.
+  **THE FIELD MAP WAS A GUESS AND ITS OWN TEST CAUGHT IT, twice.** The first
+  draft read `project_id`, `meeting_title`, `call_title` — plausible names,
+  none of which any tool takes (the registry says `project`, `record`,
+  `colleague`, and the LABEL is the required half while the id is optional,
+  which is the right way round anyway). Then letting the ARGUMENTS decide the
+  kind returned one real `delete_task` row as THREE subjects, because `title`
+  belongs to the task, meeting and record tools alike: **a label cannot say
+  what something IS.** The TOOL decides the kind, one subject per step, and the
+  pinned fixture is a transcribed production row rather than a shape I invented
+  — a step I write agrees with whatever the parser expects.
+  **A verify-red that produced NO LINE AT ALL was a harness failure, not
+  evidence**: the mutation left the file unparseable, so vitest reported a load
+  error and the filter matched nothing. Redone as two mutations that still
+  compile (arguments decide the kind; the kind is fixed), and the new
+  two-tools-one-shared-label case is the only thing that catches both. Same
+  shape an hour later: a one-liner's `\x1b` was eaten by bash quoting and the
+  run printed nothing, which read exactly like a green. **A red is only
+  evidence if the harness could have been green.**
+  **THE READ-ONLY PROBE FOUND WHAT NO UNIT TEST COULD** — the map being right
+  about the registry and wrong about the ROWS. `db/scripts/probe-working-set
+  .mjs` ran the parser over 40 real production runs: 13 yielded a subject (6
+  task, 5 meeting, 2 project) and the other 27 were list-and-read tools that
+  genuinely name nothing. **One kind is missing and its absence is real**: a
+  RECORD. The server-side reads address one by id alone — `get_call({call_id})`
+  — and a step keeps its ARGUMENTS, not its result, so the title is nowhere in
+  what was written down; the label rule then correctly skips it, because a bare
+  uuid in front of a model invites it to quote one back at a person. Resolving
+  the id costs a database read per subject per turn — a real decision, not
+  taken, and written into the module's header so the next reader does not
+  assume the `record` kind fires from the read path.
+  Also: the entry points take `unknown` rather than a caller writing `as` at
+  the jsonb boundary (**a cast against someone else's shape is a drift report
+  somebody decided not to file**), with the non-object step asserted as the
+  real state it is — that column holds rows written by every version of this
+  product going back months. And the locale splice had silently re-sorted 25
+  keys in the `tasks` namespace; restored, so the commit carries the one key it
+  says it carries.
+  **Residue swept**: the three latency probes this session created on
+  production («answer in one word: yes», 22:26–22:27Z) sat inside the 12-hour
+  carry-over window and would have been fed to the owner's next conversation as
+  "recent context" — my own probes degrading the feature I had just shipped.
+  Archived (reversible, and what the carry-over rule itself keys on), each
+  matched by id AND by its opening words, with the script refusing to write if
+  any match did not read like a probe. Nothing else touched: every other
+  conversation in the window is either already archived or not certainly mine.
+  Deployed: core on Hetzner (archive hashes equal, both entrypoints parse under
+  strip-types, both units active, health ok, zero level≥40 journal lines).
+  NOT proven live: the block changing an answer — that needs a real
+  conversation on the org's own data, and the user's next one is the
+  measurement.
+  db 233 migrations · core 1989 tests (1 pre-existing red, history ZWNJ) ·
+  web 1836 tests + gate + sweep.

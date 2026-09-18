@@ -33,6 +33,29 @@
  * A renamed task therefore shows its OLD title here until it is touched
  * again, and that is correct: this block is a record of what was discussed,
  * not a live read of the object.
+ *
+ * ── WHAT IT DOES NOT COVER, measured rather than assumed ──────────────────
+ *
+ * `db/scripts/probe-working-set.mjs` ran this parser over 40 real production
+ * runs: 13 yielded a subject (6 task, 5 meeting, 2 project) and the other 27
+ * were list-and-read tools that genuinely name nothing — `list_tasks`,
+ * `list_meetings`, `search_transcripts`, `list_members`. Correct.
+ *
+ * One kind is missing from that tally and its absence is real: a RECORD. The
+ * server-side reads address one by id alone — `get_call({call_id})`,
+ * `list_related_calls`, `get_summary` — and a step keeps its arguments, not
+ * its result, so the call's TITLE is nowhere in what was written down. The
+ * label rule then does the right thing and skips it, because a bare uuid in
+ * front of a model is an invitation to quote one back at a person.
+ *
+ * So a conversation spent reading a record does not put that record in the
+ * working set, and «خلاصه‌اش کن» after one leans on the thread alone, which is
+ * where it leaned before this file existed. The fix is to resolve the id to
+ * its title, which costs a database read per subject on every turn — a real
+ * decision, not an oversight, and it is not taken here. What is taken here is
+ * saying so, because the alternative is a next reader assuming the `record`
+ * kind fires from the read path. It fires only from the client tools that
+ * carry a name (`record`, `record_id`), which is what the map asserts.
  */
 
 export type SubjectKind = "task" | "project" | "meeting" | "record" | "person";
