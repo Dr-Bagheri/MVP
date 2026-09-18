@@ -182,7 +182,14 @@ export function ProjectDetail({ id, reader, onClose }: {
       .catch(() => notifyError(t("writeFailed")));
   };
 
-  const start = canEdit ? (
+  /*
+   * THE ACTS SIT WITH THE ACTS (user directive, 2026-09-19: "put the three
+   * dot and edit on the other side for tasks and projects"). The task detail
+   * moved in the same breath and for the same reason: these were in the
+   * panel's START slot, which is where the CLOSE button lives, so chrome and
+   * content shared one cluster while «افزودن تسک» sat alone at the other end.
+   */
+  const acts = canEdit ? (
     <>
       <KebabMenu
         label={t("moreActions")}
@@ -238,7 +245,7 @@ export function ProjectDetail({ id, reader, onClose }: {
    * What is left is «افزودن تسک», the board's own key: the button opens the
    * board's own dialog, so it says the board's own word.
    */
-  const end = isAdmin && project.topic_id !== null ? (
+  const order = isAdmin && project.topic_id !== null ? (
     /* GIVING WORK IS AN ADMIN'S (0186), the same wall the project itself is
        behind — for a member the button would be a refusal. Anybody may still
        create a card on the board; what is admin-walled is the surface for
@@ -252,6 +259,15 @@ export function ProjectDetail({ id, reader, onClose }: {
       {tCommon("addTask")}
     </button>
   ) : null;
+
+  /* one side: the close. The other: everything a person can DO here, with the
+     overflow menu last — the order every row in the product already uses. */
+  const end = (
+    <>
+      {order}
+      {acts}
+    </>
+  );
 
   /*
    * THE RAIL — the task detail's, row for row: an 11px/600 label over a
@@ -560,7 +576,6 @@ export function ProjectDetail({ id, reader, onClose }: {
         label={project.name}
         closeLabel={t("close")}
         onClose={onClose}
-        start={start}
         end={end}
         rail={rail}
       >

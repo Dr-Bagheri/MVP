@@ -41,10 +41,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
      rather than in a group of its own: both answer "when does this product
      speak to me", and one section in one group is a group. */
   { slug: "alarms", group: "configuration" },
-  /* 0231 — the alarms a person sets for themselves. Beside notifications
-     rather than in a group of its own: both answer "when does this product
-     speak to me", and one section in one group is a group. */
-  { slug: "alarms", group: "configuration" },
   { slug: "security", group: "configuration" },
   /* SIGN-IN METHODS LEFT THIS MENU (user directive, 2026-09-02: "remove
      sign-in methods from the settings"). The page still resolves at its own

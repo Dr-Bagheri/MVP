@@ -102,7 +102,20 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
      project detail opens in — and this file keeps only what goes in its
      slots. The clusters are named so the markup below reads as the slots
      it fills. */
-  const start = (
+  /*
+   * THE ACTS SIT WITH THE ACTS (user directive, 2026-09-19: "put the three
+   * dot and edit on the other side for tasks and projects").
+   *
+   * They were in the panel's START slot, which is where the CLOSE button
+   * lives — so the top bar read: close, kebab, edit … and then, a whole panel
+   * away, the record chip and the done toggle. Chrome and content in one
+   * cluster, with the object's own acts split across two.
+   *
+   * Now the close is alone on its side and everything a person can DO to this
+   * task is on the other, overflow menu last, which is the order every row in
+   * the product already uses.
+   */
+  const acts = (
     <>
             {/* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
                 2026-09-02) — and the red item is now a real DELETE (0162, the
@@ -162,6 +175,7 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
               <IconCheck width={12} height={12} />
               {task.done ? t("doneState") : t("markDone")}
             </button>
+            {acts}
     </>
   );
   const rail = (
@@ -293,7 +307,6 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
         label={task.title}
         closeLabel={t("close")}
         onClose={onClose}
-        start={start}
         end={end}
         rail={rail}
       >
