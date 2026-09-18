@@ -8258,3 +8258,29 @@ sessions) for the cross-session narrative.
   nothing built.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1814 tests + gate + sweep.
+- 2026-09-18 (later — DEEPSEEK V4 FLASH IS THE DEFAULT, THE PERSIAN TEST
+  PASSED LIVE, AND THE ORGANISATIONAL-BRAIN APPROACHES; no commit for the
+  model change — a production config write through the product's own routes):
+  user, "set deepseek v4 flash as default and run the persian test … keep the
+  agent tool … suggest structure and architecture" for the org brain. **Set**
+  through the owner's Chrome on production: `PATCH /api/admin/org` put
+  `deepseek/deepseek-v4-flash` first in `allowed_models` (so the org default
+  rung is DeepSeek) and `PUT /api/models` set the owner's preference; read
+  back `preferred_model: deepseek/deepseek-v4-flash`, selected, tool-capable,
+  ~20–40× cheaper than the $2/$12 preview it replaced. The id is the plain
+  alias (auto-latest inference; the catalogue's "0423" price label is a stale
+  snapshot). **Persian test** ran through the assistant (the dry-run route
+  400'd — see below), the real DeepSeek+tools+Persian path: «چند پروژهٔ فعال
+  داریم…» → «یک پروژهٔ فعال: ۱۰۰ ساعت دیتای لیبل خورده — با ۴ نفر، هنوز هیچ
+  تسکی نداره.» — idiomatic Persian, Persian digits, a real `list_projects`
+  call; confirmed at owner altitude that the newest agent_run spent DeepSeek
+  where the ones before it spent Gemini. **BUG (latent, separate, flagged not
+  fixed):** `/v1/skills/dry-run` 400s `bad_id` on its first live call — the
+  draft skill's `id: ""` is 22P02 on a uuid column; the fix is NULL or a
+  generated id. **Tools** kept as-is per "for now keep the agent tool."
+  **Org brain**: docs/ORGANIZATIONAL-BRAIN-APPROACHES.md — five approaches,
+  the entity-resolution and write-back sub-problems, a phased path with the
+  provenance-first derived graph (rule 6's own shape) as the recommended
+  spine, read-only first. Discussion doc; ARCHITECTURE.md untouched.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1814 tests + gate + sweep.

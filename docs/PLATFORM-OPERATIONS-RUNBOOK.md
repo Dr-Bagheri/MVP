@@ -1355,6 +1355,59 @@ run on real records is the user's call (a provider spend and summary
 writes). The recommendation and the tool-structure proposal
 (docs/AGENT-TOOLS-STRUCTURE.md) went to the user in chat.
 
+## 7aa. DeepSeek V4 Flash set as the default, Persian test passed live, and a dry-run bug found — 2026-09-18, later (no commit for the model change: a production config write through the product's own routes)
+
+User: "set deepseek v4 flash as default and run the persian test." Both done
+on production, in the owner's Chrome, through the product's own BFF routes —
+no raw SQL, so the writes are the ones an admin would make and are audited.
+
+**Set (two writes, reversible).** `PATCH /api/admin/org` put
+`deepseek/deepseek-v4-flash` FIRST in `allowed_models` (so `allowed[0]` — the
+org default rung for members with no preference and for the unattended
+workers — is DeepSeek), keeping the previous seven behind it; `PUT
+/api/models` set the owner's `preferred_model` to the same. `/api/models`
+then read back `preferred_model: deepseek/deepseek-v4-flash`, `selected:
+true`, `tools: true`, 1M context. The id is the plain alias, not `-0731`: the
+bundled pi-ai catalogue labels the alias "V4 Flash 0423" at $0.088/$0.176,
+but a call to OpenRouter with the alias resolves to the latest build at call
+time, so inference is current and the displayed price is a stale snapshot
+label (live OpenRouter: $0.05/$0.10 — ~20–40× under the $2/$12 preview it
+replaced).
+
+**The Persian test, live, on the real path.** The dry-run route was tried
+first and 400'd (see the bug below), so the test ran through the ASSISTANT on
+production — the more representative path anyway (DeepSeek + tools + Persian).
+Asked «چند پروژهٔ فعال داریم و اسم‌هایشان چیست؟ کوتاه به فارسی جواب بده.»;
+the answer: «یک پروژهٔ فعال: ۱۰۰ ساعت دیتای لیبل خورده — با ۴ نفر، هنوز هیچ
+تسکی نداره.» — fluent idiomatic Persian, Persian digits, and it CALLED A
+TOOL (`list_projects`) to get the real project, its member count and that it
+has no tasks. Confirmed at owner altitude on the live db: the newest
+`echo.agent_run` (16:09:35 UTC today) spent `deepseek/deepseek-v4-flash`; the
+runs before it were `google/gemini-3.1-pro-preview`. So the change is live and
+the model reasons + calls tools + writes correct Persian. One throwaway test
+conversation is in the owner's history (theirs to delete). Persian
+SUMMARY-vs-summary between models was not run (see the bug); the assistant
+answer is the acceptance evidence.
+
+**BUG FOUND (pre-existing, latent, separate): `/v1/skills/dry-run` 400s
+`bad_id` on the first live call.** `skill-dry-run.ts` builds the draft skill
+with `id: ""` on purpose (nothing is a saved row) and hands it to the
+runtime, which persists an `agent_run` whose skill id column is a uuid — the
+empty string is 22P02 (invalid uuid), mapped to 400 `bad_id`. The runbook
+already recorded dry-run as "NOT proven live," and the first live run is what
+surfaces this. Not fixed here (out of the two asks); flagged as a task. The
+fix is to write NULL (or a generated uuid) for a dry run's skill id rather
+than `""`, and verify red against the empty string first.
+
+**Tools:** user said "for now keep the agent tool," so the 2026-09-18
+tool-structure proposal (docs/AGENT-TOOLS-STRUCTURE.md) stays a proposal;
+nothing changed. **Organizational brain:** the "different approaches"
+directive is answered in docs/ORGANIZATIONAL-BRAIN-APPROACHES.md — five
+approaches (connector mirror / ingestion lake / provenance-first derived
+graph / federated MCP / on-prem sidecar), the two hard sub-problems (entity
+resolution, write-back), and a phased path with C as the recommended spine.
+A discussion doc; nothing built, ARCHITECTURE.md untouched.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
