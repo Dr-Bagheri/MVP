@@ -125,6 +125,12 @@ const config: Config = {
         warning: "rgb(var(--warning) / <alpha-value>)",
         danger: "rgb(var(--danger) / <alpha-value>)",
         "on-danger": "rgb(var(--on-danger) / <alpha-value>)",
+        /* THE BUTTON'S OWN FILL (2026-09-18, the tactile family in INK): read
+           by the button coats in globals.css and by nothing else — the accent
+           and the primary stay green for everything that is not a button */
+        btn: "rgb(var(--btn) / <alpha-value>)",
+        "on-btn": "rgb(var(--on-btn) / <alpha-value>)",
+        "btn-soft": "rgb(var(--btn-soft) / <alpha-value>)",
         info: "rgb(var(--info) / <alpha-value>)",
         /* the record button's own red — softer than danger, which has to
            stay loud because it marks destructive choices */

@@ -139,6 +139,12 @@ export const DARK = {
   primary: "#0FA85D",
   onPrimary: "#0B1408",
   onDanger: "#000000",
+  /* THE INK BUTTON (user, 2026-09-18): the button family's fill is the page's
+     own ink, not the accent — near-white on the dark ground, near-black on
+     the light one; `btnSoft` is the soft coat's ground under the page's fg */
+  btn: "#E6E9EC",
+  onBtn: "#101316",
+  btnSoft: "#2A3138",
   success: "#34D399", warning: "#FBBF24", danger: "#FB7185", info: "#5B9BE8",
   /* the RECORD red keeps its own token and its softened value — the
      reference records with a red dot too, and ours already passes */
@@ -177,6 +183,9 @@ export const LIGHT = {
   primary: "#01743F",
   onPrimary: "#FFFFFF",
   onDanger: "#FFFFFF",
+  btn: "#1C1A16",
+  onBtn: "#FFFFFF",
+  btnSoft: "#E7E5E0",
   /* status hues nudged darker than the reference (#0F9D6B / #CC8400 /
      #E23B54 measured 3.5, 3.1 and 4.2 against the floors) — same families,
      first passing shade */
@@ -236,6 +245,14 @@ for (const [name, T] of [["DARK (primary)", DARK], ["LIGHT (derived)", LIGHT]]) 
   check("ON-ACCENT on accent fill", T.onAccent, T.accent);
   check("ON-PRIMARY on primary fill (solid CTA)", T.onPrimary, T.primary);
   check("ON-DANGER on danger fill (solid danger button)", T.onDanger, T.danger);
+  /* the ink button (2026-09-18): the widest pair in the file today, asserted
+     anyway — "the ink" is a token somebody will one day soften, and the day
+     it lands at grey-on-grey this line is what says so; the soft coat's
+     ground carries the page's fg, and the fill has to stand off the panel
+     like any control edge */
+  check("ON-BTN on the ink button fill", T.onBtn, T.btn);
+  check("fg on the soft button's ground", T.fg, T.btnSoft);
+  check("ink button fill vs surface (a control edge)", T.btn, T.surface, 3);
   /* the record button's glyph is a white RING, not text — WCAG asks 3:1 of
      a graphic. Checked so the next "make it softer" cannot quietly cross
      the floor: the point of softening was intensity, never legibility. */

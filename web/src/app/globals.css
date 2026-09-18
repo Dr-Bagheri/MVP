@@ -106,6 +106,21 @@
     --primary: 15 168 93;
     --on-primary: 11 20 8;
     --on-danger: 0 0 0;
+    /* THE BUTTON'S OWN FILL IS INK (user, 2026-09-18, chosen from the
+       nine-way button canvas: "Ink · monochrome — Tactile"). A primary is the
+       page's own ink — the lightest thing on a dark screen, the darkest on a
+       light one — and the GREEN stays the accent for chips, links, toggles and
+       the brand; only the button family reads these. `--btn-soft` is the soft
+       coat's ground (a chosen state), `--btn-lip` the alpha of the lit top edge
+       every filled coat wears, and the two hover steps are brightness factors
+       that differ per theme on purpose: a near-white fill clips at 1.06 while a
+       near-black one has to reach 1.45 before a pointer can see it move. */
+    --btn: 230 233 236;           /* #E6E9EC */
+    --on-btn: 16 19 22;           /* #101316 */
+    --btn-soft: 42 49 56;         /* #2A3138 */
+    --btn-lip: .14;
+    --btn-hover: 1.06;
+    --btn-hover-2: 1.08;
     --secondary: 91 155 232;
     --muted: 36 42 48;
     /* soft depth, the reference's own shadow scale */
@@ -241,6 +256,13 @@
     --primary: 1 116 63;
     --on-primary: 255 255 255;
     --on-danger: 255 255 255;
+    /* the ink button, light side: the page's ink as the fill, white on it */
+    --btn: 28 26 22;              /* #1C1A16 */
+    --on-btn: 255 255 255;
+    --btn-soft: 231 229 224;      /* #E7E5E0 */
+    --btn-lip: .6;
+    --btn-hover: 1.45;
+    --btn-hover-2: .96;
     --secondary: 27 74 143;
     --muted: 237 234 227;
     --shadow-card: 0 2px 10px rgba(33,30,20,.06);
@@ -856,23 +878,53 @@
      * biggest reason our screens did not look like the reference; that
      * ruling still holds, `rounded-xl` on a 42px box is a rounded rectangle,
      * not a lozenge.)
+     *
+     * THE TACTILE FAMILY (user, 2026-09-18, chosen from a nine-way canvas:
+     * three designs in three colourways each — "Ink · monochrome … Tactile").
+     * The corner is the PANEL's `rounded-lg` (12) now: the 16 above was "the
+     * rail's own box", and the rail became design «ج» on 2026-09-17 — a
+     * segmented control on a 6px track with 8px pills — so 16 no longer
+     * matched anything on the screen. The height, the padding, the weight and
+     * the text sizes did not move; the coats did — every FILLED coat wears a
+     * lit top edge, an inner gradient and a small drop, and presses IN
+     * (`active:` swaps the shadow for an inset and drops the box by a pixel),
+     * while the ghost coats stay flat. The primary's fill is `--btn`, the
+     * page's own ink; the green is still the accent everywhere else.
      */
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-xl px-[15px] text-center text-detail font-medium leading-control
+           rounded-lg px-[15px] text-center text-detail font-medium leading-control
            transition-all duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
+  /* the act: the ink fill with the tactile recipe — a lighter top, a darker
+     edge, a lip of light, a small drop; a pointer brightens it by the theme's
+     own step, a press sinks it */
   .btn-primary {
-    @apply btn bg-primary text-on-primary hover:opacity-90 active:opacity-80;
+    @apply btn border text-on-btn hover:brightness-[var(--btn-hover)]
+           active:translate-y-px active:shadow-[inset_0_2px_5px_rgba(0,0,0,0.35)];
+    background-image: linear-gradient(180deg, color-mix(in srgb, rgb(var(--btn)) 84%, white) 0%, rgb(var(--btn)) 100%);
+    border-color: color-mix(in srgb, rgb(var(--btn)) 72%, black);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 1px 2px rgb(0 0 0 / 0.35), 0 3px 8px rgb(0 0 0 / 0.16);
   }
+  /* every other button, a dialog's cancel included: a RAISED neutral in the
+     same recipe — the raised tone fading to the panel, a hairline at the
+     control-edge strength, the same lip and press */
   .btn-secondary {
-    @apply btn bg-surface-2 text-fg hover:bg-border active:bg-surface-2;
+    @apply btn border text-fg hover:brightness-[var(--btn-hover-2)]
+           active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)];
+    background-image: linear-gradient(180deg, rgb(var(--surface-2)) 0%, rgb(var(--surface)) 100%);
+    border-color: rgb(var(--border-strong) / 0.55);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--btn-lip)), 0 1px 2px rgb(0 0 0 / 0.2);
   }
   .btn-ghost {
     @apply btn text-fg-muted hover:bg-muted hover:text-fg active:bg-surface-2;
   }
   .btn-danger {
-    @apply btn bg-danger text-on-danger hover:opacity-90 active:opacity-80;
+    @apply btn border text-on-danger hover:brightness-[1.08]
+           active:translate-y-px active:shadow-[inset_0_2px_5px_rgba(0,0,0,0.35)];
+    background-image: linear-gradient(180deg, color-mix(in srgb, rgb(var(--danger)) 84%, white) 0%, rgb(var(--danger)) 100%);
+    border-color: color-mix(in srgb, rgb(var(--danger)) 72%, black);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 1px 2px rgb(0 0 0 / 0.35);
   }
   /*
    * THREE MORE COATS, AND THEN NO MORE (2026-09-17, user: "i still feel it
@@ -894,13 +946,19 @@
   /* a CHOSEN or soft-accent control — the filter pill's own tint at rest
      (a consent card's yes, a chip that is the current state) */
   .btn-soft {
-    @apply btn bg-accent-soft text-accent hover:bg-accent-soft/80 active:bg-accent-soft;
+    /* a chosen state on the ink's own tint (2026-09-18): the soft ground,
+       the page's ink, a faint edge in the button colour and the lip — flatter
+       than the secondary (no gradient, no drop), which is what says "already
+       chosen" beside a button that is still asking to be pressed */
+    @apply btn border bg-btn-soft text-fg hover:brightness-[var(--btn-hover-2)] active:brightness-100;
+    border-color: rgb(var(--btn) / 0.3);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--btn-lip));
   }
   /* an ADD slot — the folder strip's «+», the board's add row: a dashed
      outline says "nothing here yet" where a filled button would claim there
      is something to press */
   .btn-dashed {
-    @apply btn border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg;
+    @apply btn border border-dashed border-border-strong text-fg-muted hover:bg-surface-2 hover:text-fg;
   }
   /* a DESTRUCTIVE act that stays quiet until the pointer reaches it — the
      card's trash, a row's remove: `.btn-danger` is for the button that IS
@@ -933,7 +991,7 @@
     /* the rail's pill corner (2026-09-16): a compact button standing alone
        is the same pill as one lifted inside a track, so it wears the same
        `rounded-xl` — `sectionTabClass` no longer has to add it */
-    @apply h-control-sm min-h-control-sm rounded-xl px-[13px] text-[0.78125rem];
+    @apply h-control-sm min-h-control-sm rounded-lg px-[13px] text-[0.78125rem];
   }
   /*
    * THE SEGMENTED PILL (user's choice, 2026-09-17 — design «ج» of the three

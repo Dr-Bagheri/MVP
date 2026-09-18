@@ -1,0 +1,103 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { SCAFFOLD } from "./scaffold/constants";
+
+/**
+ * THE TACTILE FAMILY IN INK (user, 2026-09-18, chosen from a nine-way canvas
+ * of three button designs in three colourways each: "Ink · monochrome —
+ * Tactile"). The choice is a set of facts about `globals.css` and the tokens
+ * behind it, and this file holds them the way `surface.guard` holds `.tile`'s
+ * corner: by READING THE RULE BODIES, because a coat is valid CSS in every
+ * wrong version of itself and only the computed value disagrees.
+ *
+ * What is pinned: the corner (12, the panel's), the primary reading the INK
+ * tokens rather than the accent, the bevel on every filled coat and its
+ * ABSENCE on the ghost coats (a family that bevels everything is wrong in the
+ * other direction), the press, the tokens in both themes at the values that
+ * were chosen, and the accent staying green — the choice was for the buttons,
+ * and a version that quietly turned the platform monochrome would pass every
+ * other line here.
+ */
+const CSS = readFileSync(join(process.cwd(), "src", "app", "globals.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const TAILWIND = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
+
+/** the body of `.name { … }` (no nested braces in the button rules) */
+function rule(name: string): string {
+  const m = new RegExp(`\\n\\s*\\.${name}\\s*\\{([^}]*)\\}`).exec(CSS);
+  if (!m) throw new Error(`no rule .${name} in globals.css`);
+  return m[1]!;
+}
+/** the flat declaration block of a theme selector */
+function tokens(selector: string): string {
+  const at = CSS.indexOf(`\n  ${selector} {`);
+  if (at === -1) throw new Error(`no ${selector} block`);
+  const end = CSS.indexOf("\n  }", at);
+  return CSS.slice(at, end);
+}
+const has = (body: string, needle: string | RegExp) => (typeof needle === "string" ? body.includes(needle) : needle.test(body));
+
+describe("the tactile button family in ink", () => {
+  it("rounds at the panel's 12 — rounded-lg on .btn and .btn-sm, the 8px squares untouched", () => {
+    expect(SCAFFOLD.radius.panel, "rounded-lg is no longer the 12 the family was chosen at").toBe(12);
+    expect(SCAFFOLD.radius.control < SCAFFOLD.radius.panel && SCAFFOLD.radius.panel < SCAFFOLD.radius.tile).toBe(true);
+    expect(rule("btn")).toMatch(/\brounded-lg\b/);
+    expect(rule("btn"), "the 16 corner is back").not.toMatch(/\brounded-xl\b/);
+    expect(rule("btn-sm")).toMatch(/\brounded-lg\b/);
+    for (const n of ["btn-xs", "btn-icon", "btn-icon-sm"]) expect(rule(n), `${n} lost its 8px corner`).toContain("rounded-[8px]");
+  });
+
+  it("the primary reads the INK tokens, not the accent, and wears the recipe", () => {
+    const p = rule("btn-primary");
+    expect(p).toContain("text-on-btn");
+    expect(p).toMatch(/linear-gradient\([^)]*var\(--btn\)/);
+    expect(p, "the lit top edge").toMatch(/box-shadow:[^;]*inset 0 1px 0/);
+    expect(p, "the press").toContain("active:translate-y-px");
+    expect(p).toMatch(/active:shadow-\[inset/);
+    for (const stale of ["bg-primary", "bg-accent", "text-on-primary", "text-on-accent", "hover:opacity"]) {
+      expect(p, `the primary still says ${stale}`).not.toContain(stale);
+    }
+  });
+
+  it("the filled coats carry the lip and the press; the ghost coats stay flat", () => {
+    for (const n of ["btn-secondary", "btn-danger"]) {
+      const b = rule(n);
+      expect(b, `${n} has no lip`).toMatch(/box-shadow:[^;]*inset 0 1px 0/);
+      expect(b, `${n} has no gradient`).toContain("linear-gradient(");
+      expect(b, `${n} does not press`).toContain("active:translate-y-px");
+    }
+    const soft = rule("btn-soft");
+    expect(soft).toContain("bg-btn-soft");
+    expect(soft, "the soft coat lost its lip").toMatch(/box-shadow:[^;]*inset 0 1px 0/);
+    expect(soft, "the soft coat is not flatter than the secondary").not.toContain("linear-gradient(");
+    /* the control: a version that bevels EVERYTHING passes the lines above */
+    for (const n of ["btn-ghost", "btn-ghost-danger"]) {
+      const b = rule(n);
+      expect(b, `${n} grew a lip`).not.toMatch(/inset 0 1px 0/);
+      expect(b, `${n} grew a gradient`).not.toContain("linear-gradient(");
+      expect(b, `${n} grew a border`).not.toMatch(/\bborder\b/);
+    }
+  });
+
+  it("both themes declare the ink tokens at the chosen values, and the accent stays green", () => {
+    const dark = tokens(":root");
+    const light = tokens('[data-theme="light"]');
+    for (const t of ["--btn:", "--on-btn:", "--btn-soft:", "--btn-lip:", "--btn-hover:", "--btn-hover-2:"]) {
+      expect(dark, `dark lacks ${t}`).toContain(t);
+      expect(light, `light lacks ${t}`).toContain(t);
+    }
+    /* the choice itself: #E6E9EC on #101316 in dark, #1C1A16 on #FFFFFF in light */
+    expect(dark).toMatch(/--btn:\s*230 233 236/);
+    expect(dark).toMatch(/--on-btn:\s*16 19 22/);
+    expect(light).toMatch(/--btn:\s*28 26 22/);
+    expect(light).toMatch(/--on-btn:\s*255 255 255/);
+    /* the scope: the buttons went ink, the platform did not */
+    expect(dark).toMatch(/--accent:\s*15 168 93/);
+    expect(light).toMatch(/--accent:\s*1 116 63/);
+  });
+
+  it("tailwind registers the three button colours the coats apply", () => {
+    for (const k of ["btn:", '"on-btn":', '"btn-soft":']) expect(TAILWIND, `tailwind.config lacks ${k}`).toContain(k);
+    expect(has(TAILWIND, "rgb(var(--btn) / <alpha-value>)")).toBe(true);
+  });
+});
