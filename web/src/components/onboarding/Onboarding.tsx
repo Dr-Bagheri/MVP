@@ -12,7 +12,7 @@ import { SceneClock, SceneLock } from "./Illustrations";
 import { ProductDemo } from "./ProductDemo";
 import { DataScreen, GoalsScreen, PlacesScreen, WelcomeScreen, WorkScreen } from "./QuestionScreens";
 import { DictateScreen, FasterPicture, FasterScreen, HotkeyScreen, LanguagesScreen, MicScreen, SavingsScreen } from "./SetupScreens";
-import { nextStep, prevStep, resumeStep, type Answers, type StepId } from "./steps";
+import { canSkip, nextStep, prevStep, resumeStep, type Answers, type StepId } from "./steps";
 
 /**
  * THE FIRST-TIME FLOW (M54, 2026-09-15).
@@ -152,16 +152,20 @@ export function Onboarding() {
 
   return (
     <OnboardingFrame step={step} layout={LAYOUT[step]} picture={picture}>
-      {/* «later» — the way out, on every screen: a flow with no exit is a wall */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="btn-ghost btn-sm"
-          onClick={() => void skipAll()}
-        >
-          {t("skipAll")}
-        </button>
-      </div>
+      {/* «later» — the way out, on every screen FROM THE PERMISSIONS STAGE ON
+          (steps.ts `canSkip`, 2026-09-18): the four sign-up questions are
+          answered, not skipped; after them a flow with no exit is a wall */}
+      {canSkip(step) ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => void skipAll()}
+          >
+            {t("skipAll")}
+          </button>
+        </div>
+      ) : null}
       {step === "welcome" ? <WelcomeScreen {...props} name={personName(me, locale) || me.email.split("@")[0] || ""} />
         : step === "goals" ? <GoalsScreen {...props} />
           : step === "work" ? <WorkScreen {...props} />

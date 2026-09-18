@@ -48,6 +48,26 @@ export const STEP_STAGE: Readonly<Record<StepId, Stage>> = {
   savings: "personalize",
 };
 
+/**
+ * WHERE «later» BEGINS (user, 2026-09-18: "for onboarding remove the later
+ * for the first four pages"). The four sign-up questions — who you are, what
+ * for, what you do, where you work — are ANSWERED, never skipped: they are
+ * what the workspace is personalised on, and a person who skips them lands
+ * in a product that knows nothing about them. From the permissions stage on
+ * the exit is on every screen, as before — a flow with no exit is a wall,
+ * and a microphone or a hotkey is a thing a person may reasonably not want
+ * to decide on the first day.
+ *
+ * Expressed as the first step that MAY be skipped rather than as a count,
+ * so inserting a fifth question keeps the rule true without a number to
+ * remember; steps.test asserts that everything before it is the sign-up
+ * stage and nothing after it is.
+ */
+export const FIRST_SKIPPABLE: StepId = "data";
+export function canSkip(step: StepId): boolean {
+  return STEP_IDS.indexOf(step) >= STEP_IDS.indexOf(FIRST_SKIPPABLE);
+}
+
 export type Answers = {
   /** where the person is; the step to resume on reload */
   step?: StepId;

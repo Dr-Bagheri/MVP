@@ -204,7 +204,10 @@ describe("the end of the flow, and the way out", () => {
     expect(updateOnboarding.mock.calls.filter(([arg]) => (arg as { complete?: boolean }).complete === true)).toHaveLength(1);
   });
 
+  /* «later» lives from the PERMISSIONS stage on (2026-09-18), so the two
+     exit tests resume there — `data` is the first screen that has the door */
   it("«later» records the skip, stamps the end, and goes home", async () => {
+    me.mockResolvedValue({ ...PERSON, onboarding: { step: "data" } });
     render(<Onboarding />);
     await screen.findByRole("heading", { level: 1 });
     fireEvent.click(screen.getByRole("button", { name: "بعداً" }));
@@ -215,10 +218,33 @@ describe("the end of the flow, and the way out", () => {
   });
 
   it("still goes home when the stamp fails to land — the shell will send them back, which is the honest outcome", async () => {
+    me.mockResolvedValue({ ...PERSON, onboarding: { step: "data" } });
     updateOnboarding.mockRejectedValue(new Error("upstream"));
     render(<Onboarding />);
     await screen.findByRole("heading", { level: 1 });
     fireEvent.click(screen.getByRole("button", { name: "بعداً" }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+  });
+
+  /**
+   * THE FOUR SIGN-UP QUESTIONS HAVE NO «later» (user, 2026-09-18: "remove
+   * the later for the first four pages"): they are what the workspace is
+   * personalised on. Asserted as the PAIR — absent on each of the four,
+   * present on the first screen after them — because "no button on the
+   * welcome screen" is also true of a flow that lost the exit everywhere,
+   * which is the wall the door exists to prevent.
+   */
+  it("draws no «later» on the four sign-up questions, and draws it on the first screen after them", async () => {
+    for (const step of ["welcome", "goals", "work", "places"] as const) {
+      me.mockResolvedValue({ ...PERSON, onboarding: { step } });
+      const view = render(<Onboarding />);
+      await screen.findByRole("heading", { level: 1 });
+      expect(screen.queryByRole("button", { name: "بعداً" }), `«later» drawn on ${step}`).toBeNull();
+      view.unmount();
+    }
+    me.mockResolvedValue({ ...PERSON, onboarding: { step: "data" } });
+    render(<Onboarding />);
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.getByRole("button", { name: "بعداً" })).toBeInTheDocument();
   });
 });

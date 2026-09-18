@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  OPTIONS, SPEED_RATIO, STAGES, STEP_IDS, STEP_STAGE, TYPING_HOURS,
-  hoursSavedPerWeek, nextStep, prevStep, progress, ready, resumeStep, toggle,
+  FIRST_SKIPPABLE, OPTIONS, SPEED_RATIO, STAGES, STEP_IDS, STEP_STAGE, TYPING_HOURS,
+  canSkip, hoursSavedPerWeek, nextStep, prevStep, progress, ready, resumeStep, toggle,
 } from "./steps";
 
 /**
@@ -72,6 +72,26 @@ describe("the first-time flow's shape", () => {
     /* the control IS the choice on these */
     for (const id of ["mic", "hotkey", "dictate", "faster", "savings"] as const) {
       expect(ready(id, {}), id).toBe(true);
+    }
+  });
+
+  /**
+   * «later» BEGINS WITH THE PERMISSIONS STAGE (user, 2026-09-18: "remove the
+   * later for the first four pages"). Asserted as the RELATIONSHIP rather
+   * than as four names: everything before the first skippable step is the
+   * sign-up stage and nothing from it on is — so a fifth question added to
+   * sign-up is covered without a count to update, and a permission step
+   * moved ahead of the questions is a red rather than a silent door.
+   */
+  it("the sign-up questions cannot be skipped; every step from the permissions stage on can", () => {
+    expect(STEP_STAGE[FIRST_SKIPPABLE]).toBe("permissions");
+    const boundary = STEP_IDS.indexOf(FIRST_SKIPPABLE);
+    expect(boundary).toBe(4);
+    for (const id of STEP_IDS) {
+      const before = STEP_IDS.indexOf(id) < boundary;
+      expect(canSkip(id), `canSkip(${id})`).toBe(!before);
+      if (before) expect(STEP_STAGE[id], `${id} sits before the door and is not a sign-up question`).toBe("signup");
+      else expect(STEP_STAGE[id], `${id} sits after the door and is still sign-up`).not.toBe("signup");
     }
   });
 
