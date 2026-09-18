@@ -87,12 +87,16 @@
        a label, not a destination. Deliberately below --fg-muted: the
        requirement is a relationship, asserted in verify-pairs. */
     --fg-subtle: 141 148 157;     /* #8D949D */
-    /* the brand hue: the reference's green */
-    --accent: 15 168 93;          /* #0FA85D */
-    /* the reference's own ink-on-green: near-black, because the green is a
-       bright surface in this theme */
-    --on-accent: 11 20 8;         /* #0B1408 */
-    --accent-soft: 26 46 43;      /* #1A2E2B — computed 10% tint over surface */
+    /* MONOCHROME (user, 2026-09-18: "all green that are in the platform
+       to a theme black and white"). The accent is the page's own white on a
+       dark ground and its ink on a light one — the same decision the button
+       family took on the nine-way canvas, applied to chips, links, toggles,
+       the focus ring and every soft tint. Cost: an accent can no longer be
+       told from body text by HUE, so emphasis is fill, weight and the lit
+       pill — which is what the toolbar kit already does. */
+    --accent: 255 255 255;        /* #FFFFFF */
+    --on-accent: 15 17 19;        /* #0F1113 — the page's ground, as ink on the white fill */
+    --accent-soft: 50 54 59;      /* #32363B — computed 10% tint over surface */
     --success: 52 211 153;
     --warning: 251 191 36;
     --danger: 251 113 133;
@@ -100,11 +104,10 @@
     /* the RECORD button's own red — its own token, not --danger: danger
        marks the destructive choice and the record button is not one */
     --record: 219 96 96;          /* #DB6060 */
-    /* the primary CTA is the GREEN here — the reference fills its one big
-       button with the brand hue, and the neutral-pill rule retired with
-       the palette that needed it */
-    --primary: 15 168 93;
-    --on-primary: 11 20 8;
+    /* `--primary` follows the accent; only the shadcn bridge and one page
+       read it, and two spellings of one colour is how they come apart */
+    --primary: 255 255 255;
+    --on-primary: 15 17 19;
     --on-danger: 0 0 0;
     /* THE BUTTON'S OWN FILL IS INK (user, 2026-09-18, chosen from the
        nine-way button canvas: "Ink · monochrome — Tactile"). A primary is the
@@ -126,7 +129,7 @@
     /* soft depth, the reference's own shadow scale */
     --shadow-card: 0 2px 10px rgba(0,0,0,.34);
     --shadow-island: 0 6px 28px rgba(0,0,0,.46);
-    --shadow-accent: 0 3px 12px rgba(0,0,0,.4), 0 0 0 1px rgba(15,168,93,.1);
+    --shadow-accent: 0 3px 12px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.1);
     /*
      * ── GLASS ────────
      *
@@ -187,9 +190,15 @@
       0 16px 40px -20px rgb(0 0 0 / .85);
     /* the ground's wash — three slow tints, deliberately under 14% so this
        reads as depth and never as decoration */
-    --wash-1: rgb(var(--accent) / .13);
-    --wash-2: rgb(var(--info) / .10);
-    --wash-3: rgb(var(--secondary) / .07);
+    /* NEUTRAL since the monochrome pass: these were the accent's green and
+       two blues, which put a faint colour cast on every page — the one thing
+       a black-and-white theme cannot have. White at a LOWER alpha than the
+       green carried, because white lifts a dark ground far harder than a
+       mid-green does and the wash exists to give the glass something to
+       sample, not to light the room. */
+    --wash-1: rgb(255 255 255 / .05);
+    --wash-2: rgb(255 255 255 / .035);
+    --wash-3: rgb(255 255 255 / .025);
     /* retained for the Echo shell until its interior re-derives */
     --sidebar: 27 32 37;
     --sidebar-fg: 242 244 246;
@@ -245,15 +254,17 @@
     /* recede = move toward the surface: darker here, lighter in dark mode */
     --fg-subtle: 113 109 98;      /* #716D62 */
     /* the reference's #018146, one step darker so its own chip passes */
-    --accent: 1 116 63;           /* #01743F */
+    /* monochrome, light's half: the page's own ink. Not #000000 — pure
+       black on this warm cream reads as a hole punched in the page. */
+    --accent: 28 26 22;           /* #1C1A16 */
     --on-accent: 255 255 255;
-    --accent-soft: 230 241 236;   /* #E6F1EC — computed 10% tint */
+    --accent-soft: 232 232 232;   /* #E8E8E8 — computed 10% tint */
     --success: 11 122 82;
     --warning: 143 93 8;
     --danger: 201 38 74;
     --info: 27 74 143;
     --record: 197 74 74;          /* #C54A4A — the same red, ink-side */
-    --primary: 1 116 63;
+    --primary: 28 26 22;
     --on-primary: 255 255 255;
     --on-danger: 255 255 255;
     /* the ink button, light side: the page's ink as the fill, white on it */
@@ -267,7 +278,7 @@
     --muted: 237 234 227;
     --shadow-card: 0 2px 10px rgba(33,30,20,.06);
     --shadow-island: 0 6px 24px rgba(33,30,20,.1);
-    --shadow-accent: 0 4px 14px rgba(1,116,63,.22);
+    --shadow-accent: 0 4px 14px rgba(28,26,22,.18);
     /* GLASS, light. The sheet is WHITE here and the lip's highlight is nearly
        opaque white — on a cream ground the light catches the top of the panel
        the same way it does in dark, but the value that reads as "lit" on a
@@ -303,9 +314,11 @@
     --shadow-glass-hover:
       inset 0 1px 0 0 rgb(var(--glass-edge) / 1),
       0 16px 36px -22px rgb(33 30 20 / .38);
-    --wash-1: rgb(var(--accent) / .09);
-    --wash-2: rgb(var(--info) / .07);
-    --wash-3: rgb(var(--secondary) / .05);
+    /* neutral, light's half — ink rather than white, at a third of the
+       alpha the accent carried: a dark wash on a light page is a shadow */
+    --wash-1: rgb(28 26 22 / .030);
+    --wash-2: rgb(28 26 22 / .022);
+    --wash-3: rgb(28 26 22 / .016);
     --sidebar: 255 255 255;
     --sidebar-fg: 28 26 22;
     --brand-mark-image: url("/brand/neurai-mark-light-transparent.png");
@@ -452,6 +465,28 @@
   select:focus-visible,
   [contenteditable="true"]:focus-visible {
     @apply ring-0 ring-offset-0;
+  }
+
+  /*
+   * THE NATIVE CONTROLS WEAR THE THEME (2026-09-18).
+   *
+   * Found while taking the green out: a checkbox had NO rule anywhere in this
+   * file, so every one in the product — the six on Management · member access,
+   * the skills list, the key dialogs — rendered in the BROWSER's default blue.
+   * Not a colour anybody chose, and the one hue on those screens belonging to
+   * no token at all. It was invisible in the source because the control
+   * carrying it has no class to read: a grep for a colour finds nothing, and
+   * only the rendered box disagrees.
+   *
+   * `accent-color` is the whole fix, and it is one of the few properties that
+   * reaches a replaced element's box at all — the note further down records
+   * what `.tap` cannot do to one, for the same reason.
+   */
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  progress {
+    accent-color: rgb(var(--accent));
   }
 
   /* Latin fragments inside Persian text keep their own direction. */

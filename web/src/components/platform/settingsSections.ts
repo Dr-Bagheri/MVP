@@ -21,6 +21,13 @@ export interface SettingsSection {
   href?: string;
   /** the label comes from another namespace when the page is not ours */
   labelFrom?: "management" | "platform";
+  /**
+   * The page refuses a member (2026-09-18). It is CHROME only — every one of
+   * these already renders an admin-only card and is refused under that by
+   * core/ and RLS — so this decides what the menu offers, never what the
+   * server serves. See lib/viewer.ts for why a curtain is allowed to be one.
+   */
+  adminOnly?: true;
 }
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -49,8 +56,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
      resolves at /management/skills, exactly as every other row this menu
      has dropped: what a menu offers and what the router serves are
      different questions, and only the first one was asked. */
-  { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management" },
-  { slug: "audit-logs", group: "compliance" },
+  { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management", adminOnly: true },
+  { slug: "audit-logs", group: "compliance", adminOnly: true },
 ];
 
 /**

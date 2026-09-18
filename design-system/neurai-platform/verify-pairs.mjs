@@ -131,13 +131,25 @@ export const DARK = {
   fg: "#F2F4F6",
   fgMuted: "#C5CAD1",
   fgSubtle: "#8D949D",     // group labels — recedes toward the surface
-  accent: "#0FA85D",        // the reference's green, its one brand hue
-  onAccent: "#0B1408",      // the reference's own ink-on-green
-  /* the primary CTA is the GREEN in this palette — the reference fills its
-     one big button with the brand hue, and the neutral-pill rule retires
-     with the palette that needed it */
-  primary: "#0FA85D",
-  onPrimary: "#0B1408",
+  /* ── MONOCHROME (user directive, 2026-09-18: "change the background color
+     and fills, all green that are in the platform, to a theme black and
+     white"). The brand hue is gone from the interface: on a dark ground the
+     accent is the page's WHITE and on a light one its INK, which is the
+     same decision the button family took on the nine-way canvas earlier the
+     same day, now applied to the chips, links, toggles, focus ring and
+     every soft tint that reads from `--accent`.
+
+     What this costs, said rather than discovered: an accent that is the
+     brightest ink on the page can no longer be told from BODY text by hue,
+     so emphasis has to come from FILL, WEIGHT and the lit pill — which is
+     what the toolbar kit already does. Pure #FFFFFF rather than `fg`'s
+     #F2F4F6 on purpose: it keeps one step of separation from body text, and
+     an accent equal to the foreground would make `accent-soft` a chip the
+     same colour as a hovered row. */
+  accent: "#FFFFFF",
+  onAccent: "#0F1113",      // the page's own ground, as ink on the white fill
+  primary: "#FFFFFF",
+  onPrimary: "#0F1113",
   onDanger: "#000000",
   /* THE INK BUTTON (user, 2026-09-18): the button family's fill is the page's
      own ink, not the accent — near-white on the dark ground, near-black on
@@ -178,9 +190,12 @@ export const LIGHT = {
   fg: "#1C1A16",
   fgMuted: "#47443D",
   fgSubtle: "#716D62",     // group labels — recedes toward the surface
-  accent: "#01743F",        // the reference's #018146, nudged one step: its own 12% chip sat at 4.22
+  /* monochrome, light's half: the accent is the page's own ink. Not
+     #000000 — pure black on a warm cream ground reads as a hole punched in
+     the page, and every other dark value in this theme is this ink. */
+  accent: "#1C1A16",
   onAccent: "#FFFFFF",
-  primary: "#01743F",
+  primary: "#1C1A16",
   onPrimary: "#FFFFFF",
   onDanger: "#FFFFFF",
   btn: "#1C1A16",

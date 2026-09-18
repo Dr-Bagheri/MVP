@@ -80,7 +80,7 @@ describe("the tactile button family in ink", () => {
     }
   });
 
-  it("both themes declare the ink tokens at the chosen values, and the accent stays green", () => {
+  it("both themes declare the ink tokens at the chosen values, and the accent is MONOCHROME", () => {
     const dark = tokens(":root");
     const light = tokens('[data-theme="light"]');
     for (const t of ["--btn:", "--on-btn:", "--btn-soft:", "--btn-lip:", "--btn-hover:", "--btn-hover-2:"]) {
@@ -92,9 +92,27 @@ describe("the tactile button family in ink", () => {
     expect(dark).toMatch(/--on-btn:\s*16 19 22/);
     expect(light).toMatch(/--btn:\s*28 26 22/);
     expect(light).toMatch(/--on-btn:\s*255 255 255/);
-    /* the scope: the buttons went ink, the platform did not */
-    expect(dark).toMatch(/--accent:\s*15 168 93/);
-    expect(light).toMatch(/--accent:\s*1 116 63/);
+    /*
+     * REVERSED 2026-09-18, later the same day, and the reversal is the point.
+     *
+     * This line asserted that the buttons went ink and THE PLATFORM DID NOT —
+     * the scope of a choice made on a button canvas, where turning the whole
+     * product monochrome by accident would have passed every other check in
+     * this file. Hours later the user asked for exactly that on purpose
+     * ("all green that are in the platform to a theme black and white"), so
+     * the assertion flips rather than being deleted: what it protects is
+     * still "the accent is whatever was DECIDED, not whatever a button
+     * happens to be", and the decision changed.
+     *
+     * Asserted as an absence too. A version that leaves one theme green
+     * satisfies "the other one is white", and a half-monochrome platform is
+     * the state this is likeliest to be left in.
+     */
+    expect(dark).toMatch(/--accent:\s*255 255 255/);
+    expect(light).toMatch(/--accent:\s*28 26 22/);
+    for (const [name, css] of [["dark", dark], ["light", light]] as const) {
+      expect(css, `${name} still carries the brand green`).not.toMatch(/15 168 93|1 116 63/);
+    }
   });
 
   it("tailwind registers the three button colours the coats apply", () => {

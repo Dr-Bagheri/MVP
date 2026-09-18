@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TwoPane, type PaneGroup } from "./TwoPane";
 import { IconGauge, IconGavel, IconMailPlus, IconUser } from "@/components/icons";
+import { isAdminRole, useViewerRole } from "@/lib/viewer";
 
 /**
  * Management's two-pane surface (user directive, review round 2: "Management
@@ -44,6 +45,28 @@ const GROUPS: readonly { key: string; slugs: readonly string[] }[] = [
   { key: "org", slugs: ["general"] },
   { key: "people", slugs: ["users", "invitations", "privileges"] },
 ];
+
+/**
+ * THE SECTIONS A MEMBER MAY NOT OPEN (user directive, 2026-09-18: "make
+ * member access invisible to the member roles").
+ *
+ * Every one of these refused a member the day it shipped — the page renders
+ * an admin-only card and core/ + RLS refuse under it — so nothing here is a
+ * new wall. What it fixes is that the MENU advertised four doors and opened
+ * one: a member pressed «دسترسی اعضا», was told it is for admins, and learned
+ * that the product's navigation does not mean anything.
+ *
+ * Derived from what each page actually does rather than hand-picked: general
+ * (OrgFields refuses), users, invitations and privileges all render the
+ * refusal card for a non-admin. `speakers` is the one section a member may
+ * genuinely read — a voice print is a fact about a colleague, and the
+ * directory is theirs to see — so Management still has a room for them and
+ * the entry is not a lie either way.
+ *
+ * The SERVER is still the wall. This list may go stale, be wrong, or be
+ * edited in devtools, and the worst that happens is a menu entry.
+ */
+const ADMIN_ONLY: readonly string[] = ["general", "users", "invitations", "privileges"];
 
 /**
  * Sections whose surface is named but not yet wired — EMPTY since Part 3
@@ -121,11 +144,33 @@ export function ManagementPane({
       : group,
   );
 
+  /*
+   * THE MENU OFFERS WHAT THE VIEWER CAN OPEN (2026-09-18).
+   *
+   * `undefined` — still asking — keeps the admin entries, and that direction
+   * is chosen deliberately: after the first load of a session the role is
+   * remembered per tab, so the only case this decides is a cold start, and
+   * there an admin's menu must not be built member-shaped and then grow (the
+   * jump the rail's foot card was fixed for on the same day). A member on a
+   * cold start sees the fuller menu for one paint and every one of those
+   * doors still refuses them.
+   *
+   * A GROUP THAT EMPTIES DISAPPEARS WITH ITS TITLE. Leaving «سازمان» standing
+   * over nothing is a heading for a room with no doors, which reads as a
+   * broken menu rather than as a menu that is not for you.
+   */
+  const role = useViewerRole();
+  const visible: PaneGroup[] = isAdminRole(role) || role === undefined
+    ? withSpeakers
+    : withSpeakers
+        .map((group) => ({ ...group, items: group.items.filter((i) => !ADMIN_ONLY.includes(i.slug)) }))
+        .filter((group) => group.items.length > 0);
+
   return (
     <TwoPane
       navLabel={t("title")}
       heading={t("title")}
-      groups={withSpeakers}
+      groups={visible}
       activeSlug={activeSlug}
       actions={actions}
     >

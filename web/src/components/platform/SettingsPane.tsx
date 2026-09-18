@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TwoPane, type PaneGroup } from "./TwoPane";
 import { GROUP_ORDER, SETTINGS_SECTIONS } from "./settingsSections";
+import { isAdminRole, useViewerRole } from "@/lib/viewer";
 
 /**
  * SETTINGS' two-pane menu, extracted from the settings page (2026-08-26)
@@ -60,6 +61,13 @@ export function useSettingsGroups(): PaneGroup[] {
   const t = useTranslations("settings");
   const tManagement = useTranslations("management");
   const tPlatform = useTranslations("platform");
+  /* THE MENU OFFERS WHAT THE VIEWER CAN OPEN (2026-09-18). `undefined` is
+     still asking and keeps the admin rows, so an admin cold-starting does not
+     watch the menu grow; every hidden row refuses a member underneath anyway.
+     Chrome only — lib/viewer.ts says why that is allowed here. */
+  const role = useViewerRole();
+  const admin = isAdminRole(role) || role === undefined;
+  const show = (section: { adminOnly?: true }) => admin || section.adminOnly !== true;
   return GROUP_ORDER.map((group) => ({
     key: group,
     /* the two borrowed groups borrow their TITLES too — one word for one
@@ -67,7 +75,7 @@ export function useSettingsGroups(): PaneGroup[] {
     title: group === "assistant" || group === "service"
       ? tManagement(`group.${group === "assistant" ? "ai" : "service"}`)
       : t(`group.${group}`),
-    items: SETTINGS_SECTIONS.filter((section) => section.group === group).map((section) => ({
+    items: SETTINGS_SECTIONS.filter((section) => section.group === group && show(section)).map((section) => ({
       slug: section.slug,
       href: section.href ?? `/settings/${section.slug}`,
       label: section.labelFrom === "management"
