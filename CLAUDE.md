@@ -8718,6 +8718,15 @@ sessions) for the cross-session narrative.
   conversation in the window is either already archived or not certainly mine.
   Deployed: core on Hetzner (archive hashes equal, both entrypoints parse under
   strip-types, both units active, health ok, zero level≥40 journal lines).
+  **Proven on production** in the user's Chrome: the project panel has ZERO
+  «ویرایش» buttons and one kebab holding ویرایش / بایگانی / حذف, with the close
+  alone at the far end; the task panel has zero done AND zero edit buttons on
+  its bar, close alone at x=606, and its kebab holds all four — ویرایش /
+  علامت به‌عنوان انجام‌شده / بایگانی تسک / حذف تسک — with the label following
+  the state (the card is not done, so «برداشتن علامت انجام» is absent, which
+  is the discriminating half on live data). The tab was HIDDEN throughout and
+  a screenshot timed out on it, so the panels were driven through the DOM with
+  dispatched pointer events; a hidden document runs no rendering steps.
   NOT proven live: the block changing an answer — that needs a real
   conversation on the org's own data, and the user's next one is the
   measurement.
