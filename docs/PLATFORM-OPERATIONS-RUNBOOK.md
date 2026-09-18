@@ -1539,6 +1539,133 @@ confirm door that writes an asserted alias) and the first surface to use
 it — the directory's own person-to-account link, which is the gap this
 exists to close.
 
+## 7ac. The entity resolver, wired to the directory link — 2026-09-18, later (532ac48: core only)
+
+User: "build the core resolver and wire it to the directory link."
+
+### What the measurement said before anything was written
+
+The plan was a cross-script name matcher for the directory's suggestion, on
+the record (2026-09-07) that the fold guess never fires. Read at owner
+altitude first, and all three facts were different:
+
+| | |
+|---|---|
+| unlinked directory people | 9 |
+| of those, with a same-named account the EXISTING fold already suggests | 2 |
+| accounts carrying `display_name_en` (the cross-script rung's input) | 0 |
+| of the 9, not members at all (external people — «NAI», «پاسارگاد — خانم مرادی», «فرزاد») | 7 |
+
+So the suggestion is not starving: accounts have been created with Persian
+names since that reading, and the rung I was about to build would have had no
+input on any row. **No matcher was built.** What is real today is the other
+half: every link made from now on is a spine fact, rather than the spine
+going stale the day it shipped.
+
+### The resolver
+
+`core/src/api/entities.ts`: `resolveAlias`, `ensureEntity`, `attachAlias`,
+`detachAlias`. They take a `tx`, not a `db`, and that is the design rather
+than a detail — every caller is writing a PRODUCT fact in its own
+transaction, and the brain's copy has to land or not land with it. Two
+transactions leave "the product says linked, the brain says two strangers",
+which shows on no screen. Whether the spine exists is asked BEFORE the
+transaction (`hasEntitySpine`), so a deployment predating 0230 skips the work
+instead of rolling back a link.
+
+`directory.update` links and unlinks inside its own person UPDATE. Linking
+moves the directory row's identifier onto the account's node (creating that
+node when the account arrived after 0230's one-shot backfill) and points the
+emptied node at the keeper; clearing gives the identifier a node of its own
+again, because leaving them merged would be the brain holding a belief the
+admin has just retracted.
+
+### Two defects the acceptance found and the fakes had certified
+
+**`ensureEntity`'s race recovery could never run.** It caught 23505 and
+re-read — and in Postgres a failed statement ABORTS the transaction, so the
+re-read gets 25P02. Dead code that turned a survivable race into a failure,
+and since these run inside the caller's transaction, into a failed directory
+link. Now `on conflict do nothing returning id`: zero rows means somebody
+else claimed it, with no error and no poisoned transaction. The fake had
+thrown a fabricated 23505 — a fake deciding what nothing means at the point
+the real system decides it differently.
+
+**The recursive walk over `merged_into` cannot fire from this file.**
+`attachAlias` only merges a node it has just EMPTIED, and an empty node has
+no alias to walk from. Found by chasing two of my own assertions that
+contradicted the rule they were testing. The walk is kept — 0230 committed in
+writing to a node-merge door whose losers KEEP their aliases — and is proven
+against that state written directly, or it would be code that cannot be wrong
+for its own reason. Said in the module header, where the reader is.
+
+### The acceptance: db/scripts/probe-resolver.mjs
+
+Opt-in, re-runnable, 24 checks against the REAL schema under the REAL app
+role, inside ONE transaction rolled back in a `finally`, with no COMMIT
+anywhere in the file.
+
+- **Check 0 is rule 11's precondition**: `current_user = echo_app`,
+  `rolbypassrls = false`. This laptop's `.env` carries only the owner
+  connection, so the run drops to echo_app with `set local role` the way
+  db/test does — run as the owner instead and every policy check passes
+  unconditionally.
+- It drives the REAL directory repo on REAL rows: «بهناز امیدفر» linked to
+  her account, both identifiers resolving to ONE node, then cleared and two
+  nodes again. That path is the one that no longer merely goes stale on a
+  mistake — it fails the link — so it is the one a fake must not be the only
+  witness for.
+- Production's counts are re-read on a FRESH connection afterwards:
+  47 entities / 121 aliases / 0 merged, before and after, unchanged.
+
+Its first run refused two assertions and cost me the two findings above.
+Its own defect, fixed: the deliberate 42501 DELETE check aborted the
+transaction for everything after it — wrapped in a SAVEPOINT now, which is
+the same Postgres fact that made the catch-and-retry dead.
+
+### Verification
+
+Ten behaviours verified red by mutation, control green either side, each on
+its own test: the spine given its own transaction, clearing saying nothing to
+the spine, the capability ignored, the spine running when the link was not
+touched, an emptied node left standing, a still-populated node merged anyway,
+ensure always inserting, detach reusing the node it is on, and (against real
+SQL) the catch-based conflict recovery restored — which does not fail a
+check, it kills the run.
+
+One mutation was MISLABELLED and went red on the wrong test, leaving its
+assertion unverified until it was redone; and two multi-line anchors silently
+stopped matching after a `git stash` round-trip rewrote the working copy to
+CRLF (the committed diff was unaffected — 88 insertions, not a whole-file
+rewrite).
+
+core typecheck clean · 1944 passed (the one red is the pre-existing
+`history.test.ts` ZWNJ contradiction from the September merge, confirmed by
+stashing this batch and re-running) · encoding sweep 1547 files.
+
+### Not built, named rather than implied
+
+Candidate matching by folded name — the indexes exist; the first real
+consumer writes the query. And the node-merge door for two people who turn
+out to be one.
+
+### Deployed
+
+Core only — nothing in db (0230 was already applied) and nothing in web.
+Archive hash matched end to end (30c75109…), `pnpm install --frozen-lockfile`
+reconciled 3 packages, both entrypoints parse under `--experimental-strip-types`,
+both units active, health `{"ok":true}`, zero level>=40 journal lines after the
+restart. The altitude probe on api.neurai.pt: `/v1/directory` 401 and a PATCH to
+it 401, against `/v1/nonsense` 404 — wired and refusing at the wall, not 500ing.
+
+**And the check that the wiring is not silently inert**: `hasEntitySpine` runs as
+echo_app through `withoutIdentity`, and a capability that answered false would
+make every link skip the spine while every screen looked right. Run as echo_app
+on production, the exact query returns true.
+
+NOT exercised live: a real directory link (a write on the org's own rows — the
+2026-09-06 lesson). It is proven by the rolled-back acceptance on those same rows.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

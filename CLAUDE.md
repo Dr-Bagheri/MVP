@@ -8339,3 +8339,65 @@ sessions) for the cross-session narrative.
   alias) and the directory's own person-to-account link.
   db 230 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1814 tests + gate + sweep.
+- 2026-09-18 (THE ENTITY RESOLVER, AND A LINK THAT REACHES THE BRAIN IN THE
+  SAME TRANSACTION; commit 532ac48; core deployed, nothing in db or web):
+  "build the core resolver and wire it to the directory link."
+  **THE MEASUREMENT KILLED THE FEATURE I WAS ABOUT TO BUILD.** The plan was a
+  cross-script name matcher for the directory's suggestion, on this file's own
+  record that the fold guess never fires. Read at owner altitude first: it
+  fires on TWO of the nine unlinked people today (accounts have been created
+  with Persian names since that reading), `display_name_en` is NULL on every
+  account so the cross-script rung had no input at all, and SEVEN of the nine
+  are not members — they are the external people the spine exists for. No
+  matcher was built. Second time in two rounds that "core has no X deserves a
+  catalogue read every time" saved a day's work aimed at nothing.
+  **THE RESOLVER** (`core/src/api/entities.ts`): resolve an identifier, ensure
+  a node for one, attach an identifier to a node, take one back. They take a
+  `tx` and not a `db`, and that IS the design — every caller is writing a
+  product fact in its own transaction, and the brain's copy has to land or not
+  land with it; two transactions leave "the product says linked, the brain
+  says two strangers", which shows on no screen. Whether the spine EXISTS is
+  asked before the transaction opens, so a deployment predating 0230 skips the
+  work rather than rolling back a link. `directory.update` links and unlinks
+  inside its own person UPDATE; clearing gives the identifier a node of its
+  own again, because leaving them merged is the brain holding a belief the
+  admin just retracted.
+  **TWO DEFECTS THE ACCEPTANCE FOUND AND THE FAKES HAD CERTIFIED.** (1)
+  `ensureEntity` recovered from a lost race with a catch on 23505 and a
+  re-read — and **in Postgres a failed statement ABORTS the transaction**, so
+  the re-read gets 25P02: dead code that turned a survivable race into a
+  failure, and (since these run inside the caller's transaction) into a FAILED
+  DIRECTORY LINK. Now `on conflict do nothing returning id` — zero rows means
+  somebody else claimed it, no error, no poisoned transaction. The fake had
+  thrown a fabricated 23505: a fake deciding what nothing means at the point
+  the real system decides it differently. (2) **The recursive walk over
+  `merged_into` cannot fire from anything in that file** — attach only merges
+  a node it has just EMPTIED, and an empty node has no alias to walk from.
+  Found by chasing two of my own assertions that contradicted the rule they
+  were testing. Kept (0230 committed in writing to a merge door whose losers
+  KEEP their aliases) and proven against that state written directly, or it
+  would be code that cannot be wrong for its own reason.
+  **THE ACCEPTANCE** (`db/scripts/probe-resolver.mjs`, opt-in, re-runnable):
+  24 checks against the real schema under the real app role, in ONE
+  transaction rolled back in a `finally`, no COMMIT in the file. Check 0 is
+  rule 11's precondition (`current_user = echo_app`, `rolbypassrls = false`) —
+  mandatory here because this laptop's `.env` has only the owner connection,
+  so the run drops to echo_app the way db/test does. It drives the REAL
+  directory repo on REAL rows: «بهناز امیدفر» linked to her account, both
+  identifiers resolving to ONE node, then cleared and two nodes again.
+  Production re-read on a fresh connection after: 47 entities, 121 aliases, 0
+  merged — unchanged. Its own defect, fixed: the deliberate 42501 DELETE check
+  aborted the transaction for every check after it (a SAVEPOINT now), which is
+  the same Postgres fact that made the catch-and-retry dead.
+  **Ten behaviours verified red by mutation**, control green either side, each
+  on its own test — plus the conflict rewrite verified against real SQL by
+  restoring the catch version, which does not fail a check, it KILLS THE RUN.
+  Two process notes: one mutation was mislabelled and went red on the wrong
+  test (redone), and two multi-line anchors silently stopped matching after a
+  `git stash` round-trip rewrote the working copy to CRLF — the committed diff
+  was unaffected.
+  **Not built, named rather than implied:** candidate matching by folded name
+  (the indexes are there; the first real consumer writes the query) and the
+  node-merge door.
+  db 230 migrations · core 1944 tests (1 pre-existing red, history ZWNJ) ·
+  web 1814 tests + gate + sweep.
