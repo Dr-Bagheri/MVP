@@ -493,3 +493,35 @@ export type TranslationStatus = (typeof TRANSLATION_STATUSES)[number];
  */
 export const SIGNIN_METHODS = ["google", "github", "apple", "azure", "sso"] as const;
 export type SigninMethod = (typeof SIGNIN_METHODS)[number];
+/**
+ * db/0230 (2026-09-18): the organizational brain's spine.
+ *
+ * ENTITY_KINDS is what a node can BE. `organization` is an EXTERNAL
+ * organization — a customer, a supplier — because `echo.org` is the tenant
+ * and is never an entity.
+ *
+ * ALIAS_SOURCES is where an identifier comes from and ALIAS_KINDS is what
+ * kind of identifier it is. There is deliberately no `name` kind: two
+ * colleagues in this organisation are both «سینا», so a name cannot be a
+ * unique identifier, and a system that treats one as an identifier is the
+ * one that attaches a colleague's identity to somebody else's voice (the
+ * 2026-09-16 finding). Names live on the node; matching by name returns
+ * candidates for a human to confirm.
+ *
+ * All three mirror the CHECK constraints in the migration that owns them,
+ * and core/test reads that migration and asserts the equality — the 0203
+ * device, so the two cannot drift quietly.
+ */
+export const ENTITY_KINDS = ["person", "organization", "project", "document", "topic"] as const;
+export type EntityKind = (typeof ENTITY_KINDS)[number];
+
+export const ALIAS_SOURCES = [
+  "neurai", "google", "microsoft", "zoom", "slack", "telegram", "jira",
+  "notion", "github", "whatsapp", "dropbox", "mcp", "crm", "manual",
+] as const;
+export type AliasSource = (typeof ALIAS_SOURCES)[number];
+
+export const ALIAS_KINDS = [
+  "app_user", "person", "project", "email", "handle", "phone", "domain", "external_id",
+] as const;
+export type AliasKind = (typeof ALIAS_KINDS)[number];

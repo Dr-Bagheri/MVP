@@ -225,6 +225,15 @@ export async function hasMeetingSignatures(db: Db): Promise<boolean> {
   return hasTable(db, "meeting_signature");
 }
 
+/**
+ * db/0230: the organizational brain's spine (echo.entity + echo.entity_alias).
+ * The two land in one migration, so one table answers for both. Absent =
+ * the deployment predates 0230 and every caller SKIPS the spine work
+ * rather than failing the product write it rides along with.
+ */
+export async function hasEntitySpine(db: Db): Promise<boolean> {
+  return hasTable(db, "entity_alias");
+}
 /** db/0096: person.team + person.voiceprint_samples (they land together). */
 export async function hasPersonTeams(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "team");

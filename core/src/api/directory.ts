@@ -13,7 +13,8 @@
  */
 import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasPersonTeams, hasVoiceprints, hasVoiceprintTakes } from "../db/capabilities.ts";
+import { hasEntitySpine, hasPersonTeams, hasVoiceprints, hasVoiceprintTakes } from "../db/capabilities.ts";
+import { attachAlias, detachAlias, ensureEntity } from "./entities.ts";
 import { centroidOf, withTake } from "./voiceprint.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -103,6 +104,71 @@ const toPerson = (row: Record<string, unknown>): PersonRecord => ({
       }
     : {}),
 });
+
+/**
+ * A directory link, told to the spine (db/0230).
+ *
+ * The product fact is `person.app_user_id` and it has not moved — every
+ * screen and every query still reads that column. What this adds is the
+ * BRAIN's copy of the same sentence: a directory row and an account that
+ * name one person must be ONE node, or a mail address learned from the one
+ * and a decision learned from the other are facts about two strangers.
+ *
+ * Runs inside the caller's transaction, so it is atomic with the column.
+ *
+ * LINKED: the person's identifier moves onto the account's node (creating
+ * that node when the account arrived after 0230's one-shot backfill), and
+ * the node it leaves — which now names nothing — points at the keeper so an
+ * entity id held from before keeps resolving.
+ *
+ * CLEARED: the person's identifier gets a node of its own again. The
+ * alternative was to leave them merged, which would mean the brain holding a
+ * belief the admin has just retracted.
+ */
+async function syncLinkToSpine(
+  tx: SqlTx,
+  identity: Identity,
+  personId: string,
+  personRow: Record<string, unknown>,
+  appUserId: string | null,
+): Promise<void> {
+  const alias = { source: "neurai", kind: "person", value: personId } as const;
+  const personName = String(personRow.display_name ?? "").trim() || "unnamed";
+
+  if (appUserId === null) {
+    await detachAlias(tx, {
+      alias,
+      seed: { kind: "person", displayName: personName, attrs: { seeded_from: "person" } },
+      actorId: identity.userId,
+    });
+    return;
+  }
+
+  /* the account's own names seed its node when the spine has never met it —
+     read here rather than passed in, because the caller holds a person row
+     and this needs the ACCOUNT's spelling of the same human */
+  const account = await tx.unsafe<{ display_name: string | null; display_name_en: string | null }>(
+    `select display_name, display_name_en from echo.app_user where id = $1 limit 1`,
+    [appUserId],
+  );
+  const entity = await ensureEntity(
+    tx,
+    { source: "neurai", kind: "app_user", value: appUserId },
+    {
+      kind: "person",
+      displayName: String(account[0]?.display_name ?? "").trim() || personName,
+      displayNameEn: account[0]?.display_name_en ?? null,
+      attrs: { seeded_from: "app_user" },
+    },
+    identity.userId,
+  );
+  await attachAlias(tx, {
+    alias,
+    toEntityId: entity.id,
+    actorId: identity.userId,
+    evidence: { via: "directory_link", person_id: personId, app_user_id: appUserId },
+  });
+}
 
 function assertTitle(title: string): asserts title is PersonTitle {
   if (!(PERSON_TITLES as readonly string[]).includes(title)) {
@@ -400,16 +466,33 @@ export function createDirectoryRepo(db: Db) {
          that throws synchronously (or any layer between here and it) would
          sail straight past a promise-tail handler, and the mapping below
          would silently never run. Caught by its own test. */
+      /*
+       * db/0230: a link is a fact the BRAIN needs too. Asked before the
+       * transaction opens, because "the spine is not deployed yet" must skip
+       * the work rather than roll back the link (capabilities.ts's own rule);
+       * inside it, the spine write shares the person UPDATE's transaction, so
+       * the product saying "linked" and the brain saying "two people" is a
+       * state that cannot exist.
+       */
+      const spine = setLink && (await hasEntitySpine(db));
       let rows: Record<string, unknown>[];
       try {
-        rows = await db.withIdentity(identity, (tx: SqlTx) =>
-          tx.unsafe<Record<string, unknown>>(
+        rows = await db.withIdentity(identity, async (tx: SqlTx) => {
+          const updated = await tx.unsafe<Record<string, unknown>>(
             `update echo.person set ${sets.join(", ")}
              where id = $1 and merged_into is null
              returning ${PERSON_COLUMNS}${withTeams ? ", team, voiceprint_samples" : ""}`,
             params,
-          ),
-        );
+          );
+          /* narrowed by the check rather than asserted: `setLink` is a
+             boolean TypeScript cannot read back onto the value, and a `!`
+             here would claim null is impossible when null IS the unlink */
+          const target = patch.appUserId;
+          if (spine && updated[0] && target !== undefined) {
+            await syncLinkToSpine(tx, identity, id, updated[0], target);
+          }
+          return updated;
+        });
       } catch (error: unknown) {
         const code = (error as { code?: string }).code;
         /* db/0100's partial unique index: another ACTIVE person already
