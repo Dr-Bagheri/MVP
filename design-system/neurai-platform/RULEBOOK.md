@@ -61,7 +61,7 @@ toolbar of the day — 70px to the first content where it had been 104):
 
 ```
 row one   TAB_TRACK     + sectionTabClass(active)   a SEGMENTED CONTROL: the recessed track,
-                                                     3px around 28px pills (`.btn-xs`), the
+                                                     2px around 24px pills (`.btn-xs`), the
                                                      chosen pill lifted with the card shadow
           ToolbarMenu   + MenuRadio / MenuCheck      «مرتب‌سازی», «فیلتر»: a ghost `btn-sm`
                                                      button with the label, the current value,
@@ -90,7 +90,7 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
 - An on/off filter that stays ON THE ROW (the call page's «مقایسه») is
   `toggleClass(on)` with `aria-pressed` — a segmented pill lifting on its
   own; a page toolbar's own on/off filters go in «فیلتر».
-- The pill (`.btn-xs`, 28) and the chip (`.filter-chip`, 24) are kit shapes in
+- The pill (`.btn-xs`, 24) and the chip (`.filter-chip`, 24) are kit shapes in
   `globals.css`; `units.guard` cross-reads their size tokens, `toolbar.guard`
   refuses a tab drawn without the kit and holds the kit to the track, the
   pill and the chip, and `filterChips.test` records the reversal of the
@@ -171,7 +171,7 @@ row two   FILTER_TRACK  + filterChipClass(active)   a LINE of `.filter-chip`s �
   create buttons in `end` at `btn-sm`; row two is the `TopicStrip` — a bare
   line of folder chips — with the SEARCH KEY in its `end` slot: at the
   row's END (the left edge of a Persian screen), a glyph (`btn-ghost
-  btn-icon`, the line's own 28) until pressed and then a field that opens on
+  btn-icon`, the line's own 24) until pressed and then a field that opens on
   the key's START side, toward the chips (closing it clears the query). A
   search is a key on a row, never a box beside it.
 - The first row's OTHER END is `TwoPane`'s / `Toolbar`'s `end` slot: the
@@ -199,7 +199,7 @@ spelled by hand).
 | Thing | The one spelling | Guard |
 |---|---|---|
 | Table | `DataTable` (`components/DataTable.tsx`) — header, rows, skeleton, pager, menu, selection all inside it. It FITS its column and grows down: cells wrap, nothing scrolls sideways (user ruling 2026-09-15). Rows are the detail size with a 6px gap. | `loading.guard`, `confirm.guard` |
-| Button | ONE SIZE FAMILY: `.btn` at 42 (34 + 8, the height the sub-menu rail set on 2026-09-16) on the panel corner `rounded-lg` (12) at weight 500 · `.btn-sm` at 34 · `.btn-icon` at 28 · `.btn-icon-sm` at 34 · `.btn-icon-lg` at 42. THE TACTILE FAMILY IN INK (user, 2026-09-18, chosen from the nine-way canvas — three designs in three colourways): every FILLED coat wears a lit top edge, an inner gradient and a small drop and presses IN; the primary's fill is `--btn`, the page's own ink (near-white on dark, near-black on light), and the green stays the accent for everything that is not a button. ONE COAT SET, each written only in `globals.css` (2026-09-17 — 133 spellings counted, 51 of them an outlined secondary drawn by hand beside the kit's filled one): `btn-primary` (the act, in ink) · `btn-secondary` (a raised neutral, every other button INCLUDING a dialog's cancel — `panelStyle.FOOTER_CANCEL` reads it) · `btn-ghost` (a quiet act, and EVERY icon button: `btn-ghost btn-icon`; flat, no lip) · `btn-soft` (a chosen state on the ink's tint, flatter than the secondary) · `btn-dashed` (an add slot) · `btn-danger` (the destructive yes, the same recipe in red) · `btn-ghost-danger` (quiet until the pointer, then red). A ground, edge, shadow, ink or weight beside `btn` is a defect | `buttonCoat.guard`, `buttonTactile.test`, `control.guard`, `units.guard` |
+| Button | ONE SIZE FAMILY, ONE STEP DOWN (user, 2026-09-18: "make all button one size smaller" — the scale moved from 42 / 34 / 28 to 34 / 28 / 24 at the tokens, paddings 13 / 10 / 8, type detail / caption / caption): `.btn` at 34 on the panel corner `rounded-lg` (12) at weight 500 · `.btn-sm` at 28 · `.btn-xs` at 24 (the segmented pill; a 2px track makes it 28, level with a `btn-sm`) · `.btn-icon` at 24 · `.btn-icon-sm` at 28 · `.btn-icon-lg` at 34. THE TACTILE FAMILY IN INK (user, 2026-09-18, chosen from the nine-way canvas — three designs in three colourways): every FILLED coat wears a lit top edge, an inner gradient and a small drop and presses IN; the primary's fill is `--btn`, the page's own ink (near-white on dark, near-black on light), and the green stays the accent for everything that is not a button. ONE COAT SET, each written only in `globals.css` (2026-09-17 — 133 spellings counted, 51 of them an outlined secondary drawn by hand beside the kit's filled one): `btn-primary` (the act, in ink) · `btn-secondary` (a raised neutral, every other button INCLUDING a dialog's cancel — `panelStyle.FOOTER_CANCEL` reads it) · `btn-ghost` (a quiet act, and EVERY icon button: `btn-ghost btn-icon`; flat, no lip) · `btn-soft` (a chosen state on the ink's tint, flatter than the secondary) · `btn-dashed` (an add slot) · `btn-danger` (the destructive yes, the same recipe in red) · `btn-ghost-danger` (quiet until the pointer, then red). A ground, edge, shadow, ink or weight beside `btn` is a defect | `buttonCoat.guard`, `buttonTactile.test`, `control.guard`, `units.guard` |
 | Field | `.input` / `.input-sm`, `Field`, `FormRow` | `select.guard` |
 | Card | `.card` (a page block) · `.card-row` (a card in a list) · `.well` (a row inside a card) · `.tile` is a card; a row of tiles says `tile-row` | `surface.guard`, `tileRow.guard` |
 | Dialog / detail | `Overlay`, `ConfirmDialog`, `DetailPanel`; body rhythm from `panelStyle` (`DIALOG_BODY`, `PANEL_SECTIONS`, `RAIL_SECTIONS`) | `dialogSections.guard`, `detailPanel.guard`, `nativeDialog.guard` |

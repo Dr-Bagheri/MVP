@@ -60,9 +60,16 @@ import {
  * reader they answer the same question about the same screen.
  */
 
-/** row one's segmented control: the recessed track, 3px around the pills, never wrapping */
+/**
+ * row one's segmented control: the recessed track, 2px around the pills,
+ * never wrapping. The 2px is a relationship, not a taste: a 24 pill in a 2px
+ * track is 28, the compact control's own height, so a `btn-sm` beside the
+ * track — the menus, the row-one create — stands level with it (2026-09-18,
+ * "make all button one size smaller": the pill went 28 → 24 and the padding
+ * 3 → 2 with it; buttonTactile.test asserts the sum).
+ */
 export const TAB_TRACK =
-  "track-scroll flex max-w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-[3px]";
+  "track-scroll flex max-w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-[2px]";
 
 /** row two's line of chips: no ground, no padding — the chips and their gaps */
 export const FILTER_TRACK =

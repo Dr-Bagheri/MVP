@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SCAFFOLD } from "./scaffold/constants";
+import { TAB_TRACK } from "./platform/sectionTabs";
 
 /**
  * THE TACTILE FAMILY IN INK (user, 2026-09-18, chosen from a nine-way canvas
@@ -99,5 +100,42 @@ describe("the tactile button family in ink", () => {
   it("tailwind registers the three button colours the coats apply", () => {
     for (const k of ["btn:", '"on-btn":', '"btn-soft":']) expect(TAILWIND, `tailwind.config lacks ${k}`).toContain(k);
     expect(has(TAILWIND, "rgb(var(--btn) / <alpha-value>)")).toBe(true);
+  });
+});
+
+/**
+ * ONE STEP DOWN (user, 2026-09-18, an hour after the family shipped: "make
+ * all button one size smaller"). The scale is the tokens — 34 / 28 / 24,
+ * where it had been 42 / 34 / 28 — so a class that spelled its own height
+ * would be the drift; the padding and the small type follow one step each;
+ * and the segmented track's padding is a RELATIONSHIP with the pill: a 24
+ * pill in a 2px track is 28, the compact control's own height, so a
+ * `btn-sm` beside the track stands level with it. That sum is what would go
+ * silently wrong the next time either number moved alone.
+ */
+describe("the family one step down", () => {
+  it("the three heights are 34 / 28 / 24 at the tokens", () => {
+    expect(SCAFFOLD.controlHeight).toBe(34);
+    expect(SCAFFOLD.controlHeightSm).toBe(28);
+    expect(SCAFFOLD.controlHeightIcon).toBe(24);
+    for (const n of ["btn", "btn-sm", "btn-xs", "btn-icon", "btn-icon-sm", "btn-icon-lg"]) {
+      expect(rule(n), `${n} spells a height of its own`).not.toMatch(/\b(?:min-)?h-\[\d/);
+    }
+  });
+
+  it("the padding and the small type followed one step each", () => {
+    expect(rule("btn")).toContain("px-[13px]");
+    expect(rule("btn")).toMatch(/\btext-detail\b/);
+    expect(rule("btn-sm")).toMatch(/\bpx-2\.5\b/);
+    expect(rule("btn-sm")).toMatch(/\btext-caption\b/);
+    expect(rule("btn-sm"), "the 12.5 text is back on the compact button").not.toContain("0.78125rem");
+    expect(rule("btn-xs")).toMatch(/\bpx-2\b(?!\.)/);
+  });
+
+  it("the segmented track's padding keeps the pill level with a btn-sm", () => {
+    const m = /\bp-\[(\d+)px\]/.exec(TAB_TRACK);
+    expect(m, "the track has no px padding to reason about").not.toBeNull();
+    const pad = Number(m![1]);
+    expect(SCAFFOLD.controlHeightIcon + 2 * pad, "pill + track is not the compact control's height").toBe(SCAFFOLD.controlHeightSm);
   });
 });

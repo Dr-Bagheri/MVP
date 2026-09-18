@@ -146,7 +146,7 @@ describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
     /* the kit's segmented track (design «ج», 2026-09-17): 3px of padding
        around 28px pills on the recessed ground, the control's 11px corner,
        no border — the same control every page's first sub-menu wears */
-    expect(TAB_BAR).toContain("p-[3px]");
+    expect(TAB_BAR).toContain("p-[2px]");
     expect(TAB_BAR).not.toMatch(/(?<![\w-])h-/);
     expect(TAB_BAR).toContain("rounded-md");
     expect(TAB_BAR).toContain("bg-surface-2");

@@ -80,7 +80,7 @@ describe("toolbar.guard — every tab is the kit's", () => {
        with no rail — a kit that quietly dropped any of them would not pass
        by making the tree empty of it */
     const kit = readFileSync(join(SRC, KIT), "utf8");
-    expect(kit).toContain("rounded-md bg-surface-2 p-[3px]");
+    expect(kit).toContain("rounded-md bg-surface-2 p-[2px]");
     expect(kit).toContain("btn btn-xs");
     expect(kit).toContain("shadow-card");
     expect(kit).toContain('"filter-chip filter-chip-on"');

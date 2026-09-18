@@ -115,22 +115,26 @@ export const SCAFFOLD = {
    * now, so the proportions hold at every width instead of at one.
    */
   /*
-   * 42, NOT the 38 measured off the reference on 2026-09-02 — a user ruling
-   * over a measurement (2026-09-16: "the style of the top bar menu and the
-   * buttons must be the same, I feel they are far apart … change the style
-   * of all buttons in the platform"). The sub-menu rail is the compact pill
-   * (34) plus 4px of track above and below, so a page button standing beside
-   * a rail — «جلسه جدید» beside «گذشته | پیش‌رو | آرشیو» — is the rail's own
-   * box: same height, same corner (`.btn` wears the rail's `rounded-xl`).
-   * Measured before the change at root 15.06: rail 39.5 / 16px corner /
-   * weight 500 against buttons at 35.8 / 11px / 600. Written as a formula so
-   * the two cannot drift apart again.
+   * ONE STEP DOWN (user, 2026-09-18, an hour after the tactile family
+   * shipped: "make all button one size smaller"). The scale was 42 / 34 / 28
+   * and is 34 / 28 / 24: every class keeps its name and its readers, and the
+   * numbers move once, here — the icon squares, the pagination arrows and
+   * the strip's search field follow because they read these same tokens.
+   * The 42 had been "the rail's own box" (2026-09-16: the 34 pill plus 4px
+   * of track above and below, written as `34 + 8` so the two could not
+   * drift) and lost its reason when the rail became design «ج» on
+   * 2026-09-17; the relationship survives one step down — a 24 pill in a
+   * 2px track is 28, the compact control's own height, so a `btn-sm` beside
+   * the segmented control still stands level with it (`TAB_TRACK` carries
+   * the 2px; buttonTactile.test asserts the sum). The reference's 38
+   * (2026-09-02) is now superseded twice, in opposite directions, both
+   * times by the user.
    */
-  controlHeight: 34 + 8,
-  /** the compact control — segmented tabs, toolbar buttons, the rail's pill */
-  controlHeightSm: 34,
-  /** the square icon button */
-  controlHeightIcon: 28,
+  controlHeight: 34,
+  /** the compact control — toolbar buttons, the row-one create, the menus, and the segmented track's own height */
+  controlHeightSm: 28,
+  /** the square icon button, and the segmented pill (`.btn-xs`) */
+  controlHeightIcon: 24,
   /**
    * The assistant's resting strip at the inline-end — the width the SHELL
    * leaves for it so every page centres in the space that is actually there.

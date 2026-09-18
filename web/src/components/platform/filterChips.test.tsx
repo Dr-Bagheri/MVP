@@ -20,7 +20,7 @@ import {
 describe("the toolbar kit", () => {
   it("row one is a segmented control: the recessed track, 3px around the pills, the chosen one lifted", () => {
     expect(TAB_TRACK).toContain("bg-surface-2");
-    expect(TAB_TRACK).toContain("p-[3px]");
+    expect(TAB_TRACK).toContain("p-[2px]");
     expect(TAB_TRACK).toContain("rounded-md");
     /* the pill is the fourth size of the button family — the icon height as
        a text button — never a height written beside `btn` */

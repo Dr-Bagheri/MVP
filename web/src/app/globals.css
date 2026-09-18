@@ -890,9 +890,15 @@
      * (`active:` swaps the shadow for an inset and drops the box by a pixel),
      * while the ghost coats stay flat. The primary's fill is `--btn`, the
      * page's own ink; the green is still the accent everywhere else.
+     *
+     * ONE STEP DOWN (user, 2026-09-18, an hour later: "make all button one
+     * size smaller"): the three heights moved at the tokens — `min-h-control`
+     * reads 34 now, `control-sm` 28, `control-icon` 24 — and the padding and
+     * the small type followed one step each: 13 / 10 / 8 and detail /
+     * caption / caption. The corners did not move.
      */
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-lg px-[15px] text-center text-detail font-medium leading-control
+           rounded-lg px-[13px] text-center text-detail font-medium leading-control
            transition-all duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
@@ -991,7 +997,9 @@
     /* the rail's pill corner (2026-09-16): a compact button standing alone
        is the same pill as one lifted inside a track, so it wears the same
        `rounded-xl` — `sectionTabClass` no longer has to add it */
-    @apply h-control-sm min-h-control-sm rounded-lg px-[13px] text-[0.78125rem];
+    /* 2026-09-18, one step down: 28 tall on the token, 10px inset, the
+       caption size — what `.btn-xs` wore the hour before */
+    @apply h-control-sm min-h-control-sm rounded-lg px-2.5 text-caption;
   }
   /*
    * THE SEGMENTED PILL (user's choice, 2026-09-17 — design «ج» of the three
@@ -1003,7 +1011,7 @@
    * square's 8: a 28px box on the rail's 12 would be a lozenge.
    */
   .btn-xs {
-    @apply h-control-icon min-h-control-icon rounded-[8px] px-2.5 text-caption;
+    @apply h-control-icon min-h-control-icon rounded-[8px] px-2 text-caption;
   }
   /*
    * THE CHIP (the same choice): the folder line under the toolbar — 24 tall,
