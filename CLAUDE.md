@@ -8585,3 +8585,44 @@ sessions) for the cross-session narrative.
   account rather than the owner's session; the seven unit cases and five
   mutations are the ceiling here.
   db 233 migrations · core 1977 tests · web 1827 tests + gate + sweep.
+- 2026-09-19 (TWO ALARM TABS WAS MY OWN SCRIPT WRITING TWICE, AND THE ACTS
+  MOVE OFF THE CLOSE BUTTON'S SIDE; commit 61d6a64; web on Vercel): two
+  screenshots — "why we have 2 alarm tabs" and "put the three dot and edit on
+  the other side for tasks and projects" — plus "check the platform in browser
+  and see if everything is fine".
+  **THE DUPLICATE WAS MINE AND THE HOW IS THE REUSABLE PART.** The alarms
+  entry was added by a script that made several edits and threw on the last
+  one; **the edits before the throw HAD ALREADY BEEN WRITTEN**, so re-running
+  it after fixing the failing anchor added the first one a second time. Nothing
+  could see it — two identical entries render two identical tabs, both of which
+  work — and the typecheck, the whole suite and the production build all
+  passed. Minted: **a multi-edit script that throws halfway has already written
+  the edits before the throw, so re-running it duplicates them**; build every
+  edit in memory and write once, or make the script idempotent. (Second
+  instance in two days: the same shape put a half-written comment in types.ts.)
+  The fix is not a careful edit. `sectionRegistry.test.ts` asserts a section is
+  listed ONCE in both registries, plus the two siblings of the same shape — a
+  slug both listed and declared off-menu, and a section in a group the menu
+  does not render. **A menu is a registry, a registry is a list, and a list
+  that may not hold a value twice should say so somewhere that runs.** Verified
+  red three ways including the exact duplicate the user photographed.
+  **THE ACTS MOVED, and production was measured before anything was touched**,
+  because a screenshot crop cannot say which side something is on: the kebab
+  and «ویرایش» sat at x=578 and x=502 against a panel whose right edge was 640
+  — clustered with the CLOSE at 606 — while the done toggle sat alone at the
+  far end. Chrome and content in one group, the object's own acts split across
+  two. Now the close is alone and everything a person can DO is on the other
+  side, overflow menu last. **Asserted as STRUCTURE rather than geometry**, and
+  that is the honest shape: jsdom lays nothing out, so "which side" is not a
+  question it can answer — but "the close button's group holds the close and
+  nothing else" is the rule that decides the side, and the version the user
+  photographed fails it without any geometry at all; with the control beside
+  it, since counting the close's neighbours alone would pass on a panel
+  rendering no acts.
+  **THE SWEEP**: eight pages 200 against a 404 control; meetings, projects and
+  agents rendered with zero raw catalogue keys, zero empty buttons and **ZERO
+  elements still painted in the retired brand green**; the two colleagues read
+  two different sentences on the live wire (0233 landed). After the deploy: the
+  Settings menu has one «زنگ‌ها», and both details put close alone at x=606
+  with ویرایش/بیشتر/the act at the far end, `closeGroupSize: 1`.
+  db 233 migrations · core 1977 tests · web 1832 tests + gate + sweep.
