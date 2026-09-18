@@ -1,5 +1,5 @@
 import { personFixture } from "@/test/fixtures";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -148,6 +148,64 @@ describe("TaskDetail — the red button", () => {
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledWith("t-1", { archived: true }));
     expect(deleteTask).not.toHaveBeenCalled();
+  });
+});
+
+describe("the acts are all in one menu (2026-09-19)", () => {
+  /*
+   * User directive: "put edit and sign it as complete inside the three dots
+   * as well for both tasks and projects."
+   *
+   * Both halves are asserted, and the second is the one that makes this a
+   * test of the DIRECTIVE rather than of the menu: a version that added the
+   * two items and left the buttons on the bar satisfies every "is it in the
+   * menu" line and is exactly what was asked to stop — two doors to one act,
+   * side by side, and a person wondering which is real.
+   */
+  it("edit and «mark done» are menu items, and neither is a button on the bar", async () => {
+    open();
+    /* BEFORE the menu opens: no act is reachable as a bar control. The done
+       toggle was a bordered `.btn btn-sm` here until today. */
+    expect(screen.queryByRole("button", { name: "edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "markDone" })).toBeNull();
+
+    await press("more");
+    expect(await screen.findByRole("menuitem", { name: "edit" })).toBeTruthy();
+    expect(await screen.findByRole("menuitem", { name: "markDone" })).toBeTruthy();
+  });
+
+  it("«mark done» writes the flag, and says the opposite word once it is set", async () => {
+    open();
+    await press("more");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "markDone" }));
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith("t-1", { done: true }));
+
+    /* the label follows the STATE — a menu row that still reads "mark as
+       done" on a finished card is a control that lies about what it does */
+    cleanup();
+    render(
+      <TaskDetail
+        task={{ ...TASK, done: true }} columns={COLUMNS} topics={TOPICS} labels={LABELS} people={PEOPLE}
+        onClose={vi.fn()} onChanged={vi.fn()} onLabelsChanged={vi.fn()}
+      />,
+    );
+    await press("more");
+    expect(await screen.findByRole("menuitem", { name: "markUndone" })).toBeTruthy();
+  });
+
+  it("«edit» opens the editor in THIS panel, and the row then offers the way out", async () => {
+    open();
+    await press("more");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "edit" }));
+
+    /* the panel is the editor (R18) — the title becomes a field in the card
+       that was already open, never a second window */
+    const panel = screen.getByRole("dialog");
+    const field = await screen.findByDisplayValue("اجرای اسکریپت مهاجرت");
+    expect(field.closest("[role=\"dialog\"]")).toBe(panel);
+
+    await press("more");
+    expect(await screen.findByRole("menuitem", { name: "done" })).toBeTruthy();
   });
 });
 

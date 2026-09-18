@@ -446,6 +446,19 @@ describe("ProjectDetail", () => {
  * panel, the roster opened a third dialog, and the rail was a read-out.
  */
 describe("the project is edited in its own panel (2026-09-08)", () => {
+  /*
+   * THE ACTS LIVE IN THE KEBAB (2026-09-19, user directive). Every «ویرایش»
+   * below goes through it, and the two ABSENCE cases had to change shape with
+   * it rather than keep passing: `queryByRole("button", {name: /ویرایش/})`
+   * is null for a member AND null for an admin who has one in a closed menu,
+   * so after the move it could not fail for its reason — the vacuous-in-a-
+   * new-way trap this repo has recorded twice. What is asserted instead is
+   * that the MENU ITSELF is absent, which is the claim the panel makes.
+   */
+  const openActs = async () => {
+    await userEvent.click(screen.getByRole("button", { name: "بیشتر" }));
+  };
+
   it("«ویرایش» makes the name and the summary writable HERE, and opens no second window", async () => {
     ONE = project({ id: "p-1", name: "بازطراحی سایت", summary: "خلاصه" });
     render(detail("p-1", "u-1"));
@@ -458,7 +471,8 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
        invisible to `getAllByRole`. Comparing the box's own dialog to the
        panel's is the question that distinguishes them. */
     const panel = screen.getByRole("dialog");
-    await userEvent.click(screen.getByRole("button", { name: /ویرایش/ }));
+    await openActs();
+    await userEvent.click(await screen.findByRole("menuitem", { name: /ویرایش/ }));
 
     expect(screen.getByLabelText("نام پروژه").closest("[role=\"dialog\"]")).toBe(panel);
     expect(screen.getByLabelText("نام پروژه")).toHaveValue("بازطراحی سایت");
@@ -472,7 +486,8 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
     ONE = project({ id: "p-1", name: "بازطراحی سایت" });
     render(detail("p-1", "u-1"));
     await waitFor(() => expect(screen.getByRole("heading", { name: "بازطراحی سایت" })).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /ویرایش/ }));
+    await openActs();
+    await userEvent.click(await screen.findByRole("menuitem", { name: /ویرایش/ }));
 
     const box = screen.getByLabelText("نام پروژه");
     await userEvent.clear(box);
@@ -494,7 +509,8 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
     ONE = project({ id: "p-1", name: "بازطراحی سایت" });
     render(detail("p-1", "u-1"));
     await waitFor(() => expect(screen.getByRole("heading", { name: "بازطراحی سایت" })).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /ویرایش/ }));
+    await openActs();
+    await userEvent.click(await screen.findByRole("menuitem", { name: /ویرایش/ }));
 
     const box = screen.getByLabelText("نام پروژه");
     await userEvent.type(box, " ");
@@ -554,7 +570,10 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
        change it — a test that only asserted the absence would pass against a
        panel that renders nothing at all for a member */
     expect(screen.queryByRole("button", { name: /متوقف/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /ویرایش/ })).toBeNull();
+    /* the ACTS MENU is absent — not merely closed. `/ویرایش/` as a button
+       name is null in both versions now that the act lives in a menu, so it
+       is the menu that has to be asked about. */
+    expect(screen.queryByRole("button", { name: "بیشتر" })).toBeNull();
     expect(screen.queryByLabelText("سرپرست")).toBeNull();
   });
 
@@ -566,7 +585,7 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
       </CrumbTitleProvider>,
     );
     await waitFor(() => expect(screen.getByText("متوقف")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /ویرایش/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "بیشتر" })).toBeNull();
     expect(screen.queryByLabelText("سرپرست")).toBeNull();
     /* giving work stays an admin's (0186) — the one control that is not an edit of the project */
     expect(screen.getByRole("button", { name: "افزودن تسک" })).toBeInTheDocument();
@@ -577,7 +596,11 @@ describe("the project is edited in its own panel (2026-09-08)", () => {
         <ProjectDetail id="p-1" reader={{ meId: "u-1", isAdmin: true, isOwner: true }} onClose={() => undefined} />
       </CrumbTitleProvider>,
     );
-    await waitFor(() => expect(screen.getByRole("button", { name: /ویرایش/ })).toBeInTheDocument());
+    /* and the OWNER gets the menu with the edit IN it — opened, because a
+       closed menu is indistinguishable from no menu to the line above */
+    await waitFor(() => expect(screen.getByRole("button", { name: "بیشتر" })).toBeInTheDocument());
+    await openActs();
+    expect(await screen.findByRole("menuitem", { name: /ویرایش/ })).toBeInTheDocument();
   });
 });
 

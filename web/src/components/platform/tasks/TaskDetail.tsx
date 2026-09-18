@@ -103,49 +103,62 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
      slots. The clusters are named so the markup below reads as the slots
      it fills. */
   /*
-   * THE ACTS SIT WITH THE ACTS (user directive, 2026-09-19: "put the three
-   * dot and edit on the other side for tasks and projects").
+   * ONE MENU FOR THE ACTS (user directive, 2026-09-19: "put edit and sign it
+   * as complete inside the three dots as well, for both tasks and projects").
    *
-   * They were in the panel's START slot, which is where the CLOSE button
-   * lives — so the top bar read: close, kebab, edit … and then, a whole panel
-   * away, the record chip and the done toggle. Chrome and content in one
-   * cluster, with the object's own acts split across two.
+   * Read as MOVE rather than COPY, and the reason is this repo's own: two
+   * doors to one act, side by side on one bar, is how a person wonders which
+   * is real — and the bar had grown to three controls plus a close. The kebab
+   * is the platform's overflow menu everywhere else; making it the one place
+   * the acts live is what the directive produces on screen.
    *
-   * Now the close is alone on its side and everything a person can DO to this
-   * task is on the other, overflow menu last, which is the order every row in
-   * the product already uses.
+   * [If both were wanted — a button AND a menu item — putting the two back on
+   * the bar is a four-line change. The buttons are gone rather than hidden,
+   * because a control commented out is a control somebody re-enables without
+   * the argument.]
+   *
+   * What is NOT in here: the record chip below, which is NAVIGATION rather
+   * than an act. It goes somewhere; it changes nothing.
+   *
+   * The order is the platform's: the ordinary edit first, the state change
+   * next, the reversible archive, and the red delete last and alone.
    */
   const acts = (
-    <>
-            {/* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
-                2026-09-02) — and the red item is now a real DELETE (0162, the
-                user's ask: "the red button should truly delete"). Archiving
-                stays as the reversible, ordinary item; both go through the
-                platform's one dialog. */}
-            <KebabMenu
-              label={t("more")}
-              items={[
-                {
-                  key: "archive",
-                  label: task.archived ? t("unarchive") : t("archiveTask"),
-                  icon: <IconArchive width={14} height={14} />,
-                  onSelect: () => setConfirmArchive(true),
-                },
-                {
-                  key: "delete",
-                  label: t("deleteTask"),
-                  icon: <IconTrash width={14} height={14} />,
-                  danger: true,
-                  onSelect: () => setConfirmDelete(true),
-                },
-              ]}
-            />
-            <button type="button" onClick={() => setEditing((v) => !v)}
-              className="btn-secondary btn-sm">
-              <IconPencil width={12} height={12} />
-              {editing ? t("done") : t("edit")}
-            </button>
-    </>
+    <KebabMenu
+      label={t("more")}
+      items={[
+        {
+          key: "edit",
+          label: editing ? t("done") : t("edit"),
+          icon: <IconPencil width={14} height={14} />,
+          onSelect: () => setEditing((v) => !v),
+        },
+        {
+          key: "done",
+          label: task.done ? t("markUndone") : t("markDone"),
+          icon: <IconCheck width={14} height={14} />,
+          onSelect: () => { void patch({ done: !task.done }); },
+        },
+        {
+          /* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
+             2026-09-02) — and the red item is a real DELETE (0162, the user's
+             ask: "the red button should truly delete"). Archiving stays as
+             the reversible, ordinary item; both go through the platform's one
+             dialog. */
+          key: "archive",
+          label: task.archived ? t("unarchive") : t("archiveTask"),
+          icon: <IconArchive width={14} height={14} />,
+          onSelect: () => setConfirmArchive(true),
+        },
+        {
+          key: "delete",
+          label: t("deleteTask"),
+          icon: <IconTrash width={14} height={14} />,
+          danger: true,
+          onSelect: () => setConfirmDelete(true),
+        },
+      ]}
+    />
   );
   const end = (
     <>
@@ -160,21 +173,10 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
                 <span className="max-w-[17.5rem] truncate">{task.meeting_title ?? task.call_title ?? t("recordGone")}</span>
               </Link>
             ) : null}
-            {/* 2026-09-03: `.btn btn-sm`, the theme's compact control — the
-                same shape as the meeting chip it stands next to. `border` is
-                written out because `.btn` draws none, and `border-accent` on
-                a borderless button paints NOTHING (this repo shipped that
-                once, the markup reading as fixed while the pixels got
-                worse); the colours stay the element's own. */}
-            <button type="button" onClick={() => patch({ done: !task.done })}
-              className={`btn btn-sm border ${
-                task.done
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border bg-surface text-fg-muted hover:text-fg"
-              }`}>
-              <IconCheck width={12} height={12} />
-              {task.done ? t("doneState") : t("markDone")}
-            </button>
+            {/* THE DONE TOGGLE MOVED INTO THE MENU (2026-09-19). It was a
+                bordered `.btn btn-sm` here; the act is the same act and it is
+                now one of the kebab's four, so that the bar carries the close,
+                where you came from, and one menu. */}
             {acts}
     </>
   );

@@ -190,10 +190,20 @@ export function ProjectDetail({ id, reader, onClose }: {
    * content shared one cluster while «افزودن تسک» sat alone at the other end.
    */
   const acts = canEdit ? (
-    <>
       <KebabMenu
         label={t("moreActions")}
         items={[
+          /* ONE MENU FOR THE ACTS (2026-09-19, the task detail's change and
+             the same sentence): «ویرایش» was a button beside this kebab, and
+             two doors to one act side by side on one bar is how a person
+             wonders which is real. A project has no done-toggle to fold in —
+             its equivalent is the stage, which is a rail field. */
+          {
+            key: "edit",
+            label: editing ? tCommon("done") : t("edit"),
+            icon: <IconPencil width={14} height={14} />,
+            onSelect: () => setEditing((v) => !v),
+          },
           project.archived_at === null
             ? {
                 key: "archive",
@@ -219,20 +229,6 @@ export function ProjectDetail({ id, reader, onClose }: {
           },
         ]}
       />
-      {/* THE TOGGLE, not a door (2026-09-08). It opened `ProjectDialog` over
-          this panel — a modal on a modal, which is what the user called "the
-          second pop up window". It now turns the two prose fields below into
-          the boxes that write them, exactly as the task detail's does, and
-          says «تمام» while it is on. */}
-      <button
-        type="button"
-        onClick={() => setEditing((v) => !v)}
-        className="btn-secondary btn-sm"
-      >
-        <IconPencil width={12} height={12} />
-        {editing ? tCommon("done") : t("edit")}
-      </button>
-    </>
   ) : null;
 
   /*

@@ -449,6 +449,45 @@ export function createSessionsRepo(db: Db) {
      * naming a column the catalogue does not have yet would 500 every ask
      * until the migration lands. Absent, the heading is simply the plain one.
      */
+    /**
+     * THE TOOL CALLS THIS CONVERSATION HAS MADE, oldest first (db/0231's
+     * sibling idea: derive, never store).
+     *
+     * Feeds the working set — what "it" refers to — which is rebuilt on every
+     * turn from what `agent_run.steps` already records rather than kept in a
+     * table of its own. See agent/subjects.ts for why that is the right shape
+     * and what it costs (a renamed thing shows its old title until it is
+     * touched again, which is correct for a record of what was discussed).
+     *
+     * Scoped by the MESSAGES of this conversation, so RLS answers it twice
+     * over: `agent_session_own` keeps the conversation to its owner, and the
+     * join only reaches runs this person's own messages point at.
+     */
+    async recentSteps(
+      identity: Identity,
+      sessionId: string,
+      limit: number,
+    ): Promise<unknown[][]> {
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ steps: unknown }>(
+          `select r.steps
+             from echo.agent_message m
+             join echo.agent_run r on r.id = m.agent_run_id
+            where m.session_id = $1
+              and jsonb_array_length(coalesce(r.steps, '[]'::jsonb)) > 0
+            order by m.created_at desc
+            limit $2`,
+          [sessionId, Math.max(1, Math.min(limit, 10))],
+        ),
+      );
+      /* newest-first from the query (the index is on created_at), oldest-first
+         to the caller: `workingSet` is told the conversation's own order and
+         reverses it itself, so the ordering rule lives in one place */
+      return rows
+        .map((r) => (Array.isArray(r.steps) ? (r.steps as unknown[]) : []))
+        .reverse();
+    },
+
     async recentConversations(
       identity: Identity,
       options: {

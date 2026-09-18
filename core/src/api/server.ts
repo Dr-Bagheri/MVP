@@ -71,6 +71,7 @@ import { floorInstruction } from "../agent/platform-map.ts";
 import {
   CARRY_LIMITS, carriedConversations, conversationHistory, type ConversationTurn,
 } from "../agent/history.ts";
+import { subjectBlock, workingSet } from "../agent/subjects.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { createNamedSkillResolver, listResolvedSkills, SUMMARIZER_SLUG } from "../agent/skill-store.ts";
@@ -6097,6 +6098,24 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
      * NOT gated on `conversation.created` — the brand-new conversation is
      * exactly the case this exists for.
      */
+    /*
+     * THE WORKING SET, read in PARALLEL with the one below (2026-09-19).
+     *
+     * User report: "I continue to tell it to move it, the next sentence is
+     * probably about the same thing, but this logic does not come and it will
+     * get lost." The conversation was always in the prompt; what was missing
+     * is a short, sharp statement of the SUBJECT against 45k tokens of tool
+     * schemas. agent/subjects.ts carries the measurement and the argument.
+     *
+     * Parallel, and swallowed on failure, for the reason the carried read is:
+     * an ask must not pay a round trip for a courtesy, and an assistant
+     * without its working set is the assistant of last week, not a broken one.
+     */
+    const subjectsRead: Promise<string> = sessions
+      .recentSteps(identity, conversation.id, 4)
+      .then((runs) => subjectBlock(workingSet(runs), body.locale === "en" ? "en" : "fa"))
+      .catch(() => "");
+
     const carriedRead: Promise<string> = sessions
       .recentConversations(identity, {
         exclude: conversation.id,
@@ -6116,7 +6135,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         );
         return "";
       });
-    const [history, carried] = await Promise.all([threadRead, carriedRead]);
+    const [history, carried, subjects] = await Promise.all([threadRead, carriedRead, subjectsRead]);
     await sessions.append(identity, {
       sessionId: conversation.id, role: "user", content: body.question,
     });
@@ -6422,7 +6441,18 @@ ${liveText}`
          and a run is admin-readable where a conversation is not (runtime.ts's
          `sessionContext` carries the whole argument). Every responder gets it
          from here, for the reason every responder gets `history`. */
-      sessionContext: carryInstruction,
+      /*
+       * THE WORKING SET GOES LAST (2026-09-19). `runtime.ts` appends
+       * `sessionContext` after the whole system prompt, so whatever ends this
+       * string is the last thing the model reads before the question — and
+       * what "it" refers to is precisely the fact that must not lose to
+       * recency. The carried conversations come first because they are
+       * background; the subject of THIS conversation comes last because it is
+       * the foreground.
+       */
+      sessionContext: [carryInstruction, subjects]
+        .filter((part) => part !== undefined && part !== "")
+        .join("\n\n") || undefined,
       skill,
       systemInstructions: instructionsFor(selectedAgent, others.map((o) => o.handle)),
       agentModel: selectedAgent?.model,

@@ -3197,6 +3197,7 @@
     "labelName": "Label name",
     "listEmpty": "No tasks match. Change a filter, or create the first one.",
     "markDone": "Mark as done",
+    "markUndone": "Mark as not done",
     "minutesAgo": "{n} minutes ago",
     "more": "More",
     "newItemPlaceholder": "New checklist line…",
