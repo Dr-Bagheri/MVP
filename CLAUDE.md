@@ -8480,3 +8480,108 @@ sessions) for the cross-session narrative.
   models screen sets it back.
   db 230 migrations · core 1959 tests (1 pre-existing red, history ZWNJ) ·
   web 1813 tests + gate + sweep.
+- 2026-09-18 (THE PLATFORM GOES MONOCHROME, A MENU STOPS LYING, THE PLATFORM
+  CAN WAKE YOU, AND THREE AGENTS STOP BEING ONE; commits 28dba4b, 9ee7cd2,
+  f3dd3ef; db 0231–0233; core + web deployed): a five-part directive, taken
+  whole.
+  **THE GREEN WAS ALL IN THE TOKENS**, which a hex sweep of web/src settled
+  before anything moved: `--accent`/`--primary` in two themes, one rgba in a
+  shadow and three page washes. Dark takes the page's WHITE, light its INK —
+  the button family's own 2026-09-18 decision applied to chips, links,
+  toggles, the focus ring and every soft tint; verify-pairs re-run, the accent
+  chip that used to be the file's tightest pair now reads 14.18. The washes
+  went neutral too (they were a green and two blues at 13/10/7%, a colour cast
+  on every page) at a LOWER alpha, because white lifts a dark ground far
+  harder than a mid-green. Cost written where it is read: an accent that is
+  the brightest ink cannot be told from body text by HUE, so emphasis is fill,
+  weight and the lit pill. **And "some of the buttons are still in their
+  previous versions" were not buttons**: every checkbox in the product had NO
+  RULE anywhere in globals.css, so all six on the member-access screen
+  rendered in the BROWSER's default blue — the one hue on those screens
+  belonging to no token at all, invisible to a source grep because the control
+  carrying it has no class to read. `accent-color` is the fix.
+  **THE MENU NOW OFFERS WHAT THE VIEWER CAN OPEN.** The reported half — an
+  admin cannot see the ADMIN privileges — was already true and true on the
+  SERVER (an admin's response contains no admin rows, the 2026-08-26 ruling).
+  The other half was not: a member saw four Management sections, pressed one,
+  met "this is for admins". Nothing was ever exposed; what was wrong is that
+  the product advertised four doors and opened one. Both panes, not one —
+  Settings was doing the same with Models and Audit logs. `lib/viewer.ts` says
+  in its own header that it is a CURTAIN and allowed to be one: every rule it
+  draws is enforced twice underneath, which is also why it may be seeded from
+  sessionStorage (the menu is then correct on the FIRST paint rather than
+  growing a moment later — the jump the rail's foot card was fixed for that
+  morning). Unknown-still-asking keeps the admin rows, because it decides a
+  cold start only.
+  **THE ALARMS (0231, 0232), and only one of the three kinds is a row.** A
+  reminder somebody TYPED exists nowhere else, so it is stored; a task
+  deadline and a meeting start are ALREADY facts, so a worker writing rows
+  ahead of time would be a second copy that goes wrong the moment anybody
+  moves a deadline, finishes a task or is taken off a roster. They are
+  computed on every poll — which is also why "somebody added you to a meeting"
+  needs no trigger and no fan-out: the moment the attendee row exists the
+  alarm exists with it, and a design that PUSHED on the add would have to
+  remember to un-push it. **The key carries the MOMENT** (`task:<id>:<instant>`)
+  so moving a deadline alarms again rather than inheriting the acknowledgement
+  of one that no longer exists; acknowledging is a WRITE, because an alarm
+  dismissed on a phone must not ring again on a laptop. The hour and minute
+  needed NO migration — `task.due_at` has been a timestamptz since 0144 and
+  the picker was throwing the time away — and `TimeField` is reused rather
+  than redrawn, so hour-left/minute-right (ruled 2026-09-03) cannot come
+  apart. Agents set one through the person's own browser: `echo_agent` holds
+  no grant on either table, asserted at the GRANT, which refuses before a
+  policy is consulted. **0231's own test found a gap on its first run** — the
+  write policy asked `org_id = actor_org_id()` and stopped, so a PENDING
+  member could insert their own alarms — and 0232 is the fix left visible
+  rather than folded into a checksummed file.
+  **THE THREE AGENTS (0233).** Roya and Ava "do the same" because on
+  2026-09-06 the analyst/operator split was deleted for a good reason (the
+  «دسترسی ندارم» refusals) and took the ONLY structural difference with it:
+  since then identical reads, identical hands, and a paragraph doing all the
+  work. Minted: **a paragraph is not a wall, and two weeks is how long it
+  takes somebody to notice.** The quieter half: `assistant_agent.tools` is
+  written by agent-store and IGNORED by delegation — stored and unqueried, so
+  the agents page showed two tidy capability lists that decided nothing. The
+  axis moved to the one worth a wall: `can_act`, defaulting FALSE, offered to
+  Roya and not to Ava, with READS untouched for both (narrowing reads is the
+  wrong axis and is what broke before). Echo is the orchestrator and the name
+  is settled — NeurAI is the platform, Echo is the assistant, and the name was
+  free because Echo-the-app dissolved into meetings on 2026-09-04. The pattern
+  is the field's own (orchestrator + specialists, per-agent tool scoping) with
+  its loudest finding taken seriously: a single agent matches or beats a
+  committee on 64% of tasks, so no third persona was added.
+  **Echo's standing orders were rewritten and a 2026-09-06 guard caught my
+  first draft**: it forbids "CANNOT" in that prompt, and it is right — a
+  prompt that teaches a model to plead inability is how the refusals happened.
+  Ava's limit is stated positively now; the inability is structural, so the
+  prompt does not need to assert it.
+  **THE ROLE REPORT IS THE DATABASE DESCRIBING ITSELF** —
+  `db/scripts/probe-roles.mjs` reads the roles, the forced-RLS check, the
+  closed DELETE allow-list (19 tables), the agent's whole grant set (43
+  selects, 8 inserts, no UPDATE or DELETE anywhere), all 58 named doors and
+  ten previously-ruled walls. All ten in force. **And its first run reported
+  one BROKEN that is in force**: `soft_delete_call` has two overloads, so
+  counting catalogue rows gave three against an expected two — **a count over
+  the catalogue is a fact about how a function is spelled wearing the costume
+  of a fact about the wall**, the count trap inside an instrument written that
+  hour to audit walls. docs/ROLES-AND-ACCESS.md and
+  docs/AGENTS-ARCHITECTURE.md are the two reports, each with a section on what
+  was deliberately NOT done.
+  **Verified**: 0231–0233 applied to production with the db suite ("the wall
+  holds", 134_alarms at 17 checks); 24 mutations across the three commits,
+  control green either side. One STAYED GREEN and is the finding: a
+  SQL-string assertion cannot tell a live predicate from `true or exists(…)`,
+  so that test now says so in as many words, pins both ownership branches, and
+  carries a narrow named guard against that one shape. Another was vacuous
+  until the fixture gained a snapshot price.
+  **Proven on production in the user's Chrome**: the accent computes
+  `rgb(255,255,255)` on dark with `--on-accent` the page ground and `--wash-1`
+  neutral; the alarms page renders with a date, a time and «ثبت زنگ», and its
+  panel puts «ساعت» at x=634 and «دقیقه» at x=714 — hour LEFT on an RTL page;
+  the new-task dialog shows «انتخاب مهلت» with zero time controls and, once a
+  date is picked, «۲۰ شهریور ۱۴۰۵» with a «۱۵:۳۰» control under it. NOT proven
+  live: the member menu — the hook's seeded role is corrected by the fetch
+  within the second (the hook working), and proving it properly needs a member
+  account rather than the owner's session; the seven unit cases and five
+  mutations are the ceiling here.
+  db 233 migrations · core 1977 tests · web 1827 tests + gate + sweep.
