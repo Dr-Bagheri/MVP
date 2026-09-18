@@ -8284,3 +8284,58 @@ sessions) for the cross-session narrative.
   spine, read-only first. Discussion doc; ARCHITECTURE.md untouched.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1814 tests + gate + sweep.
+- 2026-09-18 (THE ENTITY SPINE, AND THE DEEPSEEK SLOWNESS WAS A ROUTING
+  ALIAS; commit pending; db/0230 on production): "start building the entity
+  spine for the organizational brain, ALSO deep seek speed is too low."
+  **THE SPEED WAS NEVER THE MODEL.** Measured on the server (3 reps, one
+  Persian prompt, the `reasoning: "medium"` pi-ai actually sends): the alias
+  `deepseek/deepseek-v4-flash` routed to OpenInference/StreamLake at **27
+  tok/s**, the dated GA id `-0731` to Baidu/CoreWeave at **58**, `:nitro` to
+  Alibaba at **69** — same weights, 2.2× between the first two, because
+  OpenRouter's default route optimises for PRICE and the alias's cheapest
+  server is its slowest. Minted: **a model id is not a performance decision
+  and a routing alias is — an alias hands the choice of machine to whoever is
+  cheapest this week, which is how the same model gets slower with nothing in
+  the repo changing.** Two things ruled out BY the measurement rather than by
+  argument: reasoning OFF was *worse* (14422 ms, 15 tok/s — V4 thinks anyway
+  and the flag only stops us being billed for a trace we then do not get, so
+  the existing "medium" stands), and `:nitro` was REFUSED although fastest —
+  this repo treats a routing suffix as NOT A MODEL (`NOT_A_MODEL` excludes
+  `/:[a-z]+$/`, `baseModelId` strips only `:online`), so storing one would
+  put a string past the product's own model wall. Default moved to
+  `deepseek/deepseek-v4-flash-0731` through the product's own routes;
+  live after: first text **989 ms**, a full tool-using Persian turn 13990 ms.
+  Left for the user: medium 8189 ms vs low 3606 ms is a quality trade, theirs.
+  **THE SPINE (0230)**: `echo.entity` + `echo.entity_alias` — one node per
+  real-world thing, one row per identifier that names it, the thing every
+  approach in ORGANIZATIONAL-BRAIN-APPROACHES.md needs first. The pain is
+  already in the product: `person.app_user_id` was NULL on nine rows because
+  its only writer is an admin pressing a control and the fold guess cannot
+  cross a transliteration («سینا سپاسی» vs "Sina Sepasi"); a nullable column
+  per pair of things never reaches a CRM id, a handle and a mailbox.
+  **NAMES ARE NOT ALIASES** — two colleagues here are both «سینا», so a
+  unique key over names refuses the second, and a system that treats a name
+  as an identifier is the one that silently attached a colleague's identity
+  to somebody else's voice (2026-09-16). Names live on the node with fold
+  indexes and matching by name returns CANDIDATES; `confidence`/`evidence`
+  make an inferred link a thing to ASK about. `(id, org_id)` unique so a
+  cross-org alias is refused BY STRUCTURE not by a policy (D9); `merged_into`
+  NAMES ITS COLUMN in the set-null (0188). The backfill writes only what is
+  already asserted and leaves the cross-transliteration guess a query.
+  **Found by its own self-check, first run:** the DELETE assertion counted 2
+  grants nothing had made — `role_table_grants` also reports the table
+  OWNER's implicit privileges, so it measured who owns the table rather than
+  who may delete from it (rule 11's catalogue trap), and it refused a correct
+  migration; scoped to `echo\_%` in both files. On production: 0230 applied,
+  the db suite fixture-scoped ("the wall holds") with 102 purge coverage, 109
+  the set-null class, 50 the closed DELETE allow-list, and 133's 17 checks
+  (one identifier names one thing, two entities may share a name, the
+  cross-org lines, a PENDING member writing nothing, the agent reading and
+  not writing, nobody deleting). Backfill: 47 nodes, 121 aliases, 20
+  directory people already sharing a node with their account; the nine
+  unlinked ones are fold candidates, deliberately unwritten.
+  **NOTHING READS IT YET, said rather than implied (13½):** the next slice is
+  the core resolver (lookup, candidates, a confirm door writing an asserted
+  alias) and the directory's own person-to-account link.
+  db 230 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1814 tests + gate + sweep.

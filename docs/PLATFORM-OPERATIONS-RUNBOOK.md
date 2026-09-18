@@ -1408,6 +1408,137 @@ graph / federated MCP / on-prem sidecar), the two hard sub-problems (entity
 resolution, write-back), and a phased path with C as the recommended spine.
 A discussion doc; nothing built, ARCHITECTURE.md untouched.
 
+## 7ab. The entity spine (db/0230) and the DeepSeek speed fix — 2026-09-18, later
+
+User: "start building the entity spine for the organizational brain, ALSO
+deep seek speed is too low, what is the problem can you fix it as well."
+
+### The speed: it is WHICH PROVIDER OpenRouter routes to, not the model
+
+Measured ON THE SERVER, where production calls the provider (key read from
+`/etc/neurai/core.env`, never printed), 3 reps each, the same Persian prompt,
+`reasoning: { effort: "medium" }` — which is what pi-ai's `reasoningFor()`
+sends:
+
+| model id sent | routed to | tok/s |
+|---|---|---|
+| `deepseek/deepseek-v4-flash` (the alias we had set) | OpenInference / StreamLake | **27** |
+| `deepseek/deepseek-v4-flash-0731` (the dated GA build) | Baidu / CoreWeave | **58** |
+| `deepseek/deepseek-v4-flash:nitro` | Alibaba | **69** |
+
+Same weights, same prompt, same effort — 2.2× between the first two rows.
+OpenRouter's default route optimises for PRICE, and the alias's cheapest
+serving provider is its slowest. **A model id is not a performance decision
+and a routing alias is: an alias hands the choice of machine to whoever is
+cheapest this week, which is why the same model got slower without anything
+in this repo changing.**
+
+Two things ruled OUT by the same measurement rather than by argument:
+
+- **Reasoning is not the cost.** With `reasoning` OFF the SAME build was
+  *worse* — 14422 ms, 15 tok/s — because DeepSeek V4 thinks anyway and the
+  parameter only stops us being billed for the trace we then do not get.
+  The repo's existing `reasoning: "medium"` is right and stays.
+- **`:nitro` is not the fix**, although it is the fastest row. This repo
+  deliberately treats a routing suffix as NOT A MODEL — `NOT_A_MODEL`
+  excludes `/:[a-z]+$/` and `baseModelId()` strips only `:online` — so a
+  `:nitro` id stored in `allowed_models` or `preferred_model` would be a
+  string the product's own model wall does not recognise as a model. The
+  wall is worth more than 11 tok/s.
+
+**Fix applied: the default is the dated GA id `deepseek/deepseek-v4-flash-0731`.**
+A real model id, no suffix, 2.2× the throughput, pure config — written
+through the product's own routes (`PATCH /api/admin/org` for
+`allowed_models[0]`, `PUT /api/models` for the owner's `preferred_model`), so
+the writes are the ones an admin makes and are audited. Read back:
+`selected: true`, `tools: true`.
+
+**Live on production after the change:** first text **989 ms**; a full
+Persian turn that called tools **13990 ms** end to end, the answer accurate
+and idiomatic.
+
+**Left for the user, not changed:** on 0731, `effort: "medium"` is 8189 ms
+against `"low"` at 3606 ms on the same prompt. That is a quality/latency
+trade this repo made deliberately and it is theirs to move, not a defect.
+
+### The spine: db/0230 `echo.entity` + `echo.entity_alias`
+
+The one thing every approach in docs/ORGANIZATIONAL-BRAIN-APPROACHES.md needs
+first. One node per real-world thing; one row per identifier that names it.
+
+**Why a spine and not another column.** The product already carries the pain:
+`person.app_user_id` links a directory person to an account and was NULL on
+nine of this organisation's rows, because the only writer is an admin
+pressing a control and the server's guess (`fa_fold(name) = fa_fold(name)`)
+cannot cross a transliteration — the directory says «سینا سپاسی» and the
+account says "Sina Sepasi". One nullable column per pair of things does not
+reach a CRM id, a Slack handle and a mailbox; each new pair would be another
+column and another migration.
+
+**Names are NOT aliases, and that is the load-bearing decision.** Two
+colleagues here are both «سینا», so a unique key over names would refuse the
+second — and a system that treats a name as an identifier is the one that
+silently attaches a colleague's identity to somebody else's voice (the
+2026-09-16 finding that took exactly that out of the voice picker). Names
+live on the node with fold indexes; matching by name returns CANDIDATES.
+`confidence` + `evidence` carry provenance, so an inferred link is a thing to
+ASK about rather than act on.
+
+**Shape.** `(id, org_id)` unique on the node, so every child FK is composite
+and a cross-org alias is refused BY STRUCTURE rather than by a policy that
+only refuses the people it runs as (D9). `merged_into` is `on delete set null
+(merged_into)` — the column named, because a bare set-null over a composite
+key containing a NOT NULL `org_id` can only ever RAISE (0188). Unique
+`(org_id, source, kind, value)` is what makes resolution a lookup.
+
+**Backfill seeds only what is already asserted:** every account, every
+directory person, every project becomes a node, and a directory person an
+admin HAS linked lands on its account's node. The cross-transliteration guess
+stays a QUERY — the fold indexes make it cheap — and is deliberately not
+written as a link.
+
+**Found by its own self-check, first run.** The DELETE assertion counted 2
+grants nothing had made: `information_schema.role_table_grants` also reports
+the table OWNER's implicit privileges, so it was measuring who owns the table
+rather than who may delete from it. Rule 11's catalogue trap, and it refused
+a correct migration. Scoped to `grantee like 'echo\_%'` — what db/test/50
+means by the closed allow-list — in both the migration and the test; the
+migration rolled back cleanly and re-applied.
+
+**Verified on production:** 0230 applied, then the db suite fixture-scoped
+(`node scripts/db.mjs test` — no `--fresh`, and `reset()` refuses a remote
+target without `ECHO_ALLOW_REMOTE_RESET=1`): "the wall holds", including the
+three standing derived checks a new org-scoped table must satisfy — **102**
+purge coverage (both tables enumerated, aliases before entities), **109** the
+set-null class, **50** the closed DELETE allow-list and RLS forced — plus
+**133** (17 checks): one identifier names one thing, two entities may share a
+name and the fold finds BOTH, a cross-org alias and a cross-org merge refused
+by structure, a real in-org merge, another organisation sees nothing, a
+PENDING member writes nothing (04 is dan — without that line every "a member
+may write" assertion would be measuring `actor_is_active()`), the agent reads
+and cannot write, no product role holds DELETE.
+
+**Backfill state on the live organisation** (read-only, owner altitude):
+
+| | |
+|---|---|
+| entities | 47 (46 person, 1 project) |
+| aliases | 121 — 37 app_user, 37 email, 29 person, 17 handle, 1 project |
+| accounts / directory people | 37 / 29 |
+| directory people already sharing a node with their account | 20 |
+
+The nine unlinked directory people show up as fold candidates («شهلا حسینی»,
+«پاسارگاد — خانم مرادی», …) — queryable, deliberately unwritten. Those are
+two nodes for what is probably one person, which is the state the resolver
+exists to offer and NOT to decide.
+
+**NOT YET BUILT, named rather than implied (rule 13½ — a producer with no
+consumer is a defect):** nothing READS the spine. The next slice is the
+core-side resolver (lookup by identifier, candidates by folded name, a
+confirm door that writes an asserted alias) and the first surface to use
+it — the directory's own person-to-account link, which is the gap this
+exists to close.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
