@@ -1278,6 +1278,43 @@ rgb(36,42,48) 0%, rgb(27,32,37) 100%)` / ink rgb(242,244,246) / a
 coat and the danger coat (no consent card or delete was raised on real
 data), and hover.
 
+## 7y. Deployment record — 2026-09-18, later (0f2a9ad: web only — every button one step down)
+
+**0f2a9ad.** User, an hour after 7x: "make all button one size smaller".
+The scale moved ONCE, at `SCAFFOLD.controlHeight / Sm / Icon`: 42 / 34 /
+28 → **34 / 28 / 24**. Every class keeps its name and its readers, so the
+icon squares (`.btn-icon-lg` / `-sm` / `.btn-icon` → 34 / 28 / 24), the
+pagination arrows, the record transport and the meetings strip's search
+field follow with no line of their own; the padding and the small type
+went one step each (13 / 10 / 8; detail / caption / caption); the corners
+did not move; inputs read `fieldHeight` and are untouched. THE
+RELATIONSHIP THAT HAD TO MOVE WITH IT: `TAB_TRACK` put 3px around a 28
+pill because 34 was the compact control's height, so the menus and the
+row-one create stood level with the segmented control; with the pill at
+24 that sum is 30 against a `btn-sm` of 28, so the track is 2px now (24 +
+4 = 28), and `buttonTactile.test` asserts the SUM rather than either
+number. Three tests that pinned `p-[3px]` as a string follow. Verify-red
+by mutation, control green either side, each red on its own test:
+`controlHeight` back to 42; the track back to 3px around the 24 pill;
+`.btn-sm` back on the 12.5 text; `.btn` spelling a `h-[42px]` beside the
+token. Verified: tsc 0; 1812 web tests (no flake this run); the build
+gate alone; the encoding sweep; rendered on the dev server first (the
+gate's primary 34 at the 16px root, the top-bar square 28).
+
+**Read on production**, both Vercel projects `success`, in the user's
+Chrome at 1280 / root 15.06 on `/fa/tasks`, BEFORE and AFTER the deploy on
+the same page and the same probe: the segmented track **32.4 → 26.6** with
+its padding **3 → 2px**, the pill **26.4 → 22.6** (inset 9.4 → 7.5, its
+caption 10.35 unchanged); «تسک جدید» (`btn-primary btn-sm`) **32 → 26.4**
+(inset 13 → 9.4, type 11.77 → 10.35); «فیلتر» (`btn-ghost btn-sm`) 32 →
+26.4, the track standing **0.2px** off the menu's height where it stood
+0.4 before — level; the board's «افزودن تسک» rows 26.4 → 22.6; the top
+bar's `btn-icon-sm` 32 → 26.4; the strip's `btn-icon` 26.4 → 22.6; the
+chips 22.6 unchanged; every row-one element on one top (72). The new-task
+dialog: «ساختن تسک» and «انصراف» **39.5 → 32** (inset 13), the text field
+**37.6 unchanged**. NOT read live: the meeting page's post tabs and the
+record transport (both read the same tokens).
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

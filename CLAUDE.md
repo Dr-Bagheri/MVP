@@ -8212,3 +8212,23 @@ sessions) for the cross-session narrative.
   press, the soft and danger coats.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1809 tests + gate + sweep.
+- 2026-09-18 (later — EVERY BUTTON ONE STEP DOWN; commit 0f2a9ad; web on
+  Vercel, nothing in core or db): "make all button one size smaller." The
+  scale moved once, at the tokens: 42 / 34 / 28 → 34 / 28 / 24. Every class
+  keeps its name and its readers — the icon squares, the pagination arrows,
+  the record transport and the strip's search field follow with no line of
+  their own; padding and the small type went one step each; the corners
+  did not move; inputs read their own height and are untouched. **The
+  relationship that had to move with it**: the segmented track's 3px was
+  never a taste — 28 + 6 = 34, the compact control's height, is what kept
+  the menus and the row-one create level with the track. With the pill at
+  24 that sum is 30 against a `btn-sm` of 28, so the track is 2px and
+  `buttonTactile.test` asserts the SUM rather than either number; the next
+  time the pill or the track moves alone it is a red rather than a row two
+  pixels off. Verify-red by mutation on four behaviours, each red on its
+  own test. **Proven on production** (runbook 7y) as a BEFORE/AFTER pair on
+  one page with one probe: the track 32.4 → 26.6 (padding 3 → 2), the pill
+  26.4 → 22.6, «تسک جدید» 32 → 26.4, the menus level with the track (0.2px),
+  the dialog's footer 39.5 → 32 with its text field unchanged at 37.6.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1812 tests + gate + sweep.
