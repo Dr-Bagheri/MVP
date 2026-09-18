@@ -34,6 +34,10 @@ export const AREAS: readonly Area[] = [
   { key: "projects", heading: "PROJECTS", stems: [/project/] },
   { key: "meetings", heading: "MEETINGS", stems: [/meeting/, /minutes/, /join_code/] },
   { key: "decisions", heading: "DECISIONS", stems: [/decision/, /commitment/] },
+  /* before RECORDS, which claims /record/ and would swallow nothing here —
+     but AFTER meetings and tasks, because an alarm is ABOUT one of those and
+     the map is read top-down */
+  { key: "alarms", heading: "ALARMS", stems: [/reminder/] },
   { key: "records", heading: "RECORDS", stems: [/record/, /call/, /transcript/, /summar/, /speaker/, /voice/, /^search/, /note/, /translate/, /chapter/, /scope/] },
   { key: "rooms", heading: "ROOMS", stems: [/chat_room/, /^send_member_message$/, /conversation/] },
   { key: "people", heading: "PEOPLE", stems: [/member/, /colleague/, /invit/, /^rename_member$/, /^member_stats$/, /audit/, /person/, /role_permission/] },
@@ -69,6 +73,11 @@ export const PLATFORM_MAP = [
   "  link for guests), a during (the recording runs on the meeting page) and an",
   "  after — transcript, summary, extracted items, minutes that can be",
   "  approved, signed and closed. A held meeting is a RECORD.",
+  "· ALARMS: the platform can wake somebody. A person SETS one for a moment",
+  "  with their own words (set_reminder), and the platform works the other two",
+  "  out by itself — a task near its deadline, and a meeting about to start,",
+  "  which is why there is nothing to set for those and nothing to clean up",
+  "  when a deadline moves. It pops up in the platform; it is not an email.",
   "· DECISIONS: what the organization DECIDED and what people COMMITTED",
   "  to, as rows rather than paragraphs — each with the record it came from",
   "  and the moment in it where it was said, so a claim can be played back.",

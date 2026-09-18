@@ -17,7 +17,8 @@ import {
   FOOTER_CANCEL, FOOTER_PRIMARY,
 } from "./panelStyle";
 import { IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
-import { digits, formatDate, personName, personPhoto } from "@/lib/format";
+import { digits, formatDate, instantFromFields, nowFields, personName, personPhoto } from "@/lib/format";
+import { TimeField } from "@/components/DateTimeFields";
 import { useSeededName } from "@/lib/seededNames";
 import { notifyError } from "@/lib/notify";
 
@@ -482,6 +483,39 @@ export function DueField({ value, onPick }: {
           <JalaliPicker value={value} onPick={onPick} onClose={() => setOpen(false)} />
         </div>
       ) : null}
+
+      {/*
+        THE HOUR AND THE MINUTE (user directive, 2026-09-18: "add hour and min
+        for deadline in tasks, under the date or near it — choose as you
+        want"). Under it, because the date is the coarse answer and the time
+        refines it, and because the row this control sits in is already narrow
+        in the detail panel's rail.
+
+        `task.due_at` has been a `timestamptz` since 0144 — the deadline has
+        ALWAYS carried a time of day, and this picker was throwing it away by
+        offering only a date. So nothing changes on the wire and no migration
+        is owed: what changes is that a person can now say the part the column
+        was already storing.
+
+        ONLY WHEN THERE IS A DATE. A time on its own is not a deadline, and a
+        control offering one would be a question with no answer.
+
+        `nowFields`/`instantFromFields` rather than `new Date(...)`: the pair
+        reads and writes the PLATFORM's zone. Composing by hand would read the
+        browser's, so a deadline set for 17:00 in Tehran would be stored as
+        17:00 in whatever zone the laptop was in — the bill the meeting form
+        paid on 2026-09-06.
+      */}
+      {value === null ? null : (
+        <div className="mt-2">
+          <TimeField
+            value={nowFields(new Date(value)).time}
+            onChange={(time) =>
+              onPick(instantFromFields(nowFields(new Date(value)).date, time).toISOString())
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }

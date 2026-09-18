@@ -980,6 +980,57 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     }, ["task_id", "title", "label"]),
     effect: "write",
   },
+  /*
+   * ALARMS (db/0231; user directive, 2026-09-18: "also agents have access to
+   * it to set it for you").
+   *
+   * CLIENT tools, like every other agent write in this product: they run in
+   * the person's own browser, under the person's own identity, behind a
+   * consent card. `echo_agent` holds no grant on either alarm table at all
+   * (0231 asserts it), so "an agent can set an alarm for you" is true and "an
+   * unattended run can write into your alarms" is not — two different
+   * features, and only the first one was asked for.
+   *
+   * Nothing here can set an alarm for a COLLEAGUE: the row's owner is the
+   * database's own `echo.actor_id()`, so there is no argument for it to get
+   * wrong and no policy for it to argue with.
+   */
+  {
+    name: "list_reminders",
+    label: { fa: "فهرست زنگ‌ها", en: "Listing alarms" },
+    description:
+      "The alarms the person has set for themselves, soonest first. Task "
+      + "deadlines and meetings are NOT here — those alarm automatically and "
+      + "are not rows anybody sets.",
+    parameters: obj({}, []),
+    /* `ui` is this registry's word for "changes nothing" — a read through
+       the browser, like every other list_* here */
+    effect: "ui",
+  },
+  {
+    name: "set_reminder",
+    label: { fa: "تنظیم زنگ", en: "Setting an alarm" },
+    description:
+      "Set an alarm for the person you are talking to. `at` is an instant — "
+      + "an ISO 8601 timestamp such as 2026-09-19T14:30:00.000Z — so work out "
+      + "the moment they mean from their own timezone rather than asking them "
+      + "to convert it. `label` is what the pop-up will say, in their words. "
+      + "There is no way to set one for somebody else, and no need to set one "
+      + "for a task deadline or a meeting: the platform alarms about those by "
+      + "itself.",
+    parameters: obj({
+      at: str("The instant, ISO 8601 with a zone."),
+      label: str("What the alarm is about, in the person's own language."),
+    }, ["at", "label"]),
+    effect: "write",
+  },
+  {
+    name: "remove_reminder",
+    label: { fa: "حذف زنگ", en: "Removing an alarm" },
+    description: "Take back an alarm the person set. The id comes from list_reminders.",
+    parameters: obj({ id: str("The alarm's id.") }, ["id"]),
+    effect: "write",
+  },
   {
     name: "create_task_topic",
     label: { fa: "ساختن پوشهٔ تسک", en: "Creating a task folder" },

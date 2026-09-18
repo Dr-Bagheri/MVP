@@ -822,6 +822,37 @@ export interface MailSourceMessage {
   occurred_at: string | null;
 }
 
+/**
+ * AN ALARM (db/0231).
+ *
+ * `ReminderItem` is one a person SET — a row, editable, removable.
+ * `DueAlarmItem` is one the server says should wake them right now, and it
+ * covers all three kinds: the stored ones, a task near its deadline and a
+ * meeting about to start. The last two are computed and have no row, which is
+ * why the thing a screen sends back is the KEY rather than an id.
+ */
+export interface ReminderItem {
+  id: string;
+  at: string;
+  label: string;
+  dismissed_at: string | null;
+  created_at: string;
+}
+
+export type DueAlarmKind = "custom" | "task" | "meeting";
+
+export interface DueAlarmItem {
+  /** what an acknowledgement is keyed on; the server composes it */
+  key: string;
+  kind: DueAlarmKind;
+  /** the moment it is ABOUT — the set time, a deadline, a meeting start */
+  at: string;
+  label: string;
+  /** where pressing it goes, when there is somewhere */
+  task_id?: string;
+  meeting_id?: string;
+}
+
 export interface AgentCardItem {
   id: string;
   /* derived from core's AGENT_CARD_KINDS — this union sat one kind behind

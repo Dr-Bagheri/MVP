@@ -85,6 +85,9 @@ export const SURFACE_TOOLS: readonly string[] = [
   "create_task_column",
   "create_task_label",
   "set_task_label",
+  "list_reminders",
+  "set_reminder",
+  "remove_reminder",
   "create_task_topic",
   "update_task_checklist_item",
   "update_meeting_item",
@@ -1289,6 +1292,51 @@ export async function executeClientTool(
         return { ok: true, detail: a.on === false ? "removed" : "added" };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the label could not be set") };
+      }
+    }
+
+    /* ── alarms (db/0231) ───────────────────────────────────────────────
+       In the person's own browser, under their own identity: `echo_agent`
+       holds no grant on either alarm table, so this is the ONLY way an agent
+       can set one and there is no unattended path to the same act. */
+    case "list_reminders": {
+      try {
+        const { api } = await import("@/api/client");
+        const { reminders } = await api.reminders();
+        return { ok: true, detail: JSON.stringify(reminders) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the alarms could not be read") };
+      }
+    }
+
+    case "set_reminder": {
+      const at = String(a.at ?? "").trim();
+      const label = String(a.label ?? "").trim();
+      if (!at || !label) return { ok: false, detail: "an at and a label are required" };
+      /* refused HERE rather than at the server, so a model that hands over
+         "tomorrow at 3" is told what the argument is, instead of the person
+         meeting a 400 behind a consent card they have already approved */
+      if (Number.isNaN(new Date(at).getTime())) {
+        return { ok: false, detail: "at must be an ISO 8601 instant, e.g. 2026-09-19T14:30:00.000Z" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        await api.setReminder(new Date(at).toISOString(), label);
+        return { ok: true, detail: "set " + label };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the alarm could not be set") };
+      }
+    }
+
+    case "remove_reminder": {
+      const id = String(a.id ?? "").trim();
+      if (!id) return { ok: false, detail: "an id is required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.removeReminder(id);
+        return { ok: true, detail: "removed" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the alarm could not be removed") };
       }
     }
 

@@ -10,6 +10,7 @@ import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferenc
 import { BottomBar } from "./BottomBar";
 import { IconRail } from "./IconRail";
 import { MeetingInviteGate } from "./MeetingInviteGate";
+import { AlarmGate } from "./AlarmGate";
 import { TopBar } from "./TopBar";
 
 /**
@@ -184,6 +185,10 @@ export function PlatformShell({ children }: { children: ReactNode }) {
           (2026-09-07). Here, above every page, because "at the moment they
           are added" and "when they log in" have to be one mechanism. */}
       <MeetingInviteGate />
+      {/* 0231: the alarm pop-up lives beside the invitation gate for the same
+          reason — the shell is where "while I am working" and "the moment I
+          sign in" become one mechanism instead of two. */}
+      <AlarmGate />
       <div className="flex h-dvh bg-bg text-fg">
         <IconRail />
         <div className="flex min-w-0 flex-1 flex-col">

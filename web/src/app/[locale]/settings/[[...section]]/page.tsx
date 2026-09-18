@@ -53,6 +53,9 @@ const AssistantSettings = dynamic(
 const NotificationsSettings = dynamic(
   () => import("@/components/platform/NotificationsSettings").then((m) => m.NotificationsSettings),
 );
+const AlarmSettings = dynamic(
+  () => import("@/components/platform/AlarmSettings").then((m) => m.AlarmSettings),
+);
 const SecuritySettings = dynamic(
   () => import("@/components/platform/SecuritySettings").then((m) => m.SecuritySettings),
 );
@@ -127,6 +130,11 @@ export default function SettingsPage({
       {active.slug === "notifications" ? (
         <Section>
           <NotificationsSettings />
+        </Section>
+      ) : null}
+      {active.slug === "alarms" ? (
+        <Section>
+          <AlarmSettings />
         </Section>
       ) : null}
       {active.slug === "security" ? (

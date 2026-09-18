@@ -156,12 +156,19 @@ const REMAINING: Record<string, number> = {
      the entries above give: `mention !== null &&` satisfies the checker by
      changing the code the checker reads and moves nothing. */
   "components/platform/Hub.tsx": 1,
-  /* 0186, and NOT a loading state. The one match is the schedule's date
+  /* 0186, and NOT a loading state. The first match is the schedule's date
      conversion — `iso === null ? null : calendarDay(iso)` — where null is
      the picker's own word for «بدون مهلت», which this feature reads as
      "no end date". A value, not a fetch: nothing is in flight and there is
-     no frame to draw for a date somebody deliberately did not pick. */
-  "components/platform/tasks/TaskDialogs.tsx": 1,
+     no frame to draw for a date somebody deliberately did not pick.
+
+     The SECOND is the same shape, added 2026-09-18 with the deadline's hour
+     and minute: `value === null ? null : <TimeField…>`. A time on its own is
+     not a deadline, so the control appears once a date exists — the absence
+     is the answer to "is there a date", never to "has the network replied",
+     and a skeleton there would reserve room for a control that is not
+     coming. */
+  "components/platform/tasks/TaskDialogs.tsx": 2,
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,
   // name and description come from the catalogue; the header renders at once

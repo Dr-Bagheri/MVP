@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  DueAlarmItem, ReminderItem,
   RecalledDecision,
   SkillVersion,
   TelegramLinkRecord,
@@ -3260,6 +3261,33 @@ export const api = {
   /** M35: agent-initiated cards. `unavailable` = db/0074 pending, not "no news". */
   async cards(): Promise<{ cards: AgentCardItem[]; unavailable?: string }> {
     return cachedRead("cards", () => bff<{ cards: AgentCardItem[]; unavailable?: string }>("/api/cards"), BURST_TTL_MS);
+  },
+  /* ── alarms (db/0231) ─────────────────────────────────────────────────
+     NOT cached. Every other read on this client shares a five-second burst
+     window; an alarm poll asking "is anything due" would then answer from a
+     cache filled before the minute the alarm belongs to, which is the one
+     read in the product where being five seconds stale is the whole
+     feature failing. */
+  async reminders(): Promise<{ reminders: ReminderItem[] }> {
+    return bff<{ reminders: ReminderItem[] }>("/api/reminders");
+  },
+  async setReminder(at: string, label: string): Promise<ReminderItem> {
+    return bff<ReminderItem>("/api/reminders", {
+      method: "POST", body: JSON.stringify({ at, label }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async removeReminder(id: string): Promise<void> {
+    await bff(`/api/reminders/${id}`, { method: "DELETE" });
+  },
+  async dueAlarms(): Promise<{ alarms: DueAlarmItem[] }> {
+    return bff<{ alarms: DueAlarmItem[] }>("/api/reminders/due");
+  },
+  async ackAlarm(key: string): Promise<void> {
+    await bff("/api/reminders/ack", {
+      method: "POST", body: JSON.stringify({ key }),
+      headers: { "content-type": "application/json" },
+    });
   },
   async markCardRead(cardId: string): Promise<void> {
     await bff(`/api/cards/${cardId}/read`, { method: "POST" });

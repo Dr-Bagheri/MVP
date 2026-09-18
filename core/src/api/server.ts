@@ -78,6 +78,7 @@ import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssis
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTelegramLinkRepo } from "./telegram-link.ts";
 import { createSignaturesRepo } from "./signatures.ts";
+import { createRemindersRepo } from "./reminders.ts";
 import { createLiveRecallRepo } from "./live-recall.ts";
 import { createSkillDryRun } from "./skill-dry-run.ts";
 import { isConnectorProvider } from "./connector-providers.ts";
@@ -318,6 +319,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const telegramLink = createTelegramLinkRepo(options.db);
   const signatures = createSignaturesRepo(options.db);
+  const reminders = createRemindersRepo(options.db);
   const liveRecall = createLiveRecallRepo(options.db);
   const skillDryRun = createSkillDryRun(options.db, {
     apiKey: options.openrouterKey,
@@ -5096,6 +5098,65 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     await capabilities.require(identity, "org.settings");
     await org.setSheet(identity, null);
     return reply.code(204).send();
+  });
+
+  // ---- alarms (db/0231, db/0232) -------------------------------------------
+  /**
+   * A person's own alarms, and the three kinds of thing that should wake
+   * them. Every route here is `requireActive` + `refuseApiKey`: an alarm is a
+   * fact about a PERSON, and a gateway key is not one.
+   */
+  app.get("/v1/reminders", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "reminders");
+    return reply.send({ reminders: await reminders.list(identity) });
+  });
+
+  app.post("/v1/reminders", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "reminders");
+    const body = (request.body ?? {}) as { at?: unknown; label?: unknown };
+    if (typeof body.at !== "string" || typeof body.label !== "string") {
+      throw new ValidationError("at and label are required");
+    }
+    return reply.code(201).send(await reminders.create(identity, body.at, body.label));
+  });
+
+  app.delete("/v1/reminders/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "reminders");
+    const { id } = request.params as { id: string };
+    const { removed } = await reminders.remove(identity, id);
+    /* 404 on a row that is not there OR not theirs — the same answer to both,
+       which is this product's standing posture and the reason the warn below
+       exists rather than a different status (the indistinguishability debt). */
+    if (!removed) return reply.code(404).send({ error: "not found", kind: "not_found" });
+    return reply.code(204).send();
+  });
+
+  /**
+   * WHAT SHOULD WAKE ME NOW. Polled by the browser once a minute while the
+   * tab is visible, so it is deliberately cheap: three indexed reads and one
+   * `key = any(...)`.
+   */
+  app.get("/v1/reminders/due", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "reminders");
+    return reply.send({ alarms: await reminders.due(identity) });
+  });
+
+  /**
+   * "I have seen that one." ONE route for all three kinds: the server
+   * composed the key, so the server knows whether it means a row to dismiss
+   * or an acknowledgement to record. A client deciding that would be a client
+   * that one day decides wrong.
+   */
+  app.post("/v1/reminders/ack", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "reminders");
+    const body = (request.body ?? {}) as { key?: unknown };
+    if (typeof body.key !== "string") throw new ValidationError("key is required");
+    return reply.send(await reminders.ack(identity, body.key));
   });
 
   // ---- the minutes' signatures (db/0229) ----------------------------------
