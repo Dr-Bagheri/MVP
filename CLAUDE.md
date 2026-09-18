@@ -8232,3 +8232,29 @@ sessions) for the cross-session narrative.
   the dialog's footer 39.5 → 32 with its text field unchanged at 37.6.
   db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
   web 1812 tests + gate + sweep.
+- 2026-09-18 (later — THE ONBOARDING'S «later» BEGINS WITH THE PERMISSIONS
+  STAGE, THE MODEL READING, AND THE TOOLS PROPOSAL; commit 9ca6668; web on
+  Vercel, nothing in core or db): three asks in one message. **The
+  onboarding**: «later» is gone from the four sign-up questions — they are
+  what the workspace is personalised on — and stays on every screen from
+  the permissions stage on (a flow with no exit is a wall). Written as the
+  FIRST STEP THAT MAY BE SKIPPED plus a predicate rather than a count of
+  four; the pure test asserts the relationship (sign-up before the door,
+  never after), the rendered test the pair (absent ×4, present on `data`).
+  Three mutations red; NOT provable live (the flow refuses a stamped
+  member). **The model**: read before recommending — the org's default is
+  `google/gemini-3.1-pro-preview` at $2/$12, a preview id; the picker's
+  prices come from the bundled pi-ai SNAPSHOT and are stale against
+  OpenRouter (v4-pro $0.435 shown, $1.60 live) and the catalogue lacks
+  GLM-5.3 entirely; the recommendation (DeepSeek V4 Flash 0731 at
+  $0.06/$0.12, MIT, 2-GPU on-prem, with GLM-5.2 as the heavy rung and a
+  Persian acceptance run before the switch) went to the user, no change
+  made. **The tools**: an Explore pass mapped 125 tools in three registries
+  with three shapes, restated by hand in eight places and in prose in
+  three, with authority decided by NAME PREFIX in the browser and no tier
+  on the server — `docs/AGENT-TOOLS-STRUCTURE.md` records the facts and
+  proposes one manifest (area, side, scope, effect, consent, admin, {fa,en}
+  copy, the named argument) that everything else derives from. A proposal;
+  nothing built.
+  db 229 migrations · core 1931 tests (1 pre-existing red, history ZWNJ) ·
+  web 1814 tests + gate + sweep.

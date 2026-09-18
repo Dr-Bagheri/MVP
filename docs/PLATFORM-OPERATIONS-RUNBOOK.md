@@ -1315,6 +1315,46 @@ dialog: «ساختن تسک» and «انصراف» **39.5 → 32** (inset 13), t
 **37.6 unchanged**. NOT read live: the meeting page's post tabs and the
 record transport (both read the same tokens).
 
+## 7z. Deployment record — 2026-09-18, later (9ca6668: web only — the onboarding's «later» begins with the permissions stage) + the model reading
+
+**9ca6668.** User: "for onboarding remove the later for the first four
+pages." `steps.ts` carries `FIRST_SKIPPABLE = "data"` and `canSkip(step)`;
+the flow draws «بعداً» only where `canSkip` says so, so the four sign-up
+questions (welcome, goals, work, places) are answered, never skipped, and
+every screen from the permissions stage on keeps the exit. steps.test
+asserts the RELATIONSHIP (everything before the door is sign-up, nothing
+after it is); the rendered test asserts the PAIR (absent on each of the
+four, present on `data`); the two exit tests resume at `data`. Verify-red
+by mutation, control green either side: `canSkip` always true (2 red), the
+door removed everywhere (3 red), the door one question early (2 red).
+Verified: tsc 0; 1814 web tests (the one red under load is the recorded
+`SpeakersDirectory.account` flake, 6/6 alone); the build gate alone; the
+encoding sweep. Deployed: both Vercel projects `success` at 17:44:21.
+**NOT provable live**: the flow refuses a stamped member and a fresh
+sign-up is a write on production — the tests are the proof.
+
+**The model reading, taken for the user's choice (no change made).**
+`/api/models` on production: the org's allow-list is the 2026-08-16 seven
+and its DEFAULT is `google/gemini-3.1-pro-preview` at **$2 / $12 per M**
+— a PREVIEW id and the dearest entry but Kimi K3. The server's `core.env`
+carries no `*MODEL*` key (the ladder falls to the org preference). The
+bundled catalogue (`getBuiltinModels("openrouter")` from
+`@earendil-works/pi-ai/providers/all`, 335 ids) is a SNAPSHOT whose prices
+can be stale against OpenRouter's live list (445 ids, fetched 2026-09-18):
+`deepseek/deepseek-v4-pro` reads $0.435/$0.87 in the picker and
+$1.60/$3.20 live; `z-ai/glm-5.3` and `glm-5.3-flash` (2026-08-18 / -26)
+are on OpenRouter and NOT in the catalogue, so the picker cannot offer
+them until the package is bumped. Live, tool-capable, open-weight
+candidates: `deepseek/deepseek-v4-flash-0731` $0.06/$0.12 · 1.3M ctx ·
+MIT · 284B-A13B; `z-ai/glm-5.3-flash` $0.09/$0.30 · 320B-A18B · MIT;
+`z-ai/glm-5.2` $0.55/$1.74 · 753B-A40B · MIT; `deepseek/deepseek-v4-pro`
+$1.60/$3.20 · 1.6T-A49B; `qwen/qwen3.7-flash` $0.03/$0.13 (closed
+weights); `minimax/minimax-m3` $0.30/$1.20. Persian quality of the 2026
+generation is UNMEASURED anywhere this side could find — the acceptance
+run on real records is the user's call (a provider spend and summary
+writes). The recommendation and the tool-structure proposal
+(docs/AGENT-TOOLS-STRUCTURE.md) went to the user in chat.
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
