@@ -86,6 +86,12 @@ let boardReads = 0;
 let refuseNextPatch = false;
 /** watched, because a card drag that moves a COLUMN is the bug below */
 const updateTaskColumn = vi.fn();
+/** watched and steerable: «کپی» makes one create per person, and the copy
+    tests refuse one of them mid-way (2026-09-19) */
+const createTask = vi.fn();
+/** what only the DETAIL carries — a description, the steps, a schedule —
+    merged into `taskDetail`'s answer; the copy tests read all three off it */
+let detailExtras: Partial<TaskDetailRecord> = {};
 
 /* the reader, mutable: the board grew two ADMIN-only controls on 2026-09-05
    and a fixture that can only be one role cannot test an absence. */
@@ -126,9 +132,10 @@ vi.mock("@/api/client", () => {
       return {
         ...card({ id }), ...hit,
         description: "", checklist: [], comments: [], events: [], recurrence: null,
+        ...detailExtras,
       };
     },
-    createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
+    createTask: (...a: unknown[]) => createTask(...a), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
     /* the folder strip splits folders from projects by reading the projects
        (2026-09-05) — the mock must answer, or the effect throws */
     projects: async () => [],
@@ -166,6 +173,9 @@ beforeEach(() => {
   createdProjects.length = 0;
   updateTaskColumn.mockReset();
   updateTaskColumn.mockResolvedValue({});
+  detailExtras = {};
+  createTask.mockReset();
+  createTask.mockResolvedValue(card({ id: "t-new" }));
 });
 
 /** the column's own container — the element carrying its cards */
@@ -821,5 +831,178 @@ describe("the row's-end create (2026-09-17)", () => {
     const dialog = await screen.findByRole("dialog", { name: "تسک جدید" });
     expect(within(dialog).getByRole("radio", { name: "برای انجام" })).toHaveAttribute("aria-checked", "true");
     expect(within(dialog).getByRole("radio", { name: "در حال انجام" })).toHaveAttribute("aria-checked", "false");
+  });
+});
+
+describe("«کپی» — one card per person (2026-09-19)", () => {
+  /*
+   * User directive: "build the duplicate task option with one card per
+   * person, name it کپی" — after the ask that started it: "if there is a
+   * task I want for a couple of members I don't do it from the beginning".
+   *
+   * The properties, and why each is a property rather than a screenshot: the
+   * dialog opens FILLED from the source (a copy that asked for the title
+   * again is a new-task dialog with a different heading); the source's own
+   * people are NOT carried (the hands are the one thing the person came to
+   * change — a copy that kept Sina on it would hand Sina a duplicate); the
+   * copies are ONE PER PERSON, each with that person ALONE (one card with
+   * three people is the thing the feature exists to replace); the checklist
+   * rides along and nothing else does — the exact KEY SET of each create is
+   * pinned, because "the copy has the title" is true of every wrong version
+   * too; and a refusal mid-way leaves a clean edge that a retry cannot
+   * double.
+   */
+  const OTHERS = [
+    personFixture({ id: "u-a", display_name: "بهناز", display_name_en: null, role: "member", username: "u-a" }),
+    personFixture({ id: "u-b", display_name: "شهلا", display_name_en: null, role: "member", username: "u-b" }),
+  ];
+  beforeEach(() => { PEOPLE.push(...OTHERS); });
+  afterEach(() => { PEOPLE.splice(PEOPLE.length - OTHERS.length, OTHERS.length); });
+
+  const source = (over: Partial<TaskCardRecord> = {}) => card({
+    id: "t-src", title: "تهیهٔ گزارش ماهانه", column_id: "col-doing", topic_id: "top-1",
+    priority: "high", label_ids: ["lab-1"], assignee_ids: ["u-me"],
+    due_at: "2026-09-25T13:30:00Z", checklist_total: 2, checklist_done: 1, ...over,
+  });
+  const STEPS: TaskDetailRecord["checklist"] = [
+    { id: "l-1", label: "داده‌ها را جمع کن", done: true, position: 1 },
+    { id: "l-2", label: "نمودار را بکش", done: false, position: 2 },
+  ];
+
+  /** open the card, press ⋯ → «کپی»; the copy dialog */
+  async function openCopy(): Promise<HTMLElement> {
+    render(<TaskBoard />);
+    await userEvent.click(await screen.findByText("تهیهٔ گزارش ماهانه"));
+    await userEvent.click(await screen.findByRole("button", { name: "بیشتر" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "کپی" }));
+    return screen.findByRole("dialog", { name: "کپی تسک" });
+  }
+  /** the picker's list, opened — SCOPED, because a chosen person is also a chip */
+  async function pickerList(dialog: HTMLElement): Promise<HTMLElement> {
+    await userEvent.click(within(dialog).getByRole("button", { name: "افزودن مسئول" }));
+    const search = await within(dialog).findByPlaceholderText("جستجوی عضو…");
+    return search.parentElement!;
+  }
+  const bodies = () => createTask.mock.calls.map((c) => c[0] as Record<string, unknown>);
+
+  it("opens the board's own dialog FILLED from the card, with nobody on it — and the card's panel is gone", async () => {
+    boardTasks = [source()];
+    detailExtras = { description: "با نمودارها", checklist: STEPS };
+    const dialog = await openCopy();
+
+    /*
+     * THE PANEL CLOSED — asked by ATTRIBUTE, and the two shapes this replaced
+     * are the reason (verify-red, 2026-09-19): a second dialog opened OVER
+     * the panel marks the panel `aria-hidden`, so `queryByRole("dialog",
+     * { name })` is null either way; and `hidden: true` does not help,
+     * because a hidden node's accessible NAME is the empty string (accname
+     * step 2A) — the covered panel is in the tree with no name to match. Both
+     * queries stayed green against the mutation that left the panel open
+     * under the copy dialog. Reading `aria-label` off every dialog in the
+     * DOM, hidden or not, is the question that can answer NO.
+     *
+     * The copies land on the board, which is where the person should be
+     * looking when they do; the control is the copy dialog itself, found by
+     * name above.
+     */
+    const dialogLabels = screen.queryAllByRole("dialog", { hidden: true }).map((d) => d.getAttribute("aria-label"));
+    expect(dialogLabels).toContain("کپی تسک");
+    expect(dialogLabels).not.toContain("تهیهٔ گزارش ماهانه");
+    expect(within(dialog).getByDisplayValue("تهیهٔ گزارش ماهانه")).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue("با نمودارها")).toBeInTheDocument();
+    expect(within(dialog).getByRole("radio", { name: "در حال انجام" })).toHaveAttribute("aria-checked", "true");
+    expect(within(dialog).getByRole("radio", { name: "زیاد" })).toHaveAttribute("aria-checked", "true");
+    expect(within(dialog).getByRole("button", { name: "فوری" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getByRole("button", { name: "محصول" })).toHaveAttribute("aria-pressed", "false");
+    /* THE DISCRIMINATING HALF: the source's own assignee is NOT carried */
+    expect(within(dialog).queryByTitle("حذف سینا")).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "ساختن یک کارت" })).toBeInTheDocument();
+  });
+
+  it("makes ONE card per chosen person, each with that person alone, the steps in order, and nothing else from the source", async () => {
+    boardTasks = [source()];
+    detailExtras = { description: "با نمودارها", checklist: STEPS };
+    const dialog = await openCopy();
+    const readsBefore = boardReads;
+    const list = await pickerList(dialog);
+    await userEvent.click(within(list).getByRole("button", { name: /بهناز/ }));
+    await userEvent.click(within(list).getByRole("button", { name: /شهلا/ }));
+    /* the key counts the cards — the one-per-person rule, said where it is
+       about to happen */
+    await userEvent.click(within(dialog).getByRole("button", { name: /ساختن [2۲] کارت/ }));
+
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(2));
+    expect(bodies().map((b) => b.assignees)).toEqual([["u-a"], ["u-b"]]);
+    for (const body of bodies()) {
+      expect(Object.keys(body).sort()).toEqual([
+        "assignees", "checklist", "column_id", "description", "due_at", "label_ids", "priority", "title", "topic_id",
+      ]);
+      expect(body).toMatchObject({
+        title: "تهیهٔ گزارش ماهانه", description: "با نمودارها", column_id: "col-doing", topic_id: "top-1",
+        priority: "high", due_at: "2026-09-25T13:30:00Z", label_ids: ["lab-1"],
+        /* the steps as words, in their order — ticks and ids stay with the original */
+        checklist: ["داده‌ها را جمع کن", "نمودار را بکش"],
+      });
+    }
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "کپی تسک" })).toBeNull());
+    expect(boardReads, "the board did not re-read after the copies landed").toBeGreaterThan(readsBefore);
+  });
+
+  it("with nobody chosen makes ONE plain copy — no assignees key, and no schedule the source did not have", async () => {
+    boardTasks = [source()];
+    detailExtras = { checklist: STEPS };
+    const dialog = await openCopy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "ساختن یک کارت" }));
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(1));
+    expect(bodies()[0]).not.toHaveProperty("assignees");
+    expect(bodies()[0]).not.toHaveProperty("schedule");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "کپی تسک" })).toBeNull());
+  });
+
+  it("a refused card keeps the dialog open, drops the people whose card EXISTS, and a retry makes only the rest", async () => {
+    createTask.mockReset()
+      .mockResolvedValueOnce(card({ id: "t-c1" }))
+      .mockRejectedValueOnce(new Error("refused"))
+      .mockResolvedValue(card({ id: "t-c2" }));
+    boardTasks = [source()];
+    detailExtras = { checklist: STEPS };
+    const dialog = await openCopy();
+    const list = await pickerList(dialog);
+    await userEvent.click(within(list).getByRole("button", { name: /بهناز/ }));
+    await userEvent.click(within(list).getByRole("button", { name: /شهلا/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /ساختن [2۲] کارت/ }));
+
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(2));
+    /* still open; بهناز's card is on the board, so her chip is gone — a
+       retry must not hand her a second one; شهلا is still chosen */
+    expect(screen.getByRole("dialog", { name: "کپی تسک" })).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).queryByTitle("حذف بهناز")).toBeNull());
+    expect(within(dialog).getByTitle("حذف شهلا")).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "ساختن یک کارت" }));
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(3));
+    expect(bodies()[2]!.assignees).toEqual(["u-b"]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "کپی تسک" })).toBeNull());
+  });
+
+  it("a FINISHED card's copy starts in the first column — it is new work, not a done card twice", async () => {
+    boardTasks = [source({ done: true })];
+    detailExtras = { checklist: [] };
+    const dialog = await openCopy();
+    expect(within(dialog).getByRole("radio", { name: "برای انجام" })).toHaveAttribute("aria-checked", "true");
+    expect(within(dialog).getByRole("radio", { name: "در حال انجام" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("carries a LIVE schedule, shown so it can be switched off — each copy repeats as the original does", async () => {
+    boardTasks = [source()];
+    detailExtras = {
+      checklist: [],
+      recurrence: { id: "r-1", gap_days: 7, until_date: "2026-12-01", active: true, renewed: 2 },
+    };
+    const dialog = await openCopy();
+    expect(within(dialog).getByRole("checkbox", { name: "این کار تکرار شود" })).toBeChecked();
+    await userEvent.click(within(dialog).getByRole("button", { name: "ساختن یک کارت" }));
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(1));
+    expect(bodies()[0]!.schedule).toEqual({ gap_days: 7, until_date: "2026-12-01" });
   });
 });

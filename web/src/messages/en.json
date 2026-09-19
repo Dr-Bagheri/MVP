@@ -1202,12 +1202,12 @@
         "step6": "The meeting page's assistant is the platform's assistant with this record attached; ask about what was said. A meeting is archived, never deleted."
       },
       "tasks": {
-        "step1": "The board starts with four columns — backlog, to do, in progress, done — and columns can be added, named and coloured, and reordered by dragging their header. The row above the board: kanban, list, calendar, archive; a priority filter; «Just my tasks» and «Due today».",
+        "step1": "The board starts with four columns — backlog, to do, in progress, done — and columns can be named and coloured, and reordered by dragging their header. The row above the board: kanban, list, calendar, archive; a priority filter; «Just my tasks» and «Due today».",
         "step2": "The second row is the folders: «all tasks», your own folders with their «+», a divider, then the folders that are projects. Each folder carries its own edit menu.",
         "step3": "«Add task» at the foot of a column makes the task right there: title, description, labels, folder, column, priority, deadline and assignees in one dialog.",
         "step4": "Drag a card with the mouse to another column to change its state; with a finger, hold a moment first. A click opens it.",
         "step5": "The task panel holds the description, checklist, comments and history, with folder, state, assignees, priority, deadline, labels and repeat in its rail. Repeat means the next copy is created when this one is done.",
-        "step6": "Ticking a card marks it done; archiving takes it off the board into «archive»; delete is for good and asks first."
+        "step6": "Ticking a card marks it done; «Copy», in the task window's «More» menu, makes the same task — details and checklist included — for the people you pick, one card per person; archiving takes it off the board into «archive»; delete is for good and asks first."
       },
       "projects": {
         "step1": "A project is an order of work: an admin creates it, picks its people and assigns work to them. Everyone sees it; creating and editing is the admin's.",
@@ -3133,6 +3133,12 @@
     "commentHint": "Enter to send · Shift+Enter for a new line",
     "commentPlaceholder": "Write a comment…",
     "comments": "Comments",
+    "copy": "Copy",
+    "copyAssignees": "Assignees (one card per person)",
+    "copyPartial": "{made} of the cards were made; the rest were not saved — try again.",
+    "copySubmitMany": "Create {n} cards",
+    "copySubmitOne": "Create one card",
+    "copyTask": "Copy task",
     "createTask": "Create task",
     "createdAt": "Created {at}",
     "dayEmpty": "Nothing due on this day.",

@@ -1850,6 +1850,9 @@ export const api = {
     description?: string; priority?: TaskPriority; due_at?: string | null;
     assignees?: string[]; label_ids?: string[];
     schedule?: { gap_days: number; until_date: string | null } | null;
+    /** the steps at birth, unticked, in this order (2026-09-19, «کپی») —
+        the same transaction as the card; a blank line refuses the create */
+    checklist?: string[];
   }): Promise<TaskDetailRecord> {
     return bff("/api/tasks", {
       method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },

@@ -468,6 +468,14 @@ export function createTasksRepo(db: Db) {
        the dialog keeps its fields on screen when the write refuses. */
     label_ids?: unknown;
     schedule?: unknown;
+    /* CHECKLIST LINES, at birth (2026-09-19, «کپی»). A copy of a task
+       carries the original's steps, unticked — `renew` below has written
+       the same thing in SQL since 0186 ("the steps are part of what the
+       order IS"). Here rather than one addChecklistItem per line after the
+       create, for the assignees' reason two comments up: the card and its
+       steps arrive together or neither does, and a copy with half a
+       checklist is a card that lies about what the work is. */
+    checklist?: unknown;
   }): Promise<TaskDetailRecord> {
     const title = typeof input.title === "string" ? input.title.trim() : "";
     if (title === "" || title.length > 300) {
@@ -482,6 +490,9 @@ export function createTasksRepo(db: Db) {
     const labelIds = Array.isArray(input.label_ids)
       ? input.label_ids.filter((v): v is string => typeof v === "string" && v !== "").slice(0, 12)
       : [];
+    /* parsed BEFORE the transaction opens, like the schedule: a blank line
+       refuses the create with nothing written */
+    const checklist = parseChecklist(input.checklist);
     const id = await db.withIdentity(identity, async (tx: SqlTx) => {
       let columnId = typeof input.column_id === "string" && input.column_id !== ""
         ? input.column_id : null;
@@ -559,6 +570,18 @@ export function createTasksRepo(db: Db) {
         );
         await note(tx, taskId, "label_added", { label: String(label[0].name) });
       }
+
+      /* the steps in the order they were given — `position` is the order
+         the detail reads them back in, and a copy that shuffled its steps
+         would be a different procedure. `done` is left to its default
+         (false): a card born with ticked boxes is a card born finished. */
+      for (const [index, label] of checklist.entries()) {
+        await tx.unsafe(
+          `insert into echo.task_checklist_item (task_id, org_id, label, position)
+           select t.id, t.org_id, $2, $3 from echo.task t where t.id = $1`,
+          [taskId, label, index + 1],
+        );
+      }
       return taskId;
     });
     return detail(identity, id);
@@ -593,6 +616,32 @@ export function createTasksRepo(db: Db) {
       });
     }
     return { gap_days: gap, until_date: until };
+  }
+
+  /**
+   * The checklist as the wire may state it: a list of lines. Absent, null
+   * or empty is "no steps", which is every ordinary task.
+   *
+   * A line that is not a string, is blank, or runs past 500 characters
+   * REFUSES the create rather than being dropped — the rule `addChecklistItem`
+   * applies to one line, applied to all of them, because a copy that
+   * silently lost a step is a card that lies about what the work is. Fifty
+   * lines is the ceiling; a checklist longer than that is a project wearing
+   * a card. The code is the one the single-line door already speaks, so a
+   * client renders one sentence for both refusals.
+   */
+  function parseChecklist(value: unknown): string[] {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value) || value.length > 50) {
+      throw new ValidationError("unreadable checklist", { code: "task_checklist_invalid" });
+    }
+    return value.map((line) => {
+      const text = typeof line === "string" ? line.trim() : "";
+      if (text === "" || text.length > 500) {
+        throw new ValidationError("a checklist line needs words", { code: "task_checklist_invalid" });
+      }
+      return text;
+    });
   }
 
   async function update(identity: Identity, id: string, patch: Record<string, unknown>): Promise<TaskDetailRecord> {

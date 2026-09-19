@@ -238,3 +238,36 @@ describe("the record chip (2026-09-06)", () => {
     expect(screen.queryByRole("link", { name: /ضبط ۹/ })).toBeNull();
   });
 });
+
+describe("«کپی» is the board's door (2026-09-19)", () => {
+  /*
+   * The row makes NEW cards from this one, in the board's own new-task
+   * dialog — so it is drawn only when a caller has a board to land them on
+   * (`onCopy`), and it is ABSENT rather than inert without one: a menu row
+   * that does nothing teaches, on its first press, that the feature is
+   * broken. The board's own suite drives the dialog; this file pins the
+   * door, and the press itself must write nothing — the dialog it opens is
+   * where the writes are.
+   */
+  it("offers «copy» when the board offers a landing, and the press calls it and writes nothing", async () => {
+    const onCopy = vi.fn();
+    render(
+      <TaskDetail
+        task={TASK} columns={COLUMNS} topics={TOPICS} labels={LABELS} people={PEOPLE}
+        onClose={vi.fn()} onChanged={vi.fn()} onLabelsChanged={vi.fn()} onCopy={onCopy}
+      />,
+    );
+    await press("more");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "copy" }));
+    expect(onCopy).toHaveBeenCalledTimes(1);
+    expect(updateTask).not.toHaveBeenCalled();
+    expect(deleteTask).not.toHaveBeenCalled();
+  });
+
+  it("THE CONTROL: with no board behind it the row is absent — and the menu is not", async () => {
+    open();
+    await press("more");
+    expect(await screen.findByRole("menuitem", { name: "edit" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "copy" })).toBeNull();
+  });
+});

@@ -114,6 +114,11 @@ export function TaskBoard() {
      reason the button moved into the column. */
   const [creating, setCreating] = useState<string | null>(null);
   const [openTask, setOpenTask] = useState<TaskDetailRecord | null>(null);
+  /* «کپی» (2026-09-19): the card whose copies are being made — the new-task
+     dialog opens FILLED from it, one card per chosen person (TaskDialogs
+     `copyOf`). The detail panel closes first: the copies land on THIS board
+     and the person should be looking at it when they do. */
+  const [copying, setCopying] = useState<TaskDetailRecord | null>(null);
   /* the card about to be deleted — the dialog is the only way to the write */
   const [condemnedTask, setCondemnedTask] = useState<TaskCardRecord | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -280,6 +285,13 @@ export function TaskBoard() {
       tasks: prev.tasks.map((x) => (x.id === id ? { ...x, column_id: columnId, position: -Date.now() } : x)),
     });
     void patchTask(id, { column_id: columnId, position: -Date.now() });
+  };
+
+  /* the detail's one way out — its close, and «کپی» on its way to the dialog */
+  const closeDetail = () => {
+    setOpenTask(null);
+    if (linkedTask !== null) router.replace("/tasks");
+    load();
   };
 
   const projectByTopic = new Map(
@@ -701,7 +713,7 @@ export function TaskBoard() {
             )
       ) : null}
 
-      {creating !== null ? (
+      {creating !== null || copying !== null ? (
         <NewTaskDialog
           people={people}
           columns={board.columns}
@@ -709,8 +721,12 @@ export function TaskBoard() {
           labels={labels}
           defaultColumnId={creating}
           defaultTopicId={topic !== "all" ? topic : null}
-          onClose={() => setCreating(null)}
-          onCreated={() => { setCreating(null); load(); }}
+          /* «کپی»: the SAME dialog, filled from the card whose menu was
+             pressed — a copy takes its column and folder from the source,
+             so the two defaults above are not read for it (TaskDialogs) */
+          {...(copying !== null ? { copyOf: copying } : {})}
+          onClose={() => { setCreating(null); setCopying(null); }}
+          onCreated={() => { setCreating(null); setCopying(null); load(); }}
           onLabelsChanged={loadLabels}
         />
       ) : null}
@@ -723,11 +739,8 @@ export function TaskBoard() {
           labels={labels}
           people={people}
           isAdmin={isAdmin}
-          onClose={() => {
-            setOpenTask(null);
-            if (linkedTask !== null) router.replace("/tasks");
-            load();
-          }}
+          onClose={closeDetail}
+          onCopy={() => { const source = openTask; closeDetail(); setCopying(source); }}
           onChanged={() => {
             load();
             setOpenTask((prev) => {

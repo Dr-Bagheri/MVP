@@ -8839,3 +8839,77 @@ sessions) for the cross-session narrative.
   not built.
   db 234 migrations · core 1997 tests (1 pre-existing red, history ZWNJ) ·
   web 1836 tests + gate + sweep.
+- 2026-09-19 («کپی» — A TASK IS COPIED ONE CARD PER PERSON, AND A CARD CAN
+  BE BORN WITH ITS CHECKLIST; core deployed; web on Vercel; no migration):
+  user directive, "build the duplicate task option with one card per person,
+  name it کپی" — the answer to the morning's "if there is a task I want for
+  a couple of members I don't do it from the beginning".
+  **THE DOOR IS THE BOARD'S.** «کپی» sits in the task panel's ⋯ menu between
+  the two acts on this card (edit, done) and the two that take it off the
+  board (archive, delete); pressing it CLOSES the panel and opens the board's
+  own new-task dialog in its place, FILLED from the card — title,
+  description, folder, column, priority, deadline, labels, the checklist
+  unticked, a live schedule — with the assignees EMPTY, because whose hands
+  the copies go into is the one thing the person came to say. The submit key
+  counts the cards («ساختن ۳ کارت»), which is the one-card-per-person rule
+  stated where it is about to happen; nobody chosen is one plain copy. The
+  same dialog and not a second one: a copy that opened a different form is
+  the pair that stops matching the first time either gains a field. The
+  panel closes rather than staying under the dialog because the copies land
+  on THIS board and the person should be looking at it when they do. A
+  FINISHED card's copy starts in the first column (the renewal's own
+  reasoning, 0186); an unfinished one keeps its place. `TaskDetail` draws the
+  row only when its caller offers `onCopy` — a menu row with no board behind
+  it is ABSENT rather than inert.
+  **ONE CREATE PER PERSON, IN TURN.** Each copy is the server's existing
+  one-transaction create with `assignees: [that person]`; they run in
+  sequence so a refusal has a clean edge, and when one refuses the people
+  whose card EXISTS leave the picker — a retry that made them again would
+  hand somebody two of the same task — the dialog stays open with everybody
+  else still chosen, and the toast says how far it got («۲ کارت ساخته شد؛
+  بقیه ذخیره نشد»). Comments and history stay with the original: they are
+  its record, not the work.
+  **A CARD CAN BE BORN WITH ITS CHECKLIST** (core `create` takes `checklist:
+  string[]`): the steps are written in the same transaction as the card, in
+  the order given, `done` left to its default — the assignees' reasoning of
+  0186 applied to the steps, and what `renew` has done in SQL since 0186 for
+  a repeating order's next card. A blank line, a non-string, a line past 500
+  characters or a list past fifty REFUSES the create with the single-line
+  door's own code, before the transaction opens, so a refused copy leaves no
+  card with half a checklist behind. No migration and no BFF change (the
+  route forwards verbatim); a core that predated the field would have
+  silently dropped it, which is why core went up BEFORE the web this time.
+  **The help says it** (step 6 of the task section names «کپی» and what it
+  makes) — and step 1 stopped promising that columns can be added, which has
+  been false since the add-column slot left on 2026-09-16.
+  **THE VERIFY-RED FOUND MY OWN ASSERTION VACUOUS, TWICE, FOR TWO
+  REASONS.** The mutation that opened the copy dialog OVER the panel instead
+  of in its place stayed GREEN against
+  `queryByRole("dialog", { name: <title> })`: a second Radix dialog marks
+  the panel `aria-hidden`, so the query is null whether the panel closed or
+  was covered. Adding `hidden: true` stayed green too — and the probe that
+  printed the dialogs settled why: the panel was in the DOM with
+  `aria-hidden="true"`, and a hidden node's accessible NAME is the empty
+  string (accname step 2A), so a name query cannot match a covered dialog at
+  all. The assertion reads `aria-label` off every dialog in the DOM now, and
+  the mutation is red by name. Minted: **a covered dialog has no accessible
+  name — `hidden: true` finds it and `name` still cannot; to tell "closed"
+  from "covered", read the attribute.** Rule 12's own sentence, one query
+  option deeper than the 2026-09-19 acts test had gone.
+  Verify-red by mutation, control green first, each red on its own test:
+  core — the lines never inserted, a blank line written instead of refused,
+  the fifty-line ceiling gone, the positions all 1; web — the row never
+  drawn, the row drawn with no board behind it (the control), the source's
+  assignees carried, every copy carrying everybody, one create for all, the
+  checklist not sent, a refusal keeping the made people, a finished card
+  keeping the done column, a live schedule dropped, the board offering no
+  `onCopy`, the dialog opened over the panel. Suites: core 2004 (the one red
+  is the recorded history ZWNJ contradiction), web 1844 + gate + sweep (1,577
+  files; `selectMenuWidth` is the recorded `npx`-under-Bash artefact and
+  `SpeakersDirectory.account` the recorded load flake, green alone).
+  NOT built: an agent hand — «این تسک رو برای سینا و بهناز هم بساز» already
+  runs as one `create_task` per person behind consent cards, and a new
+  client tool would spend the schema budget the morning's diet just paid
+  down.
+  db 234 migrations · core 2004 tests (1 pre-existing red, history ZWNJ) ·
+  web 1844 tests + gate + sweep.

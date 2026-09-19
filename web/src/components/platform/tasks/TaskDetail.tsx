@@ -19,7 +19,7 @@ import { Overlay } from "../Overlay";
 import { BODY_HEADING, DIALOG_BODY, RAIL_EMPTY, RAIL_LABEL, RAIL_VALUE, SECTION_EMPTY, TAB_BAR, tabClass } from "./panelStyle";
 import { DetailPanel } from "../DetailPanel";
 import {
-  IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
+  IconArchive, IconCheck, IconClose, IconCopy, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
 } from "@/components/icons";
 import { digits, formatDate, personName, personPhoto } from "@/lib/format";
 import { useSeededName } from "@/lib/seededNames";
@@ -36,7 +36,7 @@ import { notifyError } from "@/lib/notify";
  * The rail's fields are LIVE controls, not a read-out: this is where a card
  * is actually edited, which is why the reference puts them there.
  */
-export function TaskDetail({ task, columns, topics, labels, people, isAdmin = false, onClose, onChanged, onLabelsChanged }: {
+export function TaskDetail({ task, columns, topics, labels, people, isAdmin = false, onCopy, onClose, onChanged, onLabelsChanged }: {
   task: TaskDetailRecord;
   columns: TaskColumnRecord[];
   topics: TaskTopicRecord[];
@@ -45,6 +45,17 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
   /** the room row is an admin's control and everybody else's reading
       (db/0227's trigger) — ABSENT rather than refused for a member */
   isAdmin?: boolean;
+  /**
+   * «کپی» (2026-09-19): make NEW cards from this one — the board's own
+   * new-task dialog, filled from this card, one card per chosen person
+   * (TaskDialogs `copyOf`). It is the BOARD's door, because the copies land
+   * on the board and the person should be looking at it when they do: the
+   * board closes this panel and opens the dialog in its place. A caller
+   * that offers no `onCopy` has no board to land them on, and the menu row
+   * is ABSENT rather than inert — a row that does nothing teaches, on its
+   * first press, that the feature is broken.
+   */
+  onCopy?: () => void;
   onClose: () => void;
   onChanged: () => void;
   onLabelsChanged: () => void;
@@ -121,7 +132,9 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
    * than an act. It goes somewhere; it changes nothing.
    *
    * The order is the platform's: the ordinary edit first, the state change
-   * next, the reversible archive, and the red delete last and alone.
+   * next, then «کپی» — which makes NEW cards from this one and so sits
+   * between the acts on this card and the two that take it off the board —
+   * the reversible archive, and the red delete last and alone.
    */
   const acts = (
     <KebabMenu
@@ -139,6 +152,12 @@ export function TaskDetail({ task, columns, topics, labels, people, isAdmin = fa
           icon: <IconCheck width={14} height={14} />,
           onSelect: () => { void patch({ done: !task.done }); },
         },
+        ...(onCopy === undefined ? [] : [{
+          key: "copy",
+          label: t("copy"),
+          icon: <IconCopy width={14} height={14} />,
+          onSelect: onCopy,
+        }]),
         {
           /* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
              2026-09-02) — and the red item is a real DELETE (0162, the user's

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type {
-  OrgPersonRecord, TaskColumnRecord, TaskLabelColor, TaskLabelRecord,
+  OrgPersonRecord, TaskColumnRecord, TaskDetailRecord, TaskLabelColor, TaskLabelRecord,
   TaskPriority, TaskTopicRecord,
 } from "@/api/types";
 import { Overlay } from "../Overlay";
@@ -16,7 +16,7 @@ import {
   DIALOG_BODY, FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, chipClass,
   FOOTER_CANCEL, FOOTER_PRIMARY,
 } from "./panelStyle";
-import { IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
+import { IconCheck, IconClose, IconCopy, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
 import { digits, formatDate, instantFromFields, nowFields, personName, personPhoto } from "@/lib/format";
 import { TimeField } from "@/components/DateTimeFields";
 import { useSeededName } from "@/lib/seededNames";
@@ -521,7 +521,7 @@ export function DueField({ value, onPick }: {
 }
 
 /* ── THE NEW-TASK DIALOG, field for field ────────────────────────────── */
-export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId, defaultTopicId, allowSchedule = false, onClose, onCreated, onLabelsChanged }: {
+export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId, defaultTopicId, allowSchedule = false, copyOf, onClose, onCreated, onLabelsChanged }: {
   columns: TaskColumnRecord[];
   topics: TaskTopicRecord[];
   labels: TaskLabelRecord[];
@@ -541,6 +541,27 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
    * stopped matching.
    */
   allowSchedule?: boolean;
+  /**
+   * «کپی» (user directive, 2026-09-19: "build the duplicate task option
+   * with one card per person, name it کپی" — after "if there is a task I
+   * want for a couple of members I don't do it from the beginning").
+   *
+   * The source card. The form opens FILLED from it — title, description,
+   * folder, column, priority, deadline, labels, the checklist unticked, a
+   * live schedule — with the assignees EMPTY, because different hands is
+   * the whole reason to copy rather than to point at the original. And it
+   * makes ONE CARD PER CHOSEN PERSON, each with that one person on it: three
+   * colleagues get three cards they each own, not one card they share, which
+   * is what «فقط تسک‌های من» and «چه کسی چه کرد» count. Nobody chosen is
+   * one plain copy.
+   *
+   * The same dialog and not a second one: a copy that opened a different
+   * form is the pair that stops matching the first time either gains a
+   * field. What differs is said by the heading, the assignees' label and
+   * the submit key — which counts the cards — and nothing else. Comments and
+   * history stay with the original; they are its record, not the work.
+   */
+  copyOf?: TaskDetailRecord;
   onClose: () => void;
   onCreated: () => void;
   onLabelsChanged: () => void;
@@ -549,25 +570,94 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
   /* the four seeded columns read in the reader's language here too — see
      TaskViews for why every render site and not only the board */
   const seededName = useSeededName();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [labelIds, setLabelIds] = useState<string[]>([]);
-  const [topicId, setTopicId] = useState(defaultTopicId ?? "");
-  const [columnId, setColumnId] = useState(defaultColumnId ?? columns[0]?.id ?? "");
-  const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [due, setDue] = useState<string | null>(null);
+  const locale = useLocale();
+  /*
+   * A COPY OPENS FILLED (see `copyOf`). A FINISHED card's copy starts in the
+   * first column rather than where the original stands — the renewal's own
+   * reasoning (0186: "a renewed order starts at the BEGINNING, not in
+   * «انجام‌شده»"): the copy is new work, and a new card in the done column is
+   * a card that reads as finished before anybody has touched it. An
+   * unfinished one keeps its place; the chips below move either.
+   * `columns[0]` is the first column by the board's own convention (the
+   * row-one create opens on it).
+   */
+  const seedColumn = copyOf === undefined
+    ? (defaultColumnId ?? columns[0]?.id ?? "")
+    : copyOf.done ? (columns[0]?.id ?? copyOf.column_id) : copyOf.column_id;
+  /* a LIVE schedule travels with a copy — three colleagues copied a
+     repeating order, so each of theirs repeats; a SPENT one is history, not
+     an order (ScheduleRow says the same about the card it sits on) */
+  const sourceSchedule = copyOf !== undefined && copyOf.recurrence !== null && copyOf.recurrence.active
+    ? copyOf.recurrence : null;
+  const [title, setTitle] = useState(copyOf?.title ?? "");
+  const [description, setDescription] = useState(copyOf?.description ?? "");
+  const [labelIds, setLabelIds] = useState<string[]>(copyOf?.label_ids ?? []);
+  const [topicId, setTopicId] = useState(copyOf === undefined ? (defaultTopicId ?? "") : (copyOf.topic_id ?? ""));
+  const [columnId, setColumnId] = useState(seedColumn);
+  const [priority, setPriority] = useState<TaskPriority>(copyOf?.priority ?? "medium");
+  const [due, setDue] = useState<string | null>(copyOf?.due_at ?? null);
+  /* EMPTY on a copy, on purpose: whose hands the copies go into is the one
+     thing the person came here to say (`copyOf`) */
   const [assignees, setAssignees] = useState<string[]>([]);
   /* the schedule, held as three plain values rather than an object: an
      absent schedule is `repeats === false`, which is one boolean instead of
      a null that every field then has to guard against */
-  const [repeats, setRepeats] = useState(false);
-  const [gapDays, setGapDays] = useState("0");
-  const [until, setUntil] = useState<string | null>(null);
+  const [repeats, setRepeats] = useState(sourceSchedule !== null);
+  const [gapDays, setGapDays] = useState(String(sourceSchedule?.gap_days ?? 0));
+  const [until, setUntil] = useState<string | null>(sourceSchedule?.until_date ?? null);
   const [busy, setBusy] = useState(false);
+  /* the source's steps, in their order, unticked — sent with each copy so
+     the card and its checklist are one transaction on the server (tasks.ts
+     `parseChecklist`); the create form has no checklist field, so this is
+     empty there and the key is not sent */
+  const checklist = copyOf === undefined ? [] : copyOf.checklist.map((line) => line.label);
+
+  /* everything the card IS, minus whose it is — the two paths below decide that */
+  const fields = () => ({
+    title: title.trim(),
+    column_id: columnId,
+    ...(topicId !== "" ? { topic_id: topicId } : {}),
+    ...(description.trim() !== "" ? { description } : {}),
+    priority,
+    ...(due !== null ? { due_at: due } : {}),
+    ...(labelIds.length > 0 ? { label_ids: labelIds } : {}),
+    ...(repeats ? { schedule: { gap_days: Number(gapDays) || 0, until_date: until } } : {}),
+    ...(checklist.length > 0 ? { checklist } : {}),
+  });
+
+  /*
+   * ONE CARD PER PERSON (`copyOf`). In turn rather than all at once, so that
+   * a refusal has a clean edge: the cards before it exist, the ones after it
+   * do not, and none is half-made (each create is one server transaction).
+   * When one refuses, the people whose card IS on the board leave the picker
+   * — a retry that made them again would hand somebody two of the same task
+   * — the dialog stays open with everybody else still chosen, and the toast
+   * says how far it got rather than "it failed" (rule 12: which nothing).
+   * Nobody chosen is one plain copy.
+   */
+  const submitCopies = async () => {
+    const targets: (string | null)[] = assignees.length === 0 ? [null] : assignees;
+    const made: string[] = [];
+    for (const person of targets) {
+      try {
+        await api.createTask({ ...fields(), ...(person === null ? {} : { assignees: [person] }) });
+      } catch {
+        setBusy(false);
+        setAssignees((prev) => prev.filter((id) => !made.includes(id)));
+        notifyError(made.length === 0
+          ? t("writeFailed")
+          : t("copyPartial", { made: digits(made.length, locale) }));
+        return;
+      }
+      if (person !== null) made.push(person);
+    }
+    onCreated();
+  };
 
   const submit = () => {
     if (title.trim() === "" || busy) return;
     setBusy(true);
+    if (copyOf !== undefined) { void submitCopies(); return; }
     /*
      * ONE WRITE (0186). This used to create the card and then fire the
      * labels and the people at it, each with its own `.catch(() =>
@@ -580,25 +670,18 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
      * every field still filled in.
      */
     void api.createTask({
-      title: title.trim(),
-      column_id: columnId,
-      ...(topicId !== "" ? { topic_id: topicId } : {}),
-      ...(description.trim() !== "" ? { description } : {}),
-      priority,
-      ...(due !== null ? { due_at: due } : {}),
+      ...fields(),
       ...(assignees.length > 0 ? { assignees } : {}),
-      ...(labelIds.length > 0 ? { label_ids: labelIds } : {}),
-      ...(repeats ? { schedule: { gap_days: Number(gapDays) || 0, until_date: until } } : {}),
     })
       .then(() => onCreated())
       .catch(() => { setBusy(false); notifyError(t("writeFailed")); });
   };
 
   return (
-    <Overlay onClose={onClose} label={t("newTask")} size="md">
+    <Overlay onClose={onClose} label={copyOf === undefined ? t("newTask") : t("copyTask")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
-          <h2 className="h-dialog">{t("newTask")}</h2>
+          <h2 className="h-dialog">{copyOf === undefined ? t("newTask") : t("copyTask")}</h2>
         </div>
         {/* 2026-09-03: `.btn btn-icon`, the one icon-only shape in the theme
             — the same control the task screen's close and every kebab in the
@@ -704,7 +787,10 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
             <DueField value={due} onPick={setDue} />
           </div>
           <div>
-            <span className={FIELD_LABEL}>{t("fieldAssignees")}</span>
+            {/* on a copy the label carries the rule («هر نفر یک کارت»):
+                a CONSEQUENCE said where the choice is made, and the one
+                line the form gains for being a copy */}
+            <span className={FIELD_LABEL}>{copyOf === undefined ? t("fieldAssignees") : t("copyAssignees")}</span>
             <AssigneePicker
               people={people}
               selected={assignees}
@@ -713,7 +799,10 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
           </div>
         </div>
 
-        {allowSchedule ? (
+        {/* … and on a copy of a REPEATING order, whatever the surface: the
+            schedule travels with the copy, so it is shown, switched on, where
+            the person can switch it off before the cards are made */}
+        {allowSchedule || sourceSchedule !== null ? (
           <ScheduleFields
             repeats={repeats}
             gapDays={gapDays}
@@ -735,8 +824,21 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         </button>
         <button type="button" onClick={submit} disabled={title.trim() === "" || busy || columnId === ""}
           className={FOOTER_PRIMARY}>
-          <IconPlus width={14} height={14} />
-          {t("createTask")}
+          {copyOf === undefined ? (
+            <>
+              <IconPlus width={14} height={14} />
+              {t("createTask")}
+            </>
+          ) : (
+            /* the key SAYS the consequence — «ساختن ۳ کارت» is the
+               one-card-per-person rule stated where it is about to happen */
+            <>
+              <IconCopy width={14} height={14} />
+              {assignees.length <= 1
+                ? t("copySubmitOne")
+                : t("copySubmitMany", { n: digits(assignees.length, locale) })}
+            </>
+          )}
         </button>
       </div>
     </Overlay>
