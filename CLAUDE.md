@@ -8913,3 +8913,124 @@ sessions) for the cross-session narrative.
   down.
   db 234 migrations · core 2004 tests (1 pre-existing red, history ZWNJ) ·
   web 1844 tests + gate + sweep.
+- 2026-09-19 (A CALL THAT STOPPED MOVING IS FOUND, AND DRIVEN AGAIN; commit
+  0b2df17; db/0235 on production; core deployed; web on Vercel): user report
+  with the screenshot — "this one stayed in processing, make it somehow that
+  if stayed in this stage it will run it later as well."
+  **MEASURED BEFORE ANYTHING WAS WRITTEN.** Two calls on production sit in
+  `processing` and will never leave: `8cfb48a6` (2026-09-19 10:20, the
+  screenshot's «جلسه جمع بندی تابستان و تقسیم تسک ها») and `eb65b407`
+  (2026-09-15) — **zero parts, zero transcript segments, and no message
+  naming them in any queue, live or archived.** A `call_part` row is inserted
+  only after the bytes are in storage with `process_part` enqueued in the
+  same breath, so zero parts means no audio ever reached the pipeline; and
+  `partsSettled` requires `parts.length > 0`, so no step could ever advance
+  them. Not failing, not retrying: **waiting for work that does not exist**,
+  which is the worst member of the kinds-of-nothing family because the screen
+  renders it identically to a call the platform is busy with.
+  **THE DOOR THAT MADE THEM.** `recordingEngine.finish()` already refuses a
+  zero-part finish and its own comment names this exact defect ("finishing
+  would create a call stuck at 'processing' forever") — but
+  `finishOrphanedTake` on the meeting page (db/0204's reload case) calls
+  `finishCall` DIRECTLY, outside the engine, with no part count. The wall
+  moved to the api's `finish`, the one door every finish passes and where the
+  fact lives: the count rides INSIDE the flip (one statement, so no part can
+  land between the question and the answer) and a take that captured nothing
+  lands on `failed` with its reason instead of entering a pipeline with
+  nothing to run. The browser's guard stays — it can say so before the person
+  presses anything — but it is no longer what makes the rule true.
+  **THE RECOVERY (0235)** catches every other way a call stops: a lost
+  receipt, a dead letter whose owner could not be resolved, the
+  two-parts-commit race `finishPart`'s own comment describes, a worker
+  restarted between a status write and its enqueue. `stalled_calls` is 0114's
+  `due_mail_polls` shape — ids and counts, read by the worker through
+  `withoutIdentity`, every write that follows made as the call's OWNER — with
+  0130's rung one level up (the scheduler passes, an identity-bearing caller
+  must be platform root, because this is platform-wide and has no owner
+  column to key on). `claim_call_recovery` is 0111's CAS and `recovery_at`
+  is its column.
+  **WHAT MAKES "STALLED" A FACT RATHER THAN A GUESS, and it is not the
+  clock.** A part step may legitimately run for an hour (the 2026-09-06
+  long-file lane, the five-hour ceiling, the visibility heartbeat), so an age
+  test alone re-drives live work and pays the provider twice. The
+  discriminator is the QUEUE: pgmq keeps a claimed message's row in `q_<name>`
+  while it is invisible and removes it only on delete or archive, so a call
+  named by no message has nothing working on it however long a step might
+  take. The age floor stays — but only to cover the millisecond window
+  between a status write and its enqueue, which steps.ts keeps apart on
+  purpose. **Both predicates, or neither is sound**: age alone re-drives live
+  work, queue alone re-drives the enqueue gap.
+  **ONE DECISION, TWO DOORS.** `planResume` (pure) is read by the automatic
+  sweep AND by `uploads.retry`, because two doors deciding "where does this
+  call re-enter" in two places is the two-spellings defect with a customer's
+  recording inside it — and writing it once gave the retry door two answers
+  it did not have: a call with NO usable parts is refused by name rather than
+  sent to link_speakers (which would have summarized an empty transcript —
+  fabrication by lenient resume), and a call whose summary already landed is
+  marked ready rather than summarized again at the provider's price.
+  **B3's 2026-08-13 NO-SWEEPER RULING IS MET, NOT CONTRADICTED.** It was
+  about `agent_run` rows stuck at 'running' — "hygiene, not correctness" —
+  and it named its own earns-its-place condition: "when 'runs in progress'
+  becomes a number a person acts on → a named operation, explicit actor,
+  never a silent background writer." Both halves hold: this is correctness (a
+  customer's meeting is lost while the product claims to be working on it), a
+  person acted on it, every decision is logged with the call it was made
+  about, and a call that cannot be resumed is marked FAILED with its reason
+  rather than tidied away.
+  **The meetings list stops rounding.** A failed take read as «در حال
+  پردازش», argued on 2026-09-09 as the lesser of two lies against
+  «انجام‌شده» — and the row the user photographed was that rounding. There
+  was never a reason to choose between two wrong words when a third true one
+  («پردازش نشد») is available, and now that a call that cannot be resumed
+  actually reaches `failed`, it is a state rows arrive at rather than a
+  rarity worth rounding away. `failed` is placed AFTER the closed-minutes and
+  ready branch, and the pair is pinned: a signed-off meeting whose record
+  failed is still done.
+  **NOT TOUCHED, said out loud:** `recording`. Two abandoned takes from 09-06
+  and 09-07 sit there, but deciding a recording is over is a different
+  question from deciding a finished one stopped moving — the browser may
+  still hold the take, and failing a live meeting is the worse mistake. And a
+  call owned by an INACTIVE member is excluded at the door rather than
+  returned and skipped, because the worker can write nothing as them
+  (invariant 2) and returning it would burn a claim every quarter hour
+  forever; the forfeit is named in the migration.
+  **Three of my own instruments were wrong before the code was.** (1) The
+  first db test aged its fixtures with an UPDATE — and `call_set_updated_at`
+  is a BEFORE UPDATE trigger writing `now()` unconditionally, so the rows
+  were never old and the file's own first assertion failed. **A row that must
+  be old has to be BORN old**; the insert carries the trigger past. (2)
+  `t.writes_nothing` reported "1 row(s) were written" for a door that wrote
+  nothing: it counts the rows the statement RETURNS, and `select fn()` always
+  returns one, holding the answer. **A function door is asserted on its
+  answer plus the row it did not change** — `t.writes_nothing` is for
+  statements that write. (3) The first verify-red mutation swapped
+  `usableParts === 0` with `bareParts > 0` and stayed GREEN — correctly, since
+  a call with no usable parts has no bare ones either, so the order of those
+  two changes no answer. The mutation was wrong, not the code: what the
+  comment claims is that the RULE EXISTS, and deleting it is red.
+  **Verify-red**: the door by four MUTATIONS inside rolled-back transactions
+  against the real database (control green either side; production re-read
+  after and unchanged) — the queue check removed, the age floor removed, the
+  platform-root rung removed, the claim's CAS removed; then ten mutations
+  across core and web, each red on exactly its own test.
+  **Proven**: 0235 applied to production with the db suite (136 at 24 checks,
+  "the wall holds"); core deployed to Hetzner (archive hashes equal end to
+  end, both entrypoints parse under strip-types, both units active, health
+  `{"ok":true}`, zero level≥40 journal lines after); web on Vercel from the
+  push. The two stuck calls are the acceptance: both are offered by the door
+  (checked by running its predicate by hand before the deploy), both have
+  zero usable parts, and the sweep's answer for them is `nothing` → failed
+  with `nothing_recorded`.
+  **THE ACCEPTANCE RAN ITSELF, five minutes after the deploy.** The worker's
+  first tick (17:30:40 UTC) found both calls and logged one line each:
+  `stalled_call_recovered {was: processing, resumed_at: nothing,
+  usable_parts: 0, bare_parts: 0}`. Read back at owner altitude: both are
+  `failed` with `nothing_recorded: no audio reached the pipeline before the
+  take was finished`, `recovery_at` stamped, and ZERO calls remain in a
+  non-terminal state. On production in the user's Chrome at 1920, the exact
+  row from the screenshot — «جلسه جمع بندی تابستان و تقسیم تسک ها» — now
+  reads «پردازش نشد» in the danger ink on the quiet ground, and «در حال
+  پردازش» is nowhere on the page (invented-string control 0, so the probe
+  had a subject). Vercel: both projects success on 0b2df17.
+  db 235 migrations · core 2023 tests (1 pre-existing red, history ZWNJ) ·
+  web 1851 tests + gate + sweep.
