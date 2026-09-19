@@ -79,21 +79,33 @@ export const MODE_ICON: Record<MeetingMode, ReturnType<typeof IconMic>> = {
  * sitting in the meeting reads «Processing» as a machine getting ahead of
  * them.
  *
- * A FAILED take reads as «processing» here. That is a deliberate rounding,
- * not an oversight: «done» on a recording that produced nothing is the worse
- * of the two lies. The meeting's own page says `failed` in full.
+ * A FAILED take used to read as «processing» here, argued as the lesser of
+ * two lies against «done». 2026-09-19 retires that rounding, because the
+ * user's report was this row: a meeting whose take captured nothing sat under
+ * «در حال پردازش» for two hours, and the word was the whole complaint. There
+ * was never a reason to choose between two wrong words when a third true one
+ * is available, and now that the stall recovery FAILS a call that cannot be
+ * resumed (db/0235), `failed` is a state rows actually reach rather than a
+ * rarity worth rounding away.
  */
-export type MeetingStatus = "upcoming" | "ongoing" | "processing" | "done";
+export type MeetingStatus = "upcoming" | "ongoing" | "processing" | "failed" | "done";
 
 export function meetingStatus(m: MeetingRecord): MeetingStatus {
   if (m.minutes_closed_at !== null || m.call_status === "ready") return "done";
   if (m.call_status === "recording") return "ongoing";
+  /* before `call_id`: a failed take HAS one, and the processing branch below
+     would swallow it — which is exactly how the old rounding worked */
+  if (m.call_status === "failed") return "failed";
   if (m.call_id !== null) return "processing";
   return "upcoming";
 }
 
-/** the sort's rank for a status — the pipeline's own order, not the alphabet */
-const STATUS_RANK: Record<MeetingStatus, number> = { upcoming: 0, ongoing: 1, processing: 2, done: 3 };
+/** the sort's rank for a status — the pipeline's own order, not the alphabet.
+ *  `failed` sits beside `processing` rather than at the end: it is where that
+ *  take stopped, and a reader scanning for "what needs me" wants the two
+ *  together. */
+const STATUS_RANK: Record<MeetingStatus, number> =
+  { upcoming: 0, ongoing: 1, processing: 2, failed: 3, done: 4 };
 
 /* WHO WAS THERE is `lib/meetingPeople` — this screen, the summary document
    and the live stage's people rail all read that one rule. It moved out of
@@ -544,16 +556,21 @@ export function Meetings() {
                     <span className={`shrink-0 rounded-lg px-2 py-1 text-caption font-medium ${
                       status === "done" ? "bg-success/10 text-success"
                         : status === "ongoing" ? "bg-danger/10 text-danger"
-                          : status === "processing" ? "bg-accent-soft text-accent"
-                            : "bg-surface-2 text-fg-muted"
+                          /* the danger INK on a quiet ground, not the live
+                             dot's filled red: a take that failed is a thing
+                             to look at, not a thing happening right now */
+                          : status === "failed" ? "bg-surface-2 text-danger"
+                            : status === "processing" ? "bg-accent-soft text-accent"
+                              : "bg-surface-2 text-fg-muted"
                     }`}>
                       {/* literal keys, not `t(`status_${status}`)`: the message
                           scanner reads literal calls only, and a computed key
                           is a key nothing checks exists in both locales */}
                       {status === "done" ? t("status_done")
                         : status === "ongoing" ? t("status_ongoing")
-                          : status === "processing" ? t("status_processing")
-                            : t("status_upcoming")}
+                          : status === "failed" ? t("status_failed")
+                            : status === "processing" ? t("status_processing")
+                              : t("status_upcoming")}
                     </span>
                   );
                 })()}

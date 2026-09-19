@@ -2022,6 +2022,7 @@
     "startUpload": "Upload the file",
     "statusReady": "Ready to record",
     "status_done": "Done",
+    "status_failed": "Not processed",
     "status_ongoing": "Ongoing",
     "status_processing": "Processing",
     "status_upcoming": "Upcoming",

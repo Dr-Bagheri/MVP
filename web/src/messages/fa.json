@@ -2022,6 +2022,7 @@
     "startUpload": "آپلود فایل",
     "statusReady": "آماده ضبط",
     "status_done": "انجام‌شده",
+    "status_failed": "پردازش نشد",
     "status_ongoing": "در حال برگزاری",
     "status_processing": "در حال پردازش",
     "status_upcoming": "پیش‌رو",

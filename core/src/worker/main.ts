@@ -26,6 +26,7 @@ import { createSummarizer } from "./summarizer.ts";
 import { createSignalStep } from "./signal-step.ts";
 import { createWorkflowStep } from "./workflow-step.ts";
 import { sweepWorkflowTimers } from "./workflow-triggers.ts";
+import { STALL_MINUTES, sweepStalledCalls } from "./call-recovery.ts";
 import { sweepMailboxes } from "./mail-poll.ts";
 import { sweepMeetings } from "./meeting-prep.ts";
 import { sweepTelegram } from "./telegram-poll.ts";
@@ -304,6 +305,23 @@ export async function main(): Promise<void> {
     }, log as never);
   }, 5 * 60_000);
   meetingTimer.unref();
+
+  /*
+   * THE STALL BELT (0235, user report 2026-09-19: "this one stayed in
+   * processing, make it somehow that if stayed in this stage it will run it
+   * later as well").
+   *
+   * Five minutes, against a fifteen-minute floor: the belt's job is to
+   * notice, and noticing a quarter of an hour late costs nothing, while
+   * running it more often than the floor only re-reads the same empty
+   * answer. The sweep decides nothing about WHEN a call is stalled — the
+   * door does, and it asks the queues rather than the clock.
+   */
+  const stallTimer = setInterval(() => {
+    void sweepStalledCalls({ db, queue, lifecycle, minutes: STALL_MINUTES },
+      log as never);
+  }, 5 * 60_000);
+  stallTimer.unref();
 
   /*
    * The session policy's clock (0126): sessions idle beyond seven days

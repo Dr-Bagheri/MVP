@@ -25,6 +25,9 @@ import { NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
 import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART, Q_SUMMARIZE } from "../worker/queue.ts";
+/* the resume decision and the empty-take reason live with the recovery that
+   also writes them, so the two doors cannot come to disagree */
+import { NOTHING_RECORDED, planResume, type ResumeAt } from "../worker/call-recovery.ts";
 import { enqueueWorkflowEvents } from "../worker/workflow-triggers.ts";
 import pino from "pino";
 
@@ -477,6 +480,25 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
      * The FINISH button: recording is over, the pipeline owns it now. Only a
      * 'recording' call flips — finishing twice is a no-op with the same
      * answer, because the end state IS "processing has begun".
+     *
+     * A TAKE WITH NO AUDIO FAILS HERE INSTEAD (user report, 2026-09-19: "this
+     * one stayed in processing"). A `call_part` row is inserted only after
+     * the bytes are in storage, and `process_part` is enqueued in the same
+     * breath — so a call with no parts has nothing to run, and `partsSettled`
+     * requires `parts.length > 0`, which means no step could ever advance it.
+     * Flipping it to `processing` produced a call that waits forever for work
+     * that does not exist, and two of them were sitting on production.
+     *
+     * The recording engine already refuses this finish, and its comment names
+     * the same defect — but `finishOrphanedTake` on the meeting page (0204's
+     * reload case) calls this route directly, outside the engine, with no
+     * part count. So the wall belongs HERE: this is the one door every finish
+     * goes through, and it is where the fact lives. The browser's guard stays
+     * because it can say so before the person presses anything; this one is
+     * what makes the rule true.
+     *
+     * The count rides INSIDE the update rather than preceding it, so there is
+     * no window in which a part could land between the question and the flip.
      */
     async finish(
       identity: Identity,
@@ -498,11 +520,17 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
         && (await hasProvisionalTranscript(db));
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string; status: string }>(
-          `update echo.call set status = 'processing'
+          `update echo.call c
+              set status = (case when u.n > 0 then 'processing' else 'failed' end)::echo.call_status,
+                  failure_reason = case when u.n > 0 then null else $${canPreview ? 3 : 2} end
                   ${canPreview ? ", provisional_transcript = $2" : ""}
-            where id = $1 and status = 'recording' and deleted_at is null
-            returning id, status`,
-          canPreview ? [id, provisional] : [id],
+             from (
+               select count(*) as n from echo.call_part p
+                where p.call_id = $1 and p.storage_path is not null and p.missing = false
+             ) u
+            where c.id = $1 and c.status = 'recording' and c.deleted_at is null
+            returning c.id, c.status::text as status`,
+          canPreview ? [id, provisional, NOTHING_RECORDED] : [id, NOTHING_RECORDED],
         ),
       );
       if (rows[0]) return rows[0];
@@ -532,6 +560,15 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
      * Steps re-check their artifacts on arrival, so a retry can never
      * duplicate a transcript or a speaker roster.
      *
+     * 2026-09-19: the decision itself is `planResume`, shared with the stall
+     * recovery that arrived with it. Two doors deciding "where does this call
+     * re-enter" in two places is the two-spellings defect with a customer's
+     * recording inside it — and writing it once exposed two answers this door
+     * did not have. A call with NO usable parts is refused rather than sent
+     * to link_speakers, which would have summarized an empty transcript; a
+     * call whose summary already landed is simply marked ready rather than
+     * summarized a second time at the provider's price.
+     *
      * The JOB runs as the CALL'S OWNER (M3) — payload.ownerId is the
      * call's owner_id, not the retrier: an admin pressing retry must not
      * lend the pipeline their wider read. Status moves failed→processing
@@ -540,11 +577,12 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
     async retry(
       identity: Identity,
       callId: string,
-    ): Promise<{ id: string; status: string; resumed_at: "parts" | "summary"; parts: number }> {
+    ): Promise<{ id: string; status: string; resumed_at: ResumeAt; parts: number }> {
       const id = assertUuid(callId, "call id");
       const call = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<{ id: string; status: string; owner_id: string }>(
-          `select id, status, owner_id from echo.call
+        tx.unsafe<{ id: string; status: string; owner_id: string; has_summary: boolean }>(
+          `select id, status, owner_id, current_summary_id is not null as has_summary
+             from echo.call
             where id = $1 and deleted_at is null`,
           [id],
         ),
@@ -558,18 +596,44 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
 
       // which parts never produced their transcript? (missing parts are
       // the recorded gaps — retrying them would retry the loss, not fix it)
-      const bare = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<{ id: string }>(
-          `select p.id from echo.call_part p
+      const parts = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; bare: boolean }>(
+          `select p.id,
+                  not exists (
+                    select 1 from echo.transcript_segment s where s.part_id = p.id
+                  ) as bare
+             from echo.call_part p
             where p.call_id = $1
               and p.missing = false
-              and p.storage_path is not null
-              and not exists (
-                select 1 from echo.transcript_segment s where s.part_id = p.id
-              )`,
+              and p.storage_path is not null`,
           [id],
         ),
       );
+      const bare = parts.filter((p) => p.bare);
+      const at = planResume({
+        usableParts: parts.length,
+        bareParts: bare.length,
+        hasSummary: call[0].has_summary,
+      });
+
+      // NOTHING TO RUN. The recording produced no audio, so a retry cannot
+      // produce a transcript — it would only move the call to `processing`
+      // and leave it there, which is the stall this batch exists to end. The
+      // record keeps its failure and its reason.
+      if (at === "nothing") {
+        throw new ValidationError("this recording captured no audio, so there is nothing to run again",
+          { code: "nothing_recorded" });
+      }
+
+      // EVERY ARTIFACT IS ALREADY THERE — only the last status write was
+      // lost. Completing it costs nothing; re-summarizing costs a model call
+      // and appends a second version of a summary that exists.
+      if (at === "ready") {
+        await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe(`update echo.call set status = 'ready' where id = $1 and status = 'failed'`, [id]),
+        );
+        return { id, status: "ready", resumed_at: at, parts: 0 };
+      }
 
       // 'processing' either way — honest ("back in the pipeline"); the
       // link step advances it to 'summarizing' itself when it runs
@@ -583,17 +647,17 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       );
       // a concurrent retry won the race — same intent, one answer, no fault
       if (!moved[0]) {
-        return { id, status: "processing", resumed_at: bare.length > 0 ? "parts" : "summary", parts: 0 };
+        return { id, status: "processing", resumed_at: at, parts: 0 };
       }
 
-      if (bare.length > 0) {
+      if (at === "parts") {
         for (const part of bare) {
           await queue.send(Q_PROCESS_PART, { callId: id, ownerId: owner, partId: part.id });
         }
-        return { id, status: "processing", resumed_at: "parts", parts: bare.length };
+        return { id, status: "processing", resumed_at: at, parts: bare.length };
       }
       await queue.send(Q_LINK_SPEAKERS, { callId: id, ownerId: owner });
-      return { id, status: "processing", resumed_at: "summary", parts: 0 };
+      return { id, status: "processing", resumed_at: at, parts: 0 };
     },
 
     /**

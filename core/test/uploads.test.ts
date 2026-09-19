@@ -266,17 +266,56 @@ describe("finish", () => {
     const repo = createUploadsRepo(db, CONFIG);
     await expect(repo.finish(identity, CALL_ID)).rejects.toThrow(/not found/);
   });
+
+  /*
+   * THE EMPTY TAKE (user report, 2026-09-19: "this one stayed in processing").
+   *
+   * The DECISION is the database's — one statement, so no part can land
+   * between the count and the flip — which means the honest assertion at this
+   * altitude is about the STATEMENT, and the behaviour is proven against a
+   * real Postgres in db/test/136. Both, not either: the statement is where
+   * the defect would be re-introduced (a future edit "simplifying" the flip
+   * back to a constant), and only the real database proves the two outcomes.
+   */
+  it("the flip asks how many parts carry audio — a constant 'processing' is the stall", async () => {
+    const { db, calls } = fakeDb((sql) =>
+      sql.includes("update echo.call c") ? [{ id: CALL_ID, status: "processing" }] : []);
+    const repo = createUploadsRepo(db, CONFIG);
+    await repo.finish(identity, CALL_ID);
+    const flip = calls.find((c) => c.sql.includes("update echo.call c"));
+    expect(flip, "the finish must still flip the call").toBeTruthy();
+    // it counts the parts that carry audio and are not written off as gaps
+    expect(flip!.sql).toMatch(/count\(\*\)[\s\S]*echo\.call_part/);
+    expect(flip!.sql).toContain("storage_path is not null");
+    expect(flip!.sql).toContain("missing = false");
+    // and the two outcomes are both in it, with the reason for the bad one
+    expect(flip!.sql).toContain("'processing'");
+    expect(flip!.sql).toContain("'failed'");
+    expect(JSON.stringify(flip!.params)).toContain("nothing_recorded");
+  });
+
+  it("whatever status the database decided is the one returned — the repo does not overrule it", async () => {
+    const { db } = fakeDb((sql) =>
+      sql.includes("update echo.call c") ? [{ id: CALL_ID, status: "failed" }] : []);
+    const repo = createUploadsRepo(db, CONFIG);
+    expect(await repo.finish(identity, CALL_ID)).toEqual({ id: CALL_ID, status: "failed" });
+  });
 });
 
 describe("retry (the resumable pipeline's door)", () => {
   const CALL = "33333333-3333-4333-8333-333333333333";
   const OWNER = "44444444-4444-4444-8444-444444444444";
-  const callRow = { id: CALL, status: "failed", owner_id: OWNER };
+  const callRow = { id: CALL, status: "failed", owner_id: OWNER, has_summary: false };
+  /* the part read now returns every USABLE part with a `bare` flag, so a
+     fixture can no longer say "no bare parts" and "no parts at all" with
+     the same empty array — those are different calls and, since 0235,
+     different answers. */
+  const onePartDone = [{ id: "p1", bare: false }];
 
   it("all transcripts present → re-enters at link_speakers AS THE OWNER", async () => {
     const { db, calls } = fakeDb((sql) => {
       if (sql.includes("select id, status, owner_id")) return [callRow];
-      if (sql.includes("from echo.call_part")) return []; // no bare parts
+      if (sql.includes("from echo.call_part")) return onePartDone;
       if (sql.includes("set status = 'processing'")) return [{ id: CALL }];
       return [];
     });
@@ -296,7 +335,7 @@ describe("retry (the resumable pipeline's door)", () => {
   it("parts without transcripts re-run process_part, one job each", async () => {
     const { db, calls } = fakeDb((sql) => {
       if (sql.includes("select id, status, owner_id")) return [callRow];
-      if (sql.includes("from echo.call_part")) return [{ id: "p1" }, { id: "p2" }];
+      if (sql.includes("from echo.call_part")) return [{ id: "p1", bare: true }, { id: "p2", bare: true }];
       if (sql.includes("set status = 'processing'")) return [{ id: CALL }];
       return [];
     });
@@ -320,7 +359,7 @@ describe("retry (the resumable pipeline's door)", () => {
   it("losing the race to a concurrent retry is the same answer, not a fault", async () => {
     const { db, calls } = fakeDb((sql) => {
       if (sql.includes("select id, status, owner_id")) return [callRow];
-      if (sql.includes("from echo.call_part")) return [];
+      if (sql.includes("from echo.call_part")) return onePartDone;
       if (sql.includes("set status = 'processing'")) return []; // someone else moved it
       return [];
     });
@@ -330,5 +369,41 @@ describe("retry (the resumable pipeline's door)", () => {
     expect(out.status).toBe("processing");
     const sends = calls.filter((c) => c.sql.toLowerCase().includes("send"));
     expect(sends).toHaveLength(0); // the winner enqueued; we must not double it
+  });
+
+  /*
+   * The two answers the shared `planResume` gave this door that it did not
+   * have before (2026-09-19). Both are cases where the OLD code did
+   * something: one summarized an empty transcript, the other paid for a
+   * summary that already existed.
+   */
+  it("a recording that captured no audio is refused BY NAME, not sent to be summarized", async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (sql.includes("select id, status, owner_id")) return [callRow];
+      if (sql.includes("from echo.call_part")) return []; // no parts at all
+      return [];
+    });
+    const repo = createUploadsRepo(db, CONFIG);
+    await expect(
+      repo.retry({ userId: OWNER, orgId: "o", role: "member", isActive: true }, CALL),
+    ).rejects.toThrow(/captured no audio/);
+    // and nothing was moved or enqueued on the way to saying so
+    expect(calls.filter((c) => c.sql.includes("set status"))).toHaveLength(0);
+    expect(calls.filter((c) => c.sql.toLowerCase().includes("send"))).toHaveLength(0);
+  });
+
+  it("every artifact already present → the call is completed, not summarized again", async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (sql.includes("select id, status, owner_id")) return [{ ...callRow, has_summary: true }];
+      if (sql.includes("from echo.call_part")) return onePartDone;
+      return [];
+    });
+    const repo = createUploadsRepo(db, CONFIG);
+    const out = await repo.retry(
+      { userId: OWNER, orgId: "o", role: "member", isActive: true }, CALL);
+    expect(out).toMatchObject({ resumed_at: "ready", status: "ready" });
+    expect(calls.some((c) => c.sql.includes("set status = 'ready'"))).toBe(true);
+    // the whole point: no model call is bought for a summary that exists
+    expect(calls.filter((c) => c.sql.toLowerCase().includes("send"))).toHaveLength(0);
   });
 });

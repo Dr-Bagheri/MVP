@@ -211,6 +211,47 @@ describe("Meetings", () => {
     expect(screen.queryByText(/بند$/)).toBeNull();
   });
 
+  /*
+   * A TAKE THAT FAILED IS ITS OWN WORD (user report, 2026-09-19: "this one
+   * stayed in processing"). It used to round to «در حال پردازش», argued as
+   * the lesser of two lies against «انجام‌شده» — and the row the user
+   * photographed was exactly that rounding: a meeting whose recording
+   * captured nothing, reading as work in progress for two hours.
+   *
+   * The PAIR is the test. Asserting «پردازش نشد» alone passes for a version
+   * that calls every unfinished take failed; asserting the absence alone
+   * passes for one that renders no pill at all. A failed take says one word
+   * and a live one still says the other.
+   */
+  it("a failed take says so, and a real one still says «در حال پردازش»", async () => {
+    LIST = [
+      meeting({ id: "m-1", title: "شکست خورد", call_id: "c-1", call_status: "failed" }),
+      meeting({ id: "m-2", title: "در حال کار", call_id: "c-2", call_status: "processing" }),
+    ];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("شکست خورد")).toBeInTheDocument());
+    const rowOf = (title: string) =>
+      screen.getByText(title).closest("[role=button]") as HTMLElement;
+    const failed = rowOf("شکست خورد");
+    expect(within(failed).getByText("پردازش نشد")).toBeInTheDocument();
+    expect(within(failed).queryByText("در حال پردازش")).toBeNull();
+    expect(within(rowOf("در حال کار")).getByText("در حال پردازش")).toBeInTheDocument();
+  });
+
+  /* closed minutes still outrank the take — a meeting whose record failed
+     but whose minutes were signed off is DONE, and the ladder must not have
+     put `failed` above that. */
+  it("closed minutes outrank a failed take", async () => {
+    LIST = [meeting({
+      id: "m-1", title: "بسته با ضبط ناموفق", call_id: "c-1",
+      call_status: "failed", minutes_closed_at: "2026-09-01T10:00:00.000Z",
+    })];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("بسته با ضبط ناموفق")).toBeInTheDocument());
+    const row = screen.getByText("بسته با ضبط ناموفق").closest("[role=button]") as HTMLElement;
+    expect(within(row).getByText("انجام‌شده")).toBeInTheDocument();
+  });
+
   /* THE SEARCH reaches the people too, not only the title — "which meeting
      was Sara in" is the question a roster search exists to answer, and a
      title-only match would answer it wrong while looking like it worked. */

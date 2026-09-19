@@ -259,6 +259,16 @@ export async function hasProvisionalTranscript(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "provisional_transcript");
 }
 
+/**
+ * db/0235: the stall recovery's claim column, and with it the two doors that
+ * arrive in the same migration. The column is the probe because it is the
+ * cheap one — `hasColumn` reads information_schema, and a deployment that has
+ * `recovery_at` has `stalled_calls` beside it.
+ */
+export async function hasCallRecovery(db: Db): Promise<boolean> {
+  return hasColumn(db, "call", "recovery_at");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }
