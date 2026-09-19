@@ -8732,3 +8732,110 @@ sessions) for the cross-session narrative.
   measurement.
   db 233 migrations · core 1989 tests (1 pre-existing red, history ZWNJ) ·
   web 1836 tests + gate + sweep.
+- 2026-09-19 (THE SCHEMA DIET, THE BOARD'S «MINE», AND A MEETING THAT
+  PRODUCES FIVE KINDS; commits 1139562, df50a3f, 5b1c8eb; db 0234 on
+  production; core deployed; web on Vercel): one message, five items — "do
+  the tool schema budget round; «فقط تسک‌های من» must show only tasks
+  assigned to that person, even for an admin; suggest how to copy a task to
+  several members; in the meeting review remove Entities, call action items
+  tasks, add projects with the task tab's design and functions; and make the
+  extraction notice the risks, the open questions, the tasks, the projects
+  and the approvals — it is weak now in understanding them."
+  **THE BUDGET, MEASURED BEFORE IT WAS CUT.** The three registries
+  serialised to 57,915 characters, the 101 client tools to 47,272 of it
+  (descriptions 15,914, parameters 25,504); on production a single model
+  call with the full set cost 18,580 input tokens on DeepSeek 0731 against
+  7,557 for the same model with 29 tools. And the ledger's own numbers had a
+  hole in them: runs on `openai/gpt-5.6-luna` report `tokens_in` of 3 to 12
+  — that provider does not report prompt tokens — so a median over all runs
+  was a median over an artefact; only DeepSeek and Gemini rows measure
+  anything (`db/scripts/probe-run-budget.mjs`, owner altitude, `--rows` to
+  see them, `--since` to split at a deploy). The diet is STRUCTURAL: a
+  script finds each tool's block by its name line, replaces the description
+  expression up to its terminating comma and a named argument's helper call
+  up to its matching parenthesis (strings and comments skipped while
+  scanning), and aborts before writing if any of the 79 tools or 104
+  arguments is not found exactly once — 68 descriptions rewritten, the
+  task-title sentence that sat on seven tools at 230 characters became ONE
+  constant, and the record and member references one spelling each. Every
+  rule that lived in a description still does (Telegram's addressing, the
+  project/folder distinction, UTC on schedules, the consent-card title);
+  the restatements went. After: client 38,819 (descriptions 10,524,
+  parameters 22,441), all registries 48,914; none over 400 characters, no
+  argument over 200. The JSON-schema shape is ~17 characters per argument
+  before a word of description, which is why the floor is not zero and why
+  the next lever is structural (offering a surface the families it can use
+  rather than all 101) — recorded, not built. `core/src/agent/tool-budget
+  .ts` is the ONE measurement for the report script and
+  `toolBudget.guard.test.ts`, whose control stages a paragraph one character
+  over each limit, nested arguments included; its first run against the
+  shipped registry was red on all three lines, which is the guard's own
+  verify-red.
+  **«فقط تسک‌های من» is what is assigned to me** and nothing else: the
+  creator clause was right for a member and made the toggle a no-op for the
+  seat that makes most of the board. The test's discriminating card is the
+  one I made and handed to nobody, asserted as an absence with a
+  made-and-assigned control. Projects keep on/lead/made (the 2026-09-16
+  ruling); `projectReach.ts` says why the two toggles answer two questions
+  instead of quoting the board's old rule.
+  **FIVE KINDS (db/0234).** The set — decision · action · project ·
+  question · risk — moved into core's vocabulary and the web IMPORTS it;
+  `types.ts` had carried its own copy for seventeen days. Production held
+  zero `entity` rows (read at owner altitude first: 18 decisions, 18
+  actions), so the check is dropped by its real generated name and re-added
+  narrower, with a self-check that refuses one kind check that was not
+  narrowed, TWO kind checks (a missed drop followed by a successful add),
+  and an entity row at the wall. db/test/135 walks the matrix on the fixture
+  and its flipped assertion failed by name. The panel: the action tab reads
+  «تسک‌ها» (the row keeps its wire name), a project tab with the tick box,
+  the per-row make and the convert-all — its make is `api.createProject`,
+  drawn for admins only (0186) so a member sees rows and no door the server
+  would shut; the person the meeting named leads the project. A row whose
+  kind the set no longer names is skipped rather than crashing the panel.
+  **The renamed tab collided with the meeting page's own «تسک‌ها» tab in
+  five tests** — two tablists, one word — scoped to the page's tablist;
+  the collision is real on screen too and is left as the user asked for it.
+  **THE EXTRACTION WAS NEVER WEAK AT THE FIVE; IT HAD NEVER BEEN ASKED.**
+  The prompt knew decisions and commitments. It now defines each kind with
+  its implicit forms («من فردا می‌فرستم» is a task with an owner and nobody
+  said the word), says read the WHOLE conversation, and puts the five kinds
+  in the schema line the model copies its values from. A kind the model did
+  not name is DROPPED — the old default filed anything but commitment as a
+  decision, a fabricated decision by lenient parsing; the aliases a model
+  plausibly uses, English and Persian, are mapped. Only a task or a project
+  carries an owner and a day. The pass returns a per-kind tally the worker
+  logs, so a pass that only ever finds one kind shows in the log. NOT proven
+  live: it runs on the next real summary and costs a provider call.
+  **Instruments, mine.** A line-ending census by `grep $'\r'` said LF for
+  every file and every one was CRLF — the catalogue script's own guard
+  caught it, then caught my second assumption (the namespace is not in plain
+  string order; a re-sort would have moved a hundred lines to add seven) —
+  anchored insertions instead. Two parallel Bash calls that each `cd`
+  raced on the ONE shared cwd: a core suite reported "no test files" from
+  the web root, then a `--root` run read the wrong `process.cwd()` for six
+  file-reading tests — cwd-sensitive suites run one per message. The
+  mutation runner's subprocesses could not find `node` under cmd.exe
+  (`C:\Program Files\nodejs\node.exe`, passed in). `selectMenuWidth.test`
+  fails under the Bash tool because it shells out to `npx tailwindcss`;
+  green under PowerShell — the recorded npx artefact, not code.
+  Verify-red by mutation, control green first, each red on its own test:
+  the make button for everyone, the tick lost on projects, an unknown kind
+  crashing the panel, the tabs from a stale literal, the creator clause
+  back, an unknown kind defaulting to a decision, an owner kept on every
+  kind, the schema line losing the kinds, the tally never counted, a
+  paragraph in a shared argument. Suites: core 1997 (the one red is the
+  recorded history ZWNJ), web 1836 + gate + sweep (1,571 files), db 0234 +
+  the suite on production ("the wall holds").
+  **Deployed**: core on Hetzner (hashes equal, both entrypoints parse, both
+  units active, health 200, 401/404 pair, no warnings); web on Vercel (the
+  sign-in document carries the two new catalogue keys and not the retired
+  one, with a both-builds key and an invented key as controls); the check on
+  production reads exactly the five kinds. **NOT read live — the user's
+  Chrome extension was down for the whole batch**: the panel's tabs on a
+  real meeting, and the AFTER token measurement, which needs a real
+  assistant turn on the new core — `node db/scripts/probe-run-budget.mjs
+  --since 2026-09-19T08:50:00Z --rows` reads it the moment one exists.
+  The copy-a-task question was answered as a suggestion in the report and
+  not built.
+  db 234 migrations · core 1997 tests (1 pre-existing red, history ZWNJ) ·
+  web 1836 tests + gate + sweep.
