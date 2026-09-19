@@ -327,13 +327,11 @@ export function createPlatformTools(): PlatformTool[] {
       name: "list_meetings",
       label: "فهرست جلسات",
       description:
-        "The organization's meetings — planned and held — with their time, mode, "
-        + "host, invitees and whether a recording exists. The FIRST place to look "
-        + "for anything about what is scheduled. Every row still ahead carries "
-        + "starts_in_minutes, counted from the server's clock. For \"what's next\", "
-        + "\"what should I do now\" or \"when is my next meeting\", pass "
-        + "upcoming:true — only meetings still ahead that have not started "
-        + "recording, soonest first.",
+        "The organization's meetings, planned and held: time, mode, host, "
+        + "invitees, whether a recording exists. The first place to look for what "
+        + "is scheduled. A row still ahead carries starts_in_minutes (server "
+        + "clock). For \"what's next\" pass upcoming:true — meetings ahead that "
+        + "have not started recording, soonest first.",
       parameters: Type.Object({
         archived: Type.Optional(Type.Boolean({ description: "Filed-away meetings instead of live ones." })),
         upcoming: Type.Optional(Type.Boolean({
@@ -384,9 +382,10 @@ export function createPlatformTools(): PlatformTool[] {
       name: "list_meeting_items",
       label: "مصوبات و اقدام‌ها",
       description:
-        "A meeting's decisions, action items, questions and risks — the rows the "
-        + "minutes are built from. Use this rather than re-reading a summary when "
-        + "the question is what was DECIDED or who owes what.",
+        "A meeting's decisions, tasks (kind action), proposed projects, open "
+        + "questions and risks — the rows the minutes are built from. Prefer it to "
+        + "re-reading a summary when the question is what was DECIDED or who owes "
+        + "what.",
       parameters: Type.Object({ meeting_id: Type.String() }),
       async run({ identity, deps }, args) {
         const rows = await denying(
@@ -412,13 +411,11 @@ export function createPlatformTools(): PlatformTool[] {
       name: "list_tasks",
       label: "تخته تسک‌ها",
       description:
-        "The task board: every column, the folders (each saying whether it is a "
+        "The task board: columns, folders (each saying whether it is a "
         + "project's — a project owns a folder of its own name; the rest are "
-        + "personal groupings) and the cards, with owners, deadlines, priority "
-        + "and labels. The place to answer what is in flight, what is late, and "
-        + "who is carrying it. People come back NAMED (`assignees`, "
-        + "`created_by`): this tool hands back no identifier for a person, "
-        + "because none belongs in an answer.",
+        + "personal groupings) and cards with owners, deadlines, priority and "
+        + "labels. Answers what is in flight, what is late and who carries it. "
+        + "People come back NAMED (`assignees`, `created_by`), never as ids.",
       parameters: Type.Object({
         archived: Type.Optional(Type.Boolean()),
       }),
@@ -503,16 +500,12 @@ export function createPlatformTools(): PlatformTool[] {
       name: "list_connector_items",
       label: "خواندن از یک اتصال",
       description:
-        "Read from one of the person's CONNECTED accounts (their own grants, "
-        + "on the integrations page): zoom (meetings, recordings), slack "
-        + "(channels, mentions), telegram (updates — messages sent to their "
-        + "bot), jira (issues, projects), notion (pages, databases), github "
-        + "(issues, pulls, repos), whatsapp (profile, templates), dropbox "
-        + "(files), mcp (tools, resources — an MCP server "
-        + "they added), google (mail, calendar, drive, meet). "
-        + "Metadata only: id, title, subtitle, when. Use "
-        + "list_connectors first to see what is connected; an account that is "
-        + "not connected refuses — say so and offer /integrations.",
+        "Read from one of the person's CONNECTED accounts: zoom (meetings, "
+        + "recordings), slack (channels, mentions), telegram (updates), jira "
+        + "(issues, projects), notion (pages, databases), github (issues, pulls, "
+        + "repos), whatsapp (profile, templates), dropbox (files), mcp (tools, "
+        + "resources), google (mail, calendar, drive, meet). list_connectors "
+        + "first; a disconnected account refuses — offer /integrations.",
       parameters: Type.Object({
         provider: Type.String({ description: "one of: google, zoom, slack, telegram, jira, notion, github, whatsapp, dropbox, mcp" }),
         source: Type.String({ description: "that provider's source, e.g. meetings, channels, issues, pages, files, tools" }),
@@ -538,10 +531,9 @@ export function createPlatformTools(): PlatformTool[] {
       label: "پروژه‌ها",
       description:
         "The projects — an admin's orders of work, each with its people, its "
-        + "folder on the task board (the same name) and progress counted off "
-        + "the tasks filed there. NOT the same thing as a folder: a folder is a "
-        + "person's own grouping of their tasks. Read it before create_task with "
-        + "`project`, and to answer who is on what.",
+        + "folder on the board (same name) and progress counted off the tasks "
+        + "filed there. Not a folder (a person's own grouping). Read it before "
+        + "create_task with `project`, and to answer who is on what.",
       parameters: Type.Object({
         archived: Type.Optional(Type.Boolean()),
       }),
@@ -629,13 +621,11 @@ export function createPlatformTools(): PlatformTool[] {
       name: "list_role_permissions",
       label: "دسترسی نقش‌ها",
       description:
-        "What each role may do in THIS organization. Every capability is "
-        + "allowed unless the organization has written it off, so a key with "
-        + "allowed=true is the default and one with allowed=false was taken "
-        + "away deliberately. `role` is whose privilege it is: an admin is "
-        + "never restricted by a member-level rule, and the owner by none of "
-        + "them. Use it with whoami to answer 'am I allowed to' before "
-        + "attempting anything.",
+        "What each role may do in THIS organization: every capability is "
+        + "allowed unless written off, so allowed=false was taken away "
+        + "deliberately. `role` is whose privilege it is — an admin is never "
+        + "bound by a member rule, the owner by none. Use it with whoami to "
+        + "answer 'am I allowed to' first.",
       parameters: Type.Object({}),
       async run({ identity, deps }) {
         const written = await createCapabilitiesRepo(deps.db).list(identity);
