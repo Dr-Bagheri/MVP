@@ -368,11 +368,21 @@ describe("TaskBoard", () => {
     expect(patches).toHaveLength(0);
   });
 
-  it("'just mine' keeps both kinds of mine and drops the rest", async () => {
+  it("'just mine' keeps what is ASSIGNED to me — a card I made for somebody else is not mine (2026-09-19)", async () => {
+    /*
+     * The DISCRIMINATING card is «ساختهٔ من»: made by me, assigned to nobody.
+     * The rule before today kept it ("assigned or created"), and from an
+     * admin's seat that made the filter a no-op — they made most of the
+     * board. A version that still keeps it passes every other line here,
+     * which is why that line is the one asserted as an ABSENCE. «هم ساخته
+     * هم سپرده» is the control on the other side: making a card does not
+     * disqualify it when it is also in my hands.
+     */
     boardTasks = [
       card({ id: "t-a", title: "سپرده به من", created_by: "u-other", assignee_ids: ["u-me"] }),
       card({ id: "t-b", title: "ساختهٔ من", created_by: "u-me", assignee_ids: [] }),
       card({ id: "t-c", title: "مال دیگری", created_by: "u-other", assignee_ids: ["u-other"] }),
+      card({ id: "t-d", title: "هم ساخته هم سپرده", created_by: "u-me", assignee_ids: ["u-me", "u-other"] }),
     ];
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("مال دیگری")).toBeInTheDocument());
@@ -383,7 +393,8 @@ describe("TaskBoard", () => {
 
     await waitFor(() => expect(screen.queryByText("مال دیگری")).toBeNull());
     expect(screen.getByText("سپرده به من")).toBeInTheDocument();
-    expect(screen.getByText("ساختهٔ من")).toBeInTheDocument();
+    expect(screen.getByText("هم ساخته هم سپرده")).toBeInTheDocument();
+    expect(screen.queryByText("ساختهٔ من"), "a card I made and handed to nobody is not in my hands").toBeNull();
   });
 
   it("the calendar's scale switch renders different shapes, and the list groups by deadline", async () => {

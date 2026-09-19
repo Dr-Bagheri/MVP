@@ -32,9 +32,16 @@ export function canEditProject(project: Pick<ProjectRecord, "created_by">, reade
  * «پروژه‌های من» (user report, 2026-09-16: "my projects only is not working
  * for admins"). It was membership alone — and an admin who MAKES projects
  * is on none of them, so from their seat the toggle emptied the page and
- * read as broken. Mine is what I am on, what I lead, or what I made: the
- * board's own definition for «فقط تسک‌های من» (assigned or created), so
- * the two toggles cannot mean two things.
+ * read as broken. Mine is what I am on, what I lead, or what I made.
+ *
+ * NOT the board's rule any more, and on purpose. The board's «فقط تسک‌های
+ * من» was narrowed to ASSIGNED ONLY on 2026-09-19 (the user: even an admin
+ * should see only the tasks assigned to them), and this one was left as it
+ * is: a task is a thing handed to somebody, so "mine" is whose hands it is
+ * in; a project is a thing you are ON — and its maker is on it in the sense
+ * that matters, since the page exists to hand its work out. Two toggles,
+ * two questions, each rule written where it is read rather than one copied
+ * from the other and quietly wrong for one of them.
  */
 export function isMyProject(
   project: Pick<ProjectRecord, "created_by" | "lead_id" | "member_ids">,

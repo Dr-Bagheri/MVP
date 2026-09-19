@@ -247,8 +247,18 @@ export function TaskBoard() {
     return rows.filter((task) =>
       (priority === "all" || task.priority === priority)
       && (topic === "all" || task.topic_id === topic)
-      && (!mineOnly || me === null
-          || task.assignee_ids.includes(me.id) || task.created_by === me.id)
+      /*
+       * «فقط تسک‌های من» IS WHAT IS ASSIGNED TO ME — and nothing else (user
+       * ruling, 2026-09-19: "even when an admin uses the filter it should show
+       * only tasks assigned to that person"). It used to keep a card I MADE
+       * as well, which is right for a member filing their own work and wrong
+       * for the seat that files everybody's: an admin who hands out twenty
+       * cards pressed the toggle and got the whole board back, which reads as the
+       * filter doing nothing. A task is a thing handed to somebody, so "mine"
+       * is whose hands it is in. (Projects keep on/lead/made — `projectReach
+       * .ts` says why that is a different question.)
+       */
+      && (!mineOnly || me === null || task.assignee_ids.includes(me.id))
       && (!dueToday || (task.due_at !== null && dayKeyOf(task.due_at) === today)));
   }, [source, priority, topic, mineOnly, dueToday, me]);
 
