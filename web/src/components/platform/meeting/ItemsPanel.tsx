@@ -12,12 +12,24 @@ import { digits, formatClock, formatDate, personName } from "@/lib/format";
 import type { OrgPersonRecord } from "@/api/types";
 import { resolveColleague } from "@/lib/resolveColleague";
 import { notifyError } from "@/lib/notify";
+import { isAdminRole, useViewerRole } from "@/lib/viewer";
 
 /**
- * مصوبات / اکشن‌آیتم‌ها / سؤالات / ریسک‌ها / موجودیت‌ها — the five lists a
- * meeting produces, and the surface the user asked for on 2026-09-02: "make
- * it like this that user can add edit and remove them — it does not need for
- * AI to make them, the AI can add it as well like the user if its asked to".
+ * مصوبات / تسک‌ها / پروژه‌ها / سؤالات / ریسک‌ها — the five lists a meeting
+ * produces (the set is core's MEETING_ITEM_KINDS, imported, and the tab order
+ * is its order), and the surface the user asked for on 2026-09-02: "make it
+ * like this that user can add edit and remove them — it does not need for AI
+ * to make them, the AI can add it as well like the user if its asked to".
+ *
+ * RE-CUT 2026-09-19 (user): «Entities» is gone, «Action items» reads «Tasks»
+ * (the row keeps its wire name, `action`), and PROJECTS joined "with the same
+ * design and functions as tasks, and it should be added to them" — so a
+ * project row has the tick box, the per-row make button and the convert-all
+ * button a task row has, and its make is `api.createProject`. That button is
+ * drawn for ADMINS ONLY: db/0186 makes creating a project an admin's, and a
+ * control the server would refuse is worse than none (a member would read the
+ * 403 as «ذخیره نشد»). The role comes from the viewer hook, which is a
+ * CURTAIN — the server stays the wall.
  *
  * WHY THIS REPLACED A READER. Until 0160 these panels were slices of the
  * SUMMARY'S PROSE: parse the body, match headings, render the paragraphs.
@@ -40,9 +52,13 @@ import { notifyError } from "@/lib/notify";
  * from the recording offers to play from its moment.
  */
 
-const EMPTY: Record<MeetingItemKind, MeetingItem[]> = {
-  decision: [], action: [], question: [], risk: [], entity: [],
-};
+/* derived from the published set, so a kind that joins or leaves core's list
+   is a bucket here on the same build — the literal this replaced still named
+   `entity` after the kind left the product */
+function emptyBuckets(): Record<MeetingItemKind, MeetingItem[]> {
+  return Object.fromEntries(MEETING_ITEM_KINDS.map((k) => [k, []])) as unknown as Record<MeetingItemKind, MeetingItem[]>;
+}
+const EMPTY = emptyBuckets();
 
 /**
  * A `date` column as an instant `formatDate` can render.
@@ -106,10 +122,13 @@ function ownerName(row: MeetingItem, people: OrgPersonRecord[], locale: string):
 }
 
 function group(rows: MeetingItem[]): Record<MeetingItemKind, MeetingItem[]> {
-  const out: Record<MeetingItemKind, MeetingItem[]> = {
-    decision: [], action: [], question: [], risk: [], entity: [],
-  };
-  for (const row of rows) out[row.kind].push(row);
+  const out = emptyBuckets();
+  for (const row of rows) {
+    /* a kind the set no longer names — a row written before db/0234 on a
+       deployment whose web is ahead of its migration — is left out rather
+       than taking the whole panel down on an undefined bucket */
+    if (row.kind in out) out[row.kind].push(row);
+  }
   return out;
 }
 
@@ -123,6 +142,10 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   locale: string;
 }) {
   const t = useTranslations("meetings");
+  /* who is looking — decides whether the project tab draws its make button
+     (db/0186: a project is an admin's to create). A curtain; the server is
+     the wall. */
+  const isAdmin = isAdminRole(useViewerRole());
   /*
    * THE ROSTER, read here rather than handed down. `owner_id` is a name only
    * if somebody resolves it, and the meeting page does not read the org's
@@ -252,28 +275,79 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
       ? prev.map((r) => (r.id === row.id ? { ...r, done: true } : r)) : prev));
   };
 
-  const makeOneTask = async (row: MeetingItem) => {
-    if (busy || row.done) return;
-    setBusy(true);
-    try { await makeTask(row); } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
+  /**
+   * ONE proposed project → ONE project (2026-09-19: "add projects as well with
+   * the same design and functions as tasks, and it should be added to them").
+   * The name is the item's text (the server caps a name at 120), the summary
+   * names the meeting it came from, and the person the meeting named to lead
+   * it becomes the LEAD and its first member — `owner_id` first, the same
+   * exact-match rule the task path uses second, for the same reason: a wrong
+   * lead on a project looks exactly like the right one. The item is ticked
+   * once its project exists, as a task item is. Admins only, decided at the
+   * BUTTON (db/0186 makes creation an admin's), so a member never reaches
+   * this.
+   */
+  const makeProject = async (row: MeetingItem) => {
+    let lead: string | null = row.owner_id;
+    if (lead === null && row.owner !== null && row.owner.trim() !== "") {
+      try {
+        const who = await resolveColleague(row.owner);
+        if (who.ok) lead = who.id;
+      } catch { /* the directory failing is not the project failing */ }
+    }
+    await api.createProject({
+      name: row.body.slice(0, 120),
+      summary: t("projectFromMeeting", { meeting: `/meetings/${meetingId}` }),
+      ...(lead === null ? {} : { lead_id: lead, member_ids: [lead] }),
+    });
+    if (row.owner !== null && lead === null) {
+      setUnresolved((prev) => ({ ...prev, [row.id]: row.owner as string }));
+    }
+    await api.updateMeetingItem(meetingId, row.id, { done: true });
+    setRows((prev) => (Array.isArray(prev)
+      ? prev.map((r) => (r.id === row.id ? { ...r, done: true } : r)) : prev));
   };
 
   /**
-   * Every un-ticked action item becomes a task on the board, and is then
-   * ticked here so the two surfaces agree about what is still outstanding.
+   * Which kinds are MADE into something on the board, and by whom: a task
+   * item by anybody who can see it (creating a card is every member's), a
+   * project item by an admin (db/0186). Null is "this tab makes nothing", and
+   * every make/convert control below is drawn off this one answer — so a
+   * member's project tab has the tick box and no door the server would shut.
+   */
+  const makerFor = (k: MeetingItemKind): ((row: MeetingItem) => Promise<void>) | null => {
+    if (k === "action") return makeTask;
+    if (k === "project" && isAdmin) return makeProject;
+    return null;
+  };
+  /** the two kinds that carry a tick, whoever is looking */
+  const ticks = (k: MeetingItemKind): boolean => k === "action" || k === "project";
+
+  const makeOne = async (row: MeetingItem) => {
+    const make = makerFor(kind);
+    if (make === null || busy || row.done) return;
+    setBusy(true);
+    try { await make(row); } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
+  };
+
+  /**
+   * Every un-ticked item of the tab's kind becomes its thing on the board,
+   * and is then ticked here so the two surfaces agree about what is still
+   * outstanding.
    *
-   * Ticked ONE AT A TIME as each task lands, rather than all at the end: if
-   * the fourth write fails, the first three tasks exist and their items are
-   * marked, which is a true record of a partial run. Marking them all at the
-   * end would either lose three tasks' worth of state or claim work that was
+   * Ticked ONE AT A TIME as each lands, rather than all at the end: if the
+   * fourth write fails, the first three exist and their items are marked,
+   * which is a true record of a partial run. Marking them all at the end
+   * would either lose three items' worth of state or claim work that was
    * never created.
    */
-  const convertToTasks = async () => {
-    const pending = buckets.action.filter((r) => !r.done);
-    if (pending.length === 0 || busy) return;
+  const convertRemaining = async () => {
+    const make = makerFor(kind);
+    const pending = buckets[kind].filter((r) => !r.done);
+    if (make === null || pending.length === 0 || busy) return;
     setBusy(true);
     try {
-      for (const row of pending) await makeTask(row);
+      for (const row of pending) await make(row);
     } catch { notifyError(t("itemWriteFailed")); } finally { setBusy(false); }
   };
 
@@ -348,7 +422,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
               key={row.id}
               className="card-row flex items-start gap-2 p-2.5"
             >
-              {kind === "action" ? (
+              {ticks(kind) ? (
                 <button
                   type="button"
                   role="checkbox"
@@ -456,13 +530,13 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
               </div>
 
               <div className="flex shrink-0 items-center gap-0.5">
-                {kind === "action" && !row.done ? (
+                {makerFor(kind) !== null && !row.done ? (
                   <button
                     type="button"
-                    aria-label={t("itemMakeTask")}
-                    title={t("itemMakeTask")}
+                    aria-label={t(kind === "action" ? "itemMakeTask" : "itemMakeProject")}
+                    title={t(kind === "action" ? "itemMakeTask" : "itemMakeProject")}
                     disabled={busy}
-                    onClick={() => void makeOneTask(row)}
+                    onClick={() => void makeOne(row)}
                     className="btn-ghost btn-icon"
                   >
                     <IconPlus width={12} height={12} />
@@ -550,23 +624,25 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
 
         {/*
           CONVERT WHAT IS LEFT (same directive: "and one for transform them
-          into tasks"). Only on action items, and only the ones NOT ticked —
-          "all remaining" is the reference's own word and it is the honest
-          one: an action item somebody already finished does not need a task,
-          and creating one would put closed work back on the board.
+          into tasks"; projects the same way since 2026-09-19). Only on the
+          tabs that make something — tasks for everybody, projects for an
+          admin — and only the ones NOT ticked: "all remaining" is the
+          reference's own word and it is the honest one: an item somebody
+          already finished does not need a card, and creating one would put
+          closed work back on the board.
 
           It is deliberately not reversible-looking: each converted item is
           ticked, so pressing it twice creates nothing the second time.
         */}
-        {kind === "action" && buckets.action.some((r) => !r.done) ? (
+        {makerFor(kind) !== null && buckets[kind].some((r) => !r.done) ? (
           <button
             type="button"
             disabled={busy}
-            onClick={() => void convertToTasks()}
+            onClick={() => void convertRemaining()}
             className="tap flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-accent bg-accent-soft py-2.5 text-xs font-medium text-accent transition-colors hover:bg-accent-soft/70 disabled:opacity-50"
           >
             <IconPlus width={12} height={12} />
-            {t("convertRemainingToTasks")}
+            {t(kind === "action" ? "convertRemainingToTasks" : "convertRemainingToProjects")}
           </button>
         ) : null}
       </div>

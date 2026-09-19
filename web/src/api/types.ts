@@ -20,7 +20,7 @@ import type {
 } from "@echo/core/wire";
 /* the KIND set is a vocabulary value-set, not a wire shape: importing the
    TYPE of core's own array is what keeps this union from drifting again */
-import type { AgentCardKind } from "@echo/core/vocabulary";
+import type { AgentCardKind, MeetingItemKind } from "@echo/core/vocabulary";
 export type { AgentCardKind };
 
 /** Core-owned M30 wires: these names are aliases, not browser-side copies. */
@@ -1331,8 +1331,11 @@ export interface OrgSessionRow extends AuthSessionRow {
  * `at_ms` null means a person typed it rather than "it happened at zero" —
  * the two are different, and only one of them can seek the audio.
  */
-export const MEETING_ITEM_KINDS = ["decision", "action", "question", "risk", "entity"] as const;
-export type MeetingItemKind = (typeof MEETING_ITEM_KINDS)[number];
+/* IMPORTED, not mirrored (2026-09-19): this line was a hand-kept copy of
+   core's list for seventeen days — the shape vocabulary.guard.ts exists for.
+   The tab order on the meeting page is the array's order. */
+export { MEETING_ITEM_KINDS } from "@echo/core/vocabulary";
+export type { MeetingItemKind };
 
 /** 0211 — standing until a later item replaces it, or a person reverses it */
 export const MEETING_ITEM_STATUSES = ["standing", "superseded", "reversed"] as const;

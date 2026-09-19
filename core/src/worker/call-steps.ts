@@ -145,6 +145,10 @@ export interface SummaryWritten {
    */
   meetingId?: string | null;
   itemIds?: string[];
+  /** 2026-09-19 — what the pass produced PER KIND (decision, action, project,
+      question, risk), so the log can see a pass that only ever finds one
+      kind; `{}` when nothing was produced */
+  kinds?: Partial<Record<string, number>>;
 }
 
 export interface Summarizer {
@@ -662,13 +666,13 @@ export function createSummarizeStep({
            so the difference is recorded here rather than left to be guessed
            from an empty list */
         log.warn(
-          { call_id: payload.callId, meeting_id: result.meetingId, event: "decision_extract_none" },
-          "no new decisions or commitments landed from this transcript",
+          { call_id: payload.callId, meeting_id: result.meetingId, event: "decision_extract_none", kinds: result.kinds ?? {} },
+          "no new items landed from this transcript",
         );
       } else {
         log.info(
-          { call_id: payload.callId, meeting_id: result.meetingId, claims: result.claims },
-          "decisions and commitments extracted",
+          { call_id: payload.callId, meeting_id: result.meetingId, claims: result.claims, kinds: result.kinds ?? {} },
+          "the meeting's items were extracted (decisions, tasks, projects, questions, risks)",
         );
       }
 

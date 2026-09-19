@@ -26,6 +26,11 @@ vi.mock("@/api/client", () => ({
     updateMeetingItem: vi.fn(),
     deleteMeetingItem: vi.fn(),
     createTask: vi.fn(),
+    createProject: vi.fn(),
+    /* the panel reads the viewer's role since 2026-09-19 (the project tab's
+       make button is an admin's); a mock that omits a method the component
+       calls does not fake "no role", it throws into the render */
+    me: async () => ({ role: "member" }),
     /* two colleagues, because a roster of one cannot tell a RESOLVED name
        from a lucky first row */
     orgPeople: async () => [

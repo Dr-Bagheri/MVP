@@ -56,6 +56,9 @@ The product team discussed the sign-up drop.
 ## Open questions
 - What is the status of the mobile build?
 
+## Projects
+- Second SMS provider rollout
+
 ## People & entities
 - Acme Telecom
 `;
@@ -91,7 +94,13 @@ describe("sliceSummary", () => {
     ]);
     expect(of("risk")).toEqual(["Single provider with no fallback"]);
     expect(of("question")).toEqual(["What is the status of the mobile build?"]);
-    expect(of("entity")).toEqual(["Acme Telecom"]);
+    /* 2026-09-19: projects joined the set and entities left it (db/0234). A
+       «People & entities» heading is no kind now, so its line is filed
+       NOWHERE — asserted as an absence, because a slicer that kept an
+       `entity` bucket would render perfectly and write a row the check
+       refuses */
+    expect(of("project")).toEqual(["Second SMS provider rollout"]);
+    expect(rows.map((r) => r.body)).not.toContain("Acme Telecom");
     /* the marker became the OWNER and left the body; the unmarked line
        carries none — the parser names nobody it was not told */
     expect(rows.filter((r) => r.kind === "action").map((r) => r.owner)).toEqual(["Sina", null]);

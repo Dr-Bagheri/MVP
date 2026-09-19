@@ -258,6 +258,15 @@ function stepRow(label: string): HTMLElement {
   return screen.getByText(label).closest("li")!;
 }
 
+/**
+ * A tab on the PAGE's own row. The review panel inside it has a tablist of
+ * its own, and since 2026-09-19 that panel's task tab is also called «تسک‌ها»
+ * (the user renamed action items) — an unscoped query found two and the
+ * five tests below failed for a reason none of them was about.
+ */
+const pageTab = (name: string) =>
+  within(screen.getByRole("tablist", { name: "پس از جلسه" })).getByRole("tab", { name });
+
 describe("MeetingPage", () => {
   /*
    * THE STEPPER IS GONE, and this is the assertion that says so. Every other
@@ -268,7 +277,7 @@ describe("MeetingPage", () => {
     MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument());
+    await waitFor(() => expect(pageTab("تسک‌ها")).toBeInTheDocument());
 
     /*
      * AND THE TAB SET IS FOUR. Asserted by NAME because the two that stayed
@@ -316,7 +325,7 @@ describe("MeetingPage", () => {
     await waitFor(() =>
       expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
     expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
-    expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument();
+    expect(pageTab("تسک‌ها")).toBeInTheDocument();
   });
 
   it("a failed record is named a failure, never progress", async () => {
@@ -342,7 +351,7 @@ describe("MeetingPage", () => {
     render(<MeetingPage id="m-1" />);
     /* `getCall` answering null is "gone", a different nothing from "still
        asking" — the tabs are the meeting's and stay reachable either way */
-    await waitFor(() => expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument());
+    await waitFor(() => expect(pageTab("تسک‌ها")).toBeInTheDocument());
     expect(await screen.findByText("رکورد دیگر خواندنی نیست — حذف یا پاک‌سازی شده است.")).toBeInTheDocument();
   });
 });
@@ -476,7 +485,7 @@ describe("the live screen (2026-09-08)", () => {
     /* the live screen is GONE — a page that showed both would be two
        transcripts of one meeting on one screen */
     expect(screen.queryByLabelText("حین جلسه")).toBeNull();
-    expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument();
+    expect(pageTab("تسک‌ها")).toBeInTheDocument();
   });
 
   /*
@@ -600,7 +609,7 @@ describe("the live screen (2026-09-08)", () => {
     CALL = call({ status: "ready" });
     RECALL = [recalled];
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument());
+    await waitFor(() => expect(pageTab("تسک‌ها")).toBeInTheDocument());
 
     expect(recallSpy, "recall asked about a record that is already finished").not.toHaveBeenCalled();
     expect(screen.queryByText("قرارداد با NAI تمدید شد")).toBeNull();

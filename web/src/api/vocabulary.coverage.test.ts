@@ -166,6 +166,12 @@ const EXCLUDED: Record<string, string> = {
    * entity, and that day this entry is what says they were left out on
    * purpose rather than forgotten.
    */
+  MEETING_ITEM_KINDS:
+    "not mirrored: `types.ts` re-exports the array AND the type from this " +
+    "module (2026-09-19), and the meeting page's tab strip maps over the " +
+    "imported array — one spelling, no local union to drift. Same reasoning " +
+    "as PROJECT_STAGES. The catalogues are asked for `item_<member>` by " +
+    "ItemsPanel.test.",
   ENTITY_KINDS: "not mirrored: no web surface reads the entity spine yet (2026-09-18).",
   ALIAS_SOURCES: "not mirrored: no web surface reads the entity spine yet (2026-09-18).",
   ALIAS_KINDS: "not mirrored: no web surface reads the entity spine yet (2026-09-18).",

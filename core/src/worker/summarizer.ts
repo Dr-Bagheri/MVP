@@ -17,6 +17,7 @@ import type { Identity, Skill } from "../agent/types.ts";
 import {
   composeExtractionInput, parseExtraction, resolveOwner,
 } from "./extract-decisions.ts";
+import type { MeetingItemKind } from "../api/vocabulary.ts";
 import type { MeetingsRepo } from "../api/meetings.ts";
 import { isSpeakerPlaceholder } from "../api/speaker-naming.ts";
 import { foldName } from "../agent/router.ts";
@@ -662,6 +663,10 @@ export function createSummarizer<TDeps>({
       let claims: number | null = null;
       let meetingId: string | null = null;
       let itemIds: string[] = [];
+      /* per KIND, so the log can say «two tasks, one risk, no projects» rather
+         than a total — the difference between a pass that reads the whole
+         meeting and one that only ever finds decisions is invisible in a sum */
+      let kinds: Partial<Record<MeetingItemKind, number>> = {};
       if (!result.failed && transcript.trim()) {
         try {
           const extracted = await extractClaims({
@@ -671,6 +676,7 @@ export function createSummarizer<TDeps>({
           claims = extracted.claims;
           meetingId = extracted.meetingId;
           itemIds = extracted.itemIds;
+          kinds = extracted.kinds;
         } catch {
           // the null IS the forfeit; call-steps logs it
           claims = null;
@@ -685,6 +691,7 @@ export function createSummarizer<TDeps>({
         claims,
         meetingId,
         itemIds,
+        kinds,
         skill,
         failed: result.failed,
       };
@@ -718,7 +725,14 @@ export async function extractClaims({
   apiKey?: string | undefined;
   callerModel?: string | undefined;
   deps: unknown;
-}): Promise<{ claims: number | null; meetingId: string | null; itemIds: string[] }> {
+}): Promise<{
+  claims: number | null;
+  meetingId: string | null;
+  itemIds: string[];
+  /** what the pass PRODUCED per kind, before the repo's de-dupe — `{}` when
+      nothing was produced or the pass did not run */
+  kinds: Partial<Record<MeetingItemKind, number>>;
+}> {
   /*
    * THE MEETING FIRST (2026-09-10). `meeting_item` hangs off a MEETING, and a
    * plain upload has none — so an extraction from one lands nowhere and says
@@ -729,7 +743,7 @@ export async function extractClaims({
    * every plain recording to then write nothing.
    */
   const meetingId = await meetings.meetingIdForCall(identity, callId);
-  if (meetingId === null) return { claims: 0, meetingId: null, itemIds: [] };
+  if (meetingId === null) return { claims: 0, meetingId: null, itemIds: [], kinds: {} };
 
   const today = new Date().toISOString().slice(0, 10);
   const run = await runtime.run({
@@ -744,15 +758,15 @@ export async function extractClaims({
     deps,
     input: composeExtractionInput(transcript, today),
   });
-  if (run.failed) return { claims: null, meetingId, itemIds: [] };
+  if (run.failed) return { claims: null, meetingId, itemIds: [], kinds: {} };
 
   const claims = parseExtraction(run.text);
   /* NULL, not []: an unreadable answer is not "this meeting decided nothing"
      — the caller renders those differently and must be able to tell. The
      meeting stays named either way: the roster is told the summary is ready
      whether or not the ledger could be read. */
-  if (claims === null) return { claims: null, meetingId, itemIds: [] };
-  if (claims.length === 0) return { claims: 0, meetingId, itemIds: [] };
+  if (claims === null) return { claims: null, meetingId, itemIds: [], kinds: {} };
+  if (claims.length === 0) return { claims: 0, meetingId, itemIds: [], kinds: {} };
 
   /*
    * THE ROSTER, for resolving a spoken name to an account. Read under the
@@ -790,9 +804,10 @@ export async function extractClaims({
       ? null
       : claim.owner_name;
     return {
-      /* the ledger's own vocabulary: a decision is a `decision`, a commitment
-         is an `action` — 0160's five kinds, not a sixth invented here */
-      kind: (claim.kind === "commitment" ? "action" : "decision") as "action" | "decision",
+      /* the ledger's own vocabulary, as the parser already spells it — five
+         kinds since 2026-09-19, mapped from whatever word the model used in
+         `normaliseKind` and nowhere else */
+      kind: claim.kind,
       body: claim.text,
       ownerId,
       /* the NAME as spoken stays beside the resolved account: an owner the
@@ -803,7 +818,9 @@ export async function extractClaims({
       atMs: claim.evidence_start_ms,
     };
   });
+  const kinds: Partial<Record<MeetingItemKind, number>> = {};
+  for (const row of rows) kinds[row.kind] = (kinds[row.kind] ?? 0) + 1;
   const landed = await meetings.recordExtracted(identity, meetingId, rows);
-  return { claims: landed.landed, meetingId, itemIds: landed.itemIds };
+  return { claims: landed.landed, meetingId, itemIds: landed.itemIds, kinds };
 }
 

@@ -19,7 +19,7 @@
  */
 import { NotFoundError, ValidationError, ConflictError } from "./errors.ts";
 import { hasMeetingAttendees, hasMeetingTakeStatus } from "../db/capabilities.ts";
-import { iso } from "./vocabulary.ts";
+import { iso, MEETING_ITEM_KINDS, type MeetingItemKind } from "./vocabulary.ts";
 import { isDiarizerLabel, isSpeakerPlaceholder } from "./speaker-naming.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -35,9 +35,14 @@ export type MeetingMode = (typeof MEETING_MODES)[number];
  * rewriting a model's text and hoping the headings still line up. They are
  * rows now, so a person can add one before a word has been recorded and edit
  * one the assistant heard.
+ *
+ * The SET lives in vocabulary.ts since 2026-09-19 (decision · action ·
+ * project · question · risk; `entity` retired by db/0234), where the web
+ * imports it instead of keeping the copy it kept until then. Re-exported
+ * here because this file is the set's producer for every server reader.
  */
-export const MEETING_ITEM_KINDS = ["decision", "action", "question", "risk", "entity"] as const;
-export type MeetingItemKind = (typeof MEETING_ITEM_KINDS)[number];
+export { MEETING_ITEM_KINDS };
+export type { MeetingItemKind };
 
 export interface MeetingItemRecord {
   id: string;
@@ -361,7 +366,12 @@ const SECTIONS: Array<{ kind: MeetingItemKind; match: RegExp }> = [
      summary writes "Obstacles and Problems" — neither of which any of the
      original alternatives matched on its own. */
   { kind: "risk", match: /ریسک|خطر|موانع|مشکل|چالش|risk|blocker|issue|concern|obstacle|problem/i },
-  { kind: "entity", match: /موجودیت|افراد و سازمان|entit|people|organi[sz]ation|stakeholder/i },
+  /* PROJECTS (2026-09-19): a summary that proposes one — «پروژه‌های
+     پیشنهادی», "Projects", "Initiatives" — fell under nothing before. LAST in
+     the list, so «تصمیم دربارهٔ پروژه» still slices as a decision. `entity`
+     left the set the same day (db/0234); the slicer never met a heading for
+     it on a real summary. */
+  { kind: "project", match: /پروژه|project|initiative|workstream/i },
 ];
 
 export interface SlicedItem {

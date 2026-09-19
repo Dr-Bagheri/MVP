@@ -246,6 +246,25 @@ export const PROJECT_PRIORITIES = ["low", "medium", "high", "critical"] as const
 export type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
 
 /**
+ * WHAT A MEETING PRODUCES, as rows (0160; the set re-cut 2026-09-19 by the
+ * user's ruling on the review tabs): what was DECIDED, the TASKS it hands
+ * out (`action` on the wire — the row's name since 0160, «تسک‌ها» on the
+ * screen since today), the PROJECTS it proposes, the QUESTIONS left open and
+ * the RISKS named. `entity` is gone — db/0234 narrows the check, and it held
+ * no rows on production when it did (read at owner altitude first: 18
+ * decisions, 18 actions, nothing else).
+ *
+ * The ORDER is the tab order on the meeting page.
+ *
+ * Published from HERE so the web imports the array rather than mirroring
+ * it: `web/src/api/types.ts` carried its own copy of this list for seventeen
+ * days, which is the drift shape vocabulary.guard.ts exists for, one list
+ * over.
+ */
+export const MEETING_ITEM_KINDS = ["decision", "action", "project", "question", "risk"] as const;
+export type MeetingItemKind = (typeof MEETING_ITEM_KINDS)[number];
+
+/**
  * Summary TEMPLATES (user ruling, 2026-08-23 — this exact list, no sales
  * and no standup): a template is a structural addendum to the summarizer's
  * skill prompt, chosen per regeneration, never a second skill. The keys

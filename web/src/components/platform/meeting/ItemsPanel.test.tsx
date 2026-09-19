@@ -14,7 +14,11 @@ const addMeetingItem = vi.fn();
 const updateMeetingItem = vi.fn();
 const deleteMeetingItem = vi.fn();
 const createTask = vi.fn();
+const createProject = vi.fn();
 const orgPeople = vi.fn();
+/* the viewer's role, read by the panel since 2026-09-19 — the project tab's
+   make button is an admin's (db/0186) */
+const me = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
@@ -23,7 +27,9 @@ vi.mock("@/api/client", () => ({
     updateMeetingItem: (...a: unknown[]) => updateMeetingItem(...a),
     deleteMeetingItem: (...a: unknown[]) => deleteMeetingItem(...a),
     createTask: (...a: unknown[]) => createTask(...a),
+    createProject: (...a: unknown[]) => createProject(...a),
     orgPeople: (...a: unknown[]) => orgPeople(...a),
+    me: () => me(),
   },
 }));
 
@@ -43,8 +49,14 @@ beforeEach(() => {
   updateMeetingItem.mockReset();
   deleteMeetingItem.mockReset();
   createTask.mockReset();
+  createProject.mockReset();
   orgPeople.mockReset();
   orgPeople.mockResolvedValue([]);
+  me.mockReset();
+  me.mockResolvedValue({ role: "member" });
+  /* the viewer hook REMEMBERS the role per tab; without this a case that
+     ran as admin leaks its seat into the next one */
+  sessionStorage.clear();
 });
 
 describe("ItemsPanel", () => {
@@ -381,3 +393,105 @@ describe("ItemsPanel", () => {
  * Each of these fails against the panel that shipped this morning, which drew
  * `row.owner` as a bare grey word and nothing else.
  */
+
+/**
+ * 2026-09-19 — the tabs re-cut: Entities gone, Action items read Tasks, and
+ * PROJECTS with the task tab's design and functions, made real through
+ * `api.createProject` by an ADMIN.
+ */
+describe("the project tab (2026-09-19)", () => {
+  const settle = async () => {
+    /* the role arrives through a promise; every assertion about a control
+       that depends on it is anchored AFTER the read landed, or a member's
+       "no button" is the same picture as "not asked yet" */
+    await waitFor(() => expect(me).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+  };
+
+  it("draws the five kinds in the published order — and no Entities tab", async () => {
+    meetingItems.mockResolvedValue([]);
+    render(<ItemsPanel meetingId="m1" locale="fa" />);
+    await screen.findByText("itemEmpty_decision");
+    /* asserted as EQUALITY, which is the only way an absence can be asserted
+       once its label has left the catalogue — a text query for a key that no
+       longer exists could never fail again */
+    expect(screen.getAllByRole("tab").map((el) => el.textContent)).toEqual([
+      "item_decision", "item_action", "item_project", "item_question", "item_risk",
+    ]);
+  });
+
+  it("an admin makes ONE proposed project, led by the person the meeting named, and ticks the item", async () => {
+    me.mockResolvedValue({ role: "admin" });
+    meetingItems.mockResolvedValue([
+      row({ id: "p1", kind: "project", body: "پروژهٔ دیتابیس صوتی", owner: "بهناز", owner_id: "u-2" }),
+      row({ id: "p2", kind: "project", body: "پروژهٔ دوم", owner: null }),
+    ]);
+    createProject.mockResolvedValue({ id: "proj-1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_project/ }));
+    const [first] = await screen.findAllByRole("button", { name: "itemMakeProject" });
+    fireEvent.click(first!);
+
+    await waitFor(() => expect(updateMeetingItem).toHaveBeenCalledWith("m1", "p1", { done: true }));
+    expect(createProject).toHaveBeenCalledTimes(1);
+    expect(createProject).toHaveBeenCalledWith(expect.objectContaining({
+      name: "پروژهٔ دیتابیس صوتی", lead_id: "u-2", member_ids: ["u-2"],
+    }));
+    expect(createProject.mock.calls[0]?.[0]).toMatchObject({ summary: expect.stringContaining("/meetings/m1") });
+    /* the neighbour was not made — a per-row button that converted the tab
+       would pass a count of "at least one" */
+    expect(createProject).not.toHaveBeenCalledWith(expect.objectContaining({ name: "پروژهٔ دوم" }));
+    expect(screen.getAllByRole("button", { name: "itemMakeProject" })).toHaveLength(1);
+  });
+
+  it("a MEMBER sees the project rows with their tick box — and no door the server would shut", async () => {
+    /* the same fixture as the admin case, only the seat differs: the tick
+       box is the task tab's design (kept for everybody), the make and
+       convert buttons are db/0186's (admins only). A version drawing the
+       button for everyone would send a member's press into a 403 wearing
+       «ذخیره نشد». */
+    meetingItems.mockResolvedValue([
+      row({ id: "p1", kind: "project", body: "پروژهٔ دیتابیس صوتی", owner: null }),
+    ]);
+    render(<ItemsPanel meetingId="m1" locale="fa" />);
+    fireEvent.click(await screen.findByRole("tab", { name: /item_project/ }));
+    await screen.findByRole("checkbox", { name: "itemDone" });
+    await settle();
+    expect(screen.queryByRole("button", { name: "itemMakeProject" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "convertRemainingToProjects" })).toBeNull();
+  });
+
+  it("convert-all makes only the UNFINISHED projects, for an admin", async () => {
+    me.mockResolvedValue({ role: "admin" });
+    meetingItems.mockResolvedValue([
+      row({ id: "open", kind: "project", body: "هنوز باز نشده", done: false }),
+      row({ id: "made", kind: "project", body: "قبلاً ساخته شده", done: true }),
+    ]);
+    createProject.mockResolvedValue({ id: "proj-1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_project/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "convertRemainingToProjects" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "convertRemainingToProjects" })).toBeNull());
+    expect(createProject).toHaveBeenCalledTimes(1);
+    expect(createProject).toHaveBeenCalledWith(expect.objectContaining({ name: "هنوز باز نشده" }));
+    expect(updateMeetingItem).toHaveBeenCalledWith("m1", "open", { done: true });
+  });
+
+  it("a row whose kind the set no longer names does not take the panel down", async () => {
+    /* an `entity` row written before db/0234 — the api still serves it if a
+       migration lags a deploy; the panel must draw the rest rather than
+       crash on an undefined bucket */
+    meetingItems.mockResolvedValue([
+      row({ id: "legacy", kind: "entity", body: "موجودیت قدیمی" }),
+      row({ id: "d", kind: "decision", body: "تصمیم واقعی" }),
+    ]);
+    render(<ItemsPanel meetingId="m1" locale="fa" />);
+    await screen.findByText("تصمیم واقعی");
+    expect(screen.queryByText("موجودیت قدیمی")).toBeNull();
+  });
+});

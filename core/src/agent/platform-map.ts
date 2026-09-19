@@ -78,8 +78,9 @@ export const PLATFORM_MAP = [
   "  out by itself — a task near its deadline, and a meeting about to start,",
   "  which is why there is nothing to set for those and nothing to clean up",
   "  when a deadline moves. It pops up in the platform; it is not an email.",
-  "· DECISIONS: what the organization DECIDED and what people COMMITTED",
-  "  to, as rows rather than paragraphs — each with the record it came from",
+  "· DECISIONS: what the organization DECIDED, what people COMMITTED to,",
+  "  the PROJECTS a meeting proposed, its open QUESTIONS and its named RISKS,",
+  "  as rows rather than paragraphs — each with the record it came from",
   "  and the moment in it where it was said, so a claim can be played back.",
   "  A decision can supersede an earlier one, which is how «what got reversed»",
   /* THE FIELD THE TOOL ACTUALLY EMITS (2026-09-09). This said "read the

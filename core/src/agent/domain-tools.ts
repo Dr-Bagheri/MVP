@@ -33,6 +33,7 @@ import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
 import { createMembersRepo } from "../api/members.ts";
 import { createMeetingsRepo } from "../api/meetings.ts";
+import { MEETING_ITEM_KINDS, type MeetingItemKind } from "../api/vocabulary.ts";
 import { NotFoundError } from "../api/errors.ts";
 import type { Db } from "../db/identity.ts";
 import type { ConnectorItem, ConnectorProvider } from "../api/connector-providers.ts";
@@ -330,20 +331,18 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
     name: "list_decisions",
     label: "تصمیم‌ها و تعهدها",
     description:
-      "Decisions the organization has made and commitments people have given, "
-      + "as rows: what was decided, who owes it, by when, which meeting it came "
-      + "from and where in the recording it was said. EVERY row carries "
-      + "`source`: 'ai' means a model found the sentence in a transcript and "
-      + "NOBODY HAS EDITED OR AGREED TO IT — report those as 'found in the "
-      + "record', never as settled. `status` says whether a decision still "
-      + "stands or was superseded by a later one; `done` ticks a commitment "
-      + "off.",
+      "What the organization's meetings produced, as rows: decisions, "
+      + "commitments (tasks), proposed projects, open questions and risks — "
+      + "owner, due day, meeting, moment in the recording. EVERY row "
+      + "carries `source`: 'ai' means a model found it and NOBODY HAS AGREED — "
+      + "report those as 'found in the record', never as settled. `status` says "
+      + "whether a decision still stands; `done` ticks a commitment off.",
     parameters: Type.Object({
       meeting_id: Type.Optional(Type.String({
         description: "Only this meeting's items. Omit for the whole organization.",
       })),
       kind: Type.Optional(Type.String({
-        description: "'decision' or 'commitment'. Omit for both.",
+        description: "decision, commitment, project, question or risk. Omit for all.",
       })),
       only_open: Type.Optional(Type.Boolean({
         description: "Only what is still standing and not ticked off.",
@@ -353,12 +352,14 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
       /* 0211: the ledger IS `meeting_item` (0160) — one table for a meeting's
          decisions, not a second one beside it. `commitment` is this tool's
          word for the ledger's `action`, because that is what a person calls
-         it out loud; the mapping lives here and nowhere else. */
+         it out loud; the mapping lives here and nowhere else. The other kinds
+         (2026-09-19) pass through under the ledger's own names; a word the
+         ledger does not know filters nothing rather than everything. */
+      const asked = args.kind === "commitment" ? "action" : args.kind;
       const rows = await createMeetingsRepo(deps.db).ledger(identity, {
         meetingId: args.meeting_id,
-        kind: args.kind === "commitment"
-          ? "action"
-          : args.kind === "decision" ? "decision" : undefined,
+        kind: (MEETING_ITEM_KINDS as readonly string[]).includes(asked ?? "")
+          ? asked as MeetingItemKind : undefined,
         openOnly: args.only_open === true,
       });
       /* projected, never spread: the record grows fields for the screen's
